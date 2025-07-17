@@ -54,6 +54,9 @@ builder.Services.AddSingleton<RoslynWorkspaceService>();
 builder.Services.AddSingleton<GoToDefinitionTool>();
 builder.Services.AddSingleton<FindReferencesTool>();
 builder.Services.AddSingleton<SearchSymbolsTool>();
+builder.Services.AddSingleton<GetDiagnosticsTool>();
+builder.Services.AddSingleton<GetHoverInfoTool>();
+builder.Services.AddSingleton<GetImplementationsTool>();
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -62,6 +65,9 @@ var logger = host.Services.GetRequiredService<ILogger<Program>>();
 var goToDefTool = host.Services.GetRequiredService<GoToDefinitionTool>();
 var findRefsTool = host.Services.GetRequiredService<FindReferencesTool>();
 var searchTool = host.Services.GetRequiredService<SearchSymbolsTool>();
+var diagnosticsTool = host.Services.GetRequiredService<GetDiagnosticsTool>();
+var hoverTool = host.Services.GetRequiredService<GetHoverInfoTool>();
+var implementationsTool = host.Services.GetRequiredService<GetImplementationsTool>();
 
 logger.LogInformation("COA Roslyn MCP Server starting...");
 
@@ -114,7 +120,7 @@ _ = Task.Run(async () =>
                     var request = JsonSerializer.Deserialize<JsonRpcRequest>(json, jsonOptions);
                     if (request != null)
                     {
-                        var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, logger);
+                        var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, logger);
                         var responseJson = JsonSerializer.Serialize(response, jsonOptions);
                         
                         await writer.WriteLineAsync($"Content-Length: {Encoding.UTF8.GetByteCount(responseJson)}");
@@ -228,6 +234,9 @@ static async Task<JsonRpcResponse> HandleRequest(
     GoToDefinitionTool goToDefTool,
     FindReferencesTool findRefsTool,
     SearchSymbolsTool searchTool,
+    GetDiagnosticsTool diagnosticsTool,
+    GetHoverInfoTool hoverTool,
+    GetImplementationsTool implementationsTool,
     ILogger logger)
 {
     try
@@ -275,6 +284,22 @@ static async Task<JsonRpcResponse> HandleRequest(
                             args.TryGetProperty("fuzzy", out var f) && f.GetBoolean(),
                             args.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100),
                             
+                        "get_diagnostics" => await diagnosticsTool.ExecuteAsync(
+                            args.GetProperty("path").GetString()!,
+                            args.TryGetProperty("severities", out var s) && s.ValueKind == JsonValueKind.Array
+                                ? s.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                                : null),
+                                
+                        "get_hover_info" => await hoverTool.ExecuteAsync(
+                            args.GetProperty("filePath").GetString()!,
+                            args.GetProperty("line").GetInt32(),
+                            args.GetProperty("column").GetInt32()),
+                            
+                        "get_implementations" => await implementationsTool.ExecuteAsync(
+                            args.GetProperty("filePath").GetString()!,
+                            args.GetProperty("line").GetInt32(),
+                            args.GetProperty("column").GetInt32()),
+                            
                         _ => throw new NotSupportedException($"Unknown tool: {toolName}")
                     };
                     
@@ -298,7 +323,10 @@ static async Task<JsonRpcResponse> HandleRequest(
                         {
                             new { name = "go_to_definition", description = "Navigate to symbol definition" },
                             new { name = "find_references", description = "Find all references" },
-                            new { name = "search_symbols", description = "Search for symbols" }
+                            new { name = "search_symbols", description = "Search for symbols" },
+                            new { name = "get_diagnostics", description = "Get compilation errors and warnings" },
+                            new { name = "get_hover_info", description = "Get symbol information at position" },
+                            new { name = "get_implementations", description = "Find implementations of interfaces/abstract members" }
                         }
                     }
                 };
