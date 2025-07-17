@@ -11,7 +11,12 @@ COA Roslyn MCP Server leverages Microsoft's Roslyn compiler platform to provide 
 - **Go to Definition** - Navigate to symbol definitions across your codebase
 - **Find References** - Find all references to a symbol
 - **Symbol Search** - Search for types, methods, properties, and other symbols
-- **Diagnostics** - Get compilation errors and warnings
+- **Get Diagnostics** - Get compilation errors and warnings for files, projects, or solutions
+- **Hover Information** - Get detailed symbol information at cursor position
+- **Find Implementations** - Find all implementations of interfaces and abstract members
+- **Document Symbols** - Get document outline with all types and members
+- **Call Hierarchy** - Explore incoming and outgoing call trees
+- **Rename Symbol** - Rename symbols across entire codebase with preview
 - **Workspace Management** - Efficient caching with LRU eviction for large solutions
 - **Native Performance** - Built with .NET 9.0 and AOT compilation support
 
@@ -68,20 +73,67 @@ Parameters:
 - `filePath`: Path to the source file
 - `line`: Line number (1-based)
 - `column`: Column number (1-based)
+- `includePotential`: Include potential references (optional, default: false)
 
 #### SearchSymbols
 Search for symbols by name across the workspace.
 
 Parameters:
-- `query`: Search query (supports wildcards)
-- `kind`: Symbol kind filter (optional) - "type", "method", "property", "field", "namespace"
-- `limit`: Maximum results (default: 50)
+- `pattern`: Search pattern (supports wildcards)
+- `workspacePath`: Path to solution or project
+- `kinds`: Symbol kind filter (optional) - array of "class", "interface", "method", "property", "field", "event", "namespace"
+- `fuzzy`: Enable fuzzy matching (optional, default: false)
+- `maxResults`: Maximum results (optional, default: 100)
 
 #### GetDiagnostics
-Get compilation diagnostics for a file or project.
+Get compilation errors and warnings for a file, project, or solution.
 
 Parameters:
-- `filePath`: Path to the file or project
+- `path`: Path to the file, project, or solution
+- `severities`: Filter by severity (optional) - array of "error", "warning", "info", "hidden"
+
+#### GetHoverInfo
+Get detailed symbol information at a specific position (like IDE hover tooltips).
+
+Parameters:
+- `filePath`: Path to the source file
+- `line`: Line number (1-based)
+- `column`: Column number (1-based)
+
+#### GetImplementations
+Find implementations of interfaces and abstract members.
+
+Parameters:
+- `filePath`: Path to the source file
+- `line`: Line number (1-based)
+- `column`: Column number (1-based)
+
+#### GetDocumentSymbols
+Get the outline of a document showing all types and members.
+
+Parameters:
+- `filePath`: Path to the source file
+- `includeMembers`: Include class members (optional, default: true)
+
+#### GetCallHierarchy
+Get incoming and/or outgoing call hierarchy for a method or property.
+
+Parameters:
+- `filePath`: Path to the source file
+- `line`: Line number (1-based)
+- `column`: Column number (1-based)
+- `direction`: "incoming", "outgoing", or "both" (optional, default: "both")
+- `maxDepth`: Maximum depth to traverse (optional, default: 2)
+
+#### RenameSymbol
+Rename a symbol across the entire codebase.
+
+Parameters:
+- `filePath`: Path to the source file
+- `line`: Line number (1-based)
+- `column`: Column number (1-based)
+- `newName`: The new name for the symbol
+- `preview`: Preview changes without applying (optional, default: true)
 
 ## Configuration
 
