@@ -1,0 +1,253 @@
+# Azure Pipelines CI/CD for COA Roslyn MCP Server
+# Builds, tests, and publishes dotnet tool to Azure Artifacts
+
+trigger:
+  branches:
+    include:
+      - main
+      - develop
+      - release/*
+  tags:
+    include:
+      - v*
+  paths:
+    exclude:
+      - "**/*.md"
+      - ".gitignore"
+      - "docs/**"
+
+pr:
+  branches:
+    include:
+      - main
+      - develop
+
+pool:
+  name: "Default" # Using local Windows agent pool
+
+variables:
+  buildConfiguration: "Release"
+  dotnetSdkVersion: "9.x"
+  # Base version
+  majorVersion: 1
+  minorVersion: 0
+  # Auto-incrementing patch version
+  patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
+  versionPrefix: "$(majorVersion).$(minorVersion).$(patchVersion)"
+  versionSuffix: ""
+  # Windows-specific settings
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  NUGET_PACKAGES: $(Pipeline.Workspace)\.nuget\packages
+  # Release flag based on tags
+  ${{ if startsWith(variables['Build.SourceBranch'], 'refs/tags/v') }}:
+    isRelease: true
+  ${{ else }}:
+    isRelease: false
+
+stages:
+  - stage: Build
+    displayName: "Build and Test"
+    jobs:
+      - job: BuildAndTest
+        displayName: "Build, Test, and Pack"
+        steps:
+          - checkout: self
+            fetchDepth: 0
+            clean: true
+
+          - powershell: |
+              Write-Host "Agent Information:"
+              Write-Host "=================="
+              Write-Host "Agent Name: $env:AGENT_NAME"
+              Write-Host "Agent OS: $env:AGENT_OS"
+              Write-Host "Agent Version: $env:AGENT_VERSION"
+              Write-Host "OS Version: $([System.Environment]::OSVersion.VersionString)"
+              Write-Host "PowerShell Version: $($PSVersionTable.PSVersion)"
+              Write-Host "=================="
+            displayName: "Display agent information"
+
+          - task: Cache@2
+            displayName: "Cache NuGet packages"
+            inputs:
+              key: 'nuget | "$(Agent.OS)" | **/*.csproj,!**/bin/**,!**/obj/**'
+              restoreKeys: |
+                nuget | "$(Agent.OS)"
+                nuget
+              path: "$(NUGET_PACKAGES)"
+
+          - powershell: |
+              # Calculate version based on branch/tag
+              $majorVersion = $(majorVersion)
+              $minorVersion = $(minorVersion)
+              $patchVersion = $(patchVersion)
+
+              # Get the build counter for the current version
+              $buildRevision = $env:BUILD_BUILDNUMBER.Split('.')[-1]
+
+              Write-Host "Build Source Branch: $env:BUILD_SOURCEBRANCH"
+              Write-Host "Build Reason: $env:BUILD_REASON"
+              Write-Host "Patch Version (auto-incremented): $patchVersion"
+
+              if ($env:BUILD_SOURCEBRANCH -match "^refs/tags/v(.*)") {
+                  # Tag build - use the version from the tag
+                  $version = $matches[1]
+                  $versionSuffix = ""
+                  Write-Host "Tag build detected. Version from tag: $version"
+              }
+              elseif ($env:BUILD_SOURCEBRANCH -eq "refs/heads/main") {
+                  # Main branch - use auto-incremented patch version
+                  $version = "$majorVersion.$minorVersion.$patchVersion"
+                  $versionSuffix = ""
+                  Write-Host "Main branch build. Version: $version"
+              }
+              elseif ($env:BUILD_SOURCEBRANCH -match "^refs/heads/release/(.*)") {
+                  # Release branch
+                  $releaseName = $matches[1]
+                  if ($releaseName -match "^(\d+)\.(\d+)") {
+                      $majorVersion = $matches[1]
+                      $minorVersion = $matches[2]
+                  }
+                  $version = "$majorVersion.$minorVersion.$patchVersion"
+                  $versionSuffix = "rc.$buildRevision"
+                  Write-Host "Release branch build. Version: $version-$versionSuffix"
+              }
+              elseif ($env:BUILD_SOURCEBRANCH -eq "refs/heads/develop") {
+                  # Develop branch - preview versions
+                  $version = "$majorVersion.$minorVersion.$patchVersion"
+                  $versionSuffix = "preview.$buildRevision"
+                  Write-Host "Develop branch build. Version: $version-$versionSuffix"
+              }
+              else {
+                  # Feature branches or PRs
+                  $version = "$majorVersion.$minorVersion.$patchVersion"
+                  $branchName = $env:BUILD_SOURCEBRANCHNAME -replace '[^a-zA-Z0-9]', ''
+                  $versionSuffix = "alpha.$branchName.$buildRevision"
+                  Write-Host "Feature branch build. Version: $version-$versionSuffix"
+              }
+
+              # Set pipeline variables
+              Write-Host "##vso[task.setvariable variable=versionPrefix]$version"
+              Write-Host "##vso[task.setvariable variable=versionSuffix]$versionSuffix"
+
+              if ($versionSuffix) {
+                  Write-Host "##vso[build.updatebuildnumber]$version-$versionSuffix"
+                  Write-Host "Final version: $version-$versionSuffix"
+              }
+              else {
+                  Write-Host "##vso[build.updatebuildnumber]$version"
+                  Write-Host "Final version: $version"
+              }
+            displayName: "Calculate version number"
+            name: VersionStep
+
+          - powershell: |
+              Write-Host "========================================="
+              Write-Host "Package Version Information:"
+              Write-Host "========================================="
+              Write-Host "Version Prefix: $(versionPrefix)"
+              Write-Host "Version Suffix: $(versionSuffix)"
+              if ("$(versionSuffix)") {
+                  Write-Host "Full Version: $(versionPrefix)-$(versionSuffix)"
+              }
+              else {
+                  Write-Host "Full Version: $(versionPrefix)"
+              }
+              Write-Host "========================================="
+            displayName: "Display version information"
+
+          - task: UseDotNet@2
+            displayName: "Install .NET SDK"
+            inputs:
+              version: $(dotnetSdkVersion)
+              includePreviewVersions: false
+
+          - task: DotNetCoreCLI@2
+            displayName: "Restore packages"
+            inputs:
+              command: "restore"
+              projects: "**/*.csproj"
+              feedsToUse: "select"
+
+          - powershell: |
+              # Prepare build/pack arguments based on version suffix
+              $versionArgs = "-p:VersionPrefix=$(versionPrefix)"
+              if ("$(versionSuffix)") {
+                  $versionArgs += " -p:VersionSuffix=$(versionSuffix)"
+              }
+              Write-Host "##vso[task.setvariable variable=versionArguments]$versionArgs"
+              Write-Host "Version arguments: $versionArgs"
+            displayName: "Prepare version arguments"
+
+          - task: DotNetCoreCLI@2
+            displayName: "Build solution"
+            inputs:
+              command: "build"
+              projects: "**/*.sln"
+              arguments: "--configuration $(buildConfiguration) --no-restore $(versionArguments)"
+
+          - task: DotNetCoreCLI@2
+            displayName: "Run tests"
+            inputs:
+              command: "test"
+              projects: "**/*Tests.csproj"
+              arguments: '--configuration $(buildConfiguration) --no-build --collect:"XPlat Code Coverage"'
+              publishTestResults: true
+
+          - task: PublishCodeCoverageResults@2
+            displayName: "Publish code coverage"
+            inputs:
+              summaryFileLocation: '$(Agent.TempDirectory)\**\coverage.cobertura.xml'
+
+          - task: DotNetCoreCLI@2
+            displayName: "Pack dotnet tool"
+            inputs:
+              command: "pack"
+              packagesToPack: "COA.Roslyn.McpServer/*.csproj"
+              configuration: $(buildConfiguration)
+              packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
+              nobuild: true
+              versioningScheme: "off"
+              arguments: "$(versionArguments)"
+
+          - powershell: |
+              Write-Host "Generated NuGet packages:"
+              Write-Host "========================="
+              Get-ChildItem -Path "$(Build.ArtifactStagingDirectory)\packages" -Filter "*.nupkg" | ForEach-Object {
+                  Write-Host "$($_.Name) - Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+              }
+              Write-Host "========================="
+            displayName: "List generated packages"
+
+          - task: PublishBuildArtifacts@1
+            displayName: "Publish artifacts"
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)\packages'
+              ArtifactName: "packages"
+              publishLocation: "Container"
+
+  - stage: Publish
+    displayName: "Publish to Azure DevOps"
+    dependsOn: Build
+    condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
+    jobs:
+      - job: PublishPackages
+        displayName: "Publish to COA Feed"
+        steps:
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download artifacts"
+            inputs:
+              buildType: "current"
+              downloadType: "single"
+              artifactName: "packages"
+              downloadPath: "$(System.ArtifactsDirectory)"
+
+          - task: DotNetCoreCLI@2
+            displayName: "Push to COA Azure DevOps feed"
+            inputs:
+              command: "push"
+              packagesToPush: '$(System.ArtifactsDirectory)\packages\*.nupkg'
+              nuGetFeedType: "internal"
+              publishVstsFeed: "COA"
+              allowPackageConflicts: true
+              arguments: "--skip-duplicate"
