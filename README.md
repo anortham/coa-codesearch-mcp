@@ -28,10 +28,31 @@ COA Roslyn MCP Server leverages Microsoft's Roslyn compiler platform to provide 
 dotnet tool install --global COA.Roslyn.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
 ```
 
-### For Claude Desktop
+### For Claude Code
 
 1. Install the tool globally (see above)
-2. Add to your Claude Desktop configuration:
+2. Add the MCP server using Claude Code CLI:
+
+```bash
+claude mcp add coa-roslyn-mcp
+```
+
+Or manually add to your Claude Code configuration (`%APPDATA%\Claude\claude_code_config.json` on Windows):
+
+```json
+{
+  "mcpServers": {
+    "coa-roslyn-mcp": {
+      "command": "coa-roslyn-mcp",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+### For Claude Desktop
+
+Add to your Claude Desktop configuration:
 
 ```json
 {
@@ -44,17 +65,82 @@ dotnet tool install --global COA.Roslyn.McpServer --add-source https://childrens
 }
 ```
 
+### For VS Code (via MCP Extension)
+
+1. Install the MCP extension for VS Code (when available)
+2. Add to your VS Code settings.json:
+
+```json
+{
+  "mcp.servers": {
+    "coa-roslyn": {
+      "command": "coa-roslyn-mcp",
+      "args": ["stdio"],
+      "languages": ["csharp", "vb"]
+    }
+  }
+}
+```
+
+### For GitHub Copilot (via MCP Bridge)
+
+When GitHub Copilot supports MCP servers, configure it in your `.github/copilot-mcp.json`:
+
+```json
+{
+  "servers": {
+    "roslyn": {
+      "command": "coa-roslyn-mcp",
+      "args": ["stdio"],
+      "filePatterns": ["**/*.cs", "**/*.vb", "**/*.csproj", "**/*.sln"]
+    }
+  }
+}
+```
+
 ## Usage
 
 ### Running the Server
 
 ```bash
-# Run in STDIO mode (for Claude Desktop)
+# Run in STDIO mode (for MCP clients)
 coa-roslyn-mcp stdio
 
 # Run with verbose logging
 coa-roslyn-mcp stdio --log-level debug
 ```
+
+### Usage Examples in Claude Code
+
+Once configured, you can use natural language to navigate your C# codebase:
+
+```
+"Go to the definition of the UserService class"
+"Find all references to the GetUserById method"
+"Show me all classes that implement IRepository"
+"What errors are in the current project?"
+"Rename the Calculate method to ComputeTotal"
+"Show me the call hierarchy for ProcessOrder"
+"Get the outline of the current file"
+```
+
+Claude will automatically use the appropriate MCP tools to fulfill your requests.
+
+### Usage Examples in VS Code
+
+With the MCP extension installed, you can:
+
+1. **Command Palette** (Ctrl+Shift+P):
+   - `MCP: Go to Definition`
+   - `MCP: Find All References`
+   - `MCP: Show Call Hierarchy`
+
+2. **Context Menu** (right-click):
+   - Navigate to Definition
+   - Find All Implementations
+   - Rename Symbol
+
+3. **Hover** for symbol information powered by Roslyn
 
 ### Available Tools
 
@@ -206,6 +292,35 @@ Target metrics:
 - FindReferences: < 200ms for average project
 - Symbol search: < 100ms for prefix match
 - Memory usage: < 500MB for typical solution
+
+## Troubleshooting
+
+### Common Issues
+
+1. **"MSBuild not found" error**
+   - Install Visual Studio Build Tools or Visual Studio
+   - The server automatically registers MSBuild on startup
+
+2. **"Could not load workspace" error**
+   - Ensure the solution/project builds successfully in Visual Studio
+   - Check that all NuGet packages are restored
+   - Try opening the solution in Visual Studio first
+
+3. **Authentication errors with COA feed**
+   - Set the `COA_NUGET_PAT` environment variable with your Personal Access Token
+   - Or authenticate using: `dotnet nuget add source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json -n COA -u YOUR_USERNAME -p YOUR_PAT`
+
+4. **Server not responding in Claude Code**
+   - Check that the tool is installed: `dotnet tool list -g`
+   - Verify the tool runs: `coa-roslyn-mcp stdio` (should wait for input)
+   - Check Claude Code logs: `claude logs`
+
+### Updating the Tool
+
+```bash
+# Update to latest version
+dotnet tool update --global COA.Roslyn.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
+```
 
 ## Contributing
 
