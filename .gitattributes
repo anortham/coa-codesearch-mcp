@@ -1,0 +1,2 @@
+**/tree-sitter-service.exe filter=lfs diff=lfs merge=lfs -text
+**/*.bun-build filter=lfs diff=lfs merge=lfs -text
