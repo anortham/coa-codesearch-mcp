@@ -57,6 +57,9 @@ builder.Services.AddSingleton<SearchSymbolsTool>();
 builder.Services.AddSingleton<GetDiagnosticsTool>();
 builder.Services.AddSingleton<GetHoverInfoTool>();
 builder.Services.AddSingleton<GetImplementationsTool>();
+builder.Services.AddSingleton<GetDocumentSymbolsTool>();
+builder.Services.AddSingleton<GetCallHierarchyTool>();
+builder.Services.AddSingleton<RenameSymbolTool>();
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -68,6 +71,9 @@ var searchTool = host.Services.GetRequiredService<SearchSymbolsTool>();
 var diagnosticsTool = host.Services.GetRequiredService<GetDiagnosticsTool>();
 var hoverTool = host.Services.GetRequiredService<GetHoverInfoTool>();
 var implementationsTool = host.Services.GetRequiredService<GetImplementationsTool>();
+var documentSymbolsTool = host.Services.GetRequiredService<GetDocumentSymbolsTool>();
+var callHierarchyTool = host.Services.GetRequiredService<GetCallHierarchyTool>();
+var renameSymbolTool = host.Services.GetRequiredService<RenameSymbolTool>();
 
 logger.LogInformation("COA Roslyn MCP Server starting...");
 
@@ -120,7 +126,7 @@ _ = Task.Run(async () =>
                     var request = JsonSerializer.Deserialize<JsonRpcRequest>(json, jsonOptions);
                     if (request != null)
                     {
-                        var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, logger);
+                        var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, documentSymbolsTool, callHierarchyTool, renameSymbolTool, logger);
                         var responseJson = JsonSerializer.Serialize(response, jsonOptions);
                         
                         await writer.WriteLineAsync($"Content-Length: {Encoding.UTF8.GetByteCount(responseJson)}");
@@ -237,6 +243,9 @@ static async Task<JsonRpcResponse> HandleRequest(
     GetDiagnosticsTool diagnosticsTool,
     GetHoverInfoTool hoverTool,
     GetImplementationsTool implementationsTool,
+    GetDocumentSymbolsTool documentSymbolsTool,
+    GetCallHierarchyTool callHierarchyTool,
+    RenameSymbolTool renameSymbolTool,
     ILogger logger)
 {
     try
@@ -300,6 +309,24 @@ static async Task<JsonRpcResponse> HandleRequest(
                             args.GetProperty("line").GetInt32(),
                             args.GetProperty("column").GetInt32()),
                             
+                        "get_document_symbols" => await documentSymbolsTool.ExecuteAsync(
+                            args.GetProperty("filePath").GetString()!,
+                            args.TryGetProperty("includeMembers", out var im) && im.GetBoolean()),
+                            
+                        "get_call_hierarchy" => await callHierarchyTool.ExecuteAsync(
+                            args.GetProperty("filePath").GetString()!,
+                            args.GetProperty("line").GetInt32(),
+                            args.GetProperty("column").GetInt32(),
+                            args.TryGetProperty("direction", out var dir) ? dir.GetString() ?? "both" : "both",
+                            args.TryGetProperty("maxDepth", out var md) ? md.GetInt32() : 2),
+                            
+                        "rename_symbol" => await renameSymbolTool.ExecuteAsync(
+                            args.GetProperty("filePath").GetString()!,
+                            args.GetProperty("line").GetInt32(),
+                            args.GetProperty("column").GetInt32(),
+                            args.GetProperty("newName").GetString()!,
+                            args.TryGetProperty("preview", out var p) ? p.GetBoolean() : true),
+                            
                         _ => throw new NotSupportedException($"Unknown tool: {toolName}")
                     };
                     
@@ -326,7 +353,10 @@ static async Task<JsonRpcResponse> HandleRequest(
                             new { name = "search_symbols", description = "Search for symbols" },
                             new { name = "get_diagnostics", description = "Get compilation errors and warnings" },
                             new { name = "get_hover_info", description = "Get symbol information at position" },
-                            new { name = "get_implementations", description = "Find implementations of interfaces/abstract members" }
+                            new { name = "get_implementations", description = "Find implementations of interfaces/abstract members" },
+                            new { name = "get_document_symbols", description = "Get document outline and symbols" },
+                            new { name = "get_call_hierarchy", description = "Get incoming/outgoing call hierarchy" },
+                            new { name = "rename_symbol", description = "Rename symbol across codebase" }
                         }
                     }
                 };
