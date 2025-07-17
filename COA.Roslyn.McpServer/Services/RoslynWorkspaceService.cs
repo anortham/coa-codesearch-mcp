@@ -253,6 +253,34 @@ public class RoslynWorkspaceService : IDisposable
         }
     }
 
+    public async Task UpdateSolutionAsync(Solution newSolution, CancellationToken cancellationToken = default)
+    {
+        // Find which workspace this solution belongs to
+        Workspace? targetWorkspace = null;
+        
+        foreach (var entry in _workspaces.Values)
+        {
+            if (entry.Workspace.CurrentSolution.Id == newSolution.Id)
+            {
+                targetWorkspace = entry.Workspace;
+                break;
+            }
+        }
+
+        if (targetWorkspace == null)
+        {
+            throw new InvalidOperationException("Could not find workspace for solution");
+        }
+
+        // Apply the solution changes
+        if (!targetWorkspace.TryApplyChanges(newSolution))
+        {
+            throw new InvalidOperationException("Failed to apply changes to workspace");
+        }
+
+        _logger.LogInformation("Applied solution changes to workspace");
+    }
+
     public void Dispose()
     {
         _cleanupTimer?.Dispose();
