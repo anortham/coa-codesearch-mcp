@@ -10,13 +10,13 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>coa-roslyn-mcp</ToolCommandName>
     <PackageId>COA.Roslyn.McpServer</PackageId>
-    <Version>1.0.0</Version>
-    <Authors>Your Team</Authors>
-    <Company>Your Company</Company>
+    <!-- Version is set by CI/CD pipeline -->
+    <Authors>Children of America</Authors>
+    <Company>Children of America</Company>
     <Description>High-performance MCP server for .NET code navigation using Roslyn</Description>
     <PackageTags>mcp;roslyn;csharp;code-navigation;lsp</PackageTags>
-    <RepositoryUrl>https://your-devops-url/YourProject/_git/coa-roslyn-mcp</RepositoryUrl>
-    <PackageProjectUrl>https://your-devops-url/YourProject/_git/coa-roslyn-mcp</PackageProjectUrl>
+    <RepositoryUrl>https://childrensal.visualstudio.com/COA%20Roslyn%20MCP/_git/COA%20Roslyn%20MCP</RepositoryUrl>
+    <PackageProjectUrl>https://childrensal.visualstudio.com/COA%20Roslyn%20MCP/_git/COA%20Roslyn%20MCP</PackageProjectUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
