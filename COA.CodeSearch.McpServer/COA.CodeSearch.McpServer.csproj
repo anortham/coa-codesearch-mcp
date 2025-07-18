@@ -10,8 +10,8 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>coa-codesearch-mcp</ToolCommandName>
     <PackageId>COA.CodeSearch.McpServer</PackageId>
-    <!-- Version is set by CI/CD pipeline -->
-    <Version>1.2.0</Version>
+    <!-- Version is set by CI/CD pipeline - DO NOT SET HERE -->
+    <!-- <Version>1.0.0</Version> -->
     <Authors>Children of America</Authors>
     <Company>Children of America</Company>
     <Description>High-performance MCP server for code search and navigation across multiple languages</Description>
