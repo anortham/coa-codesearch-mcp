@@ -31,10 +31,14 @@ public class LuceneIndexService : IDisposable
 
     public async Task<IndexWriter> GetIndexWriterAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
+        // Normalize the workspace path to the project root
+        var projectRoot = FindProjectRoot(workspacePath);
+        
         await _indexLock.WaitAsync(cancellationToken);
         try
         {
-            if (_indexes.TryGetValue(workspacePath, out var entry))
+            // Use the normalized project root as the cache key
+            if (_indexes.TryGetValue(projectRoot, out var entry))
             {
                 entry.LastAccessed = DateTime.UtcNow;
                 return entry.IndexWriter;
@@ -42,7 +46,13 @@ public class LuceneIndexService : IDisposable
 
             await EnsureCapacityAsync();
 
-            var indexPath = GetIndexPath(workspacePath);
+            // GetIndexPath will also use FindProjectRoot internally, but we already have it
+            var indexPath = Path.Combine(projectRoot, ".codesearch", "index");
+            System.IO.Directory.CreateDirectory(indexPath);
+            
+            // Ensure .gitignore includes .codesearch
+            EnsureGitIgnoreEntry(projectRoot);
+            
             var directory = FSDirectory.Open(indexPath);
             var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
             var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, analyzer)
@@ -53,16 +63,17 @@ public class LuceneIndexService : IDisposable
 
             var indexWriter = new IndexWriter(directory, config);
             
-            _indexes[workspacePath] = new IndexEntry
+            _indexes[projectRoot] = new IndexEntry
             {
                 IndexWriter = indexWriter,
                 Directory = directory,
                 Analyzer = analyzer,
-                WorkspacePath = workspacePath,
+                WorkspacePath = projectRoot,
                 LastAccessed = DateTime.UtcNow
             };
 
-            _logger.LogInformation("Created new Lucene index for workspace: {WorkspacePath}", workspacePath);
+            _logger.LogInformation("Created new Lucene index at: {IndexPath} for project root: {ProjectRoot} (original path: {WorkspacePath})", 
+                indexPath, projectRoot, workspacePath);
             return indexWriter;
         }
         finally
@@ -75,10 +86,13 @@ public class LuceneIndexService : IDisposable
     {
         var indexWriter = await GetIndexWriterAsync(workspacePath, cancellationToken);
         
+        // Normalize to project root for cache lookup
+        var projectRoot = FindProjectRoot(workspacePath);
+        
         await _indexLock.WaitAsync(cancellationToken);
         try
         {
-            if (_indexes.TryGetValue(workspacePath, out var entry))
+            if (_indexes.TryGetValue(projectRoot, out var entry))
             {
                 entry.LastAccessed = DateTime.UtcNow;
                 
@@ -87,7 +101,7 @@ public class LuceneIndexService : IDisposable
                 return new IndexSearcher(reader);
             }
             
-            throw new InvalidOperationException($"Index not found for workspace: {workspacePath}");
+            throw new InvalidOperationException($"Index not found for project: {projectRoot} (workspace: {workspacePath})");
         }
         finally
         {
@@ -97,10 +111,13 @@ public class LuceneIndexService : IDisposable
 
     public async Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
+        // Normalize to project root for cache lookup
+        var projectRoot = FindProjectRoot(workspacePath);
+        
         await _indexLock.WaitAsync(cancellationToken);
         try
         {
-            if (_indexes.TryGetValue(workspacePath, out var entry))
+            if (_indexes.TryGetValue(projectRoot, out var entry))
             {
                 entry.LastAccessed = DateTime.UtcNow;
                 return entry.Analyzer;
@@ -109,12 +126,12 @@ public class LuceneIndexService : IDisposable
             // If index doesn't exist yet, create it
             await GetIndexWriterAsync(workspacePath, cancellationToken);
             
-            if (_indexes.TryGetValue(workspacePath, out entry))
+            if (_indexes.TryGetValue(projectRoot, out entry))
             {
                 return entry.Analyzer;
             }
             
-            throw new InvalidOperationException($"Failed to get analyzer for workspace: {workspacePath}");
+            throw new InvalidOperationException($"Failed to get analyzer for project: {projectRoot} (workspace: {workspacePath})");
         }
         finally
         {
@@ -161,19 +178,72 @@ public class LuceneIndexService : IDisposable
     
     private string FindProjectRoot(string workspacePath)
     {
-        // If it's a solution or project file, get its directory
+        // Start from the workspace path
+        string currentPath = workspacePath;
+        
+        // If it's a file, start from its directory
         if (File.Exists(workspacePath))
         {
-            return Path.GetDirectoryName(workspacePath) ?? workspacePath;
+            currentPath = Path.GetDirectoryName(workspacePath) ?? workspacePath;
         }
         
-        // If it's already a directory, use it
-        if (System.IO.Directory.Exists(workspacePath))
+        // If the path doesn't exist, return the original workspace path
+        if (!System.IO.Directory.Exists(currentPath))
         {
+            _logger.LogWarning("Path does not exist: {Path}, using as-is", currentPath);
             return workspacePath;
         }
         
-        // Fallback to workspace path
+        // Walk up the directory tree looking for project root indicators
+        while (!string.IsNullOrEmpty(currentPath))
+        {
+            // Check for .git directory (most reliable indicator)
+            if (System.IO.Directory.Exists(Path.Combine(currentPath, ".git")))
+            {
+                _logger.LogDebug("Found project root at {Path} (.git directory)", currentPath);
+                return currentPath;
+            }
+            
+            // Check for solution files
+            var slnFiles = System.IO.Directory.GetFiles(currentPath, "*.sln", SearchOption.TopDirectoryOnly);
+            if (slnFiles.Length > 0)
+            {
+                _logger.LogDebug("Found project root at {Path} (solution file)", currentPath);
+                return currentPath;
+            }
+            
+            // Check for common project root files
+            if (File.Exists(Path.Combine(currentPath, ".gitignore")) ||
+                File.Exists(Path.Combine(currentPath, "package.json")) ||
+                File.Exists(Path.Combine(currentPath, "Directory.Build.props")) ||
+                File.Exists(Path.Combine(currentPath, "global.json")))
+            {
+                _logger.LogDebug("Found project root at {Path} (project root file)", currentPath);
+                return currentPath;
+            }
+            
+            // Move up one directory
+            var parent = System.IO.Directory.GetParent(currentPath);
+            if (parent == null || parent.FullName == currentPath)
+            {
+                break;
+            }
+            currentPath = parent.FullName;
+        }
+        
+        // If we couldn't find a project root, use the original directory
+        if (System.IO.Directory.Exists(workspacePath))
+        {
+            _logger.LogWarning("Could not find project root, using workspace path: {Path}", workspacePath);
+            return workspacePath;
+        }
+        else if (File.Exists(workspacePath))
+        {
+            var dir = Path.GetDirectoryName(workspacePath) ?? workspacePath;
+            _logger.LogWarning("Could not find project root, using file directory: {Path}", dir);
+            return dir;
+        }
+        
         return workspacePath;
     }
     
@@ -184,26 +254,43 @@ public class LuceneIndexService : IDisposable
             var gitIgnorePath = Path.Combine(projectRoot, ".gitignore");
             var codesearchEntry = ".codesearch/";
             
+            // Only update .gitignore if it exists - we shouldn't create new .gitignore files
             if (File.Exists(gitIgnorePath))
             {
-                var content = File.ReadAllText(gitIgnorePath);
-                if (!content.Contains(codesearchEntry))
+                var lines = File.ReadAllLines(gitIgnorePath);
+                var hasCodesearchEntry = lines.Any(line => 
+                    line.Trim() == codesearchEntry || 
+                    line.Trim() == ".codesearch" ||
+                    line.Trim() == "/.codesearch/" ||
+                    line.Trim() == "/.codesearch");
+                
+                if (!hasCodesearchEntry)
                 {
-                    // Add .codesearch/ to gitignore
-                    File.AppendAllText(gitIgnorePath, $"{Environment.NewLine}{codesearchEntry}{Environment.NewLine}");
-                    _logger.LogInformation("Added .codesearch/ to .gitignore");
+                    // Ensure we don't add duplicate empty lines
+                    var lastLine = lines.LastOrDefault();
+                    var needsNewLine = !string.IsNullOrWhiteSpace(lastLine);
+                    
+                    using (var writer = File.AppendText(gitIgnorePath))
+                    {
+                        if (needsNewLine)
+                        {
+                            writer.WriteLine();
+                        }
+                        writer.WriteLine(codesearchEntry);
+                    }
+                    
+                    _logger.LogInformation("Added .codesearch/ to existing .gitignore at {Path}", gitIgnorePath);
                 }
             }
             else
             {
-                // Create .gitignore with .codesearch/ entry
-                File.WriteAllText(gitIgnorePath, $"{codesearchEntry}{Environment.NewLine}");
-                _logger.LogInformation("Created .gitignore with .codesearch/ entry");
+                // Log that we're NOT creating a .gitignore
+                _logger.LogDebug(".gitignore not found at {Path}, skipping update", gitIgnorePath);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to update .gitignore");
+            _logger.LogWarning(ex, "Failed to update .gitignore at {Path}", projectRoot);
         }
     }
 
