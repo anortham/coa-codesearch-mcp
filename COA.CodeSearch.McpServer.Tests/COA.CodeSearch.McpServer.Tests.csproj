@@ -29,4 +29,13 @@
     <ProjectReference Include="..\COA.CodeSearch.McpServer\COA.CodeSearch.McpServer.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="TestProjects\**\*.cs;TestProjects\**\*.csproj">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+    <Content Include="xunit.runner.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
