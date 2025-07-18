@@ -399,6 +399,9 @@ FodyWeavers.xsd
 *.sln.iml
 .idea/
 
+# Claude settings
+.claude/settings.local.json
+
 # Test files
 TestFile.cs
 TestProject/
