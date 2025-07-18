@@ -18,6 +18,8 @@ public class GetDiagnosticsTool
     public async Task<object> ExecuteAsync(
         string path,
         string[]? severities = null,
+        int maxResults = 100,
+        bool summaryOnly = false,
         CancellationToken cancellationToken = default)
     {
         try
@@ -64,8 +66,46 @@ public class GetDiagnosticsTool
                 await AddDocumentDiagnosticsAsync(document, severityFilter, diagnosticResults, cancellationToken);
             }
 
+            // Count by severity
+            var severityCounts = diagnosticResults
+                .GroupBy(d => d.Severity)
+                .ToDictionary(g => g.Key, g => g.Count());
+
             // Group by file
             var groupedDiagnostics = diagnosticResults
+                .GroupBy(d => d.FilePath)
+                .Select(g => new
+                {
+                    filePath = g.Key,
+                    count = g.Count(),
+                    diagnostics = g.OrderBy(d => d.Line).ThenBy(d => d.Column).ToArray()
+                })
+                .OrderBy(g => g.filePath)
+                .ToArray();
+
+            // If summary only, don't include the actual diagnostics
+            if (summaryOnly)
+            {
+                return new
+                {
+                    success = true,
+                    path = path,
+                    totalDiagnostics = diagnosticResults.Count,
+                    severityCounts = severityCounts,
+                    fileCount = groupedDiagnostics.Length,
+                    fileSummary = groupedDiagnostics.Select(g => new
+                    {
+                        filePath = g.filePath,
+                        count = g.count
+                    }).ToArray()
+                };
+            }
+
+            // Apply maxResults limit
+            var limitedResults = diagnosticResults.Take(maxResults).ToList();
+            var truncated = diagnosticResults.Count > maxResults;
+
+            var limitedGroupedDiagnostics = limitedResults
                 .GroupBy(d => d.FilePath)
                 .Select(g => new
                 {
@@ -75,11 +115,6 @@ public class GetDiagnosticsTool
                 .OrderBy(g => g.filePath)
                 .ToArray();
 
-            // Count by severity
-            var severityCounts = diagnosticResults
-                .GroupBy(d => d.Severity)
-                .ToDictionary(g => g.Key, g => g.Count());
-
             return new
             {
                 success = true,
@@ -87,7 +122,9 @@ public class GetDiagnosticsTool
                 totalDiagnostics = diagnosticResults.Count,
                 severityCounts = severityCounts,
                 fileCount = groupedDiagnostics.Length,
-                diagnosticsByFile = groupedDiagnostics
+                resultsReturned = limitedResults.Count,
+                truncated = truncated,
+                diagnosticsByFile = limitedGroupedDiagnostics
             };
         }
         catch (Exception ex)
