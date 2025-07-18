@@ -161,13 +161,15 @@ public class FastTextSearchTool
             
             case "phrase":
                 var parser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                contentQuery = parser.Parse($"\"{queryText}\"");
+                contentQuery = parser.Parse($"\"{EscapeQueryText(queryText)}\"");
                 break;
             
             default: // standard
                 var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
                 standardParser.DefaultOperator = Operator.AND;
-                contentQuery = standardParser.Parse(queryText);
+                // Escape special characters for standard queries to handle things like [HttpGet], GetMethod(), etc.
+                var escapedQuery = EscapeQueryText(queryText);
+                contentQuery = standardParser.Parse(escapedQuery);
                 break;
         }
 
@@ -292,6 +294,23 @@ public class FastTextSearchTool
         }
         
         return contextResults;
+    }
+
+    /// <summary>
+    /// Escapes special characters in query text to prevent Lucene parsing errors
+    /// </summary>
+    private static string EscapeQueryText(string query)
+    {
+        // Lucene special characters that need escaping: + - = && || ! ( ) { } [ ] ^ " ~ * ? : \ / < >
+        var specialChars = new[] { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', '*', '?', ':', '\\', '/', '<', '>' };
+        
+        var escapedQuery = query;
+        foreach (var c in specialChars)
+        {
+            escapedQuery = escapedQuery.Replace(c.ToString(), "\\" + c);
+        }
+        
+        return escapedQuery;
     }
 
     private class SearchResult
