@@ -91,12 +91,12 @@ public class BatchOperationsTool
         return operationType switch
         {
             "search_symbols" => await _searchSymbolsTool.ExecuteAsync(
-                operation.GetProperty("pattern").GetString()!,
+                operation.GetProperty("searchPattern").GetString()!,
                 operation.GetProperty("workspacePath").GetString()!,
-                operation.TryGetProperty("kinds", out var k) && k.ValueKind == JsonValueKind.Array
-                    ? k.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                operation.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
+                    ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()
                     : null,
-                operation.TryGetProperty("fuzzy", out var f) && f.GetBoolean(),
+                operation.TryGetProperty("searchType", out var stype) ? stype.GetString() == "fuzzy" : false,
                 operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100,
                 cancellationToken),
 
@@ -104,7 +104,7 @@ public class BatchOperationsTool
                 operation.GetProperty("filePath").GetString()!,
                 operation.GetProperty("line").GetInt32(),
                 operation.GetProperty("column").GetInt32(),
-                operation.TryGetProperty("includePotential", out var ip) && ip.GetBoolean(),
+                operation.TryGetProperty("includeDeclaration", out var id) ? id.GetBoolean() : true,
                 cancellationToken),
 
             "go_to_definition" => await _goToDefinitionTool.ExecuteAsync(

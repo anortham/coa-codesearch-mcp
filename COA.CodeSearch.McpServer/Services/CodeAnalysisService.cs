@@ -438,7 +438,7 @@ public class CodeAnalysisService : IDisposable
         }
     }
 
-    public async Task UpdateSolutionAsync(Solution newSolution, CancellationToken cancellationToken = default)
+    public Task UpdateSolutionAsync(Solution newSolution, CancellationToken cancellationToken = default)
     {
         // Find which workspace this solution belongs to
         Workspace? targetWorkspace = null;
@@ -464,6 +464,8 @@ public class CodeAnalysisService : IDisposable
         }
 
         _logger.LogInformation("Applied solution changes to workspace");
+        
+        return Task.CompletedTask;
     }
 
     public void Dispose()

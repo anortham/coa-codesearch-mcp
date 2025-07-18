@@ -196,7 +196,11 @@ public class GetCallHierarchyTool
         foreach (var syntaxRef in syntaxRefs)
         {
             var syntaxNode = await syntaxRef.GetSyntaxAsync(cancellationToken);
-            var semanticModel = await solution.GetDocument(syntaxRef.SyntaxTree)?.GetSemanticModelAsync(cancellationToken);
+            var document = solution.GetDocument(syntaxRef.SyntaxTree);
+            if (document == null)
+                continue;
+                
+            var semanticModel = await document.GetSemanticModelAsync(cancellationToken);
             
             if (semanticModel == null)
                 continue;

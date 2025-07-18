@@ -1,0 +1,60 @@
+{
+  "workspacePath": "C:\\source\\COA Roslyn MCP",
+  "operations": [
+    {
+      "type": "text_search",
+      "query": "BatchOperations",
+      "workspacePath": "C:\\source\\COA Roslyn MCP",
+      "maxResults": 10
+    },
+    {
+      "type": "search_symbols",
+      "searchPattern": "BatchOperationsTool",
+      "workspacePath": "C:\\source\\COA Roslyn MCP",
+      "maxResults": 5
+    },
+    {
+      "type": "go_to_definition",
+      "filePath": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "line": 8,
+      "column": 14
+    },
+    {
+      "type": "find_references",
+      "filePath": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "line": 48,
+      "column": 30
+    },
+    {
+      "type": "get_hover_info",
+      "filePath": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "line": 60,
+      "column": 40
+    },
+    {
+      "type": "get_diagnostics",
+      "path": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "severities": ["Error", "Warning"]
+    },
+    {
+      "type": "get_document_symbols",
+      "filePath": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "includeMembers": true
+    },
+    {
+      "type": "get_call_hierarchy",
+      "filePath": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\Tools\\BatchOperationsTool.cs",
+      "line": 48,
+      "column": 30,
+      "direction": "incoming",
+      "maxDepth": 2
+    },
+    {
+      "type": "analyze_dependencies",
+      "symbol": "BatchOperationsTool",
+      "workspacePath": "C:\\source\\COA Roslyn MCP",
+      "direction": "both",
+      "depth": 2
+    }
+  ]
+}

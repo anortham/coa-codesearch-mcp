@@ -63,7 +63,7 @@ public class McpServer : BackgroundService
                     var errorResponse = new JsonRpcResponse
                     {
                         JsonRpc = "2.0",
-                        Id = null,
+                        Id = null!, // JSON-RPC 2.0 spec requires null id for parse errors
                         Error = new JsonRpcError
                         {
                             Code = -32700,

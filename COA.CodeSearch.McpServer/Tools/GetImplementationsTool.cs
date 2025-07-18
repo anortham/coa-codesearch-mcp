@@ -182,7 +182,7 @@ public class GetImplementationsTool
         }
     }
 
-    private async Task AddSymbolLocations(ISymbol symbol, string implementationType, List<ImplementationInfo> implementations, CancellationToken cancellationToken)
+    private Task AddSymbolLocations(ISymbol symbol, string implementationType, List<ImplementationInfo> implementations, CancellationToken cancellationToken)
     {
         foreach (var location in symbol.Locations)
         {
@@ -205,6 +205,8 @@ public class GetImplementationsTool
                 });
             }
         }
+        
+        return Task.CompletedTask;
     }
 
     private class ImplementationInfo : LocationInfo
