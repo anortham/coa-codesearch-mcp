@@ -7,7 +7,9 @@
       "Bash(dotnet package search:*)",
       "Bash(dotnet build)",
       "Bash(dotnet run)",
-      "Bash(dotnet build:*)"
+      "Bash(dotnet build:*)",
+      "Bash(dotnet test:*)",
+      "Bash(dotnet clean:*)"
     ],
     "deny": []
   }
