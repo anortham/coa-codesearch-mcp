@@ -1,6 +1,8 @@
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.Extensions.Logging;
 
@@ -55,26 +57,19 @@ public class GetCallHierarchyTool
                 };
             }
 
-            // Find the symbol at the position
-            var symbol = await SymbolFinder.FindSymbolAtPositionAsync(semanticModel, position, document.Project.Solution.Workspace, cancellationToken);
+            // Find a suitable symbol - either at the exact position or the enclosing method/property
+            var symbol = await FindCallableSymbolAsync(document, position, semanticModel, cancellationToken);
             if (symbol == null)
             {
                 return new
                 {
                     success = false,
-                    error = "No symbol found at the specified position"
+                    error = "No method or property found at or near the specified position. Try positioning the cursor on the method/property name."
                 };
             }
 
-            // Only methods, properties, and constructors can have call hierarchies
-            if (symbol is not IMethodSymbol && symbol is not IPropertySymbol)
-            {
-                return new
-                {
-                    success = false,
-                    error = $"Symbol '{symbol.Name}' is not a method or property. Call hierarchy is only available for methods, constructors, and properties."
-                };
-            }
+            _logger.LogInformation("Found callable symbol: {SymbolName} of type {SymbolType} at {Line}:{Column}", 
+                symbol.Name, symbol.GetType().Name, line, column);
 
             var solution = document.Project.Solution;
             var incomingCalls = new List<CallHierarchyItem>();
@@ -283,5 +278,96 @@ public class GetCallHierarchyTool
         {
             return _symbol;
         }
+    }
+
+    /// <summary>
+    /// Find a callable symbol (method/property) at or near the specified position
+    /// This is more forgiving than FindSymbolAtPositionAsync and will look for enclosing methods
+    /// </summary>
+    private async Task<ISymbol?> FindCallableSymbolAsync(
+        Document document, 
+        int position, 
+        SemanticModel semanticModel,
+        CancellationToken cancellationToken)
+    {
+        // First try to find symbol at exact position
+        var symbol = await SymbolFinder.FindSymbolAtPositionAsync(
+            semanticModel, position, document.Project.Solution.Workspace, cancellationToken);
+        
+        if (symbol is IMethodSymbol or IPropertySymbol)
+        {
+            _logger.LogDebug("Found callable symbol at exact position: {Symbol}", symbol.Name);
+            return symbol;
+        }
+
+        // If not found or not a callable symbol, try to find the enclosing method/property
+        var root = await document.GetSyntaxRootAsync(cancellationToken);
+        if (root == null) return null;
+
+        var token = root.FindToken(position);
+        var node = token.Parent;
+
+        // Walk up the syntax tree to find a method or property declaration
+        while (node != null)
+        {
+            ISymbol? declaredSymbol = null;
+            
+            switch (node)
+            {
+                case MethodDeclarationSyntax methodDecl:
+                    declaredSymbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                    break;
+                    
+                case PropertyDeclarationSyntax propDecl:
+                    declaredSymbol = semanticModel.GetDeclaredSymbol(propDecl);
+                    break;
+                    
+                case ConstructorDeclarationSyntax ctorDecl:
+                    declaredSymbol = semanticModel.GetDeclaredSymbol(ctorDecl);
+                    break;
+                    
+                case AccessorDeclarationSyntax accessor:
+                    declaredSymbol = semanticModel.GetDeclaredSymbol(accessor);
+                    break;
+            }
+            
+            if (declaredSymbol != null)
+            {
+                _logger.LogDebug("Found enclosing callable symbol: {Symbol}", declaredSymbol.Name);
+                return declaredSymbol;
+            }
+            
+            node = node.Parent;
+        }
+
+        // Last resort: try to find any method/property on the same line
+        var lineSpan = (await document.GetTextAsync(cancellationToken)).Lines.GetLineFromPosition(position).Span;
+        var nodesOnLine = root.DescendantNodes().Where(n => lineSpan.IntersectsWith(n.Span));
+        
+        foreach (var lineNode in nodesOnLine)
+        {
+            ISymbol? lineSymbol = null;
+            switch (lineNode)
+            {
+                case MethodDeclarationSyntax methodDecl:
+                    lineSymbol = semanticModel.GetDeclaredSymbol(methodDecl);
+                    break;
+                case PropertyDeclarationSyntax propDecl:
+                    lineSymbol = semanticModel.GetDeclaredSymbol(propDecl);
+                    break;
+                case ConstructorDeclarationSyntax ctorDecl:
+                    lineSymbol = semanticModel.GetDeclaredSymbol(ctorDecl);
+                    break;
+            }
+            
+            if (lineSymbol != null)
+            {
+                _logger.LogInformation("Found callable symbol on same line: {Symbol}", lineSymbol.Name);
+                return lineSymbol;
+            }
+        }
+
+        _logger.LogWarning("No callable symbol found at position {Position} or on line", position);
+        return null;
     }
 }

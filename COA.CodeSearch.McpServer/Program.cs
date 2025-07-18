@@ -75,6 +75,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<DependencyAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisTool>();
         services.AddSingleton<FastTextSearchTool>();
+        services.AddSingleton<IndexWorkspaceTool>();
         
         // Register the MCP server as a hosted service
         services.AddHostedService<McpServer>();
