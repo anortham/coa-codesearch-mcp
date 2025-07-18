@@ -57,15 +57,42 @@ public class BatchOperationsTool
 
             foreach (var operation in operations.EnumerateArray())
             {
-                var operationType = operation.GetProperty("type").GetString();
-                var operationResult = await ExecuteSingleOperationAsync(operationType!, operation, cancellationToken);
-                
-                results.Add(new
+                // Support both "operation" and "type" keys for flexibility
+                string? operationType = null;
+                if (operation.TryGetProperty("operation", out var opProp))
                 {
-                    type = operationType,
-                    success = true,
-                    result = operationResult
-                });
+                    operationType = opProp.GetString();
+                }
+                else if (operation.TryGetProperty("type", out var typeProp))
+                {
+                    operationType = typeProp.GetString();
+                }
+                else
+                {
+                    throw new ArgumentException("Each operation must have either an 'operation' or 'type' property");
+                }
+                
+                try
+                {
+                    var operationResult = await ExecuteSingleOperationAsync(operationType!, operation, cancellationToken);
+                    
+                    results.Add(new
+                    {
+                        operation = operationType,
+                        success = true,
+                        result = operationResult
+                    });
+                }
+                catch (Exception opEx)
+                {
+                    _logger.LogError(opEx, "Error executing operation {OperationType}", operationType);
+                    results.Add(new
+                    {
+                        operation = operationType,
+                        success = false,
+                        error = opEx.Message
+                    });
+                }
             }
 
             return new
@@ -91,7 +118,7 @@ public class BatchOperationsTool
         return operationType switch
         {
             "search_symbols" => await _searchSymbolsTool.ExecuteAsync(
-                operation.GetProperty("pattern").GetString()!,
+                operation.GetProperty("searchPattern").GetString()!,
                 operation.GetProperty("workspacePath").GetString()!,
                 operation.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
                     ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()
