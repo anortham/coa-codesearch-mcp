@@ -244,7 +244,9 @@ static async Task<JsonRpcResponse> HandleRequest(
                             args.GetProperty("path").GetString()!,
                             args.TryGetProperty("severities", out var s) && s.ValueKind == JsonValueKind.Array
                                 ? s.EnumerateArray().Select(e => e.GetString()!).ToArray()
-                                : null),
+                                : null,
+                            args.TryGetProperty("maxResults", out var dmr) ? dmr.GetInt32() : 100,
+                            args.TryGetProperty("summaryOnly", out var dso) && dso.GetBoolean()),
                                 
                         "get_hover_info" => await hoverTool.ExecuteAsync(
                             args.GetProperty("filePath").GetString()!,
@@ -445,7 +447,9 @@ static object[] GetToolsList()
                 properties = new
                 {
                     path = new { type = "string", description = "Path to file or project" },
-                    severities = new { type = "array", items = new { type = "string" }, description = "Severities to include (Error, Warning, Info, Hidden)" }
+                    severities = new { type = "array", items = new { type = "string" }, description = "Severities to include (Error, Warning, Info, Hidden)" },
+                    maxResults = new { type = "integer", description = "Maximum diagnostics to return (default: 100)" },
+                    summaryOnly = new { type = "boolean", description = "Return only summary without diagnostic details (default: false)" }
                 },
                 required = new string[] { "path" }
             }

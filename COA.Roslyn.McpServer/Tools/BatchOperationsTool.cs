@@ -129,6 +129,8 @@ public class BatchOperationsTool
                 operation.TryGetProperty("severities", out var s) && s.ValueKind == JsonValueKind.Array
                     ? s.EnumerateArray().Select(e => e.GetString()!).ToArray()
                     : null,
+                operation.TryGetProperty("maxResults", out var dmr) ? dmr.GetInt32() : 100,
+                operation.TryGetProperty("summaryOnly", out var dso) && dso.GetBoolean(),
                 cancellationToken),
 
             "get_call_hierarchy" => await _callHierarchyTool.ExecuteAsync(

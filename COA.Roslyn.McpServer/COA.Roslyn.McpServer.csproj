@@ -11,7 +11,7 @@
     <ToolCommandName>coa-roslyn-mcp</ToolCommandName>
     <PackageId>COA.Roslyn.McpServer</PackageId>
     <!-- Version is set by CI/CD pipeline -->
-    <Version>1.0.29</Version>
+    <Version>1.1.0</Version>
     <Authors>Children of America</Authors>
     <Company>Children of America</Company>
     <Description>High-performance MCP server for .NET code navigation using Roslyn</Description>
