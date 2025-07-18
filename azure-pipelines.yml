@@ -30,7 +30,7 @@ variables:
   dotnetSdkVersion: "9.x"
   # Base version
   majorVersion: 1
-  minorVersion: 0
+  minorVersion: 1
   # Auto-incrementing patch version
   patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
   versionPrefix: "$(majorVersion).$(minorVersion).$(patchVersion)"

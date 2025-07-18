@@ -9,7 +9,12 @@
       "Bash(dotnet run)",
       "Bash(dotnet build:*)",
       "Bash(dotnet test:*)",
-      "Bash(dotnet clean:*)"
+      "Bash(dotnet clean:*)",
+      "Bash(dotnet pack:*)",
+      "Bash(dotnet tool update:*)",
+      "Bash(dotnet tool uninstall:*)",
+      "Bash(ls:*)",
+      "Bash(dotnet tool install:*)"
     ],
     "deny": []
   }

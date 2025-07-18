@@ -1,8 +1,14 @@
 using Microsoft.CodeAnalysis;
+using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Host;
+using Microsoft.CodeAnalysis.Host.Mef;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Composition.Hosting;
+using System.Reflection;
 
 namespace COA.Roslyn.McpServer.Services;
 
@@ -59,19 +65,183 @@ public class RoslynWorkspaceService : IDisposable
             // Load the workspace
             _logger.LogInformation("Loading workspace for solution: {SolutionPath}", solutionPath);
             
-            var workspace = MSBuildWorkspace.Create();
+            // Get all C# and workspace assemblies for MEF composition
+            var csharpWorkspaceAssemblies = new[]
+            {
+                // Core assemblies
+                typeof(Workspace).Assembly,                                    // Microsoft.CodeAnalysis.Workspaces
+                typeof(MSBuildWorkspace).Assembly,                            // Microsoft.CodeAnalysis.Workspaces.MSBuild
+                typeof(CSharpCompilation).Assembly,                           // Microsoft.CodeAnalysis.CSharp
+                typeof(CSharpSyntaxTree).Assembly,                           // Microsoft.CodeAnalysis.CSharp
+                typeof(SyntaxNode).Assembly,                                  // Microsoft.CodeAnalysis
+                
+                // Try to load CSharp.Workspaces if available
+                Assembly.LoadFrom(Path.Combine(AppContext.BaseDirectory, "Microsoft.CodeAnalysis.CSharp.Workspaces.dll"))
+            }.Where(a => a != null).Distinct();
+
+            // Create host services with explicit C# support
+            var hostServices = MefHostServices.Create(csharpWorkspaceAssemblies);
+            
+            // Create workspace with enhanced properties for NuGet support
+            var properties = new Dictionary<string, string>
+            {
+                ["Configuration"] = "Release",
+                ["Platform"] = "AnyCPU",
+                ["DesignTimeBuild"] = "true",
+                ["BuildingInsideVisualStudio"] = "true",
+                ["SkipCompilerExecution"] = "true", 
+                ["ProvideCommandLineArgs"] = "true",
+                ["ContinueOnError"] = "ErrorAndContinue",
+                ["UseSharedCompilation"] = "false",
+                ["BuildInParallel"] = "false",
+                ["RunAnalyzersDuringBuild"] = "false",
+                
+                // NuGet and package reference resolution
+                ["RestorePackages"] = "true",
+                ["EnableNuGetPackageRestore"] = "true", 
+                ["RestoreProjectStyle"] = "PackageReference",
+                ["MSBuildSDKsPath"] = Environment.GetEnvironmentVariable("MSBuildSDKsPath") ?? "",
+                ["NuGetProps"] = "true",
+                ["ImportProjectExtensionProps"] = "true",
+                ["ImportNuGetBuildTargets"] = "true",
+                
+                // Assembly resolution
+                ["ResolveAssemblyWarnOrErrorOnTargetArchitectureMismatch"] = "None",
+                ["ResolveAssemblyReferenceIgnoreTargetFrameworkAttributeVersionMismatch"] = "true",
+                ["AutoGenerateBindingRedirects"] = "true",
+                ["GenerateBindingRedirectsOutputType"] = "true"
+            };
+            
+            var workspace = MSBuildWorkspace.Create(properties, hostServices);
             
             // Configure workspace
             workspace.WorkspaceFailed += (sender, args) =>
             {
                 _logger.LogWarning("Workspace diagnostic: {Kind} - {Message}", args.Diagnostic.Kind, args.Diagnostic.Message);
+                
+                // Temporary debug logging to file
+                var logPath = @"C:\temp\mcp-workspace-debug.log";
+                try
+                {
+                    System.IO.Directory.CreateDirectory(@"C:\temp");
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Workspace diagnostic: {args.Diagnostic.Kind} - {args.Diagnostic.Message}\n");
+                }
+                catch { }
             };
 
             try
             {
+                // Ensure NuGet packages are restored first
+                var solutionDir = Path.GetDirectoryName(solutionPath);
+                if (solutionDir != null)
+                {
+                    try
+                    {
+                        // Check if dotnet is available and run restore
+                        var restoreProcess = new System.Diagnostics.Process
+                        {
+                            StartInfo = new System.Diagnostics.ProcessStartInfo
+                            {
+                                FileName = "dotnet",
+                                Arguments = $"restore \"{solutionPath}\"",
+                                WorkingDirectory = solutionDir,
+                                UseShellExecute = false,
+                                RedirectStandardOutput = true,
+                                RedirectStandardError = true,
+                                CreateNoWindow = true
+                            }
+                        };
+                        
+                        restoreProcess.Start();
+                        await restoreProcess.WaitForExitAsync(cancellationToken);
+                        
+                        // Log restore result
+                        var restoreLogPath = @"C:\temp\mcp-workspace-debug.log";
+                        try
+                        {
+                            System.IO.File.AppendAllText(restoreLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] NuGet restore exit code: {restoreProcess.ExitCode}\n");
+                        }
+                        catch { }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to restore NuGet packages, continuing anyway");
+                        
+                        var restoreLogPath = @"C:\temp\mcp-workspace-debug.log";
+                        try
+                        {
+                            System.IO.File.AppendAllText(restoreLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] NuGet restore failed: {ex.Message}\n");
+                        }
+                        catch { }
+                    }
+                }
+                
                 var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: cancellationToken);
                 
                 _logger.LogInformation("Successfully loaded solution with {ProjectCount} projects", solution.Projects.Count());
+                
+                // Temporary debug logging to file
+                var logPath = @"C:\temp\mcp-workspace-debug.log";
+                try
+                {
+                    System.IO.Directory.CreateDirectory(@"C:\temp");
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Loaded solution: {solutionPath}\n");
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Project count: {solution.Projects.Count()}\n");
+                    
+                    foreach (var project in solution.Projects)
+                    {
+                        System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Project: {project.Name} at {project.FilePath}\n");
+                    }
+                }
+                catch { }
+                
+                // If no projects loaded, try loading individual projects as fallback
+                if (!solution.Projects.Any())
+                {
+                    _logger.LogWarning("No projects loaded from solution, trying individual project loading");
+                    
+                    // Find all .csproj files in the solution directory
+                    var fallbackSolutionDir = Path.GetDirectoryName(solutionPath);
+                    if (fallbackSolutionDir != null)
+                    {
+                        var csprojFiles = Directory.GetFiles(fallbackSolutionDir, "*.csproj", SearchOption.AllDirectories);
+                        
+                        try
+                        {
+                            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback: Found {csprojFiles.Length} .csproj files\n");
+                        }
+                        catch { }
+                        
+                        // Try to load each project individually
+                        foreach (var csprojPath in csprojFiles.Take(4)) // Limit to 4 projects to avoid issues
+                        {
+                            try
+                            {
+                                _logger.LogInformation("Attempting to load project: {ProjectPath}", csprojPath);
+                                var project = await workspace.OpenProjectAsync(csprojPath, cancellationToken: cancellationToken);
+                                
+                                try
+                                {
+                                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback loaded: {project.Name}\n");
+                                }
+                                catch { }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to load project: {ProjectPath}", csprojPath);
+                                
+                                try
+                                {
+                                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback failed: {csprojPath} - {ex.Message}\n");
+                                }
+                                catch { }
+                            }
+                        }
+                        
+                        // Get the updated solution
+                        solution = workspace.CurrentSolution;
+                    }
+                }
                 
                 // Log project details
                 foreach (var project in solution.Projects)

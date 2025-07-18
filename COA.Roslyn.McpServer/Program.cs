@@ -5,61 +5,95 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
 // Register MSBuild before anything else
-MSBuildLocator.RegisterDefaults();
+// Suppress MSBuild console output to avoid interfering with MCP protocol
+Environment.SetEnvironmentVariable("MSBUILDLOGASYNC", "0");
+Environment.SetEnvironmentVariable("MSBUILDDISABLENODEREUSE", "1");
+Environment.SetEnvironmentVariable("MSBUILDNOINPROCNODE", "1");
+Environment.SetEnvironmentVariable("MSBUILDLOGTASKINPUTS", "0");
+Environment.SetEnvironmentVariable("MSBUILDTARGETOUTPUTLOGGING", "0");
+Environment.SetEnvironmentVariable("MSBUILDCONSOLELOGGERPARAMETERS", "NoSummary;Verbosity=quiet");
+Environment.SetEnvironmentVariable("MSBUILDENABLEALLPROPERTYFUNCTIONS", "1");
+Environment.SetEnvironmentVariable("MSBUILDLOGVERBOSERETHROW", "0");
+Environment.SetEnvironmentVariable("MSBUILDLOGIMPORTS", "0");
+Environment.SetEnvironmentVariable("MSBUILDLOGGINGPREPROCESSOR", "0");
+Environment.SetEnvironmentVariable("MSBUILDLOGALLPROJECTFROMSOLUTION", "0");
+Environment.SetEnvironmentVariable("DOTNET_CLI_CAPTURE_TIMING", "0");
+Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", "false");
+
+// Also suppress Roslyn analyzer output
+Environment.SetEnvironmentVariable("ROSLYN_COMPILER_LOCATION", "");
+Environment.SetEnvironmentVariable("ROSLYN_ANALYZERS_ENABLED", "false");
+
+try
+{
+    MSBuildLocator.RegisterDefaults();
+}
+catch
+{
+    // Silently ignore MSBuild registration errors
+}
 
 // Handle command line arguments
-if (args.Length == 0 || args[0] == "--help" || args[0] == "-h")
+if (args.Length > 0 && (args[0] == "--help" || args[0] == "-h"))
 {
     Console.WriteLine("COA Roslyn MCP Server - High-performance code navigation for .NET");
     Console.WriteLine();
-    Console.WriteLine("Usage: coa-roslyn-mcp [command]");
+    Console.WriteLine("Usage: coa-roslyn-mcp [stdio]");
     Console.WriteLine();
-    Console.WriteLine("Commands:");
-    Console.WriteLine("  stdio    Run in STDIO mode for MCP clients");
-    Console.WriteLine("  --help   Show this help message");
-    Console.WriteLine();
-    Console.WriteLine("Example:");
-    Console.WriteLine("  coa-roslyn-mcp stdio");
+    Console.WriteLine("Runs in STDIO mode for MCP clients (default)");
     return 0;
 }
 
-if (args[0] != "stdio")
-{
-    Console.Error.WriteLine($"Unknown command: {args[0]}");
-    Console.Error.WriteLine("Run 'coa-roslyn-mcp --help' for usage information.");
-    return 1;
-}
+// Default to stdio mode - no need to require the argument
 
-var builder = Host.CreateApplicationBuilder(args);
+var builder = new HostBuilder()
+    .ConfigureHostConfiguration(config =>
+    {
+        config.AddEnvironmentVariables("DOTNET_");
+    })
+    .ConfigureLogging((context, logging) =>
+    {
+        // No logging providers - complete silence for MCP compatibility
+        logging.ClearProviders();
+    })
+    .ConfigureAppConfiguration((context, config) =>
+    {
+        config
+            .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
+            .AddEnvironmentVariables("MCP_");
+    })
+    .UseConsoleLifetime(options =>
+    {
+        options.SuppressStatusMessages = true;
+    });
 
-// Configure logging to stderr
-builder.Logging.ClearProviders();
-builder.Logging.AddConsole(options =>
-{
-    options.LogToStandardErrorThreshold = LogLevel.Debug;
-});
-
-// Add configuration
-builder.Configuration
-    .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
-    .AddEnvironmentVariables("MCP_");
 
 // Add services
-builder.Services.AddSingleton<RoslynWorkspaceService>();
-builder.Services.AddSingleton<GoToDefinitionTool>();
-builder.Services.AddSingleton<FindReferencesTool>();
-builder.Services.AddSingleton<SearchSymbolsTool>();
-builder.Services.AddSingleton<GetDiagnosticsTool>();
-builder.Services.AddSingleton<GetHoverInfoTool>();
-builder.Services.AddSingleton<GetImplementationsTool>();
-builder.Services.AddSingleton<GetDocumentSymbolsTool>();
-builder.Services.AddSingleton<GetCallHierarchyTool>();
-builder.Services.AddSingleton<RenameSymbolTool>();
+builder.ConfigureServices((context, services) =>
+{
+    services.AddSingleton<ILoggerFactory, NullLoggerFactory>();
+    services.AddSingleton(typeof(ILogger<>), typeof(NullLogger<>));
+    services.AddSingleton<RoslynWorkspaceService>();
+    services.AddSingleton<GoToDefinitionTool>();
+    services.AddSingleton<FindReferencesTool>();
+    services.AddSingleton<SearchSymbolsTool>();
+    services.AddSingleton<GetDiagnosticsTool>();
+    services.AddSingleton<GetHoverInfoTool>();
+    services.AddSingleton<GetImplementationsTool>();
+    services.AddSingleton<GetDocumentSymbolsTool>();
+    services.AddSingleton<GetCallHierarchyTool>();
+    services.AddSingleton<RenameSymbolTool>();
+    services.AddSingleton<BatchOperationsTool>();
+    services.AddSingleton<AdvancedSymbolSearchTool>();
+    services.AddSingleton<DependencyAnalysisTool>();
+    services.AddSingleton<ProjectStructureAnalysisTool>();
+});
 
 var host = builder.Build();
 var logger = host.Services.GetRequiredService<ILogger<Program>>();
@@ -74,12 +108,13 @@ var implementationsTool = host.Services.GetRequiredService<GetImplementationsToo
 var documentSymbolsTool = host.Services.GetRequiredService<GetDocumentSymbolsTool>();
 var callHierarchyTool = host.Services.GetRequiredService<GetCallHierarchyTool>();
 var renameSymbolTool = host.Services.GetRequiredService<RenameSymbolTool>();
+var batchOperationsTool = host.Services.GetRequiredService<BatchOperationsTool>();
+var advancedSymbolSearchTool = host.Services.GetRequiredService<AdvancedSymbolSearchTool>();
+var dependencyAnalysisTool = host.Services.GetRequiredService<DependencyAnalysisTool>();
+var projectStructureTool = host.Services.GetRequiredService<ProjectStructureAnalysisTool>();
 
-logger.LogInformation("COA Roslyn MCP Server starting...");
-
-// Set up console for binary mode
-Console.InputEncoding = Encoding.UTF8;
-Console.OutputEncoding = Encoding.UTF8;
+// Suppress startup log to avoid interfering with MCP protocol
+// logger.LogInformation("COA Roslyn MCP Server starting...");
 
 // JSON options
 var jsonOptions = new JsonSerializerOptions
@@ -89,98 +124,43 @@ var jsonOptions = new JsonSerializerOptions
     WriteIndented = false
 };
 
-// Handle JSON-RPC messages
-var cts = new CancellationTokenSource();
-Console.CancelKeyPress += (sender, e) =>
+// Create a background task to run the MCP server
+var serverTask = Task.Run(async () =>
 {
-    e.Cancel = true;
-    cts.Cancel();
-};
-
-// Start reading messages
-_ = Task.Run(async () =>
-{
-    using var reader = new StreamReader(Console.OpenStandardInput(), Encoding.UTF8);
-    using var writer = new StreamWriter(Console.OpenStandardOutput(), Encoding.UTF8) { AutoFlush = true };
+    // Redirect stderr to null to prevent any error output
+    Console.SetError(TextWriter.Null);
     
-    try
+    using var stdin = Console.OpenStandardInput();
+    using var stdout = Console.OpenStandardOutput();
+    using var reader = new StreamReader(stdin);
+    using var writer = new StreamWriter(stdout) { AutoFlush = true };
+
+    while (true)
     {
-        while (!cts.Token.IsCancellationRequested)
+        try
         {
             var line = await reader.ReadLineAsync();
             if (line == null) break;
-            
-            logger.LogDebug("Received: {Json}", line);
-            
-            try
-            {
-                var request = JsonSerializer.Deserialize<JsonRpcRequest>(line, jsonOptions);
-                if (request != null)
-                {
-                    // Check if this is a notification (no ID) or a request (has ID)
-                    if (request.Id == null)
-                    {
-                        // Handle notifications - don't send a response
-                        await HandleNotification(request, logger);
-                    }
-                    else
-                    {
-                        // Handle requests - send a response
-                        var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, documentSymbolsTool, callHierarchyTool, renameSymbolTool, logger);
-                        var responseJson = JsonSerializer.Serialize(response, jsonOptions);
-                        
-                        await writer.WriteLineAsync(responseJson);
-                        
-                        logger.LogDebug("Sent: {Json}", responseJson);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                logger.LogError(ex, "Error processing request");
-                var errorResponse = new JsonRpcResponse
-                {
-                    JsonRpc = "2.0",
-                    Error = new JsonRpcError
-                    {
-                        Code = -32603,
-                        Message = "Internal error",
-                        Data = ex.Message
-                    }
-                };
-                
-                var errorJson = JsonSerializer.Serialize(errorResponse, jsonOptions);
-                await writer.WriteLineAsync(errorJson);
-            }
+
+            var request = JsonSerializer.Deserialize<JsonRpcRequest>(line, jsonOptions);
+            if (request == null) continue;
+
+            var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, documentSymbolsTool, callHierarchyTool, renameSymbolTool, batchOperationsTool, advancedSymbolSearchTool, dependencyAnalysisTool, projectStructureTool, logger);
+            var responseJson = JsonSerializer.Serialize(response, jsonOptions);
+            await writer.WriteLineAsync(responseJson);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Error processing JSON-RPC request");
+            // DO NOT send error response here - just like Directus
         }
     }
-    catch (Exception ex)
-    {
-        logger.LogError(ex, "Fatal error in message loop");
-    }
-}, cts.Token);
-
-logger.LogInformation("MCP Server started and waiting for requests");
+});
 
 // Keep the host running
 await host.RunAsync();
 return 0;
 
-static async Task HandleNotification(JsonRpcRequest notification, ILogger logger)
-{
-    logger.LogDebug("Handling notification: {Method}", notification.Method);
-    
-    switch (notification.Method)
-    {
-        case "initialized":
-            logger.LogInformation("MCP server initialization completed successfully");
-            break;
-            
-        default:
-            logger.LogWarning("Unknown notification method: {Method}", notification.Method);
-            break;
-    }
-}
 
 static async Task<JsonRpcResponse> HandleRequest(
     JsonRpcRequest request,
@@ -193,6 +173,10 @@ static async Task<JsonRpcResponse> HandleRequest(
     GetDocumentSymbolsTool documentSymbolsTool,
     GetCallHierarchyTool callHierarchyTool,
     RenameSymbolTool renameSymbolTool,
+    BatchOperationsTool batchOperationsTool,
+    AdvancedSymbolSearchTool advancedSymbolSearchTool,
+    DependencyAnalysisTool dependencyAnalysisTool,
+    ProjectStructureAnalysisTool projectStructureTool,
     ILogger logger)
 {
     try
@@ -217,6 +201,15 @@ static async Task<JsonRpcResponse> HandleRequest(
                             version = "1.0.0" 
                         }
                     }
+                };
+                
+            case "initialized":
+                // MCP protocol expects a response for initialized
+                return new JsonRpcResponse
+                {
+                    JsonRpc = "2.0",
+                    Id = request.Id,
+                    Result = new { }
                 };
                 
             case "tools/call":
@@ -280,6 +273,42 @@ static async Task<JsonRpcResponse> HandleRequest(
                             args.GetProperty("column").GetInt32(),
                             args.GetProperty("newName").GetString()!,
                             args.TryGetProperty("preview", out var p) ? p.GetBoolean() : true),
+                            
+                        "batch_operations" => await batchOperationsTool.ExecuteAsync(
+                            args.GetProperty("operations")),
+                            
+                        "advanced_symbol_search" => await advancedSymbolSearchTool.ExecuteAsync(
+                            args.GetProperty("pattern").GetString()!,
+                            args.GetProperty("workspacePath").GetString()!,
+                            args.TryGetProperty("kinds", out var ak) && ak.ValueKind == JsonValueKind.Array
+                                ? ak.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                                : null,
+                            args.TryGetProperty("accessibility", out var aa) && aa.ValueKind == JsonValueKind.Array
+                                ? aa.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                                : null,
+                            args.TryGetProperty("isStatic", out var ais) ? ais.GetBoolean() : null,
+                            args.TryGetProperty("isAbstract", out var aia) ? aia.GetBoolean() : null,
+                            args.TryGetProperty("isVirtual", out var aiv) ? aiv.GetBoolean() : null,
+                            args.TryGetProperty("isOverride", out var aio) ? aio.GetBoolean() : null,
+                            args.TryGetProperty("returnType", out var art) ? art.GetString() : null,
+                            args.TryGetProperty("containingType", out var act) ? act.GetString() : null,
+                            args.TryGetProperty("containingNamespace", out var acn) ? acn.GetString() : null,
+                            args.TryGetProperty("fuzzy", out var af) && af.GetBoolean(),
+                            args.TryGetProperty("maxResults", out var amr) ? amr.GetInt32() : 100),
+                            
+                        "dependency_analysis" => await dependencyAnalysisTool.ExecuteAsync(
+                            args.GetProperty("symbol").GetString()!,
+                            args.GetProperty("workspacePath").GetString()!,
+                            args.TryGetProperty("direction", out var ddir) ? ddir.GetString() ?? "both" : "both",
+                            args.TryGetProperty("depth", out var ddepth) ? ddepth.GetInt32() : 3,
+                            args.TryGetProperty("includeTests", out var dit) && dit.GetBoolean(),
+                            args.TryGetProperty("includeExternalDependencies", out var died) && died.GetBoolean()),
+                            
+                        "project_structure_analysis" => await projectStructureTool.ExecuteAsync(
+                            args.GetProperty("workspacePath").GetString()!,
+                            args.TryGetProperty("includeMetrics", out var pim) ? pim.GetBoolean() : true,
+                            args.TryGetProperty("includeFiles", out var pif) && pif.GetBoolean(),
+                            args.TryGetProperty("includeNuGetPackages", out var pinp) && pinp.GetBoolean()),
                             
                         _ => throw new NotSupportedException($"Unknown tool: {toolName}")
                     };
@@ -502,6 +531,95 @@ static object[] GetToolsList()
                     preview = new { type = "boolean", description = "Preview changes without applying (default: true)" }
                 },
                 required = new string[] { "filePath", "line", "column", "newName" }
+            }
+        },
+        new 
+        { 
+            name = "batch_operations", 
+            description = "Execute multiple Roslyn operations in a single call",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    operations = new 
+                    { 
+                        type = "array", 
+                        items = new 
+                        { 
+                            type = "object",
+                            properties = new
+                            {
+                                type = new { type = "string", description = "Operation type (search_symbols, find_references, etc.)" }
+                            },
+                            required = new string[] { "type" }
+                        },
+                        description = "Array of operations to execute" 
+                    }
+                },
+                required = new string[] { "operations" }
+            }
+        },
+        new 
+        { 
+            name = "advanced_symbol_search", 
+            description = "Advanced symbol search with filtering by accessibility, static, return type, etc.",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    pattern = new { type = "string", description = "Search pattern" },
+                    workspacePath = new { type = "string", description = "Path to workspace or solution" },
+                    kinds = new { type = "array", items = new { type = "string" }, description = "Symbol kinds to include (Method, Property, Class, etc.)" },
+                    accessibility = new { type = "array", items = new { type = "string" }, description = "Accessibility levels (Public, Private, Internal, etc.)" },
+                    isStatic = new { type = "boolean", description = "Filter by static members" },
+                    isAbstract = new { type = "boolean", description = "Filter by abstract members" },
+                    isVirtual = new { type = "boolean", description = "Filter by virtual members" },
+                    isOverride = new { type = "boolean", description = "Filter by override members" },
+                    returnType = new { type = "string", description = "Filter by return type (for methods)" },
+                    containingType = new { type = "string", description = "Filter by containing type" },
+                    containingNamespace = new { type = "string", description = "Filter by containing namespace" },
+                    fuzzy = new { type = "boolean", description = "Use fuzzy matching (default: false)" },
+                    maxResults = new { type = "integer", description = "Maximum results to return (default: 100)" }
+                },
+                required = new string[] { "pattern", "workspacePath" }
+            }
+        },
+        new 
+        { 
+            name = "dependency_analysis", 
+            description = "Analyze code dependencies (incoming/outgoing) for a symbol",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    symbol = new { type = "string", description = "Symbol name to analyze" },
+                    workspacePath = new { type = "string", description = "Path to workspace or solution" },
+                    direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both' (default: 'both')" },
+                    depth = new { type = "integer", description = "Analysis depth (default: 3)" },
+                    includeTests = new { type = "boolean", description = "Include test projects (default: false)" },
+                    includeExternalDependencies = new { type = "boolean", description = "Include external dependencies (default: false)" }
+                },
+                required = new string[] { "symbol", "workspacePath" }
+            }
+        },
+        new 
+        { 
+            name = "project_structure_analysis", 
+            description = "Analyze project structure including dependencies, metrics, and files",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new { type = "string", description = "Path to workspace or solution" },
+                    includeMetrics = new { type = "boolean", description = "Include code metrics (default: true)" },
+                    includeFiles = new { type = "boolean", description = "Include source file listing (default: false)" },
+                    includeNuGetPackages = new { type = "boolean", description = "Include NuGet package analysis (default: false)" }
+                },
+                required = new string[] { "workspacePath" }
             }
         }
     };

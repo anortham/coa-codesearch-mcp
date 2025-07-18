@@ -54,6 +54,48 @@ public class SearchSymbolsTool
                 var project = await _workspaceService.GetProjectAsync(workspacePath, cancellationToken);
                 workspace = project?.Solution.Workspace;
             }
+            else if (Directory.Exists(workspacePath))
+            {
+                // Look for a .sln file in the directory
+                var slnFiles = Directory.GetFiles(workspacePath, "*.sln");
+                
+                // Temporary debug logging
+                try
+                {
+                    var logPath = @"C:\temp\mcp-workspace-debug.log";
+                    System.IO.Directory.CreateDirectory(@"C:\temp");
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SearchSymbols - Directory: {workspacePath}\n");
+                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SearchSymbols - Found {slnFiles.Length} .sln files\n");
+                    foreach (var sln in slnFiles)
+                    {
+                        System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SearchSymbols - Solution: {sln}\n");
+                    }
+                }
+                catch { }
+                
+                if (slnFiles.Length == 1)
+                {
+                    workspace = await _workspaceService.GetWorkspaceAsync(slnFiles[0], cancellationToken);
+                }
+                else if (slnFiles.Length > 1)
+                {
+                    return new
+                    {
+                        success = false,
+                        error = $"Multiple solution files found in {workspacePath}. Please specify the exact .sln file path."
+                    };
+                }
+                else
+                {
+                    // Look for a single .csproj file
+                    var csprojFiles = Directory.GetFiles(workspacePath, "*.csproj");
+                    if (csprojFiles.Length == 1)
+                    {
+                        var project = await _workspaceService.GetProjectAsync(csprojFiles[0], cancellationToken);
+                        workspace = project?.Solution.Workspace;
+                    }
+                }
+            }
 
             if (workspace == null)
             {
