@@ -56,6 +56,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         
+        // Lucene services
+        services.AddSingleton<LuceneIndexService>();
+        services.AddSingleton<FileIndexingService>();
+        
         // Register all tools
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();
@@ -70,6 +74,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<AdvancedSymbolSearchTool>();
         services.AddSingleton<DependencyAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisTool>();
+        services.AddSingleton<FastTextSearchTool>();
         
         // Register the MCP server as a hosted service
         services.AddHostedService<McpServer>();
