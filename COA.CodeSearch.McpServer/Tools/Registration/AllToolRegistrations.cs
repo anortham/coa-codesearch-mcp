@@ -37,6 +37,7 @@ public static class AllToolRegistrations
         
         // Text search tools
         RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
+        RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>());
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
@@ -335,7 +336,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<BatchOperationsParams>(
             name: "batch_operations",
-            description: "Perform multiple code analysis operations in one request - dramatically faster for complex workflows",
+            description: "Perform multiple code analysis operations in one request - dramatically faster for complex workflows. Supports: text_search, search_symbols, find_references, go_to_definition, get_hover_info, get_implementations, get_document_symbols, get_diagnostics, get_call_hierarchy, analyze_dependencies",
             inputSchema: new
             {
                 type = "object",
@@ -630,5 +631,38 @@ public static class AllToolRegistrations
         public int? MaxResults { get; set; }
         public bool? CaseSensitive { get; set; }
         public string? SearchType { get; set; }
+    }
+    
+    private static void RegisterIndexWorkspace(ToolRegistry registry, IndexWorkspaceTool tool)
+    {
+        registry.RegisterTool<IndexWorkspaceParams>(
+            name: "index_workspace",
+            description: "Index or re-index a workspace for fast text search - build search index before using fast_text_search for optimal performance",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new { type = "string", description = "The workspace path to index" },
+                    forceRebuild = new { type = "boolean", description = "Force rebuild even if index exists (default: false)" }
+                },
+                required = new[] { "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.WorkspacePath ?? "",
+                    parameters?.ForceRebuild ?? false,
+                    ct);
+                
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class IndexWorkspaceParams
+    {
+        public string? WorkspacePath { get; set; }
+        public bool? ForceRebuild { get; set; }
     }
 }

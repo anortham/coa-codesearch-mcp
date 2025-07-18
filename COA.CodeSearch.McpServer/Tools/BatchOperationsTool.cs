@@ -16,6 +16,8 @@ public class BatchOperationsTool
     private readonly GetImplementationsTool _implementationsTool;
     private readonly GetDocumentSymbolsTool _documentSymbolsTool;
     private readonly GetCallHierarchyTool _callHierarchyTool;
+    private readonly FastTextSearchTool _fastTextSearchTool;
+    private readonly DependencyAnalysisTool _dependencyAnalysisTool;
 
     public BatchOperationsTool(
         ILogger<BatchOperationsTool> logger,
@@ -26,7 +28,9 @@ public class BatchOperationsTool
         GetHoverInfoTool hoverTool,
         GetImplementationsTool implementationsTool,
         GetDocumentSymbolsTool documentSymbolsTool,
-        GetCallHierarchyTool callHierarchyTool)
+        GetCallHierarchyTool callHierarchyTool,
+        FastTextSearchTool fastTextSearchTool,
+        DependencyAnalysisTool dependencyAnalysisTool)
     {
         _logger = logger;
         _goToDefinitionTool = goToDefinitionTool;
@@ -37,6 +41,8 @@ public class BatchOperationsTool
         _implementationsTool = implementationsTool;
         _documentSymbolsTool = documentSymbolsTool;
         _callHierarchyTool = callHierarchyTool;
+        _fastTextSearchTool = fastTextSearchTool;
+        _dependencyAnalysisTool = dependencyAnalysisTool;
     }
 
     public async Task<object> ExecuteAsync(
@@ -139,6 +145,28 @@ public class BatchOperationsTool
                 operation.GetProperty("column").GetInt32(),
                 operation.TryGetProperty("direction", out var dir) ? dir.GetString() ?? "both" : "both",
                 operation.TryGetProperty("maxDepth", out var md) ? md.GetInt32() : 2,
+                cancellationToken),
+
+            "text_search" or "fast_text_search" or "textSearch" => await _fastTextSearchTool.ExecuteAsync(
+                operation.GetProperty("query").GetString()!,
+                operation.GetProperty("workspacePath").GetString()!,
+                operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
+                operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                    ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                    : null,
+                operation.TryGetProperty("contextLines", out var cl) ? cl.GetInt32() : null,
+                operation.TryGetProperty("maxResults", out var tmr) ? tmr.GetInt32() : 50,
+                operation.TryGetProperty("caseSensitive", out var cs) && cs.GetBoolean(),
+                operation.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
+                cancellationToken),
+
+            "analyze_dependencies" => await _dependencyAnalysisTool.ExecuteAsync(
+                operation.GetProperty("symbol").GetString()!,
+                operation.GetProperty("workspacePath").GetString()!,
+                operation.TryGetProperty("direction", out var dd) ? dd.GetString() ?? "both" : "both",
+                operation.TryGetProperty("depth", out var dp) ? dp.GetInt32() : 3,
+                operation.TryGetProperty("includeTests", out var it) && it.GetBoolean(),
+                operation.TryGetProperty("includeExternalDependencies", out var ied) && ied.GetBoolean(),
                 cancellationToken),
 
             _ => throw new NotSupportedException($"Operation type '{operationType}' not supported in batch operations")

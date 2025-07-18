@@ -122,6 +122,32 @@ Use COA CodeSearch when you need:
 - Reduce round-trip overhead
 - Complex multi-step operations
 - **Example**: "Find definition, then get all references, then analyze dependencies"
+- **Supported operations**: `text_search` (or `textSearch`), `search_symbols`, `find_references`, `go_to_definition`, `get_hover_info`, `get_implementations`, `get_document_symbols`, `get_diagnostics`, `get_call_hierarchy`, `analyze_dependencies`
+
+**Example batch with text search and dependency analysis**:
+```json
+{
+  "workspacePath": "C:\\source\\MyProject",
+  "operations": [
+    {
+      "type": "text_search",
+      "query": "UseAuthentication",
+      "maxResults": 10
+    },
+    {
+      "type": "search_symbols",
+      "pattern": "*Controller",
+      "searchType": "wildcard"
+    },
+    {
+      "type": "analyze_dependencies",
+      "symbol": "SERFormsController",
+      "direction": "outgoing",
+      "depth": 2
+    }
+  ]
+}
+```
 
 ## Performance Comparison
 
