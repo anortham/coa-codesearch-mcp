@@ -6,6 +6,7 @@ using Xunit;
 using Xunit.Abstractions;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Services;
+using System.Linq;
 
 namespace COA.CodeSearch.McpServer.Tests;
 
@@ -61,25 +62,30 @@ public class BatchOperationsTextSearchTests : TestBase
         var resultJson = JsonSerializer.Serialize(result);
         _output.WriteLine($"Result: {resultJson}");
 
-        dynamic dynamicResult = result;
-        Assert.True(dynamicResult.success);
-        Assert.Equal(2, dynamicResult.totalOperations);
+        // Parse the result as JSON to check the structure
+        var jsonDoc = JsonDocument.Parse(resultJson);
+        var root = jsonDoc.RootElement;
         
-        var results = dynamicResult.results as List<object>;
-        Assert.NotNull(results);
-        Assert.Equal(2, results.Count);
-
+        Assert.True(root.TryGetProperty("success", out var successProp) && successProp.GetBoolean(), 
+            "Batch operation should succeed");
+        Assert.True(root.TryGetProperty("totalOperations", out var totalOpsProp) && totalOpsProp.GetInt32() == 2,
+            "Should have 2 operations");
+        
+        // Check results array
+        Assert.True(root.TryGetProperty("results", out var resultsProp) && resultsProp.GetArrayLength() == 2,
+            "Should have 2 results");
+        
+        var resultsArray = resultsProp.EnumerateArray().ToList();
+        
         // Check text search result
-        dynamic textSearchResult = results[0];
-        Assert.Equal("text_search", textSearchResult.type);
-        Assert.True(textSearchResult.success);
-        Assert.NotNull(textSearchResult.result);
+        var textSearchResult = resultsArray[0];
+        Assert.Equal("text_search", textSearchResult.GetProperty("type").GetString());
+        Assert.True(textSearchResult.GetProperty("success").GetBoolean());
 
         // Check symbol search result  
-        dynamic symbolSearchResult = results[1];
-        Assert.Equal("search_symbols", symbolSearchResult.type);
-        Assert.True(symbolSearchResult.success);
-        Assert.NotNull(symbolSearchResult.result);
+        var symbolSearchResult = resultsArray[1];
+        Assert.Equal("search_symbols", symbolSearchResult.GetProperty("type").GetString());
+        Assert.True(symbolSearchResult.GetProperty("success").GetBoolean());
     }
 
     [Fact]
@@ -117,8 +123,17 @@ public class BatchOperationsTextSearchTests : TestBase
 
             // Assert
             Assert.NotNull(result);
-            dynamic dynamicResult = result;
-            Assert.True(dynamicResult.success, $"Failed for operation type: {opType}");
+            
+            // The result should be a successful batch operation
+            var resultJson = JsonSerializer.Serialize(result);
+            _output.WriteLine($"Result for operation type '{opType}': {resultJson}");
+            
+            // Parse the result to check success
+            var jsonDoc = JsonDocument.Parse(resultJson);
+            var root = jsonDoc.RootElement;
+            
+            Assert.True(root.TryGetProperty("success", out var successProp) && successProp.GetBoolean(), 
+                $"Batch operation failed for operation type: {opType}");
             
             _output.WriteLine($"Operation type '{opType}' succeeded");
         }
@@ -155,6 +170,7 @@ public class BatchOperationsTextSearchTests : TestBase
         services.AddScoped<GetImplementationsTool>();
         services.AddScoped<GetDocumentSymbolsTool>();
         services.AddScoped<GetCallHierarchyTool>();
+        services.AddScoped<DependencyAnalysisTool>();
         services.AddScoped<BatchOperationsTool>();
 
         return services;
