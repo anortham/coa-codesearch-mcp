@@ -1,6 +1,6 @@
-# COA Roslyn MCP Server - Claude AI Assistant Guide
+# COA CodeSearch MCP Server - Claude AI Assistant Guide
 
-This document provides context and guidelines for AI assistants working on the COA Roslyn MCP Server project.
+This document provides context and guidelines for AI assistants working on the COA CodeSearch MCP Server project.
 
 ## IMPORTANT: Environment Context
 
@@ -11,7 +11,7 @@ This document provides context and guidelines for AI assistants working on the C
 
 ## Project Overview
 
-COA Roslyn MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching .NET codebases. It leverages Roslyn for code analysis and is designed to be significantly faster than Python-based alternatives.
+COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and is being expanded to support Blazor/Razor files and other file types through fast text indexing. Designed to be significantly faster than Python-based alternatives.
 
 ## Key Commands
 
@@ -48,10 +48,10 @@ npx @modelcontextprotocol/inspector dotnet run -- stdio
 ## Project Structure
 
 ```
-COA.Roslyn.McpServer/
+COA.CodeSearch.McpServer/
 ├── Program.cs                     # Entry point, MCP server setup
 ├── Services/
-│   ├── RoslynWorkspaceService.cs  # Manages Roslyn workspaces
+│   ├── CodeAnalysisService.cs     # Manages code analysis and workspaces
 │   ├── CodeNavigationService.cs   # Navigation operations
 │   └── SymbolSearchService.cs     # Symbol search functionality
 ├── Tools/
@@ -65,7 +65,7 @@ COA.Roslyn.McpServer/
 ├── Models/
 │   └── [Various DTOs]              # Data transfer objects
 ├── appsettings.json               # Configuration
-└── COA.Roslyn.McpServer.csproj   # Project file
+└── COA.CodeSearch.McpServer.csproj   # Project file
 ```
 
 ## Architecture Decisions
@@ -204,8 +204,8 @@ public async Task<ToolResult> ToolName(
 ```json
 {
   "mcpServers": {
-    "roslyn": {
-      "command": "C:\\path\\to\\COA.Roslyn.McpServer.exe",
+    "codesearch": {
+      "command": "C:\\path\\to\\COA.CodeSearch.McpServer.exe",
       "args": ["stdio"]
     }
   }

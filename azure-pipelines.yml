@@ -1,4 +1,4 @@
-# Azure Pipelines CI/CD for COA Roslyn MCP Server
+# Azure Pipelines CI/CD for COA CodeSearch MCP Server
 # Builds, tests, and publishes dotnet tool to Azure Artifacts
 
 trigger:
@@ -203,7 +203,7 @@ stages:
             displayName: "Pack dotnet tool"
             inputs:
               command: "pack"
-              packagesToPack: "COA.Roslyn.McpServer/*.csproj"
+              packagesToPack: "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj"
               configuration: $(buildConfiguration)
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
               nobuild: true
