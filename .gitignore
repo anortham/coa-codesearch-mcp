@@ -414,3 +414,4 @@ test-direct.ps1
 test-request.json
 test-mcp.sh
 *.txt
+.codesearch/

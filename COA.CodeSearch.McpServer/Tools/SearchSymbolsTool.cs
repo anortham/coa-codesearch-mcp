@@ -171,7 +171,7 @@ public class SearchSymbolsTool
                                 Documentation = GetDocumentation(symbol),
                                 Location = new LocationInfo
                                 {
-                                    FilePath = doc.FilePath ?? location.SourceTree.FilePath,
+                                    FilePath = doc.FilePath ?? location.SourceTree?.FilePath ?? "Unknown",
                                     Line = lineSpan.StartLinePosition.Line + 1,
                                     Column = lineSpan.StartLinePosition.Character + 1,
                                     EndLine = lineSpan.EndLinePosition.Line + 1,
@@ -180,7 +180,7 @@ public class SearchSymbolsTool
                                 },
                                 Metadata = new Dictionary<string, object>
                                 {
-                                    ["ProjectName"] = project.Name,
+                                    ["ProjectName"] = project.Name ?? "Unknown",
                                     ["AssemblyName"] = project.AssemblyName ?? project.Name ?? "Unknown",
                                     ["IsStatic"] = symbol.IsStatic,
                                     ["IsAbstract"] = symbol.IsAbstract,

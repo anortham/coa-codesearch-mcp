@@ -355,14 +355,23 @@ public static class AllToolRegistrations
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                if (parameters.Operations == null || parameters.Operations.Count == 0)
+                    throw new InvalidParametersException("operations are required and cannot be empty");
                 
-                // Convert operations list to JsonElement
-                var operationsJson = JsonSerializer.Serialize(parameters.Operations ?? throw new InvalidParametersException("operations are required"));
-                var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
-                
-                var result = await tool.ExecuteAsync(operationsElement, ct);
+                try
+                {
+                    // Convert operations list to JsonElement
+                    var operationsJson = JsonSerializer.Serialize(parameters.Operations);
+                    var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
                     
-                return CreateSuccessResult(result);
+                    var result = await tool.ExecuteAsync(operationsElement, ct);
+                        
+                    return CreateSuccessResult(result);
+                }
+                catch (JsonException ex)
+                {
+                    throw new InvalidParametersException($"Invalid JSON in operations: {ex.Message}");
+                }
             }
         );
     }

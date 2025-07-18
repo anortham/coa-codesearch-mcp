@@ -121,7 +121,7 @@ public class AdvancedSymbolSearchTool
                                         Documentation = GetDocumentation(symbol),
                                         Location = new LocationInfo
                                         {
-                                            FilePath = doc.FilePath ?? location.SourceTree.FilePath,
+                                            FilePath = doc.FilePath ?? location.SourceTree?.FilePath ?? "Unknown",
                                             Line = lineSpan.StartLinePosition.Line + 1,
                                             Column = lineSpan.StartLinePosition.Character + 1,
                                             EndLine = lineSpan.EndLinePosition.Line + 1,
