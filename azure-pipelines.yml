@@ -30,8 +30,9 @@ variables:
   dotnetSdkVersion: "9.x"
   # Base version
   majorVersion: 1
-  minorVersion: 2
-  # Auto-incrementing patch version
+  minorVersion: 3
+  # Auto-incrementing patch version - increments on every build
+  # The counter is keyed by major.minor version, so it resets when those change
   patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
   versionPrefix: "$(majorVersion).$(minorVersion).$(patchVersion)"
   versionSuffix: ""
@@ -145,6 +146,9 @@ stages:
               Write-Host "========================================="
               Write-Host "Package Version Information:"
               Write-Host "========================================="
+              Write-Host "Major Version: $(majorVersion)"
+              Write-Host "Minor Version: $(minorVersion)"
+              Write-Host "Patch Version: $(patchVersion)"
               Write-Host "Version Prefix: $(versionPrefix)"
               Write-Host "Version Suffix: $(versionSuffix)"
               if ("$(versionSuffix)") {
@@ -153,6 +157,7 @@ stages:
               else {
                   Write-Host "Full Version: $(versionPrefix)"
               }
+              Write-Host "Counter Key: $(majorVersion).$(minorVersion)"
               Write-Host "========================================="
             displayName: "Display version information"
 
@@ -243,9 +248,6 @@ stages:
               downloadType: "single"
               artifactName: "packages"
               downloadPath: "$(System.ArtifactsDirectory)"
-
-          - task: NuGetAuthenticate@1
-            displayName: 'Authenticate with NuGet feeds'
 
           - task: DotNetCoreCLI@2
             displayName: "Push to COA Azure DevOps feed"
