@@ -14,7 +14,12 @@
       "Bash(dotnet tool update:*)",
       "Bash(dotnet tool uninstall:*)",
       "Bash(ls:*)",
-      "Bash(dotnet tool install:*)"
+      "Bash(dotnet tool install:*)",
+      "Bash(find:*)",
+      "Bash(mv:*)",
+      "Bash(sed:*)",
+      "Bash(dotnet add package:*)",
+      "Bash(git add:*)"
     ],
     "deny": []
   }
