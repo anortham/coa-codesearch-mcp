@@ -168,6 +168,8 @@ stages:
               command: "restore"
               projects: "**/*.csproj"
               feedsToUse: "select"
+              vstsFeed: "COA"
+              includeNuGetOrg: true
 
           - powershell: |
               # Prepare build/pack arguments based on version suffix
