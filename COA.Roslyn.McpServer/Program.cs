@@ -110,51 +110,47 @@ _ = Task.Run(async () =>
             var line = await reader.ReadLineAsync();
             if (line == null) break;
             
-            if (line.StartsWith("Content-Length:"))
+            logger.LogDebug("Received: {Json}", line);
+            
+            try
             {
-                var length = int.Parse(line.Substring("Content-Length:".Length).Trim());
-                await reader.ReadLineAsync(); // Empty line
-                
-                var buffer = new char[length];
-                var read = await reader.ReadBlockAsync(buffer, 0, length);
-                var json = new string(buffer, 0, read);
-                
-                logger.LogDebug("Received: {Json}", json);
-                
-                try
+                var request = JsonSerializer.Deserialize<JsonRpcRequest>(line, jsonOptions);
+                if (request != null)
                 {
-                    var request = JsonSerializer.Deserialize<JsonRpcRequest>(json, jsonOptions);
-                    if (request != null)
+                    // Check if this is a notification (no ID) or a request (has ID)
+                    if (request.Id == null)
                     {
+                        // Handle notifications - don't send a response
+                        await HandleNotification(request, logger);
+                    }
+                    else
+                    {
+                        // Handle requests - send a response
                         var response = await HandleRequest(request, goToDefTool, findRefsTool, searchTool, diagnosticsTool, hoverTool, implementationsTool, documentSymbolsTool, callHierarchyTool, renameSymbolTool, logger);
                         var responseJson = JsonSerializer.Serialize(response, jsonOptions);
                         
-                        await writer.WriteLineAsync($"Content-Length: {Encoding.UTF8.GetByteCount(responseJson)}");
-                        await writer.WriteLineAsync();
-                        await writer.WriteAsync(responseJson);
+                        await writer.WriteLineAsync(responseJson);
                         
                         logger.LogDebug("Sent: {Json}", responseJson);
                     }
                 }
-                catch (Exception ex)
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Error processing request");
+                var errorResponse = new JsonRpcResponse
                 {
-                    logger.LogError(ex, "Error processing request");
-                    var errorResponse = new JsonRpcResponse
+                    JsonRpc = "2.0",
+                    Error = new JsonRpcError
                     {
-                        JsonRpc = "2.0",
-                        Error = new JsonRpcError
-                        {
-                            Code = -32603,
-                            Message = "Internal error",
-                            Data = ex.Message
-                        }
-                    };
-                    
-                    var errorJson = JsonSerializer.Serialize(errorResponse, jsonOptions);
-                    await writer.WriteLineAsync($"Content-Length: {Encoding.UTF8.GetByteCount(errorJson)}");
-                    await writer.WriteLineAsync();
-                    await writer.WriteAsync(errorJson);
-                }
+                        Code = -32603,
+                        Message = "Internal error",
+                        Data = ex.Message
+                    }
+                };
+                
+                var errorJson = JsonSerializer.Serialize(errorResponse, jsonOptions);
+                await writer.WriteLineAsync(errorJson);
             }
         }
     }
@@ -164,76 +160,27 @@ _ = Task.Run(async () =>
     }
 }, cts.Token);
 
-// Send initialize response
-var initResponse = new
-{
-    protocolVersion = "0.1.0",
-    capabilities = new
-    {
-        tools = new
-        {
-            go_to_definition = new
-            {
-                description = "Navigate to the definition of a symbol",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        filePath = new { type = "string", description = "The absolute path to the file" },
-                        line = new { type = "integer", description = "The line number (1-based)" },
-                        column = new { type = "integer", description = "The column number (1-based)" }
-                    },
-                    required = new[] { "filePath", "line", "column" }
-                }
-            },
-            find_references = new
-            {
-                description = "Find all references to a symbol",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        filePath = new { type = "string", description = "The absolute path to the file" },
-                        line = new { type = "integer", description = "The line number (1-based)" },
-                        column = new { type = "integer", description = "The column number (1-based)" },
-                        includePotential = new { type = "boolean", description = "Include potential references", @default = false }
-                    },
-                    required = new[] { "filePath", "line", "column" }
-                }
-            },
-            search_symbols = new
-            {
-                description = "Search for symbols in the workspace",
-                inputSchema = new
-                {
-                    type = "object",
-                    properties = new
-                    {
-                        pattern = new { type = "string", description = "Search pattern (supports wildcards)" },
-                        workspacePath = new { type = "string", description = "Path to solution or project" },
-                        kinds = new { type = "array", items = new { type = "string" }, description = "Symbol kinds" },
-                        fuzzy = new { type = "boolean", description = "Use fuzzy matching", @default = false },
-                        maxResults = new { type = "integer", description = "Max results", @default = 100 }
-                    },
-                    required = new[] { "pattern", "workspacePath" }
-                }
-            }
-        }
-    },
-    serverInfo = new
-    {
-        name = "coa-roslyn-mcp",
-        version = "1.0.0"
-    }
-};
-
-logger.LogInformation("MCP Server initialized: {Info}", JsonSerializer.Serialize(initResponse, jsonOptions));
+logger.LogInformation("MCP Server started and waiting for requests");
 
 // Keep the host running
 await host.RunAsync();
 return 0;
+
+static async Task HandleNotification(JsonRpcRequest notification, ILogger logger)
+{
+    logger.LogDebug("Handling notification: {Method}", notification.Method);
+    
+    switch (notification.Method)
+    {
+        case "initialized":
+            logger.LogInformation("MCP server initialization completed successfully");
+            break;
+            
+        default:
+            logger.LogWarning("Unknown notification method: {Method}", notification.Method);
+            break;
+    }
+}
 
 static async Task<JsonRpcResponse> HandleRequest(
     JsonRpcRequest request,
@@ -259,9 +206,16 @@ static async Task<JsonRpcResponse> HandleRequest(
                     Id = request.Id,
                     Result = new
                     {
-                        protocolVersion = "0.1.0",
-                        capabilities = new { tools = true },
-                        serverInfo = new { name = "coa-roslyn-mcp", version = "1.0.0" }
+                        protocolVersion = "2024-11-05",
+                        capabilities = new 
+                        { 
+                            tools = new { }  // Empty object indicates tool support
+                        },
+                        serverInfo = new 
+                        { 
+                            name = "COA Roslyn MCP Server", 
+                            version = "1.0.0" 
+                        }
                     }
                 };
                 
@@ -330,11 +284,29 @@ static async Task<JsonRpcResponse> HandleRequest(
                         _ => throw new NotSupportedException($"Unknown tool: {toolName}")
                     };
                     
+                    // Wrap the result in the MCP-expected format
+                    var mcpResult = new
+                    {
+                        content = new[]
+                        {
+                            new
+                            {
+                                type = "text",
+                                text = JsonSerializer.Serialize(result, new JsonSerializerOptions
+                                {
+                                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                                    DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+                                    WriteIndented = false
+                                })
+                            }
+                        }
+                    };
+                    
                     return new JsonRpcResponse
                     {
                         JsonRpc = "2.0",
                         Id = request.Id,
-                        Result = result
+                        Result = mcpResult
                     };
                 }
                 break;
@@ -346,18 +318,7 @@ static async Task<JsonRpcResponse> HandleRequest(
                     Id = request.Id,
                     Result = new
                     {
-                        tools = new[]
-                        {
-                            new { name = "go_to_definition", description = "Navigate to symbol definition" },
-                            new { name = "find_references", description = "Find all references" },
-                            new { name = "search_symbols", description = "Search for symbols" },
-                            new { name = "get_diagnostics", description = "Get compilation errors and warnings" },
-                            new { name = "get_hover_info", description = "Get symbol information at position" },
-                            new { name = "get_implementations", description = "Find implementations of interfaces/abstract members" },
-                            new { name = "get_document_symbols", description = "Get document outline and symbols" },
-                            new { name = "get_call_hierarchy", description = "Get incoming/outgoing call hierarchy" },
-                            new { name = "rename_symbol", description = "Rename symbol across codebase" }
-                        }
+                        tools = GetToolsList()
                     }
                 };
         }
@@ -388,6 +349,162 @@ static async Task<JsonRpcResponse> HandleRequest(
             }
         };
     }
+}
+
+static object[] GetToolsList()
+{
+    return new object[]
+    {
+        new 
+        { 
+            name = "go_to_definition", 
+            description = "Navigate to the definition of a symbol at a specific position in a file",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" }
+                },
+                required = new string[] { "filePath", "line", "column" }
+            }
+        },
+        new 
+        { 
+            name = "find_references", 
+            description = "Find all references to a symbol at a specific position",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    includePotential = new { type = "boolean", description = "Include potential references (default: false)" }
+                },
+                required = new string[] { "filePath", "line", "column" }
+            }
+        },
+        new 
+        { 
+            name = "search_symbols", 
+            description = "Search for symbols in a workspace by pattern",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    pattern = new { type = "string", description = "Search pattern" },
+                    workspacePath = new { type = "string", description = "Path to workspace or solution" },
+                    kinds = new { type = "array", items = new { type = "string" }, description = "Symbol kinds to include" },
+                    fuzzy = new { type = "boolean", description = "Use fuzzy matching (default: false)" },
+                    maxResults = new { type = "integer", description = "Maximum results to return (default: 100)" }
+                },
+                required = new string[] { "pattern", "workspacePath" }
+            }
+        },
+        new 
+        { 
+            name = "get_diagnostics", 
+            description = "Get compilation errors and warnings for a file or project",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    path = new { type = "string", description = "Path to file or project" },
+                    severities = new { type = "array", items = new { type = "string" }, description = "Severities to include (Error, Warning, Info, Hidden)" }
+                },
+                required = new string[] { "path" }
+            }
+        },
+        new 
+        { 
+            name = "get_hover_info", 
+            description = "Get hover information for a symbol at a specific position",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" }
+                },
+                required = new string[] { "filePath", "line", "column" }
+            }
+        },
+        new 
+        { 
+            name = "get_implementations", 
+            description = "Find implementations of interfaces or abstract members",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" }
+                },
+                required = new string[] { "filePath", "line", "column" }
+            }
+        },
+        new 
+        { 
+            name = "get_document_symbols", 
+            description = "Get all symbols defined in a document",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    includeMembers = new { type = "boolean", description = "Include class members (default: true)" }
+                },
+                required = new string[] { "filePath" }
+            }
+        },
+        new 
+        { 
+            name = "get_call_hierarchy", 
+            description = "Get incoming or outgoing call hierarchy for a method",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both' (default: 'both')" },
+                    maxDepth = new { type = "integer", description = "Maximum depth to traverse (default: 2)" }
+                },
+                required = new string[] { "filePath", "line", "column" }
+            }
+        },
+        new 
+        { 
+            name = "rename_symbol", 
+            description = "Rename a symbol across the entire codebase",
+            inputSchema = new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    newName = new { type = "string", description = "New name for the symbol" },
+                    preview = new { type = "boolean", description = "Preview changes without applying (default: true)" }
+                },
+                required = new string[] { "filePath", "line", "column", "newName" }
+            }
+        }
+    };
 }
 
 // JSON-RPC types

@@ -33,6 +33,16 @@ public class SearchSymbolsTool
         {
             _logger.LogInformation("SearchSymbols request for pattern: {Pattern} in {WorkspacePath}", pattern, workspacePath);
 
+            // Validate input
+            if (string.IsNullOrWhiteSpace(pattern))
+            {
+                return new
+                {
+                    success = false,
+                    error = "Search pattern cannot be empty"
+                };
+            }
+
             // Get the workspace
             Workspace? workspace = null;
             if (workspacePath.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))

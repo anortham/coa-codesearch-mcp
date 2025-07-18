@@ -2,6 +2,13 @@
 
 This document provides context and guidelines for AI assistants working on the COA Roslyn MCP Server project.
 
+## IMPORTANT: Environment Context
+
+**This project is being developed in Claude Code, NOT Claude Desktop.** The MCP server integration will be different:
+- Claude Code has its own MCP integration mechanism
+- Do not look for Claude Desktop configuration files
+- MCP servers in Claude Code are configured differently than in Claude Desktop
+
 ## Project Overview
 
 COA Roslyn MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching .NET codebases. It leverages Roslyn for code analysis and is designed to be significantly faster than Python-based alternatives.
