@@ -107,6 +107,11 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ProjectStructureAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisToolV2>();
         services.AddSingleton<FastTextSearchTool>();
+        services.AddSingleton<FastFileSearchTool>();
+        services.AddSingleton<FastRecentFilesTool>();
+        services.AddSingleton<FastFileSizeAnalysisTool>();
+        services.AddSingleton<FastSimilarFilesTool>();
+        services.AddSingleton<FastDirectorySearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
         services.AddSingleton<InitializeMemoryHooksTool>();

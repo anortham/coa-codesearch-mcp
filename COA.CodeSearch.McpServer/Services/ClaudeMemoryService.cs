@@ -48,10 +48,6 @@ public class ClaudeMemoryService : IDisposable
         _projectMemoryWorkspace = Path.Combine(_config.BasePath, _config.ProjectMemoryPath);
         _localMemoryWorkspace = Path.Combine(_config.BasePath, _config.LocalMemoryPath);
         
-        // Ensure directories exist
-        System.IO.Directory.CreateDirectory(_projectMemoryWorkspace);
-        System.IO.Directory.CreateDirectory(_localMemoryWorkspace);
-        
         _logger.LogInformation("Claude Memory Service initialized with session {SessionId}", _currentSessionId);
     }
     

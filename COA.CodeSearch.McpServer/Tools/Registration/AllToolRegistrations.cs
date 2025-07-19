@@ -38,6 +38,11 @@ public static class AllToolRegistrations
         
         // Text search tools
         RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
+        RegisterFastFileSearch(registry, serviceProvider.GetRequiredService<FastFileSearchTool>());
+        RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
+        RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
+        RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>());
+        RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>());
         RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>());
         
         // Claude Memory System tools
@@ -652,7 +657,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchParams>(
             name: "fast_text_search",
-            description: "⚡ Blazing-fast text search across millions of lines in milliseconds - supports wildcards, fuzzy search, and shows context. Works with all file types including C#, TypeScript, JavaScript, and more",
+            description: "⚡ Straight blazin' fast text search across millions of lines in milliseconds - supports wildcards, fuzzy search, and shows context. Works with all file types including C#, TypeScript, JavaScript, and more",
             inputSchema: new
             {
                 type = "object",
@@ -699,6 +704,253 @@ public static class AllToolRegistrations
         public int? MaxResults { get; set; }
         public bool? CaseSensitive { get; set; }
         public string? SearchType { get; set; }
+    }
+    
+    private static void RegisterFastFileSearch(ToolRegistry registry, FastFileSearchTool tool)
+    {
+        registry.RegisterTool<FastFileSearchParams>(
+            name: "fast_file_search",
+            description: "⚡ Straight blazin' fast file search using Lucene index - find files by name with fuzzy matching, wildcards, and typo correction",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "File name to search for - supports wildcards (*), fuzzy (~), and regex patterns" },
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
+                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy', 'wildcard', 'exact', 'regex'", @default = "standard" },
+                    maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
+                    includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false }
+                },
+                required = new[] { "query", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.SearchType ?? "standard",
+                    parameters.MaxResults ?? 50,
+                    parameters.IncludeDirectories ?? false,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastFileSearchParams
+    {
+        public string? Query { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? SearchType { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? IncludeDirectories { get; set; }
+    }
+    
+    private static void RegisterFastRecentFiles(ToolRegistry registry, FastRecentFilesTool tool)
+    {
+        registry.RegisterTool<FastRecentFilesParams>(
+            name: "fast_recent_files",
+            description: "⚡ Straight blazin' fast search for recently modified files using Lucene's indexed timestamps - find what changed in the last hour, day, or week",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
+                    timeFrame = new { type = "string", description = "Time frame: '30m', '24h' (default), '7d', '4w' for minutes, hours, days, weeks", @default = "24h" },
+                    filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs', 'src/**/*.ts')" },
+                    extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Filter by file extensions" },
+                    maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
+                    includeSize = new { type = "boolean", description = "Include file size information", @default = true }
+                },
+                required = new[] { "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.TimeFrame ?? "24h",
+                    parameters.FilePattern,
+                    parameters.Extensions,
+                    parameters.MaxResults ?? 50,
+                    parameters.IncludeSize ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastRecentFilesParams
+    {
+        public string? WorkspacePath { get; set; }
+        public string? TimeFrame { get; set; }
+        public string? FilePattern { get; set; }
+        public string[]? Extensions { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? IncludeSize { get; set; }
+    }
+    
+    private static void RegisterFastFileSizeAnalysis(ToolRegistry registry, FastFileSizeAnalysisTool tool)
+    {
+        registry.RegisterTool<FastFileSizeAnalysisParams>(
+            name: "fast_file_size_analysis",
+            description: "⚡ Straight blazin' fast file size analysis - find large files, analyze size distributions, or locate empty files using Lucene's indexed size data",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to analyze" },
+                    mode = new { type = "string", description = "Analysis mode: 'largest' (default), 'smallest', 'range', 'zero', 'distribution'", @default = "largest" },
+                    minSize = new { type = "integer", description = "Minimum file size in bytes (for 'range' mode)" },
+                    maxSize = new { type = "integer", description = "Maximum file size in bytes (for 'range' mode)" },
+                    filePattern = new { type = "string", description = "Optional: Filter by file pattern" },
+                    extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Filter by extensions" },
+                    maxResults = new { type = "integer", description = "Maximum results", @default = 50 },
+                    includeAnalysis = new { type = "boolean", description = "Include size distribution analysis", @default = true }
+                },
+                required = new[] { "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.Mode ?? "largest",
+                    parameters.MinSize,
+                    parameters.MaxSize,
+                    parameters.FilePattern,
+                    parameters.Extensions,
+                    parameters.MaxResults ?? 50,
+                    parameters.IncludeAnalysis ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastFileSizeAnalysisParams
+    {
+        public string? WorkspacePath { get; set; }
+        public string? Mode { get; set; }
+        public long? MinSize { get; set; }
+        public long? MaxSize { get; set; }
+        public string? FilePattern { get; set; }
+        public string[]? Extensions { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? IncludeAnalysis { get; set; }
+    }
+    
+    private static void RegisterFastSimilarFiles(ToolRegistry registry, FastSimilarFilesTool tool)
+    {
+        registry.RegisterTool<FastSimilarFilesParams>(
+            name: "fast_similar_files",
+            description: "⚡ Straight blazin' fast search for files with similar content using Lucene's 'More Like This' - perfect for finding duplicate code, related implementations, or similar patterns",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    sourceFilePath = new { type = "string", description = "Path to the source file to find similar files for" },
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
+                    maxResults = new { type = "integer", description = "Maximum similar files to return", @default = 10 },
+                    minTermFreq = new { type = "integer", description = "Min times a term must appear in source", @default = 2 },
+                    minDocFreq = new { type = "integer", description = "Min docs a term must appear in", @default = 2 },
+                    minWordLength = new { type = "integer", description = "Minimum word length to consider", @default = 4 },
+                    maxWordLength = new { type = "integer", description = "Maximum word length to consider", @default = 30 },
+                    excludeExtensions = new { type = "array", items = new { type = "string" }, description = "File extensions to exclude" },
+                    includeScore = new { type = "boolean", description = "Include similarity scores", @default = true }
+                },
+                required = new[] { "sourceFilePath", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.SourceFilePath, "sourceFilePath"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.MaxResults ?? 10,
+                    parameters.MinTermFreq ?? 2,
+                    parameters.MinDocFreq ?? 2,
+                    parameters.MinWordLength ?? 4,
+                    parameters.MaxWordLength ?? 30,
+                    parameters.ExcludeExtensions,
+                    parameters.IncludeScore ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastSimilarFilesParams
+    {
+        public string? SourceFilePath { get; set; }
+        public string? WorkspacePath { get; set; }
+        public int? MaxResults { get; set; }
+        public int? MinTermFreq { get; set; }
+        public int? MinDocFreq { get; set; }
+        public int? MinWordLength { get; set; }
+        public int? MaxWordLength { get; set; }
+        public string[]? ExcludeExtensions { get; set; }
+        public bool? IncludeScore { get; set; }
+    }
+    
+    private static void RegisterFastDirectorySearch(ToolRegistry registry, FastDirectorySearchTool tool)
+    {
+        registry.RegisterTool<FastDirectorySearchParams>(
+            name: "fast_directory_search",
+            description: "⚡ Straight blazin' fast directory/folder search with fuzzy matching - find folders by name, discover project structure, locate namespaces",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Directory name to search for - supports wildcards (*), fuzzy (~)" },
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
+                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy', 'wildcard', 'exact', 'regex'", @default = "standard" },
+                    maxResults = new { type = "integer", description = "Maximum results to return", @default = 30 },
+                    includeFileCount = new { type = "boolean", description = "Include file count per directory", @default = true },
+                    groupByDirectory = new { type = "boolean", description = "Group results by unique directories", @default = true }
+                },
+                required = new[] { "query", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.SearchType ?? "standard",
+                    parameters.MaxResults ?? 30,
+                    parameters.IncludeFileCount ?? true,
+                    parameters.GroupByDirectory ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastDirectorySearchParams
+    {
+        public string? Query { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? SearchType { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? IncludeFileCount { get; set; }
+        public bool? GroupByDirectory { get; set; }
     }
     
     private static void RegisterIndexWorkspace(ToolRegistry registry, IndexWorkspaceTool tool)

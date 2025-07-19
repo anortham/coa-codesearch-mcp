@@ -420,18 +420,43 @@ TypeScript support is automatically configured on first use:
 - `GoToDefinition` - Automatically delegates to TypeScript for .ts/.js files
 - `FindReferences` - Works seamlessly across C# and TypeScript
 
-### Fast Text Search
+### Fast Text Search - Straight Blazin' Performance
 
 #### Index Management
 - `index_workspace` - Build search index (required before fast_text_search)
-- Indexes are cached in `%TEMP%/LuceneIndexes/`
+- Indexes are cached in `.codesearch/index/{hash}` directories
 - Automatic index updates on file changes
 
-#### Search Features
-- `fast_text_search` - Millisecond search across millions of lines
-- Supports wildcards (*), fuzzy (~), and exact phrases ("")
-- Context lines for better understanding
-- File pattern filtering (e.g., *.cs, src/**/*.ts)
+#### Blazin' Fast Search Tools
+- `fast_text_search` - Straight blazin' fast text search across millions of lines in milliseconds
+  - Supports wildcards (*), fuzzy (~), exact phrases (""), and regex patterns
+  - Context lines for better understanding
+  - File pattern filtering (e.g., *.cs, src/**/*.ts)
+
+- `fast_file_search` - Straight blazin' fast file search with fuzzy matching and typo correction
+  - Find files by name with typo tolerance (e.g., "UserServce" finds "UserService.cs")
+  - Supports wildcards, fuzzy matching, exact, and regex modes
+  - Performance: < 10ms for most searches
+
+- `fast_recent_files` - Find recently modified files using indexed timestamps
+  - Time frames: '30m', '24h', '7d', '4w' for minutes, hours, days, weeks
+  - Filter by file patterns and extensions
+  - Shows friendly "time ago" format
+
+- `fast_file_size_analysis` - Analyze files by size with multiple modes
+  - Modes: 'largest', 'smallest', 'range', 'zero', 'distribution'
+  - Find storage hogs, empty files, or analyze size distributions
+  - Provides detailed statistics by file type
+
+- `fast_similar_files` - Find files with similar content using Lucene's "More Like This"
+  - Perfect for finding duplicate code, related implementations, or similar patterns
+  - Configurable similarity thresholds
+  - Shows top matching terms
+
+- `fast_directory_search` - Find directories/folders with fuzzy matching
+  - Locate project folders, namespaces, or any directory by name
+  - Supports typo correction (e.g., "Sevices" finds "Services" folder)
+  - Shows file counts and types per directory
 
 ### Batch Operations
 The `batch_operations` tool allows executing multiple operations in parallel:

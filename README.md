@@ -13,7 +13,12 @@ COA CodeSearch MCP Server leverages Microsoft's Roslyn compiler platform for C# 
 - **Find References** - Find all references with smart insights and progressive disclosure (C# and TypeScript)
 - **Symbol Search** - Lightning-fast semantic search for C# symbols using Roslyn
 - **TypeScript Search** - Search TypeScript/JavaScript symbols across your codebase
-- **Fast Text Search** - Blazing-fast text search using Lucene indexing (milliseconds across millions of lines)
+- **Fast Text Search** - Straight blazin' fast text search using Lucene indexing (milliseconds across millions of lines)
+- **Fast File Search** - Find files with fuzzy matching and typo tolerance
+- **Fast Recent Files** - Find recently modified files (last hour/day/week)
+- **Fast Directory Search** - Find directories with fuzzy matching
+- **Fast File Size Analysis** - Analyze file sizes and distributions
+- **Fast Similar Files** - Find files with similar content
 - **Get Diagnostics** - Get compilation errors and warnings with intelligent categorization and hotspot detection
 - **Hover Information** - Get detailed symbol information at cursor position
 - **Find Implementations** - Find all implementations of interfaces and abstract members
@@ -195,12 +200,15 @@ Once configured, you can use natural language to navigate your codebase:
 "list_memories_by_type ArchitecturalDecision" - View all architectural decisions
 ```
 
-#### Fast Text Search
+#### Straight Blazin' Fast Search Tools
 ```
 "index_workspace" - Build search index (required before fast_text_search)
 "fast_text_search 'connection string'" - Search across millions of lines instantly
-"fast_text_search 'class.*Repository' with wildcards" - Pattern matching
-"fast_text_search 'user~' fuzzy search" - Find approximate matches
+"fast_file_search 'UserServce'" - Find files with typo tolerance (finds UserService.cs)
+"fast_recent_files '24h'" - Find files modified in last 24 hours
+"fast_directory_search 'Servces'" - Find directories with fuzzy matching
+"fast_file_size_analysis 'largest'" - Find large files or analyze size distribution
+"fast_similar_files 'UserService.cs'" - Find files with similar content
 ```
 
 The memory system automatically:
@@ -245,6 +253,55 @@ Parameters:
 - `extensions`: Optional array of extensions (e.g., ['.cs', '.ts'])
 - `contextLines`: Show N lines before/after matches (optional)
 - `searchType`: 'standard', 'wildcard', 'fuzzy', or 'phrase' (optional)
+
+##### FastFileSearch
+⚡ Straight blazin' fast file search with fuzzy matching and typo tolerance.
+
+Parameters:
+- `query`: File name to search for - supports wildcards (*), fuzzy (~), regex
+- `workspacePath`: Path to search
+- `searchType`: 'standard', 'fuzzy', 'wildcard', 'exact', 'regex' (optional)
+- `maxResults`: Maximum results to return (default: 50)
+
+##### FastRecentFiles
+⚡ Find recently modified files using indexed timestamps - straight blazin' fast!
+
+Parameters:
+- `workspacePath`: Path to search
+- `timeFrame`: '30m', '24h', '7d', '4w' for minutes, hours, days, weeks (default: '24h')
+- `filePattern`: Optional file pattern filter
+- `extensions`: Optional array of extensions to filter
+- `maxResults`: Maximum results (default: 50)
+
+##### FastFileSizeAnalysis
+⚡ Analyze files by size - find large files, empty files, or size distributions.
+
+Parameters:
+- `workspacePath`: Path to analyze
+- `mode`: 'largest', 'smallest', 'range', 'zero', 'distribution' (default: 'largest')
+- `minSize`: Minimum size in bytes (for 'range' mode)
+- `maxSize`: Maximum size in bytes (for 'range' mode)
+- `filePattern`: Optional file pattern filter
+- `maxResults`: Maximum results (default: 50)
+
+##### FastSimilarFiles
+⚡ Find files with similar content using Lucene's "More Like This" feature.
+
+Parameters:
+- `sourceFilePath`: Source file to find similar files for
+- `workspacePath`: Path to search
+- `maxResults`: Maximum similar files to return (default: 10)
+- `excludeExtensions`: Optional array of extensions to exclude
+
+##### FastDirectorySearch
+⚡ Find directories/folders with fuzzy matching - locate namespaces and project folders.
+
+Parameters:
+- `query`: Directory name to search for - supports wildcards, fuzzy matching
+- `workspacePath`: Path to search
+- `searchType`: 'standard', 'fuzzy', 'wildcard', 'exact', 'regex' (default: 'standard')
+- `maxResults`: Maximum results (default: 30)
+- `groupByDirectory`: Group results by unique directories (default: true)
 
 #### TypeScript Tools
 
