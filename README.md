@@ -8,27 +8,67 @@ COA Roslyn MCP Server leverages Microsoft's Roslyn compiler platform to provide 
 
 ## Features
 
-### Core Navigation Tools
+### Core Navigation Tools (Claude-Optimized)
 - **Go to Definition** - Navigate to symbol definitions across your codebase
-- **Find References** - Find all references to a symbol
+- **Find References** - Find all references to a symbol with smart insights and progressive disclosure
 - **Symbol Search** - Search for types, methods, properties, and other symbols
-- **Get Diagnostics** - Get compilation errors and warnings for files, projects, or solutions
+- **Get Diagnostics** - Get compilation errors and warnings with intelligent categorization and hotspot detection
 - **Hover Information** - Get detailed symbol information at cursor position
 - **Find Implementations** - Find all implementations of interfaces and abstract members
 - **Document Symbols** - Get document outline with all types and members
 - **Call Hierarchy** - Explore incoming and outgoing call trees
-- **Rename Symbol** - Rename symbols across entire codebase with preview
+- **Rename Symbol** - Rename symbols across entire codebase with smart preview and impact analysis
 
-### Advanced Analysis Tools
+### Advanced Analysis Tools (Claude-Optimized)
 - **Batch Operations** - Execute multiple Roslyn operations in a single call for 60-80% performance improvement
 - **Advanced Symbol Search** - Filter symbols by accessibility, static/abstract modifiers, return types, containing types/namespaces
-- **Dependency Analysis** - Analyze incoming/outgoing code dependencies with configurable depth and filtering
-- **Project Structure Analysis** - Comprehensive project analysis including dependencies, metrics, and code statistics
+- **Dependency Analysis** - Analyze incoming/outgoing code dependencies with smart insights, circular dependency detection, and architecture pattern analysis
+- **Project Structure Analysis** - Comprehensive project analysis with intelligent categorization, hotspot detection, and solution-level insights
 
-### Performance & Architecture
+### Performance & Architecture  
 - **Workspace Management** - Efficient caching with LRU eviction for large solutions
-- **Native Performance** - Built with .NET 9.0 and AOT compilation support
+- **Native Performance** - Built with .NET 9.0 and AOT compilation support  
 - **Parallel Processing** - Multi-threaded symbol analysis and workspace operations
+- **Progressive Disclosure** - Automatic token limit handling with smart summaries and drill-down capabilities
+- **Auto-Mode Switching** - Intelligent response optimization for large results (automatically switches to summary mode for responses >5,000 tokens)
+
+## Claude Optimization Features
+
+This MCP server is specifically optimized for Claude AI with intelligent features designed to enhance the coding experience:
+
+### Smart Response Management
+- **Token Limit Protection** - Automatic response size estimation with 25,000 token limit protection
+- **Progressive Disclosure** - Start with smart summaries, then drill down to specific details as needed
+- **Auto-Mode Switching** - Automatically switches to summary mode when full responses would exceed 5,000 tokens
+
+### Intelligent Analysis
+- **Smart Insights** - Contextual insights tailored for common development scenarios
+- **Hotspot Detection** - Automatically identifies files, components, or areas requiring attention
+- **Impact Analysis** - Understands the broader impact of changes across your codebase
+- **Next Actions** - Provides ready-to-use commands for logical next steps
+
+### Optimized Workflows
+- **Category-Based Organization** - Groups results by meaningful categories (errors by severity, files by type, etc.)
+- **Priority-Based Recommendations** - Suggests actions based on impact and urgency
+- **Detail Request Caching** - Efficient drill-down into specific results without re-analysis
+- **Context-Aware Suggestions** - Provides relevant suggestions based on project size, complexity, and patterns
+
+### Example Claude Interactions
+
+```
+You: "Find all references to UserService"
+Response: 
+- Summary: Found 47 references across 12 files
+- Key Insight: "Heavily used service - changes have wide impact"
+- Hotspots: UserController.cs (15 references), AuthService.cs (8 references)
+- Next Actions: [Review hotspots] [Get implementation details] [Analyze dependencies]
+
+You: "Review hotspots"
+Response: 
+- Detailed analysis of UserController.cs and AuthService.cs
+- Usage patterns and potential refactoring opportunities
+- Impact assessment for proposed changes
+```
 
 ## Installation
 
@@ -164,14 +204,21 @@ Parameters:
 - `line`: Line number (1-based)
 - `column`: Column number (1-based)
 
-##### FindReferences
-Find all references to a symbol at a specific location.
+##### FindReferences (Claude-Optimized)
+Find all references to a symbol with smart insights and progressive disclosure.
 
 Parameters:
 - `filePath`: Path to the source file
 - `line`: Line number (1-based)
 - `column`: Column number (1-based)
-- `includePotential`: Include potential references (optional, default: false)
+- `includeDeclaration`: Include the symbol declaration (optional, default: true)
+- `responseMode`: Response mode - 'full' or 'summary' (auto-switches for large results)
+
+Features:
+- **Smart Insights**: "Heavily used service - changes have wide impact"
+- **Hotspot Detection**: Identifies files with highest reference concentrations  
+- **Progressive Disclosure**: Summary → Hotspots → Full details
+- **Impact Analysis**: Assesses change impact and provides risk factors
 
 ##### SearchSymbols
 Search for symbols by name across the workspace.
@@ -183,12 +230,19 @@ Parameters:
 - `fuzzy`: Enable fuzzy matching (optional, default: false)
 - `maxResults`: Maximum results (optional, default: 100)
 
-##### GetDiagnostics
-Get compilation errors and warnings for a file, project, or solution.
+##### GetDiagnostics (Claude-Optimized)  
+Get compilation errors and warnings with intelligent categorization and hotspot detection.
 
 Parameters:
 - `path`: Path to the file, project, or solution
-- `severities`: Filter by severity (optional) - array of "error", "warning", "info", "hidden"
+- `severities`: Filter by severity (optional) - array of "Error", "Warning", "Info", "Hidden"
+- `responseMode`: Response mode - 'full' or 'summary' (auto-switches for large results)
+
+Features:
+- **Smart Categorization**: Groups diagnostics by category and severity
+- **Hotspot Detection**: Identifies files with the most issues
+- **Priority Recommendations**: "🚨 5 errors preventing compilation - must fix immediately"
+- **Progressive Disclosure**: Summary → Categories → Individual diagnostics
 
 ##### GetHoverInfo
 Get detailed symbol information at a specific position (like IDE hover tooltips).
@@ -223,8 +277,8 @@ Parameters:
 - `direction`: "incoming", "outgoing", or "both" (optional, default: "both")
 - `maxDepth`: Maximum depth to traverse (optional, default: 2)
 
-##### RenameSymbol
-Rename a symbol across the entire codebase.
+##### RenameSymbol (Claude-Optimized)
+Rename a symbol across the entire codebase with smart preview and impact analysis.
 
 Parameters:
 - `filePath`: Path to the source file
@@ -232,6 +286,13 @@ Parameters:
 - `column`: Column number (1-based)
 - `newName`: The new name for the symbol
 - `preview`: Preview changes without applying (optional, default: true)
+- `responseMode`: Response mode - 'full' or 'summary' (auto-switches for large renames)
+
+Features:
+- **Impact Analysis**: "High-impact rename: 47 occurrences across 12 files"
+- **Smart Insights**: "Renaming public interface will affect all implementations"
+- **Hotspot Detection**: Identifies files with the most changes
+- **Progressive Disclosure**: Summary → Hotspots → Full change preview
 
 #### Advanced Analysis Tools
 
@@ -261,8 +322,8 @@ Parameters:
 - `fuzzy`: Use fuzzy matching (optional, default: false)
 - `maxResults`: Maximum results to return (optional, default: 100)
 
-##### DependencyAnalysis
-Analyze code dependencies (incoming/outgoing) for a symbol.
+##### DependencyAnalysis (Claude-Optimized)
+Analyze code dependencies with smart insights, circular dependency detection, and architecture analysis.
 
 Parameters:
 - `symbol`: Symbol name to analyze
@@ -271,15 +332,30 @@ Parameters:
 - `depth`: Analysis depth (optional, default: 3)
 - `includeTests`: Include test projects (optional, default: false)
 - `includeExternalDependencies`: Include external dependencies (optional, default: false)
+- `responseMode`: Response mode - 'full' or 'summary' (auto-switches for complex graphs)
 
-##### ProjectStructureAnalysis
-Analyze project structure including dependencies, metrics, and files.
+Features:
+- **Circular Dependency Detection**: Identifies problematic dependency cycles
+- **Architecture Insights**: "Layer violation detected - UI directly depends on Data"
+- **Coupling Analysis**: Measures instability and identifies refactoring opportunities
+- **Smart Insights**: "Stable component - many depend on it but it has few dependencies"
+
+##### ProjectStructureAnalysis (Claude-Optimized)
+Comprehensive project analysis with intelligent categorization, hotspot detection, and solution-level insights.
 
 Parameters:
 - `workspacePath`: Path to workspace or solution
 - `includeMetrics`: Include code metrics (optional, default: true)
 - `includeFiles`: Include source file listing (optional, default: false)
 - `includeNuGetPackages`: Include NuGet package analysis (optional, default: false)
+- `responseMode`: Response mode - 'full' or 'summary' (auto-switches for large solutions)
+
+Features:
+- **Solution-Level Insights**: "Large enterprise solution with 47 projects"
+- **Project Categorization**: Groups projects by type (Web, API, Tests, Libraries)
+- **Hotspot Detection**: Identifies largest projects requiring attention
+- **Circular Reference Detection**: Finds problematic project dependencies
+- **NuGet Analysis**: Detects version conflicts and suggests updates
 
 ## Configuration
 
@@ -298,6 +374,14 @@ Parameters:
     "WorkspaceTimeout": "00:30:00",
     "EnableDiagnostics": true,
     "ParallelismDegree": 4
+  },
+  "ResponseLimits": {
+    "MaxTokens": 25000,
+    "SafetyMargin": 0.8,
+    "DefaultMaxResults": 50,
+    "EnableTruncation": true,
+    "EnablePagination": true,
+    "AutoModeSwitchThreshold": 5000
   }
 }
 ```
