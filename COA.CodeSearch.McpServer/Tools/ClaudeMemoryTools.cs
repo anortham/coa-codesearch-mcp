@@ -11,12 +11,14 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class ClaudeMemoryTools
 {
     private readonly ClaudeMemoryService _memoryService;
+    private readonly MemoryBackupService _backupService;
     private readonly ILogger<ClaudeMemoryTools> _logger;
 
-    public ClaudeMemoryTools(ILogger<ClaudeMemoryTools> logger, ClaudeMemoryService memoryService)
+    public ClaudeMemoryTools(ILogger<ClaudeMemoryTools> logger, ClaudeMemoryService memoryService, MemoryBackupService backupService)
     {
         _logger = logger;
         _memoryService = memoryService;
+        _backupService = backupService;
     }
 
     public async Task<object> RememberDecision(
@@ -342,6 +344,107 @@ public class ClaudeMemoryTools
         }
         
         return content.Length > maxLength ? content[..maxLength] + "..." : content;
+    }
+    
+    public async Task<object> BackupMemories(
+        string[]? scopes = null,
+        bool includeLocal = false)  // Changed default to false - only backup project memories
+    {
+        try
+        {
+            // Default scopes if not specified (project-level memories only)
+            scopes ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            
+            if (includeLocal)
+            {
+                // Only include local memories if explicitly requested
+                scopes = scopes.Concat(new[] { "WorkSession", "LocalInsight" }).ToArray();
+            }
+            
+            var result = await _backupService.BackupMemoriesAsync(scopes);
+            
+            if (result.Success)
+            {
+                _logger.LogInformation("Memory backup completed: {Count} documents backed up to {Path}", 
+                    result.DocumentsBackedUp, result.BackupPath);
+                
+                return new
+                {
+                    success = true,
+                    message = $"✅ Backed up {result.DocumentsBackedUp} memories to {result.BackupPath}",
+                    documentsBackedUp = result.DocumentsBackedUp,
+                    backupPath = result.BackupPath,
+                    backupTime = result.BackupTime
+                };
+            }
+            else
+            {
+                return new
+                {
+                    success = false,
+                    message = $"❌ Backup failed: {result.Error}"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to backup memories");
+            return new
+            {
+                success = false,
+                message = $"❌ Backup failed: {ex.Message}"
+            };
+        }
+    }
+    
+    public async Task<object> RestoreMemories(
+        string[]? scopes = null,
+        bool includeLocal = false)  // Changed default to false - only restore project memories
+    {
+        try
+        {
+            // Default scopes if not specified (project-level memories only)
+            scopes ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            
+            if (includeLocal)
+            {
+                // Only include local memories if explicitly requested
+                scopes = scopes.Concat(new[] { "WorkSession", "LocalInsight" }).ToArray();
+            }
+            
+            var result = await _backupService.RestoreMemoriesAsync(scopes);
+            
+            if (result.Success)
+            {
+                _logger.LogInformation("Memory restore completed: {Count} documents restored", 
+                    result.DocumentsRestored);
+                
+                return new
+                {
+                    success = true,
+                    message = $"✅ Restored {result.DocumentsRestored} memories from backup",
+                    documentsRestored = result.DocumentsRestored,
+                    restoreTime = result.RestoreTime
+                };
+            }
+            else
+            {
+                return new
+                {
+                    success = false,
+                    message = $"❌ Restore failed: {result.Error}"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to restore memories");
+            return new
+            {
+                success = false,
+                message = $"❌ Restore failed: {ex.Message}"
+            };
+        }
     }
 }
 

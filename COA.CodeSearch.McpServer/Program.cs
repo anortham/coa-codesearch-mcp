@@ -77,6 +77,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Claude Memory System
         services.AddSingleton<ClaudeMemoryService>();
+        services.AddSingleton<MemoryBackupService>();
         
         // TypeScript Analysis
         services.AddSingleton<TypeScriptInstaller>();

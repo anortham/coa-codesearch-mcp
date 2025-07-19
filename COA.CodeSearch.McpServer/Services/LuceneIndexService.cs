@@ -7,11 +7,27 @@ using Lucene.Net.Util;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
-/// Improved Lucene index service with better lock handling and thread safety
+/// Improved Lucene index service with better lock handling and thread safety.
+/// 
+/// Design Decisions (based on Lucene.NET 4.8 docs review):
+/// 1. Long-lived writers: We maintain writers for performance in an interactive MCP server context.
+///    The docs recommend short-lived writers for batch operations, but our use case benefits from
+///    keeping writers open to avoid constant open/close overhead.
+/// 2. Lock recovery: Implements automatic recovery for stuck locks, especially critical for memory indexes.
+/// 3. Thread safety: Uses SemaphoreSlim for synchronization. IndexWriter itself is thread-safe.
+/// 4. Memory protection: Special handling ensures memory indexes are never cleared, only locks removed.
+/// 
+/// Trade-offs:
+/// - Long-lived writers may hold resources but provide better interactive performance
+/// - Risk of stuck locks is mitigated by our recovery mechanism
+/// - Memory indexes use CREATE_OR_APPEND to preserve data across sessions
 /// </summary>
 public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
 {
@@ -25,7 +41,26 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private const string WriteLockFilename = "write.lock";
     private const string SegmentsFilename = "segments.gen";
+    private const string MetadataFilename = "metadata.json";
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
+    
+    private readonly ConcurrentDictionary<string, IndexMetadata> _metadataCache = new();
+    private readonly SemaphoreSlim _metadataLock = new(1, 1);
+    private readonly ConcurrentDictionary<string, int> _recoveryAttempts = new();
+    private const int MaxRecoveryAttempts = 3;
+    
+    private class IndexMetadata
+    {
+        public Dictionary<string, IndexEntry> Indexes { get; set; } = new();
+    }
+    
+    private class IndexEntry
+    {
+        public string OriginalPath { get; set; } = string.Empty;
+        public string HashPath { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime LastAccessed { get; set; }
+    }
     
     private class IndexContext
     {
@@ -33,8 +68,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         public IndexWriter? Writer { get; set; }
         public DirectoryReader? Reader { get; set; }
         public DateTime LastAccessed { get; set; }
+        public DateTime LastCommitted { get; set; }
         public string Path { get; set; } = string.Empty;
         public readonly SemaphoreSlim Lock = new(1, 1);
+        public int PendingChanges { get; set; }
     }
     
     public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration)
@@ -70,8 +107,38 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                     {
                         if (isStuck)
                         {
-                            _logger.LogWarning("Index at {Path} has stuck lock. Clearing index for rebuild.", indexPath);
-                            ClearIndex(indexPath);
+                            // Check if this is a protected memory index
+                            if (IsProtectedMemoryIndex(indexPath))
+                            {
+                                // Check recovery attempts
+                                var attempts = _recoveryAttempts.GetOrAdd(indexPath, 0);
+                                if (attempts >= MaxRecoveryAttempts)
+                                {
+                                    _logger.LogError("Memory index at {Path} has stuck lock and exceeded max recovery attempts ({Max}). Manual intervention required.", 
+                                        indexPath, MaxRecoveryAttempts);
+                                    throw new InvalidOperationException($"Memory index at {indexPath} has a stuck lock after {MaxRecoveryAttempts} recovery attempts. Please manually remove the write.lock file.");
+                                }
+                                
+                                _logger.LogWarning("Memory index at {Path} has stuck lock. Attempting automatic recovery.", indexPath);
+                                
+                                // Try to remove only the lock file
+                                if (TryRemoveWriteLock(indexPath))
+                                {
+                                    _logger.LogInformation("Successfully recovered memory index at {Path} by removing stuck lock", indexPath);
+                                    // Continue with normal index creation
+                                }
+                                else
+                                {
+                                    _logger.LogError("Failed to remove stuck lock from memory index at {Path}", indexPath);
+                                    throw new InvalidOperationException($"Memory index at {indexPath} has a stuck lock that could not be removed automatically.");
+                                }
+                            }
+                            else
+                            {
+                                // For non-memory indexes, use the existing clear strategy
+                                _logger.LogWarning("Index at {Path} has stuck lock. Clearing index for rebuild.", indexPath);
+                                ClearIndex(indexPath);
+                            }
                         }
                         else
                         {
@@ -82,6 +149,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                     
                     context = CreateIndexContext(indexPath, forceRecreate);
                     _indexes.TryAdd(indexPath, context);
+                    
+                    // Reset recovery attempts on successful creation
+                    ResetRecoveryAttempts(indexPath);
                 }
             }
             finally
@@ -97,7 +167,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             // Ensure writer is still valid
             if (context.Writer == null)
             {
-                context.Writer = CreateWriter(context.Directory, forceRecreate);
+                context.Writer = CreateWriter(context.Directory, forceRecreate, context.Path);
             }
             
             context.LastAccessed = DateTime.UtcNow;
@@ -181,12 +251,92 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     }
     
     /// <summary>
+    /// Check if a path is a protected memory index
+    /// </summary>
+    private bool IsProtectedMemoryIndex(string indexPath)
+    {
+        var basePath = GetBasePath();
+        var protectedPaths = new[]
+        {
+            Path.Combine(basePath, "project-memory"),
+            Path.Combine(basePath, "local-memory")
+        };
+        
+        return protectedPaths.Any(p => indexPath.Equals(p, StringComparison.OrdinalIgnoreCase));
+    }
+    
+    /// <summary>
+    /// Safely remove only the write.lock file from an index without deleting any data
+    /// </summary>
+    private bool TryRemoveWriteLock(string indexPath)
+    {
+        var lockPath = Path.Combine(indexPath, WriteLockFilename);
+        
+        if (!File.Exists(lockPath))
+        {
+            _logger.LogDebug("No write.lock file found at {Path}", lockPath);
+            return true;
+        }
+        
+        try
+        {
+            // Log the recovery attempt
+            var recoveryCount = _recoveryAttempts.AddOrUpdate(indexPath, 1, (key, count) => count + 1);
+            _logger.LogWarning("Attempting to remove write.lock from {Path} (attempt {Count}/{Max})", 
+                indexPath, recoveryCount, MaxRecoveryAttempts);
+            
+            // Verify this is indeed a stuck lock before removing
+            var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
+            if (lockAge < _lockTimeout)
+            {
+                _logger.LogInformation("Lock at {Path} is not stuck (age: {Age}), skipping removal", lockPath, lockAge);
+                return false;
+            }
+            
+            // For memory indexes, log additional information
+            if (IsProtectedMemoryIndex(indexPath))
+            {
+                _logger.LogWarning("Removing stuck lock from PROTECTED memory index at {Path}. Lock age: {Age}", 
+                    indexPath, lockAge);
+            }
+            
+            File.Delete(lockPath);
+            _logger.LogInformation("Successfully removed stuck write.lock from {Path} (age: {Age})", lockPath, lockAge);
+            
+            // Verify index data is still intact
+            var segmentsPath = Path.Combine(indexPath, SegmentsFilename);
+            if (File.Exists(segmentsPath))
+            {
+                _logger.LogInformation("Index segments verified intact at {Path}", indexPath);
+            }
+            else
+            {
+                _logger.LogWarning("No segments file found at {Path} after lock removal", indexPath);
+            }
+            
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to remove write.lock from {Path}", indexPath);
+            return false;
+        }
+    }
+    
+    /// <summary>
     /// Clear an index directory (nuclear option for stuck locks)
     /// </summary>
     private void ClearIndex(string indexPath)
     {
         try
         {
+            // CRITICAL: Protect memory indexes from accidental deletion
+            if (IsProtectedMemoryIndex(indexPath))
+            {
+                _logger.LogWarning("Attempted to clear protected memory index at {Path}. Operation blocked.", indexPath);
+                throw new InvalidOperationException($"Cannot clear protected memory index at {indexPath}");
+            }
+            
             if (System.IO.Directory.Exists(indexPath))
             {
                 System.IO.Directory.Delete(indexPath, recursive: true);
@@ -207,7 +357,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         System.IO.Directory.CreateDirectory(indexPath);
         
         var directory = FSDirectory.Open(indexPath);
-        var writer = CreateWriter(directory, forceRecreate);
+        var writer = CreateWriter(directory, forceRecreate, indexPath);
         
         return new IndexContext
         {
@@ -218,7 +368,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         };
     }
     
-    private IndexWriter CreateWriter(FSDirectory directory, bool forceRecreate)
+    private IndexWriter CreateWriter(FSDirectory directory, bool forceRecreate, string? indexPath = null)
     {
         var config = new IndexWriterConfig(Version, _analyzer)
         {
@@ -226,10 +376,62 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             OpenMode = forceRecreate ? OpenMode.CREATE : OpenMode.CREATE_OR_APPEND
         };
         
-        return new IndexWriter(directory, config);
+        try
+        {
+            return new IndexWriter(directory, config);
+        }
+        catch (LockObtainFailedException ex)
+        {
+            // If we have an index path and it's a memory index, try one more recovery attempt
+            if (indexPath != null && IsProtectedMemoryIndex(indexPath))
+            {
+                _logger.LogWarning(ex, "Failed to obtain lock for memory index at {Path}, attempting final recovery", indexPath);
+                
+                if (TryRemoveWriteLock(indexPath))
+                {
+                    // Try once more after removing the lock
+                    try
+                    {
+                        var writer = new IndexWriter(directory, config);
+                        // Reset recovery attempts on successful recovery
+                        ResetRecoveryAttempts(indexPath);
+                        _logger.LogInformation("Successfully created writer for memory index at {Path} after lock recovery", indexPath);
+                        return writer;
+                    }
+                    catch (Exception retryEx)
+                    {
+                        _logger.LogError(retryEx, "Failed to create writer even after removing lock for memory index at {Path}", indexPath);
+                        throw;
+                    }
+                }
+            }
+            
+            throw;
+        }
     }
     
     private string GetIndexPath(string workspacePath)
+    {
+        var basePath = GetBasePath();
+        
+        // If the workspace path already starts with our base path, it's a memory path - use it directly
+        if (workspacePath.StartsWith(basePath))
+        {
+            return workspacePath;
+        }
+        
+        // Otherwise it's a code search index - use hash-based directory name
+        var indexRoot = Path.Combine(basePath, "index");
+        var hashPath = GenerateHashPath(workspacePath);
+        var fullPath = Path.Combine(indexRoot, hashPath);
+        
+        // Update metadata
+        UpdateMetadata(workspacePath, hashPath);
+        
+        return fullPath;
+    }
+    
+    private string GetBasePath()
     {
         var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
         
@@ -255,50 +457,197 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             basePath = Path.Combine(projectRoot, basePath);
         }
         
-        // If the workspace path already starts with our base path, it's a memory path - use it directly
-        if (workspacePath.StartsWith(basePath))
+        return basePath;
+    }
+    
+    private string GenerateHashPath(string workspacePath)
+    {
+        using var sha256 = SHA256.Create();
+        var bytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(workspacePath));
+        
+        // Convert to hex and take first 8 characters for a short hash
+        var hash = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant();
+        return hash.Substring(0, 8);
+    }
+    
+    private void UpdateMetadata(string originalPath, string hashPath)
+    {
+        _metadataLock.Wait();
+        try
         {
-            return workspacePath;
+            var metadataPath = GetMetadataPath();
+            var metadata = LoadMetadata(metadataPath);
+            
+            if (!metadata.Indexes.ContainsKey(hashPath))
+            {
+                metadata.Indexes[hashPath] = new IndexEntry
+                {
+                    OriginalPath = originalPath,
+                    HashPath = hashPath,
+                    CreatedAt = DateTime.UtcNow,
+                    LastAccessed = DateTime.UtcNow
+                };
+            }
+            else
+            {
+                metadata.Indexes[hashPath].LastAccessed = DateTime.UtcNow;
+            }
+            
+            SaveMetadata(metadataPath, metadata);
+            _metadataCache[hashPath] = metadata;
+        }
+        finally
+        {
+            _metadataLock.Release();
+        }
+    }
+    
+    private string GetMetadataPath()
+    {
+        var basePath = GetBasePath();
+        var indexRoot = Path.Combine(basePath, "index");
+        System.IO.Directory.CreateDirectory(indexRoot);
+        return Path.Combine(indexRoot, MetadataFilename);
+    }
+    
+    private IndexMetadata LoadMetadata(string metadataPath)
+    {
+        if (File.Exists(metadataPath))
+        {
+            try
+            {
+                var json = File.ReadAllText(metadataPath);
+                return JsonSerializer.Deserialize<IndexMetadata>(json) ?? new IndexMetadata();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to load metadata from {Path}", metadataPath);
+            }
         }
         
-        // Otherwise it's a code search index - put it under the index subdirectory
-        return Path.Combine(basePath, "index", 
-            workspacePath.Replace(':', '_').Replace('\\', '_').Replace('/', '_'));
+        return new IndexMetadata();
+    }
+    
+    private void SaveMetadata(string metadataPath, IndexMetadata metadata)
+    {
+        try
+        {
+            var options = new JsonSerializerOptions
+            {
+                WriteIndented = true
+            };
+            var json = JsonSerializer.Serialize(metadata, options);
+            File.WriteAllText(metadataPath, json);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to save metadata to {Path}", metadataPath);
+        }
     }
     
     /// <summary>
-    /// Clean up old or stuck indexes
+    /// Get the original workspace path from a hash path (for debugging/logging)
+    /// </summary>
+    public string? GetOriginalPath(string hashPath)
+    {
+        _metadataLock.Wait();
+        try
+        {
+            var metadataPath = GetMetadataPath();
+            var metadata = LoadMetadata(metadataPath);
+            
+            if (metadata.Indexes.TryGetValue(hashPath, out var entry))
+            {
+                return entry.OriginalPath;
+            }
+            
+            return null;
+        }
+        finally
+        {
+            _metadataLock.Release();
+        }
+    }
+    
+    /// <summary>
+    /// Get all index mappings (for debugging/maintenance)
+    /// </summary>
+    public Dictionary<string, string> GetAllIndexMappings()
+    {
+        _metadataLock.Wait();
+        try
+        {
+            var metadataPath = GetMetadataPath();
+            var metadata = LoadMetadata(metadataPath);
+            
+            return metadata.Indexes.ToDictionary(
+                kvp => kvp.Value.OriginalPath,
+                kvp => kvp.Key
+            );
+        }
+        finally
+        {
+            _metadataLock.Release();
+        }
+    }
+    
+    /// <summary>
+    /// Reset recovery attempts for a given index path (called after successful operations)
+    /// </summary>
+    private void ResetRecoveryAttempts(string indexPath)
+    {
+        if (_recoveryAttempts.TryRemove(indexPath, out var attempts))
+        {
+            if (attempts > 0)
+            {
+                _logger.LogInformation("Reset recovery attempt counter for {Path} (was {Count})", indexPath, attempts);
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Get recovery status for all indexes
+    /// </summary>
+    public Dictionary<string, int> GetRecoveryStatus()
+    {
+        return new Dictionary<string, int>(_recoveryAttempts);
+    }
+    
+    /// <summary>
+    /// Check if memory indexes exist and are healthy
+    /// </summary>
+    public (bool projectMemoryExists, bool localMemoryExists) CheckMemoryIndexHealth()
+    {
+        var basePath = GetBasePath();
+        var projectMemoryPath = Path.Combine(basePath, "project-memory");
+        var localMemoryPath = Path.Combine(basePath, "local-memory");
+        
+        var projectMemoryExists = System.IO.Directory.Exists(projectMemoryPath) && 
+                                  File.Exists(Path.Combine(projectMemoryPath, SegmentsFilename));
+        var localMemoryExists = System.IO.Directory.Exists(localMemoryPath) && 
+                               File.Exists(Path.Combine(localMemoryPath, SegmentsFilename));
+        
+        _logger.LogInformation("Memory index health check - Project: {ProjectExists}, Local: {LocalExists}", 
+            projectMemoryExists, localMemoryExists);
+        
+        return (projectMemoryExists, localMemoryExists);
+    }
+    
+    /// <summary>
+    /// Clean up old or stuck indexes (only in the index subdirectory, never memory indexes)
     /// </summary>
     public void CleanupStuckIndexes()
     {
-        var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
-        
-        // Convert to absolute path if relative (same logic as GetIndexPath)
-        if (!Path.IsPathRooted(basePath))
-        {
-            // Find project root by looking for .git directory
-            var currentDir = System.IO.Directory.GetCurrentDirectory();
-            var projectRoot = currentDir;
-            
-            // Walk up the directory tree to find .git
-            var dir = new DirectoryInfo(currentDir);
-            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
-            {
-                dir = dir.Parent;
-            }
-            
-            if (dir != null)
-            {
-                projectRoot = dir.FullName;
-            }
-            
-            basePath = Path.Combine(projectRoot, basePath);
-        }
-        
+        var basePath = GetBasePath();
         var indexRoot = Path.Combine(basePath, "index");
         
         if (!System.IO.Directory.Exists(indexRoot))
+        {
+            _logger.LogInformation("No index directory found at {Path}, nothing to clean", indexRoot);
             return;
+        }
+        
+        _logger.LogInformation("Checking for stuck locks in code search indexes at {Path}", indexRoot);
         
         foreach (var indexDir in System.IO.Directory.GetDirectories(indexRoot))
         {
@@ -310,16 +659,21 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                 
                 if (lockAge > _lockTimeout)
                 {
-                    _logger.LogWarning("Found stuck lock at {Path}, age: {Age}", lockPath, lockAge);
+                    // Get the hash from the directory name
+                    var hashPath = Path.GetFileName(indexDir);
+                    var originalPath = GetOriginalPath(hashPath);
+                    var pathInfo = originalPath != null ? $" (original: {originalPath})" : "";
+                    
+                    _logger.LogWarning("Found stuck lock at {Path}{PathInfo}, age: {Age}", lockPath, pathInfo, lockAge);
                     
                     try
                     {
                         File.Delete(lockPath);
-                        _logger.LogInformation("Removed stuck lock at {Path}", lockPath);
+                        _logger.LogInformation("Removed stuck lock at {Path}{PathInfo}", lockPath, pathInfo);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to remove stuck lock at {Path}", lockPath);
+                        _logger.LogError(ex, "Failed to remove stuck lock at {Path}{PathInfo}", lockPath, pathInfo);
                     }
                 }
             }
@@ -366,6 +720,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         _indexes.Clear();
         _analyzer?.Dispose();
         _writerLock?.Dispose();
+        _metadataLock?.Dispose();
     }
     
     #region ILuceneIndexService Implementation
@@ -473,7 +828,19 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                     try
                     {
                         context.Writer.Commit();
-                        _logger.LogInformation("Committed changes to index at {Path}", indexPath);
+                        
+                        // Log extra info for memory indexes
+                        if (IsProtectedMemoryIndex(indexPath))
+                        {
+                            _logger.LogInformation("Successfully committed changes to MEMORY index at {Path}", indexPath);
+                        }
+                        else
+                        {
+                            _logger.LogInformation("Committed changes to index at {Path}", indexPath);
+                        }
+                        
+                        // Reset recovery attempts on successful commit
+                        ResetRecoveryAttempts(indexPath);
                     }
                     catch (ObjectDisposedException)
                     {
