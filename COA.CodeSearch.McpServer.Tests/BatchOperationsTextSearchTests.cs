@@ -42,7 +42,7 @@ public class BatchOperationsTextSearchTests : TestBase
                 new
                 {
                     type = "search_symbols",
-                    pattern = "Test*",
+                    searchPattern = "Test*",
                     workspacePath = GetTestProjectPath(),
                     searchType = "wildcard",
                     maxResults = 5
@@ -54,7 +54,7 @@ public class BatchOperationsTextSearchTests : TestBase
         var jsonElement = JsonDocument.Parse(json).RootElement;
 
         // Act
-        var result = await tool.ExecuteAsync(jsonElement.GetProperty("operations"));
+        var result = await tool.ExecuteAsync(jsonElement.GetProperty("operations"), GetTestProjectPath());
 
         // Assert
         Assert.NotNull(result);
@@ -119,7 +119,7 @@ public class BatchOperationsTextSearchTests : TestBase
             var jsonElement = JsonDocument.Parse(json).RootElement;
 
             // Act
-            var result = await tool.ExecuteAsync(jsonElement.GetProperty("operations"));
+            var result = await tool.ExecuteAsync(jsonElement.GetProperty("operations"), GetTestProjectPath());
 
             // Assert
             Assert.NotNull(result);
