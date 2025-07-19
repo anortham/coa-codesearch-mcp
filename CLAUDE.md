@@ -9,6 +9,17 @@ This document provides context and guidelines for AI assistants working on the C
 - Do not look for Claude Desktop configuration files
 - MCP servers in Claude Code are configured differently than in Claude Desktop
 
+## CRITICAL: Understanding Code Versions
+
+**You must be aware of which version of the code you're running vs. editing:**
+- **MCP Tools (`mcp__codesearch__*`)**: These execute on the INSTALLED version of the MCP server, not the code you're currently editing
+- **Code Changes**: When you modify code in the project, those changes DO NOT affect the running MCP server
+- **Testing Changes**: To test code changes, you must:
+  1. Build the project: `dotnet build -c Release`
+  2. The user must reinstall/restart the MCP server
+  3. Start a new Claude Code session to use the updated version
+- **Confusion Prevention**: Always remember that editing `ClaudeMemoryService.cs` or any other file won't change how `mcp__codesearch__remember_decision` behaves until the server is restarted with the new build
+
 ## Project Overview
 
 COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and includes TypeScript support through automatic tsserver integration. Features blazing-fast text search using Lucene indexing and an intelligent memory system for preserving architectural knowledge. Designed to be significantly faster than Python-based alternatives.

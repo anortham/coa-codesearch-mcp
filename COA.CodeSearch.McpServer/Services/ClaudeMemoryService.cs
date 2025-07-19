@@ -355,9 +355,30 @@ public class ClaudeMemoryService : IDisposable
     
     private string GetIndexPath(string workspacePath)
     {
-        // For memory workspaces, the path is already complete (e.g., .codesearch/project-memory)
-        // No need to add additional subdirectories or transformations
-        return workspacePath;
+        // Need to resolve to the actual hashed index path that LuceneIndexService uses
+        // The LuceneIndexService stores indexes in .codesearch/index/{hash}
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(workspacePath));
+        var hash = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant().Substring(0, 8);
+        
+        var basePath = _config.BasePath;
+        if (!Path.IsPathRooted(basePath))
+        {
+            // Find project root by looking for .git directory
+            var currentDir = System.IO.Directory.GetCurrentDirectory();
+            var dir = new DirectoryInfo(currentDir);
+            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            {
+                dir = dir.Parent;
+            }
+            
+            if (dir != null)
+            {
+                basePath = Path.Combine(dir.FullName, basePath);
+            }
+        }
+        
+        return Path.Combine(basePath, "index", hash);
     }
     
     public void Dispose()
