@@ -31,7 +31,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptSearchParams>(
             name: "search_typescript",
-            description: "Search for TypeScript symbols (interfaces, types, classes, functions) across your codebase",
+            description: "Search for TypeScript symbols (interfaces, types, classes, functions) using text search. NOTE: Basic text matching only - tsserver integration coming soon. Use fast_text_search for more advanced TypeScript searches.",
             inputSchema: new
             {
                 type = "object",

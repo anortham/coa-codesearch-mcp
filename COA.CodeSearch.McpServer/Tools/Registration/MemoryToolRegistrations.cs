@@ -14,7 +14,6 @@ public static class MemoryToolRegistrations
     public static void RegisterMemoryTools(ToolRegistry registry, IServiceProvider serviceProvider)
     {
         var memoryTools = serviceProvider.GetRequiredService<ClaudeMemoryTools>();
-        var initHooksTool = serviceProvider.GetRequiredService<InitializeMemoryHooksTool>();
         
         RegisterRememberDecision(registry, memoryTools);
         RegisterRememberPattern(registry, memoryTools);
@@ -24,24 +23,22 @@ public static class MemoryToolRegistrations
         RegisterListMemoriesByType(registry, memoryTools);
         RegisterBackupMemories(registry, memoryTools);
         RegisterRestoreMemories(registry, memoryTools);
-        RegisterInitMemoryHooks(registry, initHooksTool);
-        RegisterTestMemoryHooks(registry, initHooksTool);
     }
     
     private static void RegisterRememberDecision(ToolRegistry registry, ClaudeMemoryTools tool)
     {
         registry.RegisterTool<RememberDecisionParams>(
             name: "remember_decision",
-            description: "Store an architectural decision with reasoning for the entire team (version controlled)",
+            description: "Document a key architectural decision that affects the codebase - persists across sessions and shares with team via version control. Use when making technology choices, design patterns, or structural changes.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    decision = new { type = "string", description = "The architectural decision that was made" },
-                    reasoning = new { type = "string", description = "Why this decision was made and what problems it solves" },
+                    decision = new { type = "string", description = "The architectural decision - example: 'Use Repository pattern for data access layer'" },
+                    reasoning = new { type = "string", description = "Why this decision was made - example: 'Provides testability and abstracts database implementation details'" },
                     affectedFiles = new { type = "array", items = new { type = "string" }, description = "Files that are affected by or implement this decision" },
-                    tags = new { type = "array", items = new { type = "string" }, description = "Optional tags for categorization (e.g., 'security', 'performance', 'hipaa')" }
+                    tags = new { type = "array", items = new { type = "string" }, description = "Tags for categorization - examples: ['architecture', 'data-access'], ['security', 'authentication'], ['performance']" }
                 },
                 required = new[] { "decision", "reasoning" }
             },
@@ -64,15 +61,15 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<RememberPatternParams>(
             name: "remember_pattern",
-            description: "Store a reusable code pattern with location and usage guidance (version controlled)",
+            description: "Save a reusable code pattern or best practice discovered in the codebase - helps maintain consistency across the team. Persists and shares via version control.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    pattern = new { type = "string", description = "Description of the code pattern" },
-                    location = new { type = "string", description = "Where this pattern is implemented or can be found" },
-                    usage = new { type = "string", description = "When and how to use this pattern" },
+                    pattern = new { type = "string", description = "The code pattern - example: 'Async repository methods with cancellation token'" },
+                    location = new { type = "string", description = "Where to find it - example: 'Services/UserRepository.cs:45-89' or 'All repository classes in Data layer'" },
+                    usage = new { type = "string", description = "When to use - example: 'Use for all data access methods to ensure proper cancellation and error handling'" },
                     relatedFiles = new { type = "array", items = new { type = "string" }, description = "Files that demonstrate or contain this pattern" },
                     tags = new { type = "array", items = new { type = "string" }, description = "Optional tags for categorization" }
                 },
@@ -98,7 +95,7 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<RememberSecurityRuleParams>(
             name: "remember_security_rule",
-            description: "Store a security rule or compliance requirement (version controlled)",
+            description: "Record security requirements or compliance rules that must be followed - critical for maintaining security posture. Persists and shares with team via version control.",
             inputSchema: new
             {
                 type = "object",
@@ -107,7 +104,7 @@ public static class MemoryToolRegistrations
                     rule = new { type = "string", description = "The security rule or compliance requirement" },
                     reasoning = new { type = "string", description = "Why this rule exists and what it protects against" },
                     affectedFiles = new { type = "array", items = new { type = "string" }, description = "Files that implement or are affected by this rule" },
-                    compliance = new { type = "string", description = "Compliance framework (e.g., 'HIPAA', 'SOX', 'GDPR')" }
+                    compliance = new { type = "string", description = "Compliance framework - examples: 'HIPAA', 'SOX', 'GDPR', 'PCI-DSS', 'ISO-27001'" },
                 },
                 required = new[] { "rule", "reasoning" }
             },
@@ -130,7 +127,7 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<RememberSessionParams>(
             name: "remember_session",
-            description: "Store a summary of your current work session (local only)",
+            description: "Save a personal work session summary - track what you accomplished and where you left off. Local only, not shared with team. Useful for resuming work later.",
             inputSchema: new
             {
                 type = "object",
@@ -160,14 +157,14 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<RecallContextParams>(
             name: "recall_context",
-            description: "Search memories to recall relevant context for your current work",
+            description: "Load previous architectural decisions, patterns, and context relevant to your current task - essential for maintaining consistency. Use at session start or when switching tasks.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
                     query = new { type = "string", description = "What you're currently working on or want to learn about" },
-                    scopeFilter = new { type = "string", description = "Optional filter by memory type (ArchitecturalDecision, CodePattern, SecurityRule, etc.)" },
+                    scopeFilter = new { type = "string", description = "Filter by type: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight, WorkSession, LocalInsight" },
                     maxResults = new { type = "integer", description = "Maximum number of results to return (default: 10)", @default = 10 }
                 },
                 required = new[] { "query" }
@@ -199,7 +196,7 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<ListMemoriesByTypeParams>(
             name: "list_memories_by_type",
-            description: "List all memories of a specific type",
+            description: "Browse stored memories by category - useful for reviewing all architectural decisions, patterns, or security rules. Shows both team-shared and local memories.",
             inputSchema: new
             {
                 type = "object",
@@ -220,54 +217,6 @@ public static class MemoryToolRegistrations
                 }
                 
                 var result = await tool.ListMemoriesByType(scope, parameters.MaxResults ?? 20);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterInitMemoryHooks(ToolRegistry registry, InitializeMemoryHooksTool tool)
-    {
-        registry.RegisterTool<InitMemoryHooksParams>(
-            name: "init_memory_hooks",
-            description: "Initialize Claude memory system hooks for automatic context loading and session tracking",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    projectRoot = new { type = "string", description = "Project root directory (defaults to current directory)" }
-                },
-                required = new string[] { }
-            },
-            handler: async (parameters, ct) =>
-            {
-                var result = await tool.InitializeMemoryHooks(parameters?.ProjectRoot);
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterTestMemoryHooks(ToolRegistry registry, InitializeMemoryHooksTool tool)
-    {
-        registry.RegisterTool<TestMemoryHooksParams>(
-            name: "test_memory_hooks",
-            description: "Test that memory hooks are working correctly",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    hookType = new { type = "string", description = "Which hook to test: pre-tool-use, file-edit, or stop" }
-                },
-                required = new[] { "hookType" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.TestMemoryHooks(
-                    ValidateRequired(parameters.HookType, "hookType"));
                     
                 return CreateSuccessResult(result);
             }
@@ -370,16 +319,6 @@ public static class MemoryToolRegistrations
     {
         public string? Scope { get; set; }
         public int? MaxResults { get; set; }
-    }
-    
-    private class InitMemoryHooksParams
-    {
-        public string? ProjectRoot { get; set; }
-    }
-    
-    private class TestMemoryHooksParams
-    {
-        public string? HookType { get; set; }
     }
     
     private class BackupMemoriesParams

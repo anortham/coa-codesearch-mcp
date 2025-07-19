@@ -66,8 +66,7 @@ COA.CodeSearch.McpServer/
 │   ├── TypeScriptAnalysisService.cs # TypeScript/JavaScript analysis via tsserver
 │   ├── TypeScriptInstaller.cs     # Automatic TypeScript installation
 │   ├── LuceneIndexService.cs      # Fast text indexing with Lucene
-│   ├── ClaudeMemoryService.cs     # Architectural knowledge persistence
-│   └── MemoryHookManager.cs       # Claude Code hook integration
+│   └── ClaudeMemoryService.cs     # Architectural knowledge persistence
 ├── Tools/
 │   ├── GoToDefinitionTool.cs      # Navigate to definitions (C# & TypeScript)
 │   ├── FindReferencesTool.cs      # Find all references (C# & TypeScript)
@@ -81,12 +80,7 @@ COA.CodeSearch.McpServer/
 │   └── ResponseSizeEstimator.cs   # Token-aware response handling
 ├── Models/
 │   └── [Various DTOs]              # Data transfer objects
-├── appsettings.json               # Configuration
-└── .claude/hooks/                 # Automatic context loading hooks
-    ├── user-prompt-submit.ps1     # Loads context on session start
-    ├── pre-tool-use.ps1           # Loads context before tool execution
-    ├── file-edit.ps1              # Detects patterns in edits
-    └── stop.ps1                   # Saves session summary after each response
+└── appsettings.json               # Configuration
 ```
 
 ## Architecture Decisions
@@ -125,12 +119,11 @@ COA.CodeSearch.McpServer/
 - Detail request caching for efficient drill-down
 - Context-aware suggestions and priority-based recommendations
 
-### 6. **Memory System & Hooks**
+### 6. **Memory System**
 - Persistent architectural knowledge across sessions
-- Automatic context loading via Claude Code hooks
-- Pattern detection in file edits
+- Manual context loading and saving
 - Session tracking and work history
-- Zero-effort memory management
+- SQLite backup/restore for version control
 
 ## Development Guidelines
 
@@ -382,11 +375,10 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 ## Memory System Quick Start
 
 ### Session Startup
-The memory system automatically activates when you start a new conversation:
-1. **user-prompt-submit hook** runs automatically
-2. Initializes memory hooks for the session
-3. Loads recent work sessions and architectural decisions
-4. Searches for context based on your first message
+To use the memory system effectively:
+1. Start each session with `mcp__codesearch__recall_context "what I'm working on"`
+2. This loads recent work sessions and architectural decisions
+3. Provides relevant context for your current work
 
 ### Available Memory Tools
 
@@ -394,20 +386,11 @@ The memory system automatically activates when you start a new conversation:
 - `remember_decision` - Store architectural decisions with reasoning
 - `remember_pattern` - Document reusable code patterns
 - `remember_security_rule` - Track security requirements
-- `remember_session` - Save work session summary (automatic via hook)
+- `remember_session` - Save work session summary
 
 #### Recall Knowledge
 - `recall_context` - Search all memories for relevant context
 - `list_memories_by_type` - List specific types of memories
-- `init_memory_hooks` - Initialize hooks (automatic on session start)
-- `test_memory_hooks` - Verify hooks are working
-
-### Hook Strategy (Updated)
-The memory system uses a targeted hook approach:
-- **PreToolUse hook**: Suggests loading relevant context only when using MCP tools (reduces noise)
-- **Stop hook**: Tracks work units after each Claude response, suggests documenting significant changes
-- **file-edit hook**: Detects architectural patterns and suggests memory storage
-- **Manual backup/restore**: User controls when to save/load memories via SQLite
 
 ### Manual Backup/Restore
 - `backup_memories_to_sqlite` - Backup project memories to SQLite for version control
