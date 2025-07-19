@@ -45,11 +45,11 @@ public class InitializeMemoryHooksTool
             await _memoryService.StoreArchitecturalDecisionAsync(
                 "Implemented Claude Memory System with automatic hooks",
                 "Hooks provide zero-effort memory management: " +
-                "1) tool-call hook loads relevant context before operations, " +
+                "1) pre-tool-use hook loads relevant context before operations, " +
                 "2) file-edit hook detects architectural patterns, " +
-                "3) session-end hook preserves work history. " +
+                "3) stop hook preserves work history. " +
                 "This ensures knowledge persistence and team collaboration.",
-                new[] { ".claude/hooks/tool-call.*", ".claude/hooks/file-edit.*", ".claude/hooks/session-end.*" },
+                new[] { ".claude/hooks/pre-tool-use.*", ".claude/hooks/file-edit.*", ".claude/hooks/stop.*" },
                 new[] { "architecture", "automation", "memory-system" }
             );
 
@@ -63,9 +63,9 @@ public class InitializeMemoryHooksTool
 🖥️ Platform: {platform}
 
 **Hooks Created:**
-- 🎯 **tool-call**: Auto-loads context before MCP tool execution
+- 🎯 **pre-tool-use**: Auto-loads context before MCP tool execution
 - 📝 **file-edit**: Detects patterns and suggests memory storage  
-- 🏁 **session-end**: Saves session summary automatically
+- 🏁 **stop**: Saves session summary after each Claude response
 
 **What happens now:**
 1. When you use tools like `find_references`, relevant memories load automatically
@@ -135,7 +135,7 @@ The memory system is now on **autopilot**! 🚁
             // Create test environment variables
             var testEnv = hookType switch
             {
-                "tool-call" => new Dictionary<string, string>
+                "pre-tool-use" => new Dictionary<string, string>
                 {
                     ["CLAUDE_TOOL_NAME"] = "find_references",
                     ["CLAUDE_TOOL_PARAMS"] = "{\"filePath\":\"TestFile.cs\",\"line\":10,\"column\":5}"
@@ -145,7 +145,7 @@ The memory system is now on **autopilot**! 🚁
                     ["CLAUDE_FILE_PATH"] = "TestRepository.cs",
                     ["CLAUDE_FILE_OPERATION"] = "edit"
                 },
-                "session-end" => new Dictionary<string, string>(),
+                "stop" => new Dictionary<string, string>(),
                 _ => throw new ArgumentException($"Unknown hook type: {hookType}")
             };
 
@@ -186,9 +186,9 @@ Hook system is ready for automatic memory management! 🎯";
 
     private static string GetExpectedBehavior(string hookType) => hookType switch
     {
-        "tool-call" => "Should load memories related to TestFile.cs before tool execution",
+        "pre-tool-use" => "Should load memories related to TestFile.cs before tool execution",
         "file-edit" => "Should detect Repository pattern and suggest memory storage",
-        "session-end" => "Should save session summary with timestamp and modified files",
+        "stop" => "Should save session summary with timestamp and modified files",
         _ => "Unknown hook type"
     };
 
@@ -198,9 +198,9 @@ Hook system is ready for automatic memory management! 🎯";
         {
             return hookType switch
             {
-                "tool-call" => "$env:CLAUDE_TOOL_NAME='find_references'; $env:CLAUDE_TOOL_PARAMS='{\"filePath\":\"Test.cs\"}'; .\\tool-call.ps1",
+                "pre-tool-use" => "$env:CLAUDE_TOOL_NAME='find_references'; $env:CLAUDE_TOOL_PARAMS='{\"filePath\":\"Test.cs\"}'; .\\pre-tool-use.ps1",
                 "file-edit" => "$env:CLAUDE_FILE_PATH='TestRepo.cs'; $env:CLAUDE_FILE_OPERATION='edit'; .\\file-edit.ps1",
-                "session-end" => ".\\session-end.ps1",
+                "stop" => ".\\stop.ps1",
                 _ => ""
             };
         }
@@ -208,9 +208,9 @@ Hook system is ready for automatic memory management! 🎯";
         {
             return hookType switch
             {
-                "tool-call" => "CLAUDE_TOOL_NAME='find_references' CLAUDE_TOOL_PARAMS='{\"filePath\":\"Test.cs\"}' ./tool-call.sh",
+                "pre-tool-use" => "CLAUDE_TOOL_NAME='find_references' CLAUDE_TOOL_PARAMS='{\"filePath\":\"Test.cs\"}' ./pre-tool-use.sh",
                 "file-edit" => "CLAUDE_FILE_PATH='TestRepo.cs' CLAUDE_FILE_OPERATION='edit' ./file-edit.sh",
-                "session-end" => "./session-end.sh",
+                "stop" => "./stop.sh",
                 _ => ""
             };
         }

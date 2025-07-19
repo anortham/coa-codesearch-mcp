@@ -84,9 +84,9 @@ COA.CodeSearch.McpServer/
 ├── appsettings.json               # Configuration
 └── .claude/hooks/                 # Automatic context loading hooks
     ├── user-prompt-submit.ps1     # Loads context on session start
-    ├── tool-call.ps1              # Loads context before tool execution
+    ├── pre-tool-use.ps1           # Loads context before tool execution
     ├── file-edit.ps1              # Detects patterns in edits
-    └── session-end.ps1            # Saves session summary
+    └── stop.ps1                   # Saves session summary after each response
 ```
 
 ## Architecture Decisions

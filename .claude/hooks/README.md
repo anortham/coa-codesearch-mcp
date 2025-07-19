@@ -1,24 +1,10 @@
 # Claude Memory System Hooks
 
-These hooks integrate with Claude Code to provide automatic memory management for the COA CodeSearch MCP Server.
+These hooks integrate with Claude Code to provide automatic memory management:
 
-## Cross-Platform Support
-
-The memory system provides hooks for both Windows and Unix-based systems:
-
-- **Windows**: PowerShell scripts (`.ps1`)
-- **macOS/Linux**: Bash scripts (`.sh`)
-
-Claude Code will automatically use the appropriate script based on your operating system.
-
-## Hook Functions
+## 🎯 Hook Functions
 
 ### pre-tool-use
-- **Triggers**: Before any MCP codesearch tool execution
-- **Function**: Suggests loading relevant context based on the tool and parameters
-- **Note**: Only fires when actually using MCP tools, reducing noise
-
-### tool-call
 - **Triggers**: Before any MCP tool execution
 - **Function**: Loads relevant memories based on the tool and file context
 - **Example**: When using `find_references` on UserService.cs, automatically loads previous decisions about UserService
@@ -29,99 +15,33 @@ Claude Code will automatically use the appropriate script based on your operatin
 - **Example**: Detects new Repository pattern and suggests documenting it
 
 ### stop
-- **Triggers**: After each Claude response completes
-- **Function**: Tracks modified files and suggests documenting significant changes
-- **Example**: Logs work units and prompts for memory creation when appropriate
+- **Triggers**: After each Claude response (work unit completed)
+- **Function**: Automatically stores session summary with modified files
+- **Example**: Saves "Worked on authentication module, modified UserController.cs"
 
-### Manual Memory Management
-- **backup_memories_to_sqlite**: Manually backup memories to SQLite for version control
-- **restore_memories_from_sqlite**: Restore memories from SQLite backup
-- **Use cases**: Share memories with team, restore after losing Lucene index
+## 🔧 Configuration
 
-## Installation
+Hooks are platform-specific:
+- **Windows**: PowerShell scripts (.ps1)
+- **macOS/Linux**: Bash scripts (.sh)
 
-The hooks are already installed in this repository. To use them in other projects:
+## 📝 Manual Testing
 
-1. Copy the `.claude/hooks` directory to your project root
-2. Ensure the MCP server is installed: `dotnet tool install -g coa-codesearch-mcp`
-3. The hooks will activate automatically when Claude Code runs
-
-## Environment Differences from Claude Desktop
-
-Claude Code provides different environment variables than Claude Desktop:
-- `CLAUDECODE=1` - Indicates running in Claude Code
-- `CLAUDE_CODE_SHELL` - The shell being used (powershell, bash, etc.)
-- `CLAUDE_CODE_ENTRYPOINT` - How Claude Code was started
-
-The hooks have been updated to work without:
-- `CLAUDE_CONVERSATION_ID` - Not available in Claude Code
-- `CLAUDE_USER_MESSAGE` - Not available in Claude Code
-- `CLAUDE_TOOL_NAME` / `CLAUDE_TOOL_PARAMS` - May not be available
-
-## Manual Testing
-
-Test hooks manually to verify they're working:
-
-### Windows (PowerShell)
-```powershell
-# Test pre-tool-use hook
-$env:CLAUDE_TOOL_NAME="mcp__codesearch__find_references"
-$env:CLAUDE_TOOL_PARAMS='{"filePath":"test.cs"}'
-powershell -ExecutionPolicy Bypass -File .\.claude\hooks\pre-tool-use.ps1
-
-# Test stop hook
-powershell -ExecutionPolicy Bypass -File .\.claude\hooks\stop.ps1
-
-# Test file-edit hook
-$env:CLAUDE_FILE_PATH="test.cs"
-powershell -ExecutionPolicy Bypass -File .\.claude\hooks\file-edit.ps1
-```
-
-### Unix/macOS/Linux (Bash)
+Test hooks manually:
 ```bash
-# Test pre-tool-use hook
-CLAUDE_TOOL_NAME="mcp__codesearch__find_references" CLAUDE_TOOL_PARAMS='{"filePath":"test.cs"}' ./.claude/hooks/pre-tool-use.sh
+# Unix/macOS
+CLAUDE_TOOL_NAME="find_references" CLAUDE_TOOL_PARAMS='{"filePath":"test.cs"}' ./pre-tool-use.sh
 
-# Test stop hook
-./.claude/hooks/stop.sh
-
-# Test file-edit hook
-CLAUDE_FILE_PATH="test.cs" ./.claude/hooks/file-edit.sh
+# Windows
+$env:CLAUDE_TOOL_NAME="find_references"; $env:CLAUDE_TOOL_PARAMS='{"filePath":"test.cs"}'; .\pre-tool-use.ps1
 ```
 
-## Troubleshooting
-
-### Hooks not triggering
-1. Check if hooks are enabled in Claude Code settings
-2. Verify the MCP server is installed: `coa-codesearch-mcp --version`
-3. Check hook file permissions (especially on Unix systems)
-
-### MCP commands timing out
-1. Ensure the MCP server is running properly
-2. Check if the server indexes exist in `.codesearch/index/`
-3. Try running MCP commands manually: `coa-codesearch-mcp list_memories_by_type WorkSession`
-
-### Hook Strategy
-The updated hook system uses a more targeted approach:
-- **PreToolUse**: Loads context only when using MCP tools
-- **Stop**: Tracks work units after each response
-- **Manual backup/restore**: User controls when to save/load memories
-- No more noisy UserPromptSubmit hooks firing on every message
-
-## Benefits
+## 🚀 Benefits
 
 1. **Zero-effort memory**: Context loads automatically
 2. **Pattern detection**: Architectural decisions tracked
-3. **Session continuity**: Work progress saved between sessions
+3. **Session continuity**: Never lose work progress
 4. **Team knowledge**: Shared memories in version control
-5. **Cross-platform**: Works on Windows, macOS, and Linux
-
-## Important Notes
-
-- The "straight blazin'" naming convention comes from a bad movie reference (stored in project memories)
-- Memories are stored in Lucene indexes under `.codesearch/index/`
-- Project memories (version controlled) vs local memories (developer-specific)
-- Hooks should exit with code 0 to allow normal Claude Code operation
 
 ---
 Generated by COA CodeSearch MCP Memory System

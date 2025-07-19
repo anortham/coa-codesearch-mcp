@@ -258,7 +258,7 @@ public static class MemoryToolRegistrations
                 type = "object",
                 properties = new
                 {
-                    hookType = new { type = "string", description = "Which hook to test: tool-call, file-edit, or session-end" }
+                    hookType = new { type = "string", description = "Which hook to test: pre-tool-use, file-edit, or stop" }
                 },
                 required = new[] { "hookType" }
             },
