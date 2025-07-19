@@ -118,9 +118,9 @@ if ($CLAUDE_FILE_OPERATION -eq 'edit' -or $CLAUDE_FILE_OPERATION -eq 'create') {
 exit 0
 ";
 
-        // Session end hook - PowerShell
+        // Stop hook - PowerShell
         var sessionEndHook = @"#!/usr/bin/env pwsh
-# Claude Memory System - Session End Hook (Windows)
+# Claude Memory System - Stop Hook (Windows)
 # Automatically summarizes work session
 
 Write-Host ""📝 Session ending - storing work summary..."" -ForegroundColor Green
@@ -174,9 +174,9 @@ if (-not (Test-Path $sessionFile)) {
 exit 0
 ";
 
-        await WriteHookFileAsync("tool-call.ps1", toolCallHook);
+        await WriteHookFileAsync("pre-tool-use.ps1", toolCallHook);
         await WriteHookFileAsync("file-edit.ps1", fileEditHook);
-        await WriteHookFileAsync("session-end.ps1", sessionEndHook);
+        await WriteHookFileAsync("stop.ps1", sessionEndHook);
         await WriteHookFileAsync("user-prompt-submit.ps1", userPromptHook);
     }
 
@@ -239,9 +239,9 @@ fi
 exit 0
 ";
 
-        // Session end hook - Bash
+        // Stop hook - Bash
         var sessionEndHook = @"#!/bin/bash
-# Claude Memory System - Session End Hook (Unix)
+# Claude Memory System - Stop Hook (Unix)
 # Automatically summarizes work session
 
 echo ""📝 Session ending - storing work summary...""
@@ -294,9 +294,9 @@ fi
 exit 0
 ";
 
-        await WriteHookFileAsync("tool-call.sh", toolCallHook, makeExecutable: true);
+        await WriteHookFileAsync("pre-tool-use.sh", toolCallHook, makeExecutable: true);
         await WriteHookFileAsync("file-edit.sh", fileEditHook, makeExecutable: true);
-        await WriteHookFileAsync("session-end.sh", sessionEndHook, makeExecutable: true);
+        await WriteHookFileAsync("stop.sh", sessionEndHook, makeExecutable: true);
         await WriteHookFileAsync("user-prompt-submit.sh", userPromptHook, makeExecutable: true);
     }
 
@@ -360,7 +360,7 @@ These hooks integrate with Claude Code to provide automatic memory management:
 
 ## 🎯 Hook Functions
 
-### tool-call
+### pre-tool-use
 - **Triggers**: Before any MCP tool execution
 - **Function**: Loads relevant memories based on the tool and file context
 - **Example**: When using `find_references` on UserService.cs, automatically loads previous decisions about UserService
@@ -370,8 +370,8 @@ These hooks integrate with Claude Code to provide automatic memory management:
 - **Function**: Detects architectural patterns and suggests memory storage
 - **Example**: Detects new Repository pattern and suggests documenting it
 
-### session-end
-- **Triggers**: When Claude Code session ends
+### stop
+- **Triggers**: After each Claude response (work unit completed)
 - **Function**: Automatically stores session summary with modified files
 - **Example**: Saves ""Worked on authentication module, modified UserController.cs""
 
@@ -386,10 +386,10 @@ Hooks are platform-specific:
 Test hooks manually:
 ```bash
 # Unix/macOS
-CLAUDE_TOOL_NAME=""find_references"" CLAUDE_TOOL_PARAMS='{""filePath"":""test.cs""}' ./tool-call.sh
+CLAUDE_TOOL_NAME=""find_references"" CLAUDE_TOOL_PARAMS='{""filePath"":""test.cs""}' ./pre-tool-use.sh
 
 # Windows
-$env:CLAUDE_TOOL_NAME=""find_references""; $env:CLAUDE_TOOL_PARAMS='{""filePath"":""test.cs""}'; .\tool-call.ps1
+$env:CLAUDE_TOOL_NAME=""find_references""; $env:CLAUDE_TOOL_PARAMS='{""filePath"":""test.cs""}'; .\pre-tool-use.ps1
 ```
 
 ## 🚀 Benefits
