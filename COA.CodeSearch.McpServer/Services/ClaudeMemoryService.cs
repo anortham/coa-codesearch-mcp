@@ -20,45 +20,37 @@ public class ClaudeMemoryService : IDisposable
 {
     private readonly ILogger<ClaudeMemoryService> _logger;
     private readonly MemoryConfiguration _config;
+    private readonly IImprovedLuceneIndexService _indexService;
     
-    // Separate indexes for project vs local memories
-    private readonly FSDirectory _projectMemoryDirectory;
-    private readonly FSDirectory _localMemoryDirectory;
-    
-    private readonly IndexWriter _projectMemoryWriter;
-    private readonly IndexWriter _localMemoryWriter;
+    // Workspace paths for project and local memories
+    private readonly string _projectMemoryWorkspace;
+    private readonly string _localMemoryWorkspace;
     
     private readonly StandardAnalyzer _analyzer;
-    private readonly object _lockObject = new();
     
     // Session tracking
     private readonly string _currentSessionId;
     
-    public ClaudeMemoryService(ILogger<ClaudeMemoryService> logger, IConfiguration configuration)
+    public ClaudeMemoryService(
+        ILogger<ClaudeMemoryService> logger, 
+        IConfiguration configuration,
+        IImprovedLuceneIndexService indexService)
     {
         _logger = logger;
         _config = configuration.GetSection("ClaudeMemory").Get<MemoryConfiguration>() ?? new MemoryConfiguration();
+        _indexService = indexService;
         _currentSessionId = Guid.NewGuid().ToString();
         
         // Setup Lucene analyzer
         _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
         
-        // Create memory directories
-        var projectPath = Path.Combine(_config.BasePath, _config.ProjectMemoryPath);
-        var localPath = Path.Combine(_config.BasePath, _config.LocalMemoryPath);
+        // Create workspace paths for memory indexes
+        _projectMemoryWorkspace = Path.Combine(_config.BasePath, _config.ProjectMemoryPath);
+        _localMemoryWorkspace = Path.Combine(_config.BasePath, _config.LocalMemoryPath);
         
-        System.IO.Directory.CreateDirectory(projectPath);
-        System.IO.Directory.CreateDirectory(localPath);
-        
-        _projectMemoryDirectory = FSDirectory.Open(projectPath);
-        _localMemoryDirectory = FSDirectory.Open(localPath);
-        
-        // Create index writers
-        var projectConfig = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
-        var localConfig = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
-        
-        _projectMemoryWriter = new IndexWriter(_projectMemoryDirectory, projectConfig);
-        _localMemoryWriter = new IndexWriter(_localMemoryDirectory, localConfig);
+        // Ensure directories exist
+        System.IO.Directory.CreateDirectory(_projectMemoryWorkspace);
+        System.IO.Directory.CreateDirectory(_localMemoryWorkspace);
         
         _logger.LogInformation("Claude Memory Service initialized with session {SessionId}", _currentSessionId);
     }
@@ -70,21 +62,19 @@ public class ClaudeMemoryService : IDisposable
     {
         try
         {
-            lock (_lockObject)
-            {
-                memory.SessionId = _currentSessionId;
-                
-                var document = CreateLuceneDocument(memory);
-                var writer = IsProjectScope(memory.Scope) ? _projectMemoryWriter : _localMemoryWriter;
-                
-                writer.AddDocument(document);
-                writer.Commit();
-                
-                var scopeType = IsProjectScope(memory.Scope) ? "project" : "local";
-                _logger.LogInformation("Stored {ScopeType} memory: {Content}", scopeType, memory.Content[..Math.Min(50, memory.Content.Length)]);
-                
-                return true;
-            }
+            memory.SessionId = _currentSessionId;
+            
+            var document = CreateLuceneDocument(memory);
+            var workspacePath = IsProjectScope(memory.Scope) ? _projectMemoryWorkspace : _localMemoryWorkspace;
+            
+            var writer = _indexService.GetOrCreateWriter(workspacePath);
+            writer.AddDocument(document);
+            writer.Commit();
+            
+            var scopeType = IsProjectScope(memory.Scope) ? "project" : "local";
+            _logger.LogInformation("Stored {ScopeType} memory: {Content}", scopeType, memory.Content[..Math.Min(50, memory.Content.Length)]);
+            
+            return true;
         }
         catch (Exception ex)
         {
@@ -110,8 +100,8 @@ public class ClaudeMemoryService : IDisposable
         try
         {
             // Search both indexes
-            var projectMemories = await SearchIndex(_projectMemoryDirectory, query, scopeFilter, maxResults);
-            var localMemories = await SearchIndex(_localMemoryDirectory, query, scopeFilter, maxResults);
+            var projectMemories = await SearchIndex(_projectMemoryWorkspace, query, scopeFilter, maxResults);
+            var localMemories = await SearchIndex(_localMemoryWorkspace, query, scopeFilter, maxResults);
             
             // Combine and sort by relevance
             var allMemories = projectMemories.Concat(localMemories)
@@ -144,14 +134,14 @@ public class ClaudeMemoryService : IDisposable
         if (maxResults == 0)
             maxResults = _config.MaxSearchResults;
         
-        var directory = IsProjectScope(scope) ? _projectMemoryDirectory : _localMemoryDirectory;
-        return await SearchIndex(directory, "*", scope, maxResults);
+        var workspacePath = IsProjectScope(scope) ? _projectMemoryWorkspace : _localMemoryWorkspace;
+        return await SearchIndex(workspacePath, "*", scope, maxResults);
     }
     
     /// <summary>
     /// Stores an architectural decision with structured information
     /// </summary>
-    public async Task<bool> StoreArchitecturalDecisionAsync(string decision, string reasoning, string[] affectedFiles, string[] tags = null)
+    public async Task<bool> StoreArchitecturalDecisionAsync(string decision, string reasoning, string[] affectedFiles, string[]? tags = null)
     {
         var memory = new MemoryEntry
         {
@@ -169,7 +159,7 @@ public class ClaudeMemoryService : IDisposable
     /// <summary>
     /// Stores a code pattern with location and usage information
     /// </summary>
-    public async Task<bool> StoreCodePatternAsync(string pattern, string location, string usage, string[] relatedFiles = null)
+    public async Task<bool> StoreCodePatternAsync(string pattern, string location, string usage, string[]? relatedFiles = null)
     {
         var memory = new MemoryEntry
         {
@@ -186,7 +176,7 @@ public class ClaudeMemoryService : IDisposable
     /// <summary>
     /// Stores a work session summary
     /// </summary>
-    public async Task<bool> StoreWorkSessionAsync(string summary, string[] filesWorkedOn = null)
+    public async Task<bool> StoreWorkSessionAsync(string summary, string[]? filesWorkedOn = null)
     {
         var memory = new MemoryEntry
         {
@@ -212,39 +202,58 @@ public class ClaudeMemoryService : IDisposable
         _logger.LogInformation("Memory cleanup completed for entries older than {CutoffDate}", cutoffDate);
     }
     
-    private async Task<List<MemoryEntry>> SearchIndex(FSDirectory directory, string query, MemoryScope? scopeFilter, int maxResults)
+    private async Task<List<MemoryEntry>> SearchIndex(string workspacePath, string query, MemoryScope? scopeFilter, int maxResults)
     {
         var memories = new List<MemoryEntry>();
         
-        using var reader = DirectoryReader.Open(directory);
-        var searcher = new IndexSearcher(reader);
-        var parser = new QueryParser(LuceneVersion.LUCENE_48, "content", _analyzer);
+        // Get the index path from the workspace
+        var indexPath = GetIndexPath(workspacePath);
         
-        // Build query
-        var luceneQuery = parser.Parse(query == "*" ? "*:*" : query);
-        
-        // Add scope filter if specified
-        if (scopeFilter.HasValue)
+        // Check if index exists
+        if (!System.IO.Directory.Exists(indexPath))
         {
-            var scopeQuery = new TermQuery(new Term("scope", scopeFilter.Value.ToString()));
-            var boolQuery = new BooleanQuery
-            {
-                { luceneQuery, Occur.MUST },
-                { scopeQuery, Occur.MUST }
-            };
-            luceneQuery = boolQuery;
+            _logger.LogDebug("No index found at {IndexPath} for workspace {WorkspacePath}", indexPath, workspacePath);
+            return memories;
         }
         
-        var hits = searcher.Search(luceneQuery, maxResults);
+        using var directory = FSDirectory.Open(indexPath);
         
-        foreach (var hit in hits.ScoreDocs)
+        try
         {
-            var doc = searcher.Doc(hit.Doc);
-            var memory = CreateMemoryFromDocument(doc);
-            if (memory != null)
+            using var reader = DirectoryReader.Open(directory);
+            var searcher = new IndexSearcher(reader);
+            var parser = new QueryParser(LuceneVersion.LUCENE_48, "content", _analyzer);
+            
+            // Build query
+            var luceneQuery = parser.Parse(query == "*" ? "*:*" : query);
+            
+            // Add scope filter if specified
+            if (scopeFilter.HasValue)
             {
-                memories.Add(memory);
+                var scopeQuery = new TermQuery(new Term("scope", scopeFilter.Value.ToString()));
+                var boolQuery = new BooleanQuery
+                {
+                    { luceneQuery, Occur.MUST },
+                    { scopeQuery, Occur.MUST }
+                };
+                luceneQuery = boolQuery;
             }
+            
+            var hits = searcher.Search(luceneQuery, maxResults);
+            
+            foreach (var hit in hits.ScoreDocs)
+            {
+                var doc = searcher.Doc(hit.Doc);
+                var memory = CreateMemoryFromDocument(doc);
+                if (memory != null)
+                {
+                    memories.Add(memory);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching index at {WorkspacePath}", workspacePath);
         }
         
         return memories;
@@ -344,12 +353,35 @@ public class ClaudeMemoryService : IDisposable
         return keywords;
     }
     
+    private string GetIndexPath(string workspacePath)
+    {
+        // This matches the pattern used by ImprovedLuceneIndexService
+        var basePath = ".codesearch"; // Could be made configurable
+        return Path.Combine(basePath, "index", 
+            workspacePath.Replace(':', '_').Replace('\\', '_').Replace('/', '_'));
+    }
+    
     public void Dispose()
     {
-        _projectMemoryWriter?.Dispose();
-        _localMemoryWriter?.Dispose();
-        _projectMemoryDirectory?.Dispose();
-        _localMemoryDirectory?.Dispose();
+        // Close writers through the index service
+        try
+        {
+            _indexService.CloseWriter(_projectMemoryWorkspace, commit: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error closing project memory writer");
+        }
+        
+        try
+        {
+            _indexService.CloseWriter(_localMemoryWorkspace, commit: true);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error closing local memory writer");
+        }
+        
         _analyzer?.Dispose();
     }
 }

@@ -7,12 +7,12 @@ public class IndexWorkspaceTool
 {
     private readonly ILogger<IndexWorkspaceTool> _logger;
     private readonly FileIndexingService _fileIndexingService;
-    private readonly LuceneIndexService _luceneIndexService;
+    private readonly ILuceneIndexService _luceneIndexService;
 
     public IndexWorkspaceTool(
         ILogger<IndexWorkspaceTool> logger,
         FileIndexingService fileIndexingService,
-        LuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService)
     {
         _logger = logger;
         _fileIndexingService = fileIndexingService;

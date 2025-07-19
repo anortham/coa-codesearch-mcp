@@ -1,5 +1,7 @@
+using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
+using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 using Microsoft.Extensions.Configuration;
@@ -11,7 +13,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Improved Lucene index service with better lock handling based on CoA Intranet patterns
 /// </summary>
-public class ImprovedLuceneIndexService : IDisposable
+public class ImprovedLuceneIndexService : ILuceneIndexService, IImprovedLuceneIndexService
 {
     private readonly ILogger<ImprovedLuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
@@ -250,4 +252,104 @@ public class ImprovedLuceneIndexService : IDisposable
         _indexes.Clear();
         _analyzer?.Dispose();
     }
+    
+    #region ILuceneIndexService Implementation
+    
+    /// <summary>
+    /// Get index writer asynchronously (wraps synchronous GetOrCreateWriter)
+    /// </summary>
+    public Task<IndexWriter> GetIndexWriterAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() => GetOrCreateWriter(workspacePath), cancellationToken);
+    }
+    
+    /// <summary>
+    /// Get index searcher asynchronously
+    /// </summary>
+    public Task<IndexSearcher> GetIndexSearcherAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            var indexPath = GetIndexPath(workspacePath);
+            
+            // Ensure index exists
+            if (!System.IO.Directory.Exists(indexPath) || 
+                !System.IO.Directory.GetFiles(indexPath, "*.cfs").Any() &&
+                !System.IO.Directory.GetFiles(indexPath, "*.cfe").Any() &&
+                !File.Exists(Path.Combine(indexPath, SegmentsFilename)))
+            {
+                // Create empty index if it doesn't exist
+                using var writer = GetOrCreateWriter(workspacePath);
+                writer.Commit();
+            }
+            
+            var directory = FSDirectory.Open(indexPath);
+            var reader = DirectoryReader.Open(directory);
+            return new IndexSearcher(reader);
+        }, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Get analyzer asynchronously
+    /// </summary>
+    public Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        // Return the shared analyzer instance
+        return Task.FromResult<Analyzer>(_analyzer);
+    }
+    
+    /// <summary>
+    /// Commit index changes asynchronously
+    /// </summary>
+    public Task CommitAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            var indexPath = GetIndexPath(workspacePath);
+            
+            if (_indexes.TryGetValue(indexPath, out var context) && context.Writer != null)
+            {
+                context.Writer.Commit();
+                _logger.LogInformation("Committed changes to index at {Path}", indexPath);
+            }
+        }, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Optimize index asynchronously (merge segments for better performance)
+    /// </summary>
+    public Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            var writer = GetOrCreateWriter(workspacePath);
+            
+            // ForceMerge is the modern equivalent of Optimize
+            writer.ForceMerge(1); // Merge down to a single segment
+            writer.Commit();
+            
+            _logger.LogInformation("Optimized index at {Path}", GetIndexPath(workspacePath));
+        }, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Clear index asynchronously
+    /// </summary>
+    public Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            var indexPath = GetIndexPath(workspacePath);
+            
+            // Close any open writers first
+            CloseWriter(workspacePath, commit: false);
+            
+            // Clear the index
+            ClearIndex(indexPath);
+            
+            _logger.LogInformation("Cleared index for workspace {WorkspacePath}", workspacePath);
+        }, cancellationToken);
+    }
+    
+    #endregion
 }

@@ -9,11 +9,13 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class InitializeMemoryHooksTool
 {
     private readonly ILogger<InitializeMemoryHooksTool> _logger;
+    private readonly ILoggerFactory _loggerFactory;
     private readonly ClaudeMemoryService _memoryService;
 
-    public InitializeMemoryHooksTool(ILogger<InitializeMemoryHooksTool> logger, ClaudeMemoryService memoryService)
+    public InitializeMemoryHooksTool(ILogger<InitializeMemoryHooksTool> logger, ILoggerFactory loggerFactory, ClaudeMemoryService memoryService)
     {
         _logger = logger;
+        _loggerFactory = loggerFactory;
         _memoryService = memoryService;
     }
 
@@ -22,7 +24,8 @@ public class InitializeMemoryHooksTool
     {
         try
         {
-            var hookManager = new MemoryHookManager(_logger, projectRoot);
+            var hookManagerLogger = _loggerFactory.CreateLogger<MemoryHookManager>();
+            var hookManager = new MemoryHookManager(hookManagerLogger, projectRoot);
             
             // Initialize the hooks
             var success = await hookManager.InitializeHooksAsync();
