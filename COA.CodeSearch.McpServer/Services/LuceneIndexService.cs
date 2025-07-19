@@ -438,23 +438,18 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         // Convert to absolute path if relative
         if (!Path.IsPathRooted(basePath))
         {
-            // Find project root by looking for .git directory
-            var currentDir = System.IO.Directory.GetCurrentDirectory();
-            var projectRoot = currentDir;
+            // Use application base directory instead of searching for .git
+            // This ensures indexes are always stored relative to the MCP server location
+            var appBasePath = AppContext.BaseDirectory;
             
-            // Walk up the directory tree to find .git
-            var dir = new DirectoryInfo(currentDir);
-            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            // If running from bin directory, go up to project root
+            if (appBasePath.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase))
             {
-                dir = dir.Parent;
+                var binIndex = appBasePath.LastIndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase);
+                appBasePath = appBasePath.Substring(0, binIndex);
             }
             
-            if (dir != null)
-            {
-                projectRoot = dir.FullName;
-            }
-            
-            basePath = Path.Combine(projectRoot, basePath);
+            basePath = Path.Combine(appBasePath, basePath);
         }
         
         return basePath;

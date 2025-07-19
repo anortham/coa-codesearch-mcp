@@ -135,10 +135,9 @@ public class CodeAnalysisService : IDisposable
                 _logger.LogWarning("Workspace diagnostic: {Kind} - {Message}", args.Diagnostic.Kind, args.Diagnostic.Message);
                 
                 // Temporary debug logging to file
-                var logPath = @"C:\temp\mcp-workspace-debug.log";
+                var logPath = Path.Combine(Path.GetTempPath(), "mcp-workspace-debug.log");
                 try
                 {
-                    System.IO.Directory.CreateDirectory(@"C:\temp");
                     System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Workspace diagnostic: {args.Diagnostic.Kind} - {args.Diagnostic.Message}\n");
                 }
                 catch { }
@@ -196,10 +195,9 @@ public class CodeAnalysisService : IDisposable
                 _logger.LogInformation("Successfully loaded solution with {ProjectCount} projects", solution.Projects.Count());
                 
                 // Temporary debug logging to file
-                var logPath = @"C:\temp\mcp-workspace-debug.log";
+                var logPath = Path.Combine(Path.GetTempPath(), "mcp-workspace-debug.log");
                 try
                 {
-                    System.IO.Directory.CreateDirectory(@"C:\temp");
                     System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Loaded solution: {solutionPath}\n");
                     System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Project count: {solution.Projects.Count()}\n");
                     

@@ -360,18 +360,18 @@ public class ClaudeMemoryService : IDisposable
         var basePath = _config.BasePath;
         if (!Path.IsPathRooted(basePath))
         {
-            // Find project root by looking for .git directory
-            var currentDir = System.IO.Directory.GetCurrentDirectory();
-            var dir = new DirectoryInfo(currentDir);
-            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            // Use application base directory instead of searching for .git
+            // This ensures indexes are always stored relative to the MCP server location
+            var appBasePath = AppContext.BaseDirectory;
+            
+            // If running from bin directory, go up to project root
+            if (appBasePath.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase))
             {
-                dir = dir.Parent;
+                var binIndex = appBasePath.LastIndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase);
+                appBasePath = appBasePath.Substring(0, binIndex);
             }
             
-            if (dir != null)
-            {
-                basePath = Path.Combine(dir.FullName, basePath);
-            }
+            basePath = Path.Combine(appBasePath, basePath);
         }
         
         return Path.Combine(basePath, "index", hash);

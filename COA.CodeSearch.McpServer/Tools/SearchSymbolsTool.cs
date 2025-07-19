@@ -62,8 +62,7 @@ public class SearchSymbolsTool
                 // Temporary debug logging
                 try
                 {
-                    var logPath = @"C:\temp\mcp-workspace-debug.log";
-                    System.IO.Directory.CreateDirectory(@"C:\temp");
+                    var logPath = Path.Combine(Path.GetTempPath(), "mcp-workspace-debug.log");
                     System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SearchSymbols - Directory: {workspacePath}\n");
                     System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] SearchSymbols - Found {slnFiles.Length} .sln files\n");
                     foreach (var sln in slnFiles)
