@@ -355,10 +355,9 @@ public class ClaudeMemoryService : IDisposable
     
     private string GetIndexPath(string workspacePath)
     {
-        // This matches the pattern used by ImprovedLuceneIndexService
-        var basePath = ".codesearch"; // Could be made configurable
-        return Path.Combine(basePath, "index", 
-            workspacePath.Replace(':', '_').Replace('\\', '_').Replace('/', '_'));
+        // For memory workspaces, the path is already complete (e.g., .codesearch/project-memory)
+        // No need to add additional subdirectories or transformations
+        return workspacePath;
     }
     
     public void Dispose()
