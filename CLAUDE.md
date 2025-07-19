@@ -11,7 +11,7 @@ This document provides context and guidelines for AI assistants working on the C
 
 ## Project Overview
 
-COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and is being expanded to support Blazor/Razor files and other file types through fast text indexing. Designed to be significantly faster than Python-based alternatives.
+COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and includes TypeScript support through automatic tsserver integration. Features blazing-fast text search using Lucene indexing and an intelligent memory system for preserving architectural knowledge. Designed to be significantly faster than Python-based alternatives.
 
 ## Key Commands
 
@@ -51,21 +51,31 @@ npx @modelcontextprotocol/inspector dotnet run -- stdio
 COA.CodeSearch.McpServer/
 ├── Program.cs                     # Entry point, MCP server setup
 ├── Services/
-│   ├── CodeAnalysisService.cs     # Manages code analysis and workspaces
-│   ├── CodeNavigationService.cs   # Navigation operations
-│   └── SymbolSearchService.cs     # Symbol search functionality
+│   ├── CodeAnalysisService.cs     # Manages C# code analysis and workspaces
+│   ├── TypeScriptAnalysisService.cs # TypeScript/JavaScript analysis via tsserver
+│   ├── TypeScriptInstaller.cs     # Automatic TypeScript installation
+│   ├── LuceneIndexService.cs      # Fast text indexing with Lucene
+│   ├── ClaudeMemoryService.cs     # Architectural knowledge persistence
+│   └── MemoryHookManager.cs       # Claude Code hook integration
 ├── Tools/
-│   ├── GoToDefinitionTool.cs      # Navigate to definitions
-│   ├── FindReferencesTool.cs      # Find all references
+│   ├── GoToDefinitionTool.cs      # Navigate to definitions (C# & TypeScript)
+│   ├── FindReferencesTool.cs      # Find all references (C# & TypeScript)
 │   ├── SearchSymbolsTool.cs       # Search for symbols
-│   └── GetDiagnosticsTool.cs      # Get compilation errors
-├── Resources/
-│   ├── ProjectStructureResource.cs # Expose project structure
-│   └── SymbolInfoResource.cs      # Symbol information
+│   ├── FastTextSearchTool.cs      # Blazing-fast text search
+│   ├── BatchOperationsTool.cs     # Execute multiple operations in parallel
+│   ├── ClaudeMemoryTools.cs       # Store/recall architectural decisions
+│   └── [V2 Tools]                 # Claude-optimized tools with progressive disclosure
+├── Infrastructure/
+│   ├── ClaudeOptimizedToolBase.cs # Base class for v2 tools
+│   └── ResponseSizeEstimator.cs   # Token-aware response handling
 ├── Models/
 │   └── [Various DTOs]              # Data transfer objects
 ├── appsettings.json               # Configuration
-└── COA.CodeSearch.McpServer.csproj   # Project file
+└── .claude/hooks/                 # Automatic context loading hooks
+    ├── user-prompt-submit.ps1     # Loads context on session start
+    ├── tool-call.ps1              # Loads context before tool execution
+    ├── file-edit.ps1              # Detects patterns in edits
+    └── session-end.ps1            # Saves session summary
 ```
 
 ## Architecture Decisions
@@ -88,6 +98,8 @@ COA.CodeSearch.McpServer/
 - Lazy loading of projects
 - Parallel symbol search
 - Memory-mapped file access for large files
+- Lucene indexing for millisecond text search across millions of lines
+- Automatic TypeScript server reuse across operations
 
 ### 4. **Error Handling**
 - Graceful degradation when projects don't compile
@@ -101,6 +113,13 @@ COA.CodeSearch.McpServer/
 - Smart analysis with insights, hotspots, and next actions
 - Detail request caching for efficient drill-down
 - Context-aware suggestions and priority-based recommendations
+
+### 6. **Memory System & Hooks**
+- Persistent architectural knowledge across sessions
+- Automatic context loading via Claude Code hooks
+- Pattern detection in file edits
+- Session tracking and work history
+- Zero-effort memory management
 
 ## Development Guidelines
 
@@ -348,3 +367,69 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 - Code lens and inline hints
 - Integration with .NET CLI tools
 - Semantic code search with embeddings
+
+## Memory System Quick Start
+
+### Session Startup
+The memory system automatically activates when you start a new conversation:
+1. **user-prompt-submit hook** runs automatically
+2. Initializes memory hooks for the session
+3. Loads recent work sessions and architectural decisions
+4. Searches for context based on your first message
+
+### Available Memory Tools
+
+#### Store Knowledge
+- `remember_decision` - Store architectural decisions with reasoning
+- `remember_pattern` - Document reusable code patterns
+- `remember_security_rule` - Track security requirements
+- `remember_session` - Save work session summary (automatic via hook)
+
+#### Recall Knowledge
+- `recall_context` - Search all memories for relevant context
+- `list_memories_by_type` - List specific types of memories
+- `init_memory_hooks` - Initialize hooks (automatic on session start)
+- `test_memory_hooks` - Verify hooks are working
+
+### Automatic Features
+- **tool-call hook**: Loads relevant context before MCP tool execution
+- **file-edit hook**: Detects architectural patterns and suggests memory storage
+- **session-end hook**: Automatically saves session summary with modified files
+
+## TypeScript Support
+
+### Automatic Installation
+TypeScript support is automatically configured on first use:
+1. Checks for existing TypeScript installation
+2. Downloads and installs TypeScript + tsserver if needed
+3. Caches installation for future sessions
+
+### TypeScript Tools
+- `search_typescript` - Search for TypeScript symbols
+- `GoToDefinition` - Automatically delegates to TypeScript for .ts/.js files
+- `FindReferences` - Works seamlessly across C# and TypeScript
+
+### Fast Text Search
+
+#### Index Management
+- `index_workspace` - Build search index (required before fast_text_search)
+- Indexes are cached in `%TEMP%/LuceneIndexes/`
+- Automatic index updates on file changes
+
+#### Search Features
+- `fast_text_search` - Millisecond search across millions of lines
+- Supports wildcards (*), fuzzy (~), and exact phrases ("")
+- Context lines for better understanding
+- File pattern filtering (e.g., *.cs, src/**/*.ts)
+
+### Batch Operations
+The `batch_operations` tool allows executing multiple operations in parallel:
+```json
+{
+  "operations": [
+    {"type": "text_search", "query": "TODO", "filePattern": "*.cs"},
+    {"type": "search_symbols", "searchPattern": "*Service"},
+    {"type": "find_references", "filePath": "User.cs", "line": 10, "column": 5}
+  ]
+}
+```

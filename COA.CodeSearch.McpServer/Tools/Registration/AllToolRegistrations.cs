@@ -125,7 +125,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<SearchSymbolsParams>(
             name: "search_symbols",
-            description: "Lightning-fast semantic search for classes, methods, properties by name - supports wildcards and fuzzy matching",
+            description: "Lightning-fast semantic search for C# classes, methods, properties by name using Roslyn - supports wildcards and fuzzy matching",
             inputSchema: new
             {
                 type = "object",
@@ -652,7 +652,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchParams>(
             name: "fast_text_search",
-            description: "⚡ Blazing-fast text search across millions of lines in milliseconds - supports wildcards, fuzzy search, and shows context",
+            description: "⚡ Blazing-fast text search across millions of lines in milliseconds - supports wildcards, fuzzy search, and shows context. Works with all file types including C#, TypeScript, JavaScript, and more",
             inputSchema: new
             {
                 type = "object",

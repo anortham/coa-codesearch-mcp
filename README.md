@@ -1,17 +1,19 @@
-# COA Roslyn MCP Server
+# COA CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server for .NET that provides Language Server Protocol (LSP)-like capabilities for navigating and searching .NET codebases using Roslyn.
+A high-performance Model Context Protocol (MCP) server that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases. Features Roslyn for C# analysis, TypeScript support via automatic tsserver integration, blazing-fast text search with Lucene indexing, and an intelligent memory system for preserving architectural knowledge.
 
 ## Overview
 
-COA Roslyn MCP Server leverages Microsoft's Roslyn compiler platform to provide powerful code navigation and analysis features for .NET projects. It's designed as a native .NET tool, offering significant performance advantages over Python-based alternatives.
+COA CodeSearch MCP Server leverages Microsoft's Roslyn compiler platform for C# analysis, TypeScript Language Service for JavaScript/TypeScript support, and Lucene for lightning-fast text search across millions of lines. It includes an intelligent memory system that preserves architectural decisions and work context across sessions. Designed as a native .NET tool with AOT compilation, it offers significant performance advantages over Python-based alternatives.
 
 ## Features
 
 ### Core Navigation Tools (Claude-Optimized)
-- **Go to Definition** - Navigate to symbol definitions across your codebase
-- **Find References** - Find all references to a symbol with smart insights and progressive disclosure
-- **Symbol Search** - Search for types, methods, properties, and other symbols
+- **Go to Definition** - Navigate to symbol definitions (supports C# and TypeScript)
+- **Find References** - Find all references with smart insights and progressive disclosure (C# and TypeScript)
+- **Symbol Search** - Lightning-fast semantic search for C# symbols using Roslyn
+- **TypeScript Search** - Search TypeScript/JavaScript symbols across your codebase
+- **Fast Text Search** - Blazing-fast text search using Lucene indexing (milliseconds across millions of lines)
 - **Get Diagnostics** - Get compilation errors and warnings with intelligent categorization and hotspot detection
 - **Hover Information** - Get detailed symbol information at cursor position
 - **Find Implementations** - Find all implementations of interfaces and abstract members
@@ -20,17 +22,28 @@ COA Roslyn MCP Server leverages Microsoft's Roslyn compiler platform to provide 
 - **Rename Symbol** - Rename symbols across entire codebase with smart preview and impact analysis
 
 ### Advanced Analysis Tools (Claude-Optimized)
-- **Batch Operations** - Execute multiple Roslyn operations in a single call for 60-80% performance improvement
-- **Advanced Symbol Search** - Filter symbols by accessibility, static/abstract modifiers, return types, containing types/namespaces
-- **Dependency Analysis** - Analyze incoming/outgoing code dependencies with smart insights, circular dependency detection, and architecture pattern analysis
-- **Project Structure Analysis** - Comprehensive project analysis with intelligent categorization, hotspot detection, and solution-level insights
+- **Batch Operations** - Execute multiple operations in parallel for 60-80% performance improvement
+- **Advanced Symbol Search** - Filter symbols by accessibility, static/abstract modifiers, return types
+- **Dependency Analysis** - Analyze code dependencies with circular dependency detection
+- **Project Structure Analysis** - Comprehensive project analysis with hotspot detection
+- **Index Workspace** - Build search indexes for optimal performance
+
+### Memory System & Knowledge Persistence
+- **Architectural Decisions** - Store and recall design decisions with reasoning
+- **Code Patterns** - Document reusable patterns with usage guidance
+- **Security Rules** - Track compliance requirements and security patterns
+- **Work Sessions** - Automatic session tracking and history
+- **Context Recall** - Intelligent search across all stored memories
+- **Claude Code Hooks** - Automatic context loading on session start, tool execution, and file edits
 
 ### Performance & Architecture  
+- **Multi-Language Support** - C# via Roslyn, TypeScript/JavaScript via tsserver, all other files via Lucene
 - **Workspace Management** - Efficient caching with LRU eviction for large solutions
 - **Native Performance** - Built with .NET 9.0 and AOT compilation support  
 - **Parallel Processing** - Multi-threaded symbol analysis and workspace operations
-- **Progressive Disclosure** - Automatic token limit handling with smart summaries and drill-down capabilities
-- **Auto-Mode Switching** - Intelligent response optimization for large results (automatically switches to summary mode for responses >5,000 tokens)
+- **Lucene Indexing** - Millisecond search across millions of lines
+- **Progressive Disclosure** - Automatic token limit handling with smart summaries
+- **Auto-Mode Switching** - Intelligent response optimization for large results
 
 ## Claude Optimization Features
 
@@ -75,7 +88,7 @@ Response:
 ### As a Global Tool
 
 ```bash
-dotnet tool install --global COA.Roslyn.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
+dotnet tool install --global COA.CodeSearch.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
 ```
 
 ### For Claude Code
@@ -84,7 +97,7 @@ dotnet tool install --global COA.Roslyn.McpServer --add-source https://childrens
 2. Add the MCP server using Claude Code CLI:
 
 ```bash
-claude mcp add coa-roslyn-mcp
+claude mcp add coa-codesearch-mcp
 ```
 
 Or manually add to your Claude Code configuration (`%APPDATA%\Claude\claude_code_config.json` on Windows):
@@ -92,8 +105,8 @@ Or manually add to your Claude Code configuration (`%APPDATA%\Claude\claude_code
 ```json
 {
   "mcpServers": {
-    "coa-roslyn-mcp": {
-      "command": "coa-roslyn-mcp",
+    "coa-codesearch-mcp": {
+      "command": "coa-codesearch-mcp",
       "args": ["stdio"]
     }
   }
@@ -107,8 +120,8 @@ Add to your Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
-    "roslyn": {
-      "command": "coa-roslyn-mcp",
+    "codesearch": {
+      "command": "coa-codesearch-mcp",
       "args": ["stdio"]
     }
   }
@@ -123,10 +136,10 @@ Add to your Claude Desktop configuration:
 ```json
 {
   "mcp.servers": {
-    "coa-roslyn": {
-      "command": "coa-roslyn-mcp",
+    "coa-codesearch": {
+      "command": "coa-codesearch-mcp",
       "args": ["stdio"],
-      "languages": ["csharp", "vb"]
+      "languages": ["csharp", "vb", "javascript", "typescript"]
     }
   }
 }
@@ -139,10 +152,10 @@ When GitHub Copilot supports MCP servers, configure it in your `.github/copilot-
 ```json
 {
   "servers": {
-    "roslyn": {
-      "command": "coa-roslyn-mcp",
+    "codesearch": {
+      "command": "coa-codesearch-mcp",
       "args": ["stdio"],
-      "filePatterns": ["**/*.cs", "**/*.vb", "**/*.csproj", "**/*.sln"]
+      "filePatterns": ["**/*.cs", "**/*.vb", "**/*.ts", "**/*.js", "**/*.tsx", "**/*.jsx", "**/*.csproj", "**/*.sln"]
     }
   }
 }
@@ -154,27 +167,46 @@ When GitHub Copilot supports MCP servers, configure it in your `.github/copilot-
 
 ```bash
 # Run in STDIO mode (for MCP clients)
-coa-roslyn-mcp stdio
+coa-codesearch-mcp stdio
 
 # Run with verbose logging
-coa-roslyn-mcp stdio --log-level debug
+coa-codesearch-mcp stdio --log-level debug
 ```
 
 ### Usage Examples in Claude Code
 
-Once configured, you can use natural language to navigate your C# codebase:
+Once configured, you can use natural language to navigate your codebase:
 
+#### Code Navigation (C# and TypeScript)
 ```
 "Go to the definition of the UserService class"
 "Find all references to the GetUserById method"
-"Show me all classes that implement IRepository"
+"Show me all TypeScript interfaces that extend BaseModel"
+"Search for 'TODO' comments across the entire codebase"
 "What errors are in the current project?"
 "Rename the Calculate method to ComputeTotal"
-"Show me the call hierarchy for ProcessOrder"
-"Get the outline of the current file"
 ```
 
-Claude will automatically use the appropriate MCP tools to fulfill your requests.
+#### Memory System (Automatic on Session Start)
+```
+"init_memory_hooks" - Initialize hooks (automatic via user-prompt-submit hook)
+"remember_decision why we chose microservices architecture" - Store architectural decision
+"recall_context authentication" - Load relevant memories about authentication
+"list_memories_by_type ArchitecturalDecision" - View all architectural decisions
+```
+
+#### Fast Text Search
+```
+"index_workspace" - Build search index (required before fast_text_search)
+"fast_text_search 'connection string'" - Search across millions of lines instantly
+"fast_text_search 'class.*Repository' with wildcards" - Pattern matching
+"fast_text_search 'user~' fuzzy search" - Find approximate matches
+```
+
+The memory system automatically:
+- Loads relevant context when you use tools
+- Detects architectural patterns in your edits
+- Saves session summaries when you finish
 
 ### Usage Examples in VS Code
 
@@ -194,10 +226,90 @@ With the MCP extension installed, you can:
 
 ### Available Tools
 
+#### Fast Text Search Tools
+
+##### IndexWorkspace
+Build or rebuild search index for fast text search operations.
+
+Parameters:
+- `workspacePath`: Path to index
+- `forceRebuild`: Force rebuild even if index exists (optional)
+
+##### FastTextSearch
+Blazingly-fast text search across millions of lines using Lucene indexing.
+
+Parameters:
+- `query`: Text to search for - supports wildcards (*), fuzzy (~), phrases ("exact")
+- `workspacePath`: Path to search
+- `filePattern`: Optional file pattern filter (e.g., '*.cs', 'src/**/*.ts')
+- `extensions`: Optional array of extensions (e.g., ['.cs', '.ts'])
+- `contextLines`: Show N lines before/after matches (optional)
+- `searchType`: 'standard', 'wildcard', 'fuzzy', or 'phrase' (optional)
+
+#### TypeScript Tools
+
+##### SearchTypeScript
+Search for TypeScript symbols (interfaces, types, classes, functions).
+
+Parameters:
+- `symbolName`: Symbol to search for
+- `workspacePath`: Path to search
+- `mode`: 'definition', 'references', or 'both' (optional)
+
+#### Memory System Tools
+
+##### InitMemoryHooks
+Initialize Claude memory hooks (automatic on session start).
+
+Parameters:
+- `projectRoot`: Project root directory (optional)
+
+##### RememberDecision
+Store architectural decisions with reasoning.
+
+Parameters:
+- `decision`: The decision made
+- `reasoning`: Why this decision was made
+- `affectedFiles`: Optional array of affected files
+- `tags`: Optional tags for categorization
+
+##### RememberPattern
+Document reusable code patterns.
+
+Parameters:
+- `pattern`: Description of the pattern
+- `location`: Where it's implemented
+- `usage`: When and how to use it
+- `relatedFiles`: Optional array of example files
+
+##### RememberSecurityRule
+Track security requirements and compliance rules.
+
+Parameters:
+- `rule`: The security rule or requirement
+- `reasoning`: Why this rule exists
+- `affectedFiles`: Optional array of affected files
+- `compliance`: Optional compliance framework (HIPAA, SOX, etc.)
+
+##### RecallContext
+Search memories for relevant context.
+
+Parameters:
+- `query`: What to search for
+- `scopeFilter`: Optional filter by memory type
+- `maxResults`: Maximum results to return
+
+##### ListMemoriesByType
+List all memories of a specific type.
+
+Parameters:
+- `scope`: Type of memories (ArchitecturalDecision, CodePattern, SecurityRule, etc.)
+- `maxResults`: Maximum results (optional)
+
 #### Core Navigation Tools
 
 ##### GoToDefinition
-Navigate to the definition of a symbol at a specific location.
+Navigate to the definition of a symbol at a specific location. Automatically delegates to TypeScript analysis for .ts/.js files.
 
 Parameters:
 - `filePath`: Path to the source file
@@ -221,7 +333,7 @@ Features:
 - **Impact Analysis**: Assesses change impact and provides risk factors
 
 ##### SearchSymbols
-Search for symbols by name across the workspace.
+Search for C# symbols by name across the workspace using Roslyn.
 
 Parameters:
 - `pattern`: Search pattern (supports wildcards)
@@ -416,17 +528,20 @@ dotnet publish -c Release -r win-x64
 ### Testing with MCP Inspector
 
 ```bash
-npx @modelcontextprotocol/inspector coa-roslyn-mcp stdio
+npx @modelcontextprotocol/inspector coa-codesearch-mcp stdio
 ```
 
 ## Architecture
 
 The server is built with:
-- **Roslyn** - Microsoft.CodeAnalysis for code analysis
+- **Roslyn** - Microsoft.CodeAnalysis for C# code analysis
+- **TypeScript Language Service** - Via automatic tsserver integration
+- **Lucene.NET** - High-performance text indexing and search
 - **MSBuildWorkspace** - For loading .NET solutions and projects
 - **JSON-RPC 2.0** - Standard MCP communication protocol
 - **LRU Cache** - Efficient workspace management
 - **Native AOT** - For fast startup and reduced memory usage
+- **Claude Code Hooks** - PowerShell/Bash scripts for automatic context management
 
 ## Performance
 
@@ -456,20 +571,32 @@ Target metrics:
    - Check that all NuGet packages are restored
    - Try opening the solution in Visual Studio first
 
-3. **Authentication errors with COA feed**
+3. **TypeScript not working**
+   - Ensure Node.js is installed: `node --version`
+   - The server will auto-install TypeScript on first use
+   - Check `%LOCALAPPDATA%\COA.CodeSearch.McpServer\typescript` for installation
+   - See TYPESCRIPT_SETUP.md for manual installation options
+
+4. **Authentication errors with COA feed**
    - Set the `COA_NUGET_PAT` environment variable with your Personal Access Token
    - Or authenticate using: `dotnet nuget add source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json -n COA -u YOUR_USERNAME -p YOUR_PAT`
 
-4. **Server not responding in Claude Code**
+5. **Server not responding in Claude Code**
    - Check that the tool is installed: `dotnet tool list -g`
-   - Verify the tool runs: `coa-roslyn-mcp stdio` (should wait for input)
+   - Verify the tool runs: `coa-codesearch-mcp stdio` (should wait for input)
    - Check Claude Code logs: `claude logs`
+
+6. **Memory hooks not working**
+   - Run `init_memory_hooks` to initialize (automatic on session start)
+   - Check `.claude/hooks/` directory exists
+   - Test with `test_memory_hooks tool-call`
+   - Ensure PowerShell execution policy allows scripts
 
 ### Updating the Tool
 
 ```bash
 # Update to latest version
-dotnet tool update --global COA.Roslyn.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
+dotnet tool update --global COA.CodeSearch.McpServer --add-source https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json
 ```
 
 ## Contributing
