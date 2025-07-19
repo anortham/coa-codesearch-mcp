@@ -51,10 +51,16 @@
     
     <!-- Caching -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
+    
+    <!-- HTTP Client for TypeScript installer -->
+    <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
   </ItemGroup>
 
   <ItemGroup>
     <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Update="package.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

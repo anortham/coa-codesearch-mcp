@@ -63,6 +63,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IResultTruncator, ResultTruncator>();
         services.AddMemoryCache(); // Required for DetailRequestCache
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
+        services.AddHttpClient(); // For TypeScript installer
         
         // Core services
         services.AddSingleton<CodeAnalysisService>();
@@ -78,6 +79,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         
         // TypeScript Analysis
+        services.AddSingleton<TypeScriptInstaller>();
         services.AddSingleton<TypeScriptAnalysisService>();
         services.AddSingleton<TypeScriptTextAnalysisService>();
         

@@ -10,11 +10,16 @@ public class GoToDefinitionTool
 {
     private readonly ILogger<GoToDefinitionTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
+    private readonly TypeScriptGoToDefinitionTool? _typeScriptTool;
 
-    public GoToDefinitionTool(ILogger<GoToDefinitionTool> logger, CodeAnalysisService workspaceService)
+    public GoToDefinitionTool(
+        ILogger<GoToDefinitionTool> logger, 
+        CodeAnalysisService workspaceService,
+        TypeScriptGoToDefinitionTool? typeScriptTool = null)
     {
         _logger = logger;
         _workspaceService = workspaceService;
+        _typeScriptTool = typeScriptTool;
     }
 
     public async Task<object> ExecuteAsync(
@@ -26,6 +31,25 @@ public class GoToDefinitionTool
         try
         {
             _logger.LogInformation("GoToDefinition request for {FilePath} at {Line}:{Column}", filePath, line, column);
+
+            // Check if this is a TypeScript file
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            if (IsTypeScriptFile(extension))
+            {
+                if (_typeScriptTool != null)
+                {
+                    _logger.LogInformation("Delegating to TypeScript GoToDefinition tool");
+                    return await _typeScriptTool.GoToDefinitionAsync(filePath, line, column, cancellationToken);
+                }
+                else
+                {
+                    return new
+                    {
+                        success = false,
+                        error = "TypeScript analysis is not available"
+                    };
+                }
+            }
 
             // Get the document
             var document = await _workspaceService.GetDocumentAsync(filePath, cancellationToken);
@@ -132,5 +156,10 @@ public class GoToDefinitionTool
                 error = ex.Message
             };
         }
+    }
+
+    private bool IsTypeScriptFile(string extension)
+    {
+        return extension == ".ts" || extension == ".tsx" || extension == ".js" || extension == ".jsx" || extension == ".vue";
     }
 }
