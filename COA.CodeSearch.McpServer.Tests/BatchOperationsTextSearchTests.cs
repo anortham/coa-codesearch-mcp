@@ -13,10 +13,13 @@ namespace COA.CodeSearch.McpServer.Tests;
 public class BatchOperationsTextSearchTests : TestBase
 {
     private readonly ITestOutputHelper _output;
+    private readonly string _tempDirectory;
 
     public BatchOperationsTextSearchTests(ITestOutputHelper output)
     {
         _output = output;
+        _tempDirectory = Path.Combine(Path.GetTempPath(), $"batch_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(_tempDirectory);
     }
 
     [Fact]
@@ -176,5 +179,23 @@ public class BatchOperationsTextSearchTests : TestBase
         services.AddScoped<BatchOperationsTool>();
 
         return services;
+    }
+    
+    #pragma warning disable xUnit1013 // Public method should be marked as test
+    public new void Dispose()
+    #pragma warning restore xUnit1013
+    {
+        // Cleanup temp directory first
+        if (!string.IsNullOrEmpty(_tempDirectory) && Directory.Exists(_tempDirectory))
+        {
+            try
+            {
+                Directory.Delete(_tempDirectory, true);
+            }
+            catch { }
+        }
+        
+        // Then call base dispose
+        base.Dispose();
     }
 }

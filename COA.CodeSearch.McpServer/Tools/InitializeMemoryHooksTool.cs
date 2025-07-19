@@ -38,8 +38,7 @@ public class InitializeMemoryHooksTool
                 };
             }
 
-            // Create README
-            await hookManager.CreateHooksReadmeAsync();
+            // README is now created automatically by InitializeHooksAsync
 
             // Store this as an architectural decision!
             await _memoryService.StoreArchitecturalDecisionAsync(
