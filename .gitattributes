@@ -1,139 +1,27 @@
 # Set default behavior to automatically normalize line endings
 * text=auto
 
-# Force batch scripts to always use CRLF
+# Force batch files to always use CRLF
 *.bat text eol=crlf
 *.cmd text eol=crlf
 # Force bash scripts to always use LF
 *.sh text eol=lf
-# Denote all files that are truly binary and should not be modified
+# C# and .NET files
+*.cs text
+*.csproj text
+*.sln text eol=crlf
+*.config text
+*.json text
+*.xml text
+*.md text
+# Binary files
+*.dll binary
+*.exe binary
 *.png binary
 *.jpg binary
 *.jpeg binary
 *.gif binary
 *.ico binary
-*.mov binary
-*.mp4 binary
-*.mp3 binary
-*.flv binary
-*.fla binary
-*.swf binary
-*.gz binary
-*.zip binary
-*.7z binary
-*.ttf binary
-*.eot binary
-*.woff binary
-*.pyc binary
 *.pdf binary
-*.ez binary
-*.bz2 binary
-*.swp binary
-*.exe binary
-*.dll binary
-*.pdb binary
-*.so binary
-*.dylib binary
-# Text files where line endings should be preserved
-*.patch -text
-# Documents
-*.doc diff=astextplain
-*.DOC diff=astextplain
-*.docx diff=astextplain
-*.DOCX diff=astextplain
-*.dot diff=astextplain
-*.DOT diff=astextplain
-*.pdf diff=astextplain
-*.PDF diff=astextplain
-*.rtf diff=astextplain
-*.RTF diff=astextplain
-*.md text
-*.tex text
-*.adoc text
-*.textile text
-*.mustache text
-*.csv text
-*.tab text
-*.tsv text
-*.txt text
-*.sql text
-# Graphics
-*.svg text
-*.eps binary
-# C# and .NET specific
-*.cs text diff=csharp
-*.csproj text merge=union
-*.sln text eol=crlf merge=union
-*.config text
-*.json text
-*.xml text
-*.xaml text
-*.resx text
-*.ruleset text
-*.props text
-*.targets text
-*.nuspec text
-# Web files
-*.html text
-*.htm text
-*.css text
-*.scss text
-*.sass text
-*.less text
-*.js text
-*.jsx text
-*.ts text
-*.tsx text
-*.vue text
-*.php text
-*.razor text
-*.cshtml text
-# Docker
-Dockerfile text
-*.dockerfile text
-*.dockerignore text
-# YAML/Configuration
-*.yml text
-*.yaml text
-*.toml text
-*.ini text
-*.cfg text
-*.conf text
-# Git files
-.gitattributes text
-.gitignore text
-.gitconfig text
-.gitmodules text
-# Package files
-*.nupkg binary
-*.snupkg binary
-# Certificates
-*.cer binary
-*.crt binary
-*.key binary
-*.pem text
-*.pfx binary
-# Archives
-*.tar binary
-*.tgz binary
-*.jar binary
-*.rar binary
-# Database files
-*.sqlite binary
-*.db binary
-*.mdb binary
-# Lucene index files (for future use)
-*.cfs binary
-*.cfx binary
-*.cfe binary
-*.si binary
-*.fnm binary
-*.fdx binary
-*.fdt binary
-*.tip binary
-*.tim binary
-*.doc binary
-*.pos binary
-*.pay binary
 **/tree-sitter-service.exe filter=lfs diff=lfs merge=lfs -text
 **/*.bun-build filter=lfs diff=lfs merge=lfs -text
