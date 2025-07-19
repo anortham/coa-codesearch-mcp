@@ -47,6 +47,7 @@ public class BatchOperationsTool
 
     public async Task<object> ExecuteAsync(
         JsonElement operations,
+        string? defaultWorkspacePath = null,
         CancellationToken cancellationToken = default)
     {
         try
@@ -74,7 +75,7 @@ public class BatchOperationsTool
                 
                 try
                 {
-                    var operationResult = await ExecuteSingleOperationAsync(operationType!, operation, cancellationToken);
+                    var operationResult = await ExecuteSingleOperationAsync(operationType!, operation, defaultWorkspacePath, cancellationToken);
                     
                     results.Add(new
                     {
@@ -115,13 +116,30 @@ public class BatchOperationsTool
         }
     }
 
-    private async Task<object> ExecuteSingleOperationAsync(string operationType, JsonElement operation, CancellationToken cancellationToken)
+    private string GetWorkspacePath(JsonElement operation, string? defaultWorkspacePath)
+    {
+        // First check if the operation has its own workspacePath
+        if (operation.TryGetProperty("workspacePath", out var wsPath) && wsPath.ValueKind == JsonValueKind.String)
+        {
+            return wsPath.GetString()!;
+        }
+        
+        // Fall back to the default workspacePath from the batch request
+        if (!string.IsNullOrEmpty(defaultWorkspacePath))
+        {
+            return defaultWorkspacePath;
+        }
+        
+        throw new ArgumentException("workspacePath is required either in the operation or as a default parameter");
+    }
+
+    private async Task<object> ExecuteSingleOperationAsync(string operationType, JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
         return operationType switch
         {
             "search_symbols" => await _searchSymbolsTool.ExecuteAsync(
-                operation.GetProperty("pattern").GetString()!,
-                operation.GetProperty("workspacePath").GetString()!,
+                operation.GetProperty("searchPattern").GetString()!,
+                GetWorkspacePath(operation, defaultWorkspacePath),
                 operation.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
                     ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()
                     : null,
@@ -178,7 +196,7 @@ public class BatchOperationsTool
 
             "text_search" or "fast_text_search" or "textSearch" => await _fastTextSearchTool.ExecuteAsync(
                 operation.GetProperty("query").GetString()!,
-                operation.GetProperty("workspacePath").GetString()!,
+                GetWorkspacePath(operation, defaultWorkspacePath),
                 operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
                 operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
                     ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
@@ -191,7 +209,7 @@ public class BatchOperationsTool
 
             "analyze_dependencies" => await _dependencyAnalysisTool.ExecuteAsync(
                 operation.GetProperty("symbol").GetString()!,
-                operation.GetProperty("workspacePath").GetString()!,
+                GetWorkspacePath(operation, defaultWorkspacePath),
                 operation.TryGetProperty("direction", out var dd) ? dd.GetString() ?? "both" : "both",
                 operation.TryGetProperty("depth", out var dp) ? dp.GetInt32() : 3,
                 operation.TryGetProperty("includeTests", out var it) && it.GetBoolean(),

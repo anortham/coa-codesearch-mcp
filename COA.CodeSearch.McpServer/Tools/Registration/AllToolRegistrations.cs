@@ -364,7 +364,7 @@ public static class AllToolRegistrations
                     var operationsJson = JsonSerializer.Serialize(parameters.Operations);
                     var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
                     
-                    var result = await tool.ExecuteAsync(operationsElement, ct);
+                    var result = await tool.ExecuteAsync(operationsElement, parameters.WorkspacePath, ct);
                         
                     return CreateSuccessResult(result);
                 }

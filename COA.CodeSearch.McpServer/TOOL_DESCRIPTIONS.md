@@ -124,7 +124,7 @@ Use COA CodeSearch when you need:
 - **Example**: "Find definition, then get all references, then analyze dependencies"
 - **Supported operations**: `fast_text_search`, `search_symbols`, `find_references`, `go_to_definition`, `get_hover_info`, `get_implementations`, `get_document_symbols`, `get_diagnostics`, `get_call_hierarchy`, `analyze_dependencies`
 
-**Important**: Each operation in the batch must include the `workspacePath` parameter!
+**Important**: The `workspacePath` can be specified at the top level (recommended) or in each individual operation. If an operation doesn't specify `workspacePath`, it will use the top-level value.
 
 **Example batch with text search and dependency analysis**:
 ```json
@@ -134,21 +134,37 @@ Use COA CodeSearch when you need:
     {
       "operation": "fast_text_search",
       "query": "UseAuthentication",
-      "workspacePath": "C:\\source\\MyProject",
       "maxResults": 10
     },
     {
       "operation": "search_symbols",
-      "pattern": "*Controller",
-      "workspacePath": "C:\\source\\MyProject",
+      "searchPattern": "*Controller",
       "searchType": "wildcard"
     },
     {
       "operation": "analyze_dependencies",
       "symbol": "SERFormsController",
-      "workspacePath": "C:\\source\\MyProject",
       "direction": "outgoing",
       "depth": 2
+    }
+  ]
+}
+```
+
+You can also override the workspacePath for specific operations if needed:
+```json
+{
+  "workspacePath": "C:\\source\\MyProject",
+  "operations": [
+    {
+      "operation": "fast_text_search",
+      "query": "TODO",
+      "maxResults": 10
+    },
+    {
+      "operation": "search_symbols",
+      "searchPattern": "ILogger",
+      "workspacePath": "C:\\source\\DifferentProject"
     }
   ]
 }
@@ -160,7 +176,7 @@ Each operation must include `"operation"` (or `"type"`) and the required paramet
 
 1. **fast_text_search**
    - `query`: Search query (required)
-   - `workspacePath`: Path to workspace (required)
+   - `workspacePath`: Path to workspace (required if not specified at top level)
    - `filePattern`: Optional file glob pattern
    - `extensions`: Optional array of file extensions
    - `contextLines`: Optional number of context lines
@@ -169,8 +185,8 @@ Each operation must include `"operation"` (or `"type"`) and the required paramet
    - `searchType`: Optional search type ("standard", "wildcard", "fuzzy", "phrase")
 
 2. **search_symbols**
-   - `pattern`: Search pattern (required)
-   - `workspacePath`: Path to workspace (required)
+   - `searchPattern`: Search pattern (required)
+   - `workspacePath`: Path to workspace (required if not specified at top level)
    - `symbolTypes`: Optional array of symbol types
    - `searchType`: Optional search type ("exact", "contains", "startsWith", "wildcard", "fuzzy")
    - `maxResults`: Optional max results (default: 100)
@@ -215,7 +231,7 @@ Each operation must include `"operation"` (or `"type"`) and the required paramet
 
 10. **analyze_dependencies**
     - `symbol`: Symbol name (required)
-    - `workspacePath`: Path to workspace (required)
+    - `workspacePath`: Path to workspace (required if not specified at top level)
     - `direction`: Optional direction ("incoming", "outgoing", "both", default: "both")
     - `depth`: Optional analysis depth (default: 3)
     - `includeTests`: Optional include test projects
