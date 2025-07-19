@@ -22,6 +22,8 @@ public static class MemoryToolRegistrations
         RegisterRememberSession(registry, memoryTools);
         RegisterRecallContext(registry, memoryTools);
         RegisterListMemoriesByType(registry, memoryTools);
+        RegisterBackupMemories(registry, memoryTools);
+        RegisterRestoreMemories(registry, memoryTools);
         RegisterInitMemoryHooks(registry, initHooksTool);
         RegisterTestMemoryHooks(registry, initHooksTool);
     }
@@ -272,6 +274,58 @@ public static class MemoryToolRegistrations
         );
     }
     
+    private static void RegisterBackupMemories(ToolRegistry registry, ClaudeMemoryTools tool)
+    {
+        registry.RegisterTool<BackupMemoriesParams>(
+            name: "backup_memories_to_sqlite",
+            description: "Backup memories from Lucene index to SQLite database for version control and sharing. By default backs up only project-level memories (architectural decisions, patterns, security rules) which can be shared with the team.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to backup. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
+                    includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.BackupMemories(
+                    parameters?.Scopes,
+                    parameters?.IncludeLocal ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterRestoreMemories(ToolRegistry registry, ClaudeMemoryTools tool)
+    {
+        registry.RegisterTool<RestoreMemoriesParams>(
+            name: "restore_memories_from_sqlite",
+            description: "Restore memories from SQLite database backup to Lucene index. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to restore. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
+                    includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.RestoreMemories(
+                    parameters?.Scopes,
+                    parameters?.IncludeLocal ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
     // Parameter classes
     private class RememberDecisionParams
     {
@@ -326,5 +380,17 @@ public static class MemoryToolRegistrations
     private class TestMemoryHooksParams
     {
         public string? HookType { get; set; }
+    }
+    
+    private class BackupMemoriesParams
+    {
+        public string[]? Scopes { get; set; }
+        public bool? IncludeLocal { get; set; }
+    }
+    
+    private class RestoreMemoriesParams
+    {
+        public string[]? Scopes { get; set; }
+        public bool? IncludeLocal { get; set; }
     }
 }

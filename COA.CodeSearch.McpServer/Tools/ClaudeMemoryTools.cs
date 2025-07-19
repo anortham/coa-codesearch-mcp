@@ -219,7 +219,7 @@ public class ClaudeMemoryTools
                 foreach (var memory in group.Take(3)) // Limit per category
                 {
                     response += $"**{FormatMemoryTitle(memory)}**\n";
-                    response += $"{FormatMemoryContent(memory)}\n";
+                    response += $"{FormatMemoryContent(memory, maxLength: 500)}\n";
                     
                     if (memory.FilesInvolved.Any())
                     {

@@ -402,10 +402,21 @@ The memory system automatically activates when you start a new conversation:
 - `init_memory_hooks` - Initialize hooks (automatic on session start)
 - `test_memory_hooks` - Verify hooks are working
 
-### Automatic Features
-- **tool-call hook**: Loads relevant context before MCP tool execution
+### Hook Strategy (Updated)
+The memory system uses a targeted hook approach:
+- **PreToolUse hook**: Suggests loading relevant context only when using MCP tools (reduces noise)
+- **Stop hook**: Tracks work units after each Claude response, suggests documenting significant changes
 - **file-edit hook**: Detects architectural patterns and suggests memory storage
-- **session-end hook**: Automatically saves session summary with modified files
+- **Manual backup/restore**: User controls when to save/load memories via SQLite
+
+### Manual Backup/Restore
+- `backup_memories_to_sqlite` - Backup project memories to SQLite for version control
+- `restore_memories_from_sqlite` - Restore memories from SQLite (useful for new machines)
+
+Example workflow:
+1. Before major changes: `mcp__codesearch__backup_memories_to_sqlite`
+2. Check in `memories.db` to source control
+3. On new machine: `mcp__codesearch__restore_memories_from_sqlite`
 
 ## TypeScript Support
 
