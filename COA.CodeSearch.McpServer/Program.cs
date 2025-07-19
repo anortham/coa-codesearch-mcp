@@ -1,3 +1,5 @@
+using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tools.Registration;
@@ -52,6 +54,16 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .ConfigureServices((context, services) =>
     {
+        // Configuration
+        services.Configure<ResponseLimitOptions>(
+            context.Configuration.GetSection("ResponseLimits"));
+        
+        // Infrastructure services
+        services.AddSingleton<IResponseSizeEstimator, ResponseSizeEstimator>();
+        services.AddSingleton<IResultTruncator, ResultTruncator>();
+        services.AddMemoryCache(); // Required for DetailRequestCache
+        services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
+        
         // Core services
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
@@ -63,17 +75,21 @@ var host = Host.CreateDefaultBuilder(args)
         // Register all tools
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();
+        services.AddSingleton<FindReferencesToolV2>();
         services.AddSingleton<SearchSymbolsTool>();
         services.AddSingleton<GetDiagnosticsTool>();
+        services.AddSingleton<GetDiagnosticsToolV2>();
         services.AddSingleton<GetHoverInfoTool>();
         services.AddSingleton<GetImplementationsTool>();
         services.AddSingleton<GetDocumentSymbolsTool>();
         services.AddSingleton<GetCallHierarchyTool>();
         services.AddSingleton<RenameSymbolTool>();
+        services.AddSingleton<RenameSymbolToolV2>();
         services.AddSingleton<BatchOperationsTool>();
         services.AddSingleton<AdvancedSymbolSearchTool>();
         services.AddSingleton<DependencyAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisTool>();
+        services.AddSingleton<ProjectStructureAnalysisToolV2>();
         services.AddSingleton<FastTextSearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         

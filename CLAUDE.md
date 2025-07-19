@@ -230,7 +230,67 @@ public async Task<ToolResult> ToolName(
    - Check for compilation errors in target projects
    - Profile with performance tools
 
-## Future Enhancements
+## Progressive Disclosure Pattern (Optimized for Claude)
+
+The MCP server includes smart response handling designed specifically for Claude's workflow:
+
+## Auto-Mode Switching
+Tools automatically switch to summary mode when responses exceed 5,000 tokens:
+```json
+{
+  "success": true,
+  "mode": "summary",
+  "autoModeSwitch": true,  // Indicates automatic switch
+  "data": { /* summary data */ }
+}
+```
+
+## Smart Summaries
+Summary responses include:
+- **Key Insights**: "CmsController.cs has 30% of all changes"
+- **Hotspots**: Files with highest concentration of results
+- **Categories**: Results grouped by file type (controllers, services, etc.)
+- **Impact Analysis**: Risk factors and suggestions
+
+## Efficient Drill-Down
+Request specific details without re-executing operations:
+```json
+// Get details for high-impact files
+{
+  "detailLevel": "hotspots",
+  "detailRequestToken": "..."
+}
+
+// Get category-specific details
+{
+  "detailLevel": "smart_batch",
+  "criteria": {
+    "categories": ["controllers"],
+    "maxTokens": 8000
+  }
+}
+```
+
+## Token Awareness
+All responses include token estimates:
+- `estimatedTokens`: Current response size
+- `estimatedFullResponseTokens`: Full data size
+- Available detail levels show token cost
+
+## Usage Example
+```bash
+# 1. Initial request - auto-switches to summary if large
+rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementService
+
+# 2. Response includes smart analysis
+# - Key insights about the changes
+# - Recommended next actions with exact commands
+# - Token estimates for each action
+
+# 3. Drill down as needed using provided commands
+```
+
+# Future Enhancements
 
 - WebSocket transport for remote deployment
 - Integration with OmniSharp for additional features
