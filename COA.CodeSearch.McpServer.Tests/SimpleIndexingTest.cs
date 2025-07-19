@@ -28,7 +28,7 @@ public class SimpleIndexingTest
         });
         
         var config = new ConfigurationBuilder().Build();
-        var luceneService = new ImprovedLuceneIndexServiceV2(loggerFactory.CreateLogger<ImprovedLuceneIndexServiceV2>(), config);
+        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config);
         var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService);
         
         // Create test directory

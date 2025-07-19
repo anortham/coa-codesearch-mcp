@@ -15,7 +15,7 @@ public class FastTextSearchIntegrationTests : IDisposable
 {
     private ILoggerFactory _loggerFactory = null!;
     private IConfiguration _configuration = null!;
-    private ImprovedLuceneIndexServiceV2 _luceneIndexService = null!;
+    private LuceneIndexService _luceneIndexService = null!;
     private FileIndexingService _fileIndexingService = null!;
     private FastTextSearchTool _fastTextSearchTool = null!;
     private string _testProjectPath = null!;
@@ -50,8 +50,8 @@ public class FastTextSearchIntegrationTests : IDisposable
         });
         _configuration = configBuilder.Build();
 
-        _luceneIndexService = new ImprovedLuceneIndexServiceV2(
-            _loggerFactory.CreateLogger<ImprovedLuceneIndexServiceV2>(),
+        _luceneIndexService = new LuceneIndexService(
+            _loggerFactory.CreateLogger<LuceneIndexService>(),
             _configuration);
 
         _fileIndexingService = new FileIndexingService(

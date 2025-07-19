@@ -69,13 +69,20 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ToolRegistry>();
         
         // Lucene services
-        services.AddSingleton<ImprovedLuceneIndexServiceV2>();
-        services.AddSingleton<IImprovedLuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexServiceV2>());
-        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexServiceV2>());
+        services.AddSingleton<LuceneIndexService>();
+        services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
+        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<FileIndexingService>();
         
         // Claude Memory System
         services.AddSingleton<ClaudeMemoryService>();
+        
+        // TypeScript Analysis
+        services.AddSingleton<TypeScriptAnalysisService>();
+        services.AddSingleton<TypeScriptTextAnalysisService>();
+        
+        // Lucene lifecycle management
+        services.AddHostedService<LuceneLifecycleService>();
         
         // Register all tools
         services.AddSingleton<GoToDefinitionTool>();
@@ -100,6 +107,11 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
         services.AddSingleton<InitializeMemoryHooksTool>();
+        
+        // TypeScript tools
+        services.AddSingleton<TypeScriptGoToDefinitionTool>();
+        services.AddSingleton<TypeScriptFindReferencesTool>();
+        services.AddSingleton<TypeScriptSearchTool>();
         
         // Register the MCP server as a hosted service
         services.AddHostedService<McpServer>();

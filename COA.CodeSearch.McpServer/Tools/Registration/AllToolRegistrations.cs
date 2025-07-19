@@ -42,6 +42,9 @@ public static class AllToolRegistrations
         
         // Claude Memory System tools
         MemoryToolRegistrations.RegisterMemoryTools(registry, serviceProvider);
+        
+        // TypeScript tools
+        TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)

@@ -13,9 +13,9 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Improved Lucene index service with better lock handling and thread safety
 /// </summary>
-public class ImprovedLuceneIndexServiceV2 : ILuceneIndexService, IImprovedLuceneIndexService
+public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
 {
-    private readonly ILogger<ImprovedLuceneIndexServiceV2> _logger;
+    private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
     private readonly StandardAnalyzer _analyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
@@ -37,7 +37,7 @@ public class ImprovedLuceneIndexServiceV2 : ILuceneIndexService, IImprovedLucene
         public readonly SemaphoreSlim Lock = new(1, 1);
     }
     
-    public ImprovedLuceneIndexServiceV2(ILogger<ImprovedLuceneIndexServiceV2> logger, IConfiguration configuration)
+    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
@@ -285,7 +285,7 @@ public class ImprovedLuceneIndexServiceV2 : ILuceneIndexService, IImprovedLucene
     {
         if (_disposed)
         {
-            throw new ObjectDisposedException(nameof(ImprovedLuceneIndexServiceV2));
+            throw new ObjectDisposedException(nameof(LuceneIndexService));
         }
     }
     
