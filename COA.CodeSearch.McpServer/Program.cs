@@ -69,9 +69,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ToolRegistry>();
         
         // Lucene services
-        services.AddSingleton<ImprovedLuceneIndexService>();
-        services.AddSingleton<IImprovedLuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexService>());
-        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexService>());
+        services.AddSingleton<ImprovedLuceneIndexServiceV2>();
+        services.AddSingleton<IImprovedLuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexServiceV2>());
+        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexServiceV2>());
         services.AddSingleton<FileIndexingService>();
         
         // Claude Memory System
