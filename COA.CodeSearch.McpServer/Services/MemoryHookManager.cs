@@ -143,9 +143,41 @@ Write-Host ""✅ Session memory saved"" -ForegroundColor Green
 exit 0
 ";
 
+        // User prompt hook - PowerShell
+        var userPromptHook = @"#!/usr/bin/env pwsh
+# Claude Memory System - User Prompt Hook (Windows)
+# Loads relevant context on first prompt of session
+
+# Check if this is the first prompt in the session
+$sessionFile = Join-Path $env:TEMP ""claude_session_$env:CLAUDE_CONVERSATION_ID.txt""
+if (-not (Test-Path $sessionFile)) {
+    Write-Host ""🚀 New session started - loading context..."" -ForegroundColor Cyan
+    
+    # Create session marker
+    New-Item -ItemType File -Path $sessionFile -Force | Out-Null
+    
+    # Load recent work sessions
+    & coa-codesearch-mcp list_memories_by_type WorkSession --maxResults 3 2>$null
+    
+    # Load architectural decisions
+    & coa-codesearch-mcp list_memories_by_type ArchitecturalDecision --maxResults 5 2>$null
+    
+    # Search for context based on prompt
+    $promptWords = $env:CLAUDE_USER_MESSAGE -split '\s+' | Where-Object { $_.Length -gt 3 }
+    if ($promptWords.Count -gt 0) {
+        $searchQuery = $promptWords[0..2] -join ' '
+        Write-Host ""🔍 Searching for context: $searchQuery"" -ForegroundColor Cyan
+        & coa-codesearch-mcp recall_context ""$searchQuery"" 2>$null
+    }
+}
+
+exit 0
+";
+
         await WriteHookFileAsync("tool-call.ps1", toolCallHook);
         await WriteHookFileAsync("file-edit.ps1", fileEditHook);
         await WriteHookFileAsync("session-end.ps1", sessionEndHook);
+        await WriteHookFileAsync("user-prompt-submit.ps1", userPromptHook);
     }
 
     private async Task CreateUnixHooksAsync()
@@ -232,9 +264,40 @@ echo ""✅ Session memory saved""
 exit 0
 ";
 
+        // User prompt hook - Bash
+        var userPromptHook = @"#!/bin/bash
+# Claude Memory System - User Prompt Hook (Unix)
+# Loads relevant context on first prompt of session
+
+# Check if this is the first prompt in the session
+SESSION_FILE=""/tmp/claude_session_${CLAUDE_CONVERSATION_ID}.txt""
+if [[ ! -f ""$SESSION_FILE"" ]]; then
+    echo ""🚀 New session started - loading context...""
+    
+    # Create session marker
+    touch ""$SESSION_FILE""
+    
+    # Load recent work sessions
+    coa-codesearch-mcp list_memories_by_type WorkSession --maxResults 3 2>/dev/null || true
+    
+    # Load architectural decisions
+    coa-codesearch-mcp list_memories_by_type ArchitecturalDecision --maxResults 5 2>/dev/null || true
+    
+    # Search for context based on prompt
+    SEARCH_QUERY=$(echo ""$CLAUDE_USER_MESSAGE"" | awk '{print $1, $2, $3}')
+    if [[ -n ""$SEARCH_QUERY"" ]]; then
+        echo ""🔍 Searching for context: $SEARCH_QUERY""
+        coa-codesearch-mcp recall_context ""$SEARCH_QUERY"" 2>/dev/null || true
+    fi
+fi
+
+exit 0
+";
+
         await WriteHookFileAsync("tool-call.sh", toolCallHook, makeExecutable: true);
         await WriteHookFileAsync("file-edit.sh", fileEditHook, makeExecutable: true);
         await WriteHookFileAsync("session-end.sh", sessionEndHook, makeExecutable: true);
+        await WriteHookFileAsync("user-prompt-submit.sh", userPromptHook, makeExecutable: true);
     }
 
     private async Task WriteHookFileAsync(string fileName, string content, bool makeExecutable = false)
