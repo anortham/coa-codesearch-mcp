@@ -118,7 +118,7 @@ public class BatchOperationsTool
         return operationType switch
         {
             "search_symbols" => await _searchSymbolsTool.ExecuteAsync(
-                operation.GetProperty("searchPattern").GetString()!,
+                operation.GetProperty("pattern").GetString()!,
                 operation.GetProperty("workspacePath").GetString()!,
                 operation.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
                     ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()

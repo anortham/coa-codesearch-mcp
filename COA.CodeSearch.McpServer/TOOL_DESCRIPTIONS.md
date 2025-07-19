@@ -122,7 +122,9 @@ Use COA CodeSearch when you need:
 - Reduce round-trip overhead
 - Complex multi-step operations
 - **Example**: "Find definition, then get all references, then analyze dependencies"
-- **Supported operations**: `text_search` (or `textSearch`), `search_symbols`, `find_references`, `go_to_definition`, `get_hover_info`, `get_implementations`, `get_document_symbols`, `get_diagnostics`, `get_call_hierarchy`, `analyze_dependencies`
+- **Supported operations**: `fast_text_search`, `search_symbols`, `find_references`, `go_to_definition`, `get_hover_info`, `get_implementations`, `get_document_symbols`, `get_diagnostics`, `get_call_hierarchy`, `analyze_dependencies`
+
+**Important**: Each operation in the batch must include the `workspacePath` parameter!
 
 **Example batch with text search and dependency analysis**:
 ```json
@@ -130,24 +132,94 @@ Use COA CodeSearch when you need:
   "workspacePath": "C:\\source\\MyProject",
   "operations": [
     {
-      "type": "text_search",
+      "operation": "fast_text_search",
       "query": "UseAuthentication",
+      "workspacePath": "C:\\source\\MyProject",
       "maxResults": 10
     },
     {
-      "type": "search_symbols",
+      "operation": "search_symbols",
       "pattern": "*Controller",
+      "workspacePath": "C:\\source\\MyProject",
       "searchType": "wildcard"
     },
     {
-      "type": "analyze_dependencies",
+      "operation": "analyze_dependencies",
       "symbol": "SERFormsController",
+      "workspacePath": "C:\\source\\MyProject",
       "direction": "outgoing",
       "depth": 2
     }
   ]
 }
 ```
+
+### Batch Operations Parameter Reference
+
+Each operation must include `"operation"` (or `"type"`) and the required parameters:
+
+1. **fast_text_search**
+   - `query`: Search query (required)
+   - `workspacePath`: Path to workspace (required)
+   - `filePattern`: Optional file glob pattern
+   - `extensions`: Optional array of file extensions
+   - `contextLines`: Optional number of context lines
+   - `maxResults`: Optional max results (default: 50)
+   - `caseSensitive`: Optional case sensitivity
+   - `searchType`: Optional search type ("standard", "wildcard", "fuzzy", "phrase")
+
+2. **search_symbols**
+   - `pattern`: Search pattern (required)
+   - `workspacePath`: Path to workspace (required)
+   - `symbolTypes`: Optional array of symbol types
+   - `searchType`: Optional search type ("exact", "contains", "startsWith", "wildcard", "fuzzy")
+   - `maxResults`: Optional max results (default: 100)
+
+3. **find_references**
+   - `filePath`: File path (required)
+   - `line`: Line number (required)
+   - `column`: Column number (required)
+   - `includeDeclaration`: Optional include declaration (default: true)
+
+4. **go_to_definition**
+   - `filePath`: File path (required)
+   - `line`: Line number (required)
+   - `column`: Column number (required)
+
+5. **get_hover_info**
+   - `filePath`: File path (required)
+   - `line`: Line number (required)
+   - `column`: Column number (required)
+
+6. **get_implementations**
+   - `filePath`: File path (required)
+   - `line`: Line number (required)
+   - `column`: Column number (required)
+
+7. **get_document_symbols**
+   - `filePath`: File path (required)
+   - `includeMembers`: Optional include members (default: true)
+
+8. **get_diagnostics**
+   - `path`: Path to file/project/solution (required)
+   - `severities`: Optional array of severities
+   - `maxResults`: Optional max results (default: 100)
+   - `summaryOnly`: Optional summary only mode
+
+9. **get_call_hierarchy**
+   - `filePath`: File path (required)
+   - `line`: Line number (required)
+   - `column`: Column number (required)
+   - `direction`: Optional direction ("incoming", "outgoing", "both", default: "both")
+   - `maxDepth`: Optional max depth (default: 2)
+
+10. **analyze_dependencies**
+    - `symbol`: Symbol name (required)
+    - `workspacePath`: Path to workspace (required)
+    - `direction`: Optional direction ("incoming", "outgoing", "both", default: "both")
+    - `depth`: Optional analysis depth (default: 3)
+    - `includeTests`: Optional include test projects
+    - `includeExternalDependencies`: Optional include external dependencies
 
 ## Performance Comparison
 
