@@ -423,3 +423,7 @@ COA.CodeSearch.McpServer/.codesearch/
 # Project memories (team knowledge) - INCLUDE by forcing
 !.codesearch/project-memory/
 !.codesearch/project-memory/**
+# SQLite backup file - INCLUDE for version control
+!.codesearch/memories.db
+!.codesearch/memories.db-wal
+!.codesearch/memories.db-shm
