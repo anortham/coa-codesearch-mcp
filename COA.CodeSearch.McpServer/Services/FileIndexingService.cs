@@ -208,6 +208,9 @@ public class FileIndexingService
         var extension = Path.GetExtension(filePath);
         var fileName = Path.GetFileName(filePath);
         var relativePath = Path.GetRelativePath(workspacePath, filePath);
+        var directoryPath = Path.GetDirectoryName(filePath) ?? "";
+        var relativeDirectoryPath = Path.GetRelativePath(workspacePath, directoryPath);
+        var directoryName = Path.GetFileName(directoryPath) ?? "";
         
         var doc = new Document
         {
@@ -219,10 +222,14 @@ public class FileIndexingService
             new Int64Field("size", fileInfo.Length, Field.Store.YES),
             new Int64Field("lastModified", fileInfo.LastWriteTimeUtc.Ticks, Field.Store.YES),
             new StringField("relativePath", relativePath, Field.Store.YES),
+            new StringField("directory", directoryPath, Field.Store.YES),
+            new StringField("relativeDirectory", relativeDirectoryPath, Field.Store.YES),
+            new StringField("directoryName", directoryName, Field.Store.YES),
             
             // Indexed fields
             new TextField("content", content, Field.Store.NO),
-            new TextField("filename_text", fileName, Field.Store.NO)
+            new TextField("filename_text", fileName, Field.Store.NO),
+            new TextField("directory_text", relativeDirectoryPath.Replace(Path.DirectorySeparatorChar, ' '), Field.Store.NO)
         };
 
         // Add language field if we can determine it
