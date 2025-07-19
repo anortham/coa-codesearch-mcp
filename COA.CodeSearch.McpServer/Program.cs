@@ -72,6 +72,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<FileIndexingService>();
         
+        // Claude Memory System
+        services.AddSingleton<ClaudeMemoryService>();
+        
         // Register all tools
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();
@@ -93,6 +96,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ProjectStructureAnalysisToolV2>();
         services.AddSingleton<FastTextSearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
+        services.AddSingleton<ClaudeMemoryTools>();
+        services.AddSingleton<InitializeMemoryHooksTool>();
         
         // Register the MCP server as a hosted service
         services.AddHostedService<McpServer>();
