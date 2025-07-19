@@ -233,6 +233,28 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     {
         var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
         
+        // Convert to absolute path if relative
+        if (!Path.IsPathRooted(basePath))
+        {
+            // Find project root by looking for .git directory
+            var currentDir = System.IO.Directory.GetCurrentDirectory();
+            var projectRoot = currentDir;
+            
+            // Walk up the directory tree to find .git
+            var dir = new DirectoryInfo(currentDir);
+            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            {
+                dir = dir.Parent;
+            }
+            
+            if (dir != null)
+            {
+                projectRoot = dir.FullName;
+            }
+            
+            basePath = Path.Combine(projectRoot, basePath);
+        }
+        
         // If the workspace path already starts with our base path, it's a memory path - use it directly
         if (workspacePath.StartsWith(basePath))
         {
@@ -250,6 +272,29 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     public void CleanupStuckIndexes()
     {
         var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
+        
+        // Convert to absolute path if relative (same logic as GetIndexPath)
+        if (!Path.IsPathRooted(basePath))
+        {
+            // Find project root by looking for .git directory
+            var currentDir = System.IO.Directory.GetCurrentDirectory();
+            var projectRoot = currentDir;
+            
+            // Walk up the directory tree to find .git
+            var dir = new DirectoryInfo(currentDir);
+            while (dir != null && !System.IO.Directory.Exists(Path.Combine(dir.FullName, ".git")))
+            {
+                dir = dir.Parent;
+            }
+            
+            if (dir != null)
+            {
+                projectRoot = dir.FullName;
+            }
+            
+            basePath = Path.Combine(projectRoot, basePath);
+        }
+        
         var indexRoot = Path.Combine(basePath, "index");
         
         if (!System.IO.Directory.Exists(indexRoot))
