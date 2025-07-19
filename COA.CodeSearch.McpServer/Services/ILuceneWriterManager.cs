@@ -3,9 +3,9 @@ using Lucene.Net.Index;
 namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
-/// Interface for improved Lucene index service with better lock handling
+/// Interface for managing Lucene index writers with proper lock handling
 /// </summary>
-public interface IImprovedLuceneIndexService : IDisposable
+public interface ILuceneWriterManager : IDisposable
 {
     /// <summary>
     /// Get or create an index writer with proper lock handling

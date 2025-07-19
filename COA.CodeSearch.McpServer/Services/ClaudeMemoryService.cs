@@ -20,7 +20,7 @@ public class ClaudeMemoryService : IDisposable
 {
     private readonly ILogger<ClaudeMemoryService> _logger;
     private readonly MemoryConfiguration _config;
-    private readonly IImprovedLuceneIndexService _indexService;
+    private readonly ILuceneWriterManager _indexService;
     
     // Workspace paths for project and local memories
     private readonly string _projectMemoryWorkspace;
@@ -34,7 +34,7 @@ public class ClaudeMemoryService : IDisposable
     public ClaudeMemoryService(
         ILogger<ClaudeMemoryService> logger, 
         IConfiguration configuration,
-        IImprovedLuceneIndexService indexService)
+        ILuceneWriterManager indexService)
     {
         _logger = logger;
         _config = configuration.GetSection("ClaudeMemory").Get<MemoryConfiguration>() ?? new MemoryConfiguration();

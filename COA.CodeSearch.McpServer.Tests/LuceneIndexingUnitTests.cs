@@ -13,7 +13,7 @@ public class LuceneIndexingUnitTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IConfiguration _configuration;
-    private readonly ImprovedLuceneIndexServiceV2 _luceneIndexService;
+    private readonly LuceneIndexService _luceneIndexService;
     private readonly FileIndexingService _fileIndexingService;
     private readonly string _testDirectory;
 
@@ -25,8 +25,8 @@ public class LuceneIndexingUnitTests : IDisposable
         var configBuilder = new ConfigurationBuilder();
         _configuration = configBuilder.Build();
 
-        _luceneIndexService = new ImprovedLuceneIndexServiceV2(
-            _loggerFactory.CreateLogger<ImprovedLuceneIndexServiceV2>(),
+        _luceneIndexService = new LuceneIndexService(
+            _loggerFactory.CreateLogger<LuceneIndexService>(),
             _configuration);
 
         _fileIndexingService = new FileIndexingService(

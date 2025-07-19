@@ -1,0 +1,120 @@
+using Microsoft.Extensions.Logging;
+using COA.CodeSearch.McpServer.Services;
+
+namespace COA.CodeSearch.McpServer.Tools;
+
+/// <summary>
+/// MCP tool for navigating to TypeScript symbol definitions
+/// </summary>
+public class TypeScriptGoToDefinitionTool
+{
+    private readonly ILogger<TypeScriptGoToDefinitionTool> _logger;
+    private readonly TypeScriptAnalysisService _tsService;
+
+    public TypeScriptGoToDefinitionTool(
+        ILogger<TypeScriptGoToDefinitionTool> logger,
+        TypeScriptAnalysisService tsService)
+    {
+        _logger = logger;
+        _tsService = tsService;
+    }
+
+    public async Task<object> GoToDefinitionAsync(
+        string filePath,
+        int line,
+        int column,
+        CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("TypeScript GoToDefinition: {File}:{Line}:{Column}", filePath, line, column);
+
+            // Ensure the file exists
+            if (!File.Exists(filePath))
+            {
+                return new
+                {
+                    success = false,
+                    error = $"File not found: {filePath}"
+                };
+            }
+
+            // Find the TypeScript project containing this file
+            var directory = Path.GetDirectoryName(filePath);
+            var tsProjects = await _tsService.DetectTypeScriptProjectsAsync(directory ?? ".", cancellationToken);
+            
+            if (tsProjects.Count == 0)
+            {
+                _logger.LogWarning("No TypeScript project found for {File}", filePath);
+                // Try to use the file directly without a project
+            }
+            else
+            {
+                // Open the first matching project
+                var projectPath = tsProjects.FirstOrDefault(p => 
+                    filePath.StartsWith(Path.GetDirectoryName(p) ?? "", StringComparison.OrdinalIgnoreCase));
+                    
+                if (projectPath != null)
+                {
+                    await _tsService.OpenProjectAsync(projectPath, cancellationToken);
+                }
+            }
+
+            // Get the definition
+            var definition = await _tsService.GetDefinitionAsync(filePath, line, column, cancellationToken);
+
+            if (definition == null)
+            {
+                return new
+                {
+                    success = false,
+                    error = "No definition found at the specified location"
+                };
+            }
+
+            // Read the line at the definition location for preview
+            string? previewText = null;
+            try
+            {
+                if (File.Exists(definition.File))
+                {
+                    var lines = await File.ReadAllLinesAsync(definition.File, cancellationToken);
+                    if (definition.Line > 0 && definition.Line <= lines.Length)
+                    {
+                        previewText = lines[definition.Line - 1].Trim();
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read preview text from {File}", definition.File);
+            }
+
+            return new
+            {
+                success = true,
+                definition = new
+                {
+                    filePath = definition.File,
+                    line = definition.Line,
+                    column = definition.Offset,
+                    previewText = previewText ?? definition.LineText
+                },
+                metadata = new
+                {
+                    language = "typescript",
+                    fileExtension = Path.GetExtension(definition.File)
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in TypeScript GoToDefinition");
+            return new
+            {
+                success = false,
+                error = ex.Message
+            };
+        }
+    }
+}
