@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.Directus.Mcp.Protocol;
 using Microsoft.Extensions.DependencyInjection;
@@ -18,22 +19,22 @@ public static class AllToolRegistrations
     {
         // Core navigation tools
         RegisterGoToDefinition(registry, serviceProvider.GetRequiredService<GoToDefinitionTool>());
-        RegisterFindReferences(registry, serviceProvider.GetRequiredService<FindReferencesTool>());
+        RegisterFindReferences(registry, serviceProvider.GetRequiredService<FindReferencesToolV2>());
         RegisterSearchSymbols(registry, serviceProvider.GetRequiredService<SearchSymbolsTool>());
         RegisterGetImplementations(registry, serviceProvider.GetRequiredService<GetImplementationsTool>());
         
         // Code information tools
         RegisterGetHoverInfo(registry, serviceProvider.GetRequiredService<GetHoverInfoTool>());
         RegisterGetDocumentSymbols(registry, serviceProvider.GetRequiredService<GetDocumentSymbolsTool>());
-        RegisterGetDiagnostics(registry, serviceProvider.GetRequiredService<GetDiagnosticsTool>());
+        RegisterGetDiagnostics(registry, serviceProvider.GetRequiredService<GetDiagnosticsToolV2>());
         
         // Advanced analysis tools
         RegisterGetCallHierarchy(registry, serviceProvider.GetRequiredService<GetCallHierarchyTool>());
-        RegisterRenameSymbol(registry, serviceProvider.GetRequiredService<RenameSymbolTool>());
+        RegisterRenameSymbol(registry, serviceProvider.GetRequiredService<RenameSymbolToolV2>());
         RegisterBatchOperations(registry, serviceProvider.GetRequiredService<BatchOperationsTool>());
         RegisterAdvancedSymbolSearch(registry, serviceProvider.GetRequiredService<AdvancedSymbolSearchTool>());
         RegisterDependencyAnalysis(registry, serviceProvider.GetRequiredService<DependencyAnalysisTool>());
-        RegisterProjectStructureAnalysis(registry, serviceProvider.GetRequiredService<ProjectStructureAnalysisTool>());
+        RegisterProjectStructureAnalysis(registry, serviceProvider.GetRequiredService<ProjectStructureAnalysisToolV2>());
         
         // Text search tools
         RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
@@ -71,11 +72,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterFindReferences(ToolRegistry registry, FindReferencesTool tool)
+    private static void RegisterFindReferences(ToolRegistry registry, FindReferencesToolV2 tool)
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "Find every place a symbol is used throughout your codebase - perfect for understanding impact before changes",
+            description: "Find every place a symbol is used throughout your codebase. Automatically switches to summary mode for large results. Supports progressive disclosure for efficient navigation.",
             inputSchema: new
             {
                 type = "object",
@@ -84,7 +85,8 @@ public static class AllToolRegistrations
                     filePath = new { type = "string", description = "Path to the source file" },
                     line = new { type = "integer", description = "Line number (1-based)" },
                     column = new { type = "integer", description = "Column number (1-based)" },
-                    includeDeclaration = new { type = "boolean", description = "Include the declaration", @default = true }
+                    includeDeclaration = new { type = "boolean", description = "Include the declaration", @default = true },
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
                 },
                 required = new[] { "filePath", "line", "column" }
             },
@@ -92,11 +94,20 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "summary" => ResponseMode.Summary,
+                    "compact" => ResponseMode.Compact,
+                    _ => ResponseMode.Full
+                };
+                
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.FilePath, "filePath"),
                     ValidatePositive(parameters.Line, "line"),
                     ValidatePositive(parameters.Column, "column"),
                     parameters.IncludeDeclaration ?? true,
+                    mode,
+                    null, // DetailRequest - not used in initial call
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -231,11 +242,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterGetDiagnostics(ToolRegistry registry, GetDiagnosticsTool tool)
+    private static void RegisterGetDiagnostics(ToolRegistry registry, GetDiagnosticsToolV2 tool)
     {
         registry.RegisterTool<GetDiagnosticsParams>(
             name: "get_diagnostics",
-            description: "Instantly check for compilation errors and warnings - ensure code health before commits",
+            description: "Instantly check for compilation errors and warnings. Automatically switches to summary mode for large results. Supports progressive disclosure for efficient debugging.",
             inputSchema: new
             {
                 type = "object",
@@ -243,7 +254,8 @@ public static class AllToolRegistrations
                 {
                     path = new { type = "string", description = "Path to file, project, or solution" },
                     severities = new { type = "array", items = new { type = "string" }, description = "Filter by severity: Error, Warning, Info, Hidden" },
-                    includeSuppressions = new { type = "boolean", description = "Include suppressed diagnostics", @default = false }
+                    includeSuppressions = new { type = "boolean", description = "Include suppressed diagnostics", @default = false },
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
                 },
                 required = new[] { "path" }
             },
@@ -251,11 +263,17 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "summary" => ResponseMode.Summary,
+                    _ => ResponseMode.Full
+                };
+                
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.Path, "path"),
                     parameters.Severities,
-                    100, // maxResults
-                    false, // summaryOnly
+                    mode,
+                    null, // DetailRequest - not used in initial call
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -298,11 +316,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterRenameSymbol(ToolRegistry registry, RenameSymbolTool tool)
+    private static void RegisterRenameSymbol(ToolRegistry registry, RenameSymbolToolV2 tool)
     {
         registry.RegisterTool<RenameSymbolParams>(
             name: "rename_symbol",
-            description: "Safely rename any symbol across your entire codebase - all references updated automatically",
+            description: "Safely rename any symbol across your entire codebase - all references updated automatically. Automatically switches to summary mode for large renames. Supports progressive disclosure for efficient review.",
             inputSchema: new
             {
                 type = "object",
@@ -311,7 +329,9 @@ public static class AllToolRegistrations
                     filePath = new { type = "string", description = "Path to the source file" },
                     line = new { type = "integer", description = "Line number (1-based)" },
                     column = new { type = "integer", description = "Column number (1-based)" },
-                    newName = new { type = "string", description = "New name for the symbol" }
+                    newName = new { type = "string", description = "New name for the symbol" },
+                    preview = new { type = "boolean", description = "Preview changes without applying them", @default = true },
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary' for large operations", @default = "full" }
                 },
                 required = new[] { "filePath", "line", "column", "newName" }
             },
@@ -319,12 +339,20 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "summary" => ResponseMode.Summary,
+                    _ => ResponseMode.Full
+                };
+                
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.FilePath, "filePath"),
                     ValidatePositive(parameters.Line, "line"),
                     ValidatePositive(parameters.Column, "column"),
                     ValidateRequired(parameters.NewName, "newName"),
-                    true, // preview
+                    parameters.Preview ?? true,
+                    mode,
+                    null, // DetailRequest - not used in initial call
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -455,11 +483,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterProjectStructureAnalysis(ToolRegistry registry, ProjectStructureAnalysisTool tool)
+    private static void RegisterProjectStructureAnalysis(ToolRegistry registry, ProjectStructureAnalysisToolV2 tool)
     {
         registry.RegisterTool<ProjectStructureAnalysisParams>(
             name: "project_structure_analysis",
-            description: "Get comprehensive metrics and structure analysis - lines of code, complexity, dependencies, and project organization",
+            description: "Get comprehensive metrics and structure analysis - lines of code, complexity, dependencies, and project organization. Automatically switches to summary mode for large solutions.",
             inputSchema: new
             {
                 type = "object",
@@ -468,7 +496,8 @@ public static class AllToolRegistrations
                     workspacePath = new { type = "string", description = "Path to solution or project" },
                     includeMetrics = new { type = "boolean", description = "Include code metrics", @default = true },
                     includeFiles = new { type = "boolean", description = "Include file listings", @default = false },
-                    includeNuGetPackages = new { type = "boolean", description = "Include NuGet packages", @default = false }
+                    includeNuGetPackages = new { type = "boolean", description = "Include NuGet packages", @default = false },
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
                 },
                 required = new[] { "workspacePath" }
             },
@@ -476,11 +505,20 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "summary" => ResponseMode.Summary,
+                    "compact" => ResponseMode.Compact,
+                    _ => ResponseMode.Full
+                };
+                
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.IncludeMetrics ?? true,
                     parameters.IncludeFiles ?? false,
                     parameters.IncludeNuGetPackages ?? false,
+                    mode,
+                    null, // DetailRequest - not used in initial call
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -502,6 +540,7 @@ public static class AllToolRegistrations
         public int Line { get; set; }
         public int Column { get; set; }
         public bool? IncludeDeclaration { get; set; }
+        public string? ResponseMode { get; set; }
     }
 
     private class SearchSymbolsParams
@@ -539,6 +578,7 @@ public static class AllToolRegistrations
         public string? Path { get; set; }
         public string[]? Severities { get; set; }
         public bool? IncludeSuppressions { get; set; }
+        public string? ResponseMode { get; set; }
     }
 
     private class GetCallHierarchyParams
@@ -556,6 +596,8 @@ public static class AllToolRegistrations
         public int Line { get; set; }
         public int Column { get; set; }
         public string? NewName { get; set; }
+        public bool? Preview { get; set; }
+        public string? ResponseMode { get; set; }
     }
 
     private class BatchOperationsParams
@@ -587,6 +629,7 @@ public static class AllToolRegistrations
         public bool? IncludeMetrics { get; set; }
         public bool? IncludeFiles { get; set; }
         public bool? IncludeNuGetPackages { get; set; }
+        public string? ResponseMode { get; set; }
     }
     
     private static void RegisterFastTextSearch(ToolRegistry registry, FastTextSearchTool tool)

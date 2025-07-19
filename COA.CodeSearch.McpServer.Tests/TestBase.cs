@@ -1,6 +1,8 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using Microsoft.Build.Locator;
 using System.Runtime.CompilerServices;
@@ -40,11 +42,25 @@ public abstract class TestBase : IDisposable
             {
                 ["McpServer:MaxWorkspaces"] = "5",
                 ["McpServer:WorkspaceTimeout"] = "00:30:00",
-                ["McpServer:ParallelismDegree"] = "4"
+                ["McpServer:ParallelismDegree"] = "4",
+                ["ResponseLimits:MaxTokens"] = "20000",
+                ["ResponseLimits:SafetyMargin"] = "0.8",
+                ["ResponseLimits:DefaultMaxResults"] = "50",
+                ["ResponseLimits:EnableTruncation"] = "true",
+                ["ResponseLimits:EnablePagination"] = "true"
             })
             .Build();
         
         services.AddSingleton<IConfiguration>(configuration);
+        
+        // Configure options
+        services.Configure<ResponseLimitOptions>(configuration.GetSection("ResponseLimits"));
+        
+        // Add infrastructure services
+        services.AddSingleton<IResponseSizeEstimator, ResponseSizeEstimator>();
+        services.AddSingleton<IResultTruncator, ResultTruncator>();
+        services.AddMemoryCache(); // Required for DetailRequestCache
+        services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
         
         // Add services
         services.AddSingleton<CodeAnalysisService>();

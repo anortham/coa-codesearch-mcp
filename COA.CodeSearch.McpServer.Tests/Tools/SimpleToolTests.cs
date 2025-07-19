@@ -1,7 +1,10 @@
+using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Options;
 using FluentAssertions;
 using System.Text.Json;
 using Moq;
@@ -183,7 +186,10 @@ public class SimpleToolTests : TestBase
         // Arrange
         var tool = new RenameSymbolTool(
             ServiceProvider.GetRequiredService<ILogger<RenameSymbolTool>>(),
-            WorkspaceService);
+            WorkspaceService,
+            ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
+            ServiceProvider.GetRequiredService<IResultTruncator>(),
+            ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>());
         
         // Act
         var result = await tool.ExecuteAsync("NonExistentFile.cs", 1, 1, "NewName", true);
