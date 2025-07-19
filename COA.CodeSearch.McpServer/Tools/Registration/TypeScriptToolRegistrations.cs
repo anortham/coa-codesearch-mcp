@@ -19,12 +19,18 @@ public static class TypeScriptToolRegistrations
             RegisterTypeScriptSearch(registry, searchTool);
         }
         
-        // Future: Register TSServer-based tools when ready
-        // var goToDefTool = serviceProvider.GetService<TypeScriptGoToDefinitionTool>();
-        // if (goToDefTool != null)
-        // {
-        //     RegisterTypeScriptGoToDefinition(registry, goToDefTool);
-        // }
+        // TSServer-based tools
+        var goToDefTool = serviceProvider.GetService<TypeScriptGoToDefinitionTool>();
+        if (goToDefTool != null)
+        {
+            RegisterTypeScriptGoToDefinition(registry, goToDefTool);
+        }
+        
+        var findRefsTool = serviceProvider.GetService<TypeScriptFindReferencesTool>();
+        if (findRefsTool != null)
+        {
+            RegisterTypeScriptFindReferences(registry, findRefsTool);
+        }
     }
     
     private static void RegisterTypeScriptSearch(ToolRegistry registry, TypeScriptSearchTool tool)
@@ -65,11 +71,83 @@ public static class TypeScriptToolRegistrations
         );
     }
     
+    private static void RegisterTypeScriptGoToDefinition(ToolRegistry registry, TypeScriptGoToDefinitionTool tool)
+    {
+        registry.RegisterTool<TypeScriptNavigationParams>(
+            name: "typescript_go_to_definition",
+            description: "Navigate to TypeScript symbol definitions using tsserver - provides accurate navigation for complex TypeScript codebases",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" }
+                },
+                required = new[] { "filePath", "line", "column" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.GoToDefinitionAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    parameters.Line ?? throw new InvalidParametersException("line is required"),
+                    parameters.Column ?? throw new InvalidParametersException("column is required"),
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterTypeScriptFindReferences(ToolRegistry registry, TypeScriptFindReferencesTool tool)
+    {
+        registry.RegisterTool<TypeScriptNavigationParams>(
+            name: "typescript_find_references",
+            description: "Find all references to a TypeScript symbol using tsserver - accurate reference finding across the entire TypeScript codebase",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    includeDeclaration = new { type = "boolean", description = "Include the declaration", @default = true }
+                },
+                required = new[] { "filePath", "line", "column" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.FindReferencesAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    parameters.Line ?? throw new InvalidParametersException("line is required"),
+                    parameters.Column ?? throw new InvalidParametersException("column is required"),
+                    parameters.IncludeDeclaration ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
     private class TypeScriptSearchParams
     {
         public string? SymbolName { get; set; }
         public string? WorkspacePath { get; set; }
         public string? Mode { get; set; }
         public int? MaxResults { get; set; }
+    }
+    
+    private class TypeScriptNavigationParams
+    {
+        public string? FilePath { get; set; }
+        public int? Line { get; set; }
+        public int? Column { get; set; }
+        public bool? IncludeDeclaration { get; set; }
     }
 }
