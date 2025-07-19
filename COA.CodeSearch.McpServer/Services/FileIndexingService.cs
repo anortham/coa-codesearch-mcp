@@ -14,7 +14,7 @@ public class FileIndexingService
 {
     private readonly ILogger<FileIndexingService> _logger;
     private readonly IConfiguration _configuration;
-    private readonly LuceneIndexService _luceneIndexService;
+    private readonly ILuceneIndexService _luceneIndexService;
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
     private const int MaxFileSize = 10 * 1024 * 1024; // 10MB
@@ -22,7 +22,7 @@ public class FileIndexingService
     public FileIndexingService(
         ILogger<FileIndexingService> logger, 
         IConfiguration configuration,
-        LuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService)
     {
         _logger = logger;
         _configuration = configuration;

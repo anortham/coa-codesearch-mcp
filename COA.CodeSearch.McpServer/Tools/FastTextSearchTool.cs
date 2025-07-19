@@ -19,13 +19,13 @@ public class FastTextSearchTool
 {
     private readonly ILogger<FastTextSearchTool> _logger;
     private readonly IConfiguration _configuration;
-    private readonly LuceneIndexService _luceneIndexService;
+    private readonly ILuceneIndexService _luceneIndexService;
     private readonly FileIndexingService _fileIndexingService;
 
     public FastTextSearchTool(
         ILogger<FastTextSearchTool> logger,
         IConfiguration configuration,
-        LuceneIndexService luceneIndexService,
+        ILuceneIndexService luceneIndexService,
         FileIndexingService fileIndexingService)
     {
         _logger = logger;

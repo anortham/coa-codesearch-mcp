@@ -14,9 +14,9 @@ public class MemoryHookManager
     private readonly string _projectRoot;
     private readonly string _hooksDirectory;
 
-    public MemoryHookManager(ILogger logger, string? projectRoot = null)
+    public MemoryHookManager(ILogger<MemoryHookManager> logger, string? projectRoot = null)
     {
-        _logger = (ILogger<MemoryHookManager>)logger;
+        _logger = logger;
         _projectRoot = projectRoot ?? Directory.GetCurrentDirectory();
         _hooksDirectory = Path.Combine(_projectRoot, ".claude", "hooks");
     }

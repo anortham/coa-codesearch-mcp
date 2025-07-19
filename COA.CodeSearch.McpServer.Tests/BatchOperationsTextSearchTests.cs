@@ -156,7 +156,9 @@ public class BatchOperationsTextSearchTests : TestBase
         services.AddLogging(builder => builder.AddConsole());
         
         // Register all required services
-        services.AddSingleton<LuceneIndexService>();
+        services.AddSingleton<ImprovedLuceneIndexService>();
+        services.AddSingleton<IImprovedLuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexService>());
+        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<ImprovedLuceneIndexService>());
         services.AddSingleton<FileIndexingService>();
         services.AddScoped<CodeAnalysisService>();
         
