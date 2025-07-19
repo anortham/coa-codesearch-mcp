@@ -27,13 +27,20 @@ public class SimpleIndexingTest
             builder.SetMinimumLevel(LogLevel.Debug);
         });
         
-        var config = new ConfigurationBuilder().Build();
-        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config);
-        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService);
-        
         // Create test directory
         var testDir = Path.Combine(Path.GetTempPath(), $"test_{Guid.NewGuid()}");
         Directory.CreateDirectory(testDir);
+        
+        // Configure to use temp directory for indexes
+        var config = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["Lucene:IndexBasePath"] = Path.Combine(testDir, ".codesearch")
+            })
+            .Build();
+            
+        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config);
+        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService);
         
         // Create test file
         var testFile = Path.Combine(testDir, "test.cs");

@@ -22,7 +22,16 @@ public class LuceneIndexingUnitTests : IDisposable
         _output = output;
         _loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
         
+        // Create a temporary test directory with test files
+        _testDirectory = Path.Combine(Path.GetTempPath(), $"lucene_test_{Guid.NewGuid()}");
+        Directory.CreateDirectory(_testDirectory);
+        
+        // Configure to use temp directory for indexes
         var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Lucene:IndexBasePath"] = Path.Combine(_testDirectory, ".codesearch")
+        });
         _configuration = configBuilder.Build();
 
         _luceneIndexService = new LuceneIndexService(
@@ -33,10 +42,6 @@ public class LuceneIndexingUnitTests : IDisposable
             _loggerFactory.CreateLogger<FileIndexingService>(),
             _configuration,
             _luceneIndexService);
-
-        // Create a temporary test directory with test files
-        _testDirectory = Path.Combine(Path.GetTempPath(), $"lucene_test_{Guid.NewGuid()}");
-        Directory.CreateDirectory(_testDirectory);
         
         // Create test files
         File.WriteAllText(Path.Combine(_testDirectory, "test1.cs"), 
