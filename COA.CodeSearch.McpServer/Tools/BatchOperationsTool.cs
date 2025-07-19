@@ -123,6 +123,14 @@ public class BatchOperationsTool
         {
             return wsPath.GetString()!;
         }
+
+        // Check if parameters object has workspacePath
+        if (operation.TryGetProperty("parameters", out var paramsProp) && 
+            paramsProp.TryGetProperty("workspacePath", out var paramsWsPath) && 
+            paramsWsPath.ValueKind == JsonValueKind.String)
+        {
+            return paramsWsPath.GetString()!;
+        }
         
         // Fall back to the default workspacePath from the batch request
         if (!string.IsNullOrEmpty(defaultWorkspacePath))
@@ -137,15 +145,7 @@ public class BatchOperationsTool
     {
         return operationType switch
         {
-            "search_symbols" => await _searchSymbolsTool.ExecuteAsync(
-                operation.GetProperty("searchPattern").GetString()!,
-                GetWorkspacePath(operation, defaultWorkspacePath),
-                operation.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
-                    ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()
-                    : null,
-                operation.TryGetProperty("searchType", out var stype) ? stype.GetString() == "fuzzy" : false,
-                operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100,
-                cancellationToken),
+            "search_symbols" => await ExecuteSearchSymbolsAsync(operation, defaultWorkspacePath, cancellationToken),
 
             "find_references" => await _findReferencesTool.ExecuteAsync(
                 operation.GetProperty("filePath").GetString()!,
@@ -194,18 +194,7 @@ public class BatchOperationsTool
                 operation.TryGetProperty("maxDepth", out var md) ? md.GetInt32() : 2,
                 cancellationToken),
 
-            "text_search" or "fast_text_search" or "textSearch" => await _fastTextSearchTool.ExecuteAsync(
-                operation.GetProperty("query").GetString()!,
-                GetWorkspacePath(operation, defaultWorkspacePath),
-                operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
-                operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
-                    ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
-                    : null,
-                operation.TryGetProperty("contextLines", out var cl) ? cl.GetInt32() : null,
-                operation.TryGetProperty("maxResults", out var tmr) ? tmr.GetInt32() : 50,
-                operation.TryGetProperty("caseSensitive", out var cs) && cs.GetBoolean(),
-                operation.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
-                cancellationToken),
+            "text_search" or "fast_text_search" or "textSearch" => await ExecuteTextSearchAsync(operation, defaultWorkspacePath, cancellationToken),
 
             "analyze_dependencies" => await _dependencyAnalysisTool.ExecuteAsync(
                 operation.GetProperty("symbol").GetString()!,
@@ -218,5 +207,60 @@ public class BatchOperationsTool
 
             _ => throw new NotSupportedException($"Operation type '{operationType}' not supported in batch operations")
         };
+    }
+
+    private async Task<object> ExecuteTextSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        // First check if parameters are nested under a "parameters" property
+        JsonElement parameters = operation;
+        if (operation.TryGetProperty("parameters", out var paramsProp))
+        {
+            parameters = paramsProp;
+        }
+
+        // Get the query - this is required
+        if (!parameters.TryGetProperty("query", out var queryProp))
+        {
+            throw new ArgumentException("'query' parameter is required for text_search operation");
+        }
+
+        return await _fastTextSearchTool.ExecuteAsync(
+            queryProp.GetString()!,
+            GetWorkspacePath(parameters, defaultWorkspacePath),
+            parameters.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
+            parameters.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            parameters.TryGetProperty("contextLines", out var cl) ? cl.GetInt32() : null,
+            parameters.TryGetProperty("maxResults", out var tmr) ? tmr.GetInt32() : 50,
+            parameters.TryGetProperty("caseSensitive", out var cs) && cs.GetBoolean(),
+            parameters.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteSearchSymbolsAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        // First check if parameters are nested under a "parameters" property
+        JsonElement parameters = operation;
+        if (operation.TryGetProperty("parameters", out var paramsProp))
+        {
+            parameters = paramsProp;
+        }
+
+        // Get the searchPattern - this is required
+        if (!parameters.TryGetProperty("searchPattern", out var searchPatternProp))
+        {
+            throw new ArgumentException("'searchPattern' parameter is required for search_symbols operation");
+        }
+
+        return await _searchSymbolsTool.ExecuteAsync(
+            searchPatternProp.GetString()!,
+            GetWorkspacePath(parameters, defaultWorkspacePath),
+            parameters.TryGetProperty("symbolTypes", out var st) && st.ValueKind == JsonValueKind.Array
+                ? st.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            parameters.TryGetProperty("searchType", out var stype) ? stype.GetString() == "fuzzy" : false,
+            parameters.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100,
+            cancellationToken);
     }
 }

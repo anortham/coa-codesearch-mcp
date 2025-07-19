@@ -10,11 +10,16 @@ public class FindReferencesTool
 {
     private readonly ILogger<FindReferencesTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
+    private readonly TypeScriptFindReferencesTool? _typeScriptTool;
 
-    public FindReferencesTool(ILogger<FindReferencesTool> logger, CodeAnalysisService workspaceService)
+    public FindReferencesTool(
+        ILogger<FindReferencesTool> logger, 
+        CodeAnalysisService workspaceService,
+        TypeScriptFindReferencesTool? typeScriptTool = null)
     {
         _logger = logger;
         _workspaceService = workspaceService;
+        _typeScriptTool = typeScriptTool;
     }
 
     public async Task<object> ExecuteAsync(
@@ -27,6 +32,25 @@ public class FindReferencesTool
         try
         {
             _logger.LogInformation("FindReferences request for {FilePath} at {Line}:{Column}", filePath, line, column);
+
+            // Check if this is a TypeScript file
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            if (IsTypeScriptFile(extension))
+            {
+                if (_typeScriptTool != null)
+                {
+                    _logger.LogInformation("Delegating to TypeScript FindReferences tool");
+                    return await _typeScriptTool.FindReferencesAsync(filePath, line, column, includePotential, cancellationToken);
+                }
+                else
+                {
+                    return new
+                    {
+                        success = false,
+                        error = "TypeScript analysis is not available"
+                    };
+                }
+            }
 
             // Get the document
             var document = await _workspaceService.GetDocumentAsync(filePath, cancellationToken);
@@ -146,5 +170,10 @@ public class FindReferencesTool
         public bool IsDefinition { get; init; }
         public bool IsImplicit { get; init; }
         public bool IsPotential { get; init; }
+    }
+
+    private bool IsTypeScriptFile(string extension)
+    {
+        return extension == ".ts" || extension == ".tsx" || extension == ".js" || extension == ".jsx" || extension == ".vue";
     }
 }

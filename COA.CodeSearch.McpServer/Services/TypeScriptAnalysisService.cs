@@ -12,34 +12,72 @@ public class TypeScriptAnalysisService : IDisposable
 {
     private readonly ILogger<TypeScriptAnalysisService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly TypeScriptInstaller _installer;
     private readonly string _nodeExecutable;
-    private readonly string _tsServerPath;
+    private string? _tsServerPath;
     private Process? _tsServerProcess;
     private StreamWriter? _tsServerInput;
     private StreamReader? _tsServerOutput;
     private readonly SemaphoreSlim _requestLock = new(1, 1);
     private int _requestSequence = 0;
     private bool _disposed;
+    private bool _initialized = false;
 
     public TypeScriptAnalysisService(
         ILogger<TypeScriptAnalysisService> logger,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        TypeScriptInstaller installer)
     {
         _logger = logger;
         _configuration = configuration;
+        _installer = installer;
         
         // Find Node.js executable
         _nodeExecutable = FindNodeExecutable();
         if (string.IsNullOrEmpty(_nodeExecutable))
         {
-            throw new InvalidOperationException("Node.js is required for TypeScript analysis but was not found in PATH");
+            _logger.LogWarning("Node.js is required for TypeScript analysis but was not found in PATH. TypeScript features will be limited.");
+        }
+        else
+        {
+            _logger.LogInformation("Node.js found at {NodePath}", _nodeExecutable);
+        }
+    }
+
+    private async Task<bool> InitializeAsync()
+    {
+        if (_initialized || string.IsNullOrEmpty(_nodeExecutable))
+        {
+            return _initialized;
+        }
+
+        // First check configured path
+        _tsServerPath = _configuration["TypeScript:ServerPath"];
+        
+        // Then check local node_modules
+        if (string.IsNullOrEmpty(_tsServerPath) || !File.Exists(_tsServerPath))
+        {
+            _tsServerPath = Path.Combine(AppContext.BaseDirectory, "node_modules", "typescript", "lib", "tsserver.js");
         }
         
-        // Path to TypeScript language server
-        _tsServerPath = configuration["TypeScript:ServerPath"] ?? 
-            Path.Combine(AppContext.BaseDirectory, "typescript", "lib", "tsserver.js");
-            
-        _logger.LogInformation("TypeScript Analysis Service initialized with Node.js at {NodePath}", _nodeExecutable);
+        // If still not found, try to install
+        if (!File.Exists(_tsServerPath))
+        {
+            _logger.LogInformation("TypeScript not found locally. Attempting automatic installation...");
+            _tsServerPath = await _installer.GetTsServerPathAsync();
+        }
+
+        if (!string.IsNullOrEmpty(_tsServerPath) && File.Exists(_tsServerPath))
+        {
+            _logger.LogInformation("TypeScript Analysis Service initialized with tsserver at {TsServerPath}", _tsServerPath);
+            _initialized = true;
+        }
+        else
+        {
+            _logger.LogWarning("TypeScript server could not be initialized. TypeScript features will not be available.");
+        }
+
+        return _initialized;
     }
 
     /// <summary>
@@ -133,6 +171,12 @@ public class TypeScriptAnalysisService : IDisposable
     /// </summary>
     private async Task EnsureServerStartedAsync()
     {
+        // Initialize if not already done
+        if (!_initialized && !await InitializeAsync())
+        {
+            throw new InvalidOperationException("TypeScript server is not available");
+        }
+
         if (_tsServerProcess != null && !_tsServerProcess.HasExited)
         {
             return;
