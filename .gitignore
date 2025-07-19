@@ -414,4 +414,12 @@ test-direct.ps1
 test-request.json
 test-mcp.sh
 *.txt
+
+# Lucene indexes and local data
 .codesearch/
+COA.CodeSearch.McpServer/.codesearch/
+
+# Claude Memory System - Exception for project memories
+# Project memories (team knowledge) - INCLUDE by forcing
+!.codesearch/project-memory/
+!.codesearch/project-memory/**

@@ -39,6 +39,9 @@ public static class AllToolRegistrations
         // Text search tools
         RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
         RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>());
+        
+        // Claude Memory System tools
+        MemoryToolRegistrations.RegisterMemoryTools(registry, serviceProvider);
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
