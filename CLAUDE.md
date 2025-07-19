@@ -95,6 +95,13 @@ COA.CodeSearch.McpServer/
 - Detailed error messages for debugging
 - Fallback to syntax-only analysis
 
+### 5. **Claude Optimization (v2 Tools)**
+- Progressive disclosure with token limit protection (25,000 token limit)
+- Auto-mode switching at 5,000 token threshold
+- Smart analysis with insights, hotspots, and next actions
+- Detail request caching for efficient drill-down
+- Context-aware suggestions and priority-based recommendations
+
 ## Development Guidelines
 
 ### Code Style
@@ -164,6 +171,40 @@ public async Task<ToolResult> ToolName(
 - Check STDIO input/output
 - Validate JSON-RPC messages
 
+## Claude-Optimized Tools Usage
+
+### Progressive Disclosure Pattern
+
+The v2 tools implement a progressive disclosure pattern designed specifically for Claude:
+
+1. **Auto-Mode Switching**: Tools automatically switch to summary mode when responses would exceed 5,000 tokens
+2. **Smart Summaries**: Provide key insights, hotspots, and categorized data
+3. **Next Actions**: Ready-to-use commands for logical follow-up operations
+4. **Detail Requests**: Efficient drill-down into specific results
+
+### Example Workflow
+
+```
+Claude: "Find all references to UserService"
+→ Summary: 47 references across 12 files
+→ Key Insight: "Heavily used service - changes have wide impact"
+→ Hotspots: UserController.cs (15 refs), AuthService.cs (8 refs)
+→ Next Action: "Review hotspots for detailed analysis"
+
+Claude: "Review hotspots" (uses cached detail request)
+→ Detailed analysis of UserController.cs and AuthService.cs
+→ Usage patterns and refactoring opportunities
+→ Impact assessment for proposed changes
+```
+
+### v2 Tools Available
+
+- **FindReferencesToolV2**: Smart reference analysis with impact insights
+- **RenameSymbolToolV2**: Intelligent rename preview with risk assessment  
+- **GetDiagnosticsToolV2**: Categorized diagnostics with priority recommendations
+- **DependencyAnalysisToolV2**: Architecture analysis with circular dependency detection
+- **ProjectStructureAnalysisToolV2**: Solution insights with hotspot identification
+
 ## Configuration
 
 ### appsettings.json
@@ -180,6 +221,14 @@ public async Task<ToolResult> ToolName(
     "WorkspaceTimeout": "00:30:00",
     "EnableDiagnostics": true,
     "ParallelismDegree": 4
+  },
+  "ResponseLimits": {
+    "MaxTokens": 25000,
+    "SafetyMargin": 0.8,
+    "DefaultMaxResults": 50,
+    "EnableTruncation": true,
+    "EnablePagination": true,
+    "AutoModeSwitchThreshold": 5000
   }
 }
 ```

@@ -88,6 +88,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<BatchOperationsTool>();
         services.AddSingleton<AdvancedSymbolSearchTool>();
         services.AddSingleton<DependencyAnalysisTool>();
+        services.AddSingleton<DependencyAnalysisToolV2>();
         services.AddSingleton<ProjectStructureAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisToolV2>();
         services.AddSingleton<FastTextSearchTool>();

@@ -33,7 +33,7 @@ public static class AllToolRegistrations
         RegisterRenameSymbol(registry, serviceProvider.GetRequiredService<RenameSymbolToolV2>());
         RegisterBatchOperations(registry, serviceProvider.GetRequiredService<BatchOperationsTool>());
         RegisterAdvancedSymbolSearch(registry, serviceProvider.GetRequiredService<AdvancedSymbolSearchTool>());
-        RegisterDependencyAnalysis(registry, serviceProvider.GetRequiredService<DependencyAnalysisTool>());
+        RegisterDependencyAnalysis(registry, serviceProvider.GetRequiredService<DependencyAnalysisToolV2>());
         RegisterProjectStructureAnalysis(registry, serviceProvider.GetRequiredService<ProjectStructureAnalysisToolV2>());
         
         // Text search tools
@@ -446,11 +446,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterDependencyAnalysis(ToolRegistry registry, DependencyAnalysisTool tool)
+    private static void RegisterDependencyAnalysis(ToolRegistry registry, DependencyAnalysisToolV2 tool)
     {
         registry.RegisterTool<DependencyAnalysisParams>(
             name: "dependency_analysis",
-            description: "Analyze code dependencies to understand coupling, find circular dependencies, and track component relationships",
+            description: "Analyze code dependencies with smart insights about coupling, circular dependencies, and architecture patterns. Automatically switches to summary mode for complex dependency graphs.",
             inputSchema: new
             {
                 type = "object",
@@ -461,13 +461,20 @@ public static class AllToolRegistrations
                     direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both'", @default = "both" },
                     depth = new { type = "integer", description = "Analysis depth", @default = 3 },
                     includeTests = new { type = "boolean", description = "Include test projects", @default = false },
-                    includeExternalDependencies = new { type = "boolean", description = "Include external dependencies", @default = false }
+                    includeExternalDependencies = new { type = "boolean", description = "Include external dependencies", @default = false },
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large graphs.", @default = "full" }
                 },
                 required = new[] { "symbol", "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "summary" => ResponseMode.Summary,
+                    _ => ResponseMode.Full
+                };
                 
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.Symbol, "symbol"),
@@ -476,6 +483,8 @@ public static class AllToolRegistrations
                     parameters.Depth ?? 3,
                     parameters.IncludeTests ?? false,
                     parameters.IncludeExternalDependencies ?? false,
+                    mode,
+                    null, // DetailRequest - not used in initial call
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -621,6 +630,7 @@ public static class AllToolRegistrations
         public int? Depth { get; set; }
         public bool? IncludeTests { get; set; }
         public bool? IncludeExternalDependencies { get; set; }
+        public string? ResponseMode { get; set; }
     }
 
     private class ProjectStructureAnalysisParams
