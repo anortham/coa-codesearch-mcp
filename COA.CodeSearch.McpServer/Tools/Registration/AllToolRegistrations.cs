@@ -56,7 +56,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GoToDefinitionParams>(
             name: "go_to_definition",
-            description: "Navigate instantly to where any symbol (class, method, property) is defined - works across entire solutions",
+            description: "Navigate to where any symbol (class, method, property) is defined - works across entire solutions. Supports C# and TypeScript. ~50ms for cached workspaces.",
             inputSchema: new
             {
                 type = "object",
@@ -87,7 +87,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "Find every place a symbol is used throughout your codebase. Automatically switches to summary mode for large results. Supports progressive disclosure for efficient navigation.",
+            description: "Find every place a symbol is used throughout your codebase. Returns full details for <5000 tokens, otherwise auto-switches to smart summary with hotspots and insights. Use responseMode='summary' to force summary view.",
             inputSchema: new
             {
                 type = "object",
@@ -130,7 +130,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<SearchSymbolsParams>(
             name: "search_symbols",
-            description: "Lightning-fast semantic search for C# classes, methods, properties by name using Roslyn - supports wildcards and fuzzy matching",
+            description: "Find C# symbols by name with basic filters - fast prefix/contains matching for classes, methods, properties. C# ONLY. Use for simple searches; for semantic filters use advanced_symbol_search. ~100ms response.",
             inputSchema: new
             {
                 type = "object",
@@ -197,7 +197,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetHoverInfoParams>(
             name: "get_hover_info",
-            description: "Get detailed type information, signatures, and documentation for any symbol - like IDE hover tooltips",
+            description: "Get detailed type information, signatures, and documentation for any symbol - like IDE hover tooltips. Works with C# and TypeScript. Shows XML docs when available.",
             inputSchema: new
             {
                 type = "object",
@@ -257,7 +257,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDiagnosticsParams>(
             name: "get_diagnostics",
-            description: "Instantly check for compilation errors and warnings. Automatically switches to summary mode for large results. Supports progressive disclosure for efficient debugging.",
+            description: "Check for compilation errors and warnings across your codebase. Returns full diagnostics for <5000 tokens, otherwise groups by severity with smart insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -331,7 +331,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<RenameSymbolParams>(
             name: "rename_symbol",
-            description: "Safely rename any symbol across your entire codebase - all references updated automatically. Automatically switches to summary mode for large renames. Supports progressive disclosure for efficient review.",
+            description: "Safely rename any symbol across your entire codebase - all references updated automatically. Shows full changes for <5000 tokens, otherwise provides impact summary with risk assessment. Set preview=false to apply changes.",
             inputSchema: new
             {
                 type = "object",
@@ -419,7 +419,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<AdvancedSymbolSearchParams>(
             name: "advanced_symbol_search",
-            description: "Power-user symbol search with semantic filters - find by accessibility, modifiers, return types, and more",
+            description: "Find C# symbols with semantic filters - search by accessibility (public/private), modifiers (static/abstract), return types, or namespace. Use when search_symbols isn't specific enough.",
             inputSchema: new
             {
                 type = "object",
@@ -461,7 +461,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<DependencyAnalysisParams>(
             name: "dependency_analysis",
-            description: "Analyze code dependencies with smart insights about coupling, circular dependencies, and architecture patterns. Automatically switches to summary mode for complex dependency graphs.",
+            description: "Analyze code dependencies to understand coupling and architecture. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -507,7 +507,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<ProjectStructureAnalysisParams>(
             name: "project_structure_analysis",
-            description: "Get comprehensive metrics and structure analysis - lines of code, complexity, dependencies, and project organization. Automatically switches to summary mode for large solutions.",
+            description: "Analyze project structure with metrics on size, complexity, and organization. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -657,7 +657,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchParams>(
             name: "fast_text_search",
-            description: "⚡ Straight blazin' fast text search across millions of lines in milliseconds - supports wildcards, fuzzy search, and shows context. Works with all file types including C#, TypeScript, JavaScript, and more",
+            description: "Search text across entire codebase with millisecond performance - supports wildcards (*), fuzzy (~), phrases (\"exact\"), and regex. Works with all file types. PREREQUISITE: Run index_workspace first. ~50ms for typical searches.",
             inputSchema: new
             {
                 type = "object",
@@ -710,15 +710,15 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSearchParams>(
             name: "fast_file_search",
-            description: "⚡ Straight blazin' fast file search using Lucene index - find files by name with fuzzy matching, wildcards, and typo correction",
+            description: "Find files by name with typo tolerance and pattern matching - uses pre-built index for instant results. Supports wildcards (*), fuzzy (~), regex. PREREQUISITE: Run index_workspace first. ~10ms response time.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "File name to search for - supports wildcards (*), fuzzy (~), and regex patterns" },
+                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy', 'wildcard', 'exact', 'regex'", @default = "standard" },
+                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
                     includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false }
                 },
@@ -754,7 +754,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastRecentFilesParams>(
             name: "fast_recent_files",
-            description: "⚡ Straight blazin' fast search for recently modified files using Lucene's indexed timestamps - find what changed in the last hour, day, or week",
+            description: "Find recently modified files using indexed timestamps - discover what changed in the last hour, day, or week. Shows modification time in friendly format.",
             inputSchema: new
             {
                 type = "object",
@@ -801,7 +801,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSizeAnalysisParams>(
             name: "fast_file_size_analysis",
-            description: "⚡ Straight blazin' fast file size analysis - find large files, analyze size distributions, or locate empty files using Lucene's indexed size data",
+            description: "Analyze files by size - find large files, empty files, or analyze size distributions. Uses indexed data for instant results across entire codebase.",
             inputSchema: new
             {
                 type = "object",
@@ -854,7 +854,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastSimilarFilesParams>(
             name: "fast_similar_files",
-            description: "⚡ Straight blazin' fast search for files with similar content using Lucene's 'More Like This' - perfect for finding duplicate code, related implementations, or similar patterns",
+            description: "Find files with similar content using 'More Like This' algorithm - ideal for discovering duplicate code, related implementations, or similar patterns. Shows similarity scores and matching terms.",
             inputSchema: new
             {
                 type = "object",
@@ -910,15 +910,15 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastDirectorySearchParams>(
             name: "fast_directory_search",
-            description: "⚡ Straight blazin' fast directory/folder search with fuzzy matching - find folders by name, discover project structure, locate namespaces",
+            description: "Search for directories/folders with fuzzy matching - locate project folders, discover structure, find namespaces. Shows file counts and supports typo correction.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "Directory name to search for - supports wildcards (*), fuzzy (~)" },
+                    query = new { type = "string", description = "Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy', 'wildcard', 'exact', 'regex'", @default = "standard" },
+                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 30 },
                     includeFileCount = new { type = "boolean", description = "Include file count per directory", @default = true },
                     groupByDirectory = new { type = "boolean", description = "Group results by unique directories", @default = true }
@@ -957,7 +957,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<IndexWorkspaceParams>(
             name: "index_workspace",
-            description: "Index or re-index a workspace for fast text search - build search index before using fast_text_search for optimal performance",
+            description: "Build or rebuild search index for fast text/file search tools. REQUIRED before using: fast_text_search, fast_file_search, fast_recent_files, etc. Takes 5-60 seconds depending on codebase size.",
             inputSchema: new
             {
                 type = "object",

@@ -114,7 +114,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FastDirectorySearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
-        services.AddSingleton<InitializeMemoryHooksTool>();
         
         // TypeScript tools
         services.AddSingleton<TypeScriptGoToDefinitionTool>();
