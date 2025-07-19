@@ -79,6 +79,7 @@ public class BatchOperationsTool
                     results.Add(new
                     {
                         operation = operationType,
+                        type = operationType,  // Include both for compatibility
                         success = true,
                         result = operationResult
                     });
@@ -89,6 +90,7 @@ public class BatchOperationsTool
                     results.Add(new
                     {
                         operation = operationType,
+                        type = operationType,  // Include both for compatibility
                         success = false,
                         error = opEx.Message
                     });
