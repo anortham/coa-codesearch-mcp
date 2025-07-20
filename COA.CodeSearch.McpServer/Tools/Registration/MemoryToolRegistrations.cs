@@ -23,6 +23,9 @@ public static class MemoryToolRegistrations
         RegisterListMemoriesByType(registry, memoryTools);
         RegisterBackupMemories(registry, memoryTools);
         RegisterRestoreMemories(registry, memoryTools);
+        
+        // Migration tool
+        RegisterMigrateMemories(registry, serviceProvider.GetRequiredService<MigrateMemoriesTool>());
     }
     
     private static void RegisterRememberDecision(ToolRegistry registry, ClaudeMemoryTools tool)
@@ -271,6 +274,35 @@ public static class MemoryToolRegistrations
                     parameters?.IncludeLocal ?? false);
                     
                 return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterMigrateMemories(ToolRegistry registry, MigrateMemoriesTool tool)
+    {
+        registry.RegisterTool<object?>(
+            name: "migrate_memories_add_ticks",
+            description: "Migrate existing memories to add timestamp_ticks field. This is needed for memories created before the backup enhancement. Run this once to fix old memories that aren't being backed up.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new { },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.MigrateAsync();
+                
+                return CreateSuccessResult(new
+                {
+                    success = true,
+                    message = $"Migration completed: {result.MigratedMemories} memories migrated, {result.SkippedMemories} already had timestamp_ticks",
+                    totalMemories = result.TotalMemories,
+                    migratedMemories = result.MigratedMemories,
+                    skippedMemories = result.SkippedMemories,
+                    migratedScopes = result.MigratedScopes,
+                    errors = result.Errors
+                });
             }
         );
     }

@@ -127,6 +127,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FastDirectorySearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
+        services.AddSingleton<MigrateMemoriesTool>();
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
         
