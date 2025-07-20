@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -11,6 +12,7 @@ public class FileWatcherService : BackgroundService
     private readonly ILogger<FileWatcherService> _logger;
     private readonly IConfiguration _configuration;
     private readonly FileIndexingService _fileIndexingService;
+    private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
     private readonly ConcurrentDictionary<string, DateTime> _pendingUpdates = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
@@ -23,11 +25,13 @@ public class FileWatcherService : BackgroundService
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
-        FileIndexingService fileIndexingService)
+        FileIndexingService fileIndexingService,
+        IServiceProvider serviceProvider)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
+        _serviceProvider = serviceProvider;
 
         // Load configuration
         _enabled = configuration.GetValue("FileWatcher:Enabled", true);
@@ -63,7 +67,14 @@ public class FileWatcherService : BackgroundService
         {
             var watcher = new FileSystemWatcher(workspacePath)
             {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                // Use all relevant notify filters for Windows compatibility
+                // LastWrite alone is not reliable on Windows - need DirectoryName and Attributes too
+                NotifyFilter = NotifyFilters.FileName 
+                             | NotifyFilters.LastWrite 
+                             | NotifyFilters.Size
+                             | NotifyFilters.DirectoryName
+                             | NotifyFilters.Attributes
+                             | NotifyFilters.CreationTime,
                 IncludeSubdirectories = true,
                 EnableRaisingEvents = true
             };
@@ -102,10 +113,69 @@ public class FileWatcherService : BackgroundService
             return Task.CompletedTask;
         }
 
+        // Start watching previously indexed workspaces
+        _ = Task.Run(async () => await StartWatchingIndexedWorkspaces(), stoppingToken);
+
         // Start the background processing task
         _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
         
         return Task.CompletedTask;
+    }
+
+    private async Task StartWatchingIndexedWorkspaces()
+    {
+        try
+        {
+            // Wait a bit for services to fully initialize
+            await Task.Delay(2000);
+
+            // Get ILuceneIndexService from DI container
+            using var scope = _serviceProvider.CreateScope();
+            var luceneService = scope.ServiceProvider.GetService<ILuceneIndexService>();
+            
+            if (luceneService == null)
+            {
+                _logger.LogWarning("ILuceneIndexService not available, cannot auto-start watching indexed workspaces");
+                return;
+            }
+
+            // Get all indexed workspaces
+            var indexMappings = luceneService.GetAllIndexMappings();
+            
+            if (indexMappings.Count == 0)
+            {
+                _logger.LogInformation("No previously indexed workspaces found");
+                return;
+            }
+
+            _logger.LogInformation("Found {Count} previously indexed workspaces, starting file watchers", indexMappings.Count);
+
+            foreach (var mapping in indexMappings)
+            {
+                var workspacePath = mapping.Key;
+                
+                // Verify the workspace still exists
+                if (!Directory.Exists(workspacePath))
+                {
+                    _logger.LogWarning("Previously indexed workspace no longer exists: {WorkspacePath}", workspacePath);
+                    continue;
+                }
+
+                try
+                {
+                    StartWatching(workspacePath);
+                    _logger.LogInformation("Auto-started watching previously indexed workspace: {WorkspacePath}", workspacePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to auto-start watching workspace: {WorkspacePath}", workspacePath);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during startup of file watching for indexed workspaces");
+        }
     }
 
     private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
@@ -209,14 +279,24 @@ public class FileWatcherService : BackgroundService
     private void OnFileChanged(string workspacePath, FileSystemEventArgs e)
     {
         if (ShouldIgnoreFile(e.FullPath))
+        {
+            _logger.LogTrace("Ignoring change event for file: {FilePath}", e.FullPath);
             return;
+        }
 
-        _changeQueue.TryAdd(new FileChangeEvent
+        _logger.LogDebug("File changed detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
+        
+        var added = _changeQueue.TryAdd(new FileChangeEvent
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Modified
         });
+        
+        if (!added)
+        {
+            _logger.LogWarning("Failed to add file change event to queue for: {FilePath}", e.FullPath);
+        }
     }
 
     private void OnFileCreated(string workspacePath, FileSystemEventArgs e)

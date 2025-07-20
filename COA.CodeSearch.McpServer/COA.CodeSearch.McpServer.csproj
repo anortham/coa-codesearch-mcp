@@ -66,11 +66,5 @@
     </None>
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Embedded hook scripts -->
-    <EmbeddedResource Include="Resources\Hooks\*.ps1" />
-    <EmbeddedResource Include="Resources\Hooks\*.sh" />
-    <EmbeddedResource Include="Resources\Hooks\README.md" />
-  </ItemGroup>
 
 </Project>

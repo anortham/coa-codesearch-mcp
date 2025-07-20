@@ -12,4 +12,5 @@ public interface ILuceneIndexService : IDisposable
     Task CommitAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
+    Dictionary<string, string> GetAllIndexMappings();
 }
