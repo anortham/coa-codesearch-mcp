@@ -104,6 +104,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<SearchSymbolsTool>();
         services.AddSingleton<GetDiagnosticsTool>();
         services.AddSingleton<GetDiagnosticsToolV2>();
+        services.AddSingleton<TypeScriptHoverInfoTool>();
         services.AddSingleton<GetHoverInfoTool>();
         services.AddSingleton<GetImplementationsTool>();
         services.AddSingleton<GetDocumentSymbolsTool>();

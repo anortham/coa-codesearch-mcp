@@ -61,6 +61,34 @@ public class TypeScriptAnalysisService : IDisposable
         else
         {
             _logger.LogInformation("Node.js found at {NodePath}", _nodeExecutable);
+            
+            // Log Node.js version for debugging
+            Task.Run(async () =>
+            {
+                try
+                {
+                    var versionInfo = new ProcessStartInfo
+                    {
+                        FileName = _nodeExecutable,
+                        Arguments = "--version",
+                        UseShellExecute = false,
+                        RedirectStandardOutput = true,
+                        CreateNoWindow = true
+                    };
+                    
+                    using var process = Process.Start(versionInfo);
+                    if (process != null)
+                    {
+                        var version = await process.StandardOutput.ReadToEndAsync();
+                        await process.WaitForExitAsync();
+                        _logger.LogInformation("Node.js version: {Version}", version.Trim());
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to get Node.js version");
+                }
+            });
         }
     }
 
@@ -119,6 +147,18 @@ public class TypeScriptAnalysisService : IDisposable
                 else
                 {
                     _logger.LogInformation("TypeScript not found at local path: {Path}", localPath);
+                }
+            }
+            
+            // Check for project-specific TypeScript installations
+            if (string.IsNullOrEmpty(_tsServerPath))
+            {
+                _logger.LogInformation("Searching for TypeScript in common project locations...");
+                var projectTsServerPath = await FindProjectTypeScriptAsync();
+                if (!string.IsNullOrEmpty(projectTsServerPath))
+                {
+                    _tsServerPath = projectTsServerPath;
+                    _logger.LogInformation("Found TypeScript in project at: {Path}", _tsServerPath);
                 }
             }
             
@@ -468,6 +508,9 @@ public class TypeScriptAnalysisService : IDisposable
         int offset, 
         CancellationToken cancellationToken = default)
     {
+        // Normalize the file path for TypeScript (forward slashes)
+        var normalizedPath = NormalizePathForTypeScript(filePath);
+        
         // First ensure the file is opened in tsserver
         var openRequest = new
         {
@@ -476,8 +519,8 @@ public class TypeScriptAnalysisService : IDisposable
             command = "open",
             arguments = new
             {
-                file = filePath,
-                projectRootPath = Path.GetDirectoryName(filePath)
+                file = normalizedPath,
+                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
             }
         };
         
@@ -494,7 +537,7 @@ public class TypeScriptAnalysisService : IDisposable
             command = "definition",
             arguments = new
             {
-                file = filePath,
+                file = normalizedPath,
                 line = line,
                 offset = offset
             }
@@ -536,6 +579,9 @@ public class TypeScriptAnalysisService : IDisposable
     {
         var references = new List<TypeScriptLocation>();
         
+        // Normalize the file path for TypeScript (forward slashes)
+        var normalizedPath = NormalizePathForTypeScript(filePath);
+        
         // First ensure the file is opened in tsserver
         var openRequest = new
         {
@@ -544,8 +590,8 @@ public class TypeScriptAnalysisService : IDisposable
             command = "open",
             arguments = new
             {
-                file = filePath,
-                projectRootPath = Path.GetDirectoryName(filePath)
+                file = normalizedPath,
+                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
             }
         };
         
@@ -562,7 +608,7 @@ public class TypeScriptAnalysisService : IDisposable
             command = "references",
             arguments = new
             {
-                file = filePath,
+                file = normalizedPath,
                 line = line,
                 offset = offset
             }
@@ -594,6 +640,189 @@ public class TypeScriptAnalysisService : IDisposable
         }
         
         return references;
+    }
+
+    /// <summary>
+    /// Get quick info (hover information) for a symbol at a given position
+    /// </summary>
+    public async Task<object?> GetQuickInfoAsync(
+        string filePath,
+        int line,
+        int offset,
+        CancellationToken cancellationToken = default)
+    {
+        // Normalize the file path for TypeScript (forward slashes)
+        var normalizedPath = NormalizePathForTypeScript(filePath);
+        
+        // First ensure the file is opened in tsserver
+        var openRequest = new
+        {
+            seq = Interlocked.Increment(ref _requestSequence),
+            type = "request",
+            command = "open",
+            arguments = new
+            {
+                file = normalizedPath,
+                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
+            }
+        };
+        
+        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
+        if (openResponse == null)
+        {
+            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+        }
+        
+        var request = new
+        {
+            seq = Interlocked.Increment(ref _requestSequence),
+            type = "request",
+            command = "quickinfo",
+            arguments = new
+            {
+                file = normalizedPath,
+                line = line,
+                offset = offset
+            }
+        };
+        
+        try
+        {
+            var response = await SendRequestAsync(request, cancellationToken);
+            if (response?.RootElement.TryGetProperty("body", out var body) == true)
+            {
+                return new
+                {
+                    type = "typescript",
+                    displayString = body.TryGetProperty("displayString", out var displayString) 
+                        ? displayString.GetString() ?? "" 
+                        : "",
+                    documentation = body.TryGetProperty("documentation", out var documentation) 
+                        ? documentation.GetString() ?? "" 
+                        : "",
+                    kind = body.TryGetProperty("kind", out var kind) 
+                        ? kind.GetString() ?? "" 
+                        : "",
+                    kindModifiers = body.TryGetProperty("kindModifiers", out var kindModifiers) 
+                        ? kindModifiers.GetString() ?? "" 
+                        : "",
+                    tags = body.TryGetProperty("tags", out var tags) && tags.ValueKind == JsonValueKind.Array
+                        ? tags.EnumerateArray().Select(t => new
+                        {
+                            name = t.TryGetProperty("name", out var name) ? name.GetString() : "",
+                            text = t.TryGetProperty("text", out var text) ? text.GetString() : ""
+                        }).ToArray()
+                        : Array.Empty<object>()
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get quick info for {File}:{Line}:{Offset}", filePath, line, offset);
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Normalize file paths for TypeScript (convert backslashes to forward slashes)
+    /// </summary>
+    private string NormalizePathForTypeScript(string path)
+    {
+        // TypeScript expects forward slashes even on Windows
+        return path.Replace('\\', '/');
+    }
+    
+    /// <summary>
+    /// Search for TypeScript installations in common project locations
+    /// </summary>
+    private async Task<string?> FindProjectTypeScriptAsync()
+    {
+        return await Task.Run(() =>
+        {
+            var searchPaths = new List<string>();
+            
+            // Get current directory and its parents up to a reasonable depth
+            var currentDir = Directory.GetCurrentDirectory();
+            var dir = new DirectoryInfo(currentDir);
+            
+            // Search up to 5 levels up from current directory
+            for (int i = 0; i < 5 && dir != null; i++)
+            {
+                searchPaths.Add(dir.FullName);
+                dir = dir.Parent;
+            }
+            
+            // Also check common project roots
+            var driveRoots = DriveInfo.GetDrives()
+                .Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
+                .Select(d => d.RootDirectory.FullName);
+                
+            foreach (var drive in driveRoots)
+            {
+                searchPaths.Add(Path.Combine(drive, "source"));
+                searchPaths.Add(Path.Combine(drive, "repos"));
+                searchPaths.Add(Path.Combine(drive, "projects"));
+                searchPaths.Add(Path.Combine(drive, "dev"));
+                searchPaths.Add(Path.Combine(drive, "src"));
+            }
+            
+            // Search for tsserver.js in each path
+            foreach (var basePath in searchPaths.Distinct())
+            {
+                if (!Directory.Exists(basePath))
+                    continue;
+                    
+                try
+                {
+                    // Look for node_modules/typescript/lib/tsserver.js
+                    var nodeModulesPath = Path.Combine(basePath, "node_modules", "typescript", "lib", "tsserver.js");
+                    if (File.Exists(nodeModulesPath))
+                    {
+                        _logger.LogDebug("Found tsserver.js at: {Path}", nodeModulesPath);
+                        return nodeModulesPath;
+                    }
+                    
+                    // Search subdirectories (ClientApp, frontend, etc.)
+                    var subDirs = new[] { "ClientApp", "client", "frontend", "web", "ui", "app" };
+                    foreach (var subDir in subDirs)
+                    {
+                        var subPath = Path.Combine(basePath, subDir, "node_modules", "typescript", "lib", "tsserver.js");
+                        if (File.Exists(subPath))
+                        {
+                            _logger.LogDebug("Found tsserver.js at: {Path}", subPath);
+                            return subPath;
+                        }
+                    }
+                    
+                    // Search one level deeper for any directories containing node_modules
+                    if (basePath.Length < 50) // Avoid searching too deep
+                    {
+                        var directories = Directory.GetDirectories(basePath, "node_modules", SearchOption.TopDirectoryOnly);
+                        foreach (var nodeModules in directories)
+                        {
+                            var tsPath = Path.Combine(nodeModules, "typescript", "lib", "tsserver.js");
+                            if (File.Exists(tsPath))
+                            {
+                                _logger.LogDebug("Found tsserver.js at: {Path}", tsPath);
+                                return tsPath;
+                            }
+                        }
+                    }
+                }
+                catch (UnauthorizedAccessException)
+                {
+                    // Skip directories we can't access
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error searching in {Path}", basePath);
+                }
+            }
+            
+            _logger.LogDebug("No project-specific TypeScript installation found");
+            return null;
+        });
     }
 
     public void Dispose()
