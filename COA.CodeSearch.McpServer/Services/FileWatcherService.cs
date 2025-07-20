@@ -296,6 +296,13 @@ public class FileWatcherService : BackgroundService
 
     private bool ShouldIgnoreFile(string filePath)
     {
+        // Always ignore anything in .codesearch directory
+        if (filePath.Contains(".codesearch", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogTrace("Ignoring file in .codesearch directory: {FilePath}", filePath);
+            return true;
+        }
+
         // Check extension
         var extension = Path.GetExtension(filePath);
         if (string.IsNullOrEmpty(extension) || !_supportedExtensions.Contains(extension))
