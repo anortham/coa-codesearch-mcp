@@ -51,25 +51,19 @@ public class TypeScriptGoToDefinitionTool
                 };
             }
 
-            // Find the TypeScript project containing this file
-            var directory = Path.GetDirectoryName(filePath);
-            var tsProjects = await _tsService.DetectTypeScriptProjectsAsync(directory ?? ".", cancellationToken);
+            // Find the nearest TypeScript project by searching upward
+            var projectPath = await _tsService.FindNearestTypeScriptProjectAsync(filePath, cancellationToken);
             
-            if (tsProjects.Count == 0)
+            if (projectPath == null)
             {
-                _logger.LogWarning("No TypeScript project found for {File}", filePath);
+                _logger.LogWarning("No tsconfig.json found for {File}, attempting to use file directly", filePath);
                 // Try to use the file directly without a project
+                // This may work for simple cases but might miss project-specific configurations
             }
             else
             {
-                // Open the first matching project
-                var projectPath = tsProjects.FirstOrDefault(p => 
-                    filePath.StartsWith(Path.GetDirectoryName(p) ?? "", StringComparison.OrdinalIgnoreCase));
-                    
-                if (projectPath != null)
-                {
-                    await _tsService.OpenProjectAsync(projectPath, cancellationToken);
-                }
+                _logger.LogInformation("Using TypeScript project at {ProjectPath} for file {FilePath}", projectPath, filePath);
+                await _tsService.OpenProjectAsync(projectPath, cancellationToken);
             }
 
             // Get the definition

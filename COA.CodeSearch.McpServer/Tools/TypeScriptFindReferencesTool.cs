@@ -52,19 +52,17 @@ public class TypeScriptFindReferencesTool
                 };
             }
 
-            // Find and open the TypeScript project
-            var directory = Path.GetDirectoryName(filePath);
-            var tsProjects = await _tsService.DetectTypeScriptProjectsAsync(directory ?? ".", cancellationToken);
+            // Find and open the nearest TypeScript project
+            var projectPath = await _tsService.FindNearestTypeScriptProjectAsync(filePath, cancellationToken);
             
-            if (tsProjects.Count > 0)
+            if (projectPath != null)
             {
-                var projectPath = tsProjects.FirstOrDefault(p => 
-                    filePath.StartsWith(Path.GetDirectoryName(p) ?? "", StringComparison.OrdinalIgnoreCase));
-                    
-                if (projectPath != null)
-                {
-                    await _tsService.OpenProjectAsync(projectPath, cancellationToken);
-                }
+                _logger.LogInformation("Using TypeScript project at {ProjectPath} for file {FilePath}", projectPath, filePath);
+                await _tsService.OpenProjectAsync(projectPath, cancellationToken);
+            }
+            else
+            {
+                _logger.LogWarning("No tsconfig.json found for {File}, attempting to use file directly", filePath);
             }
 
             // Find all references
