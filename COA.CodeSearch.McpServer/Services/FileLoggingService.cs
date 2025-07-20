@@ -43,7 +43,7 @@ public class FileLoggingService : IHostedService, IDisposable
         try
         {
             _logDirectory = _pathResolution.GetLogsPath();
-            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
             
             // Ensure log directory exists
             Directory.CreateDirectory(_logDirectory);
@@ -54,14 +54,14 @@ public class FileLoggingService : IHostedService, IDisposable
             _logger.LogError(ex, "Failed to initialize file logging service - will retry on StartAsync");
             // Use temp directory as fallback
             _logDirectory = Path.Combine(Path.GetTempPath(), ".codesearch", "logs");
-            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
         }
     }
 
     /// <summary>
     /// Start file logging with the specified log level
     /// </summary>
-    public void StartLogging(LogEventLevel logLevel = LogEventLevel.Information)
+    public void StartLogging(LogEventLevel logLevel = LogEventLevel.Debug)
     {
         lock (_lock)
         {

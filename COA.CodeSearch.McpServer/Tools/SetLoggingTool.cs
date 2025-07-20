@@ -177,7 +177,7 @@ public class SetLoggingTool
     private static LogEventLevel ParseLogLevel(string? level)
     {
         if (string.IsNullOrEmpty(level))
-            return LogEventLevel.Information;
+            return LogEventLevel.Debug;  // Default to Debug for temporary debugging sessions
 
         return level.ToLowerInvariant() switch
         {
@@ -187,7 +187,7 @@ public class SetLoggingTool
             "warning" or "warn" => LogEventLevel.Warning,
             "error" => LogEventLevel.Error,
             "fatal" => LogEventLevel.Fatal,
-            _ => LogEventLevel.Information
+            _ => LogEventLevel.Debug  // Default to Debug for unrecognized levels
         };
     }
 
