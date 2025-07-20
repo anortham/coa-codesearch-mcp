@@ -40,18 +40,21 @@ public class FileLoggingService : IHostedService, IDisposable
         _pathResolution = pathResolution;
         
         // Use the centralized logs directory
-        _logDirectory = _pathResolution.GetLogsPath();
-        _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
-        
-        // Ensure log directory exists
         try
         {
+            _logDirectory = _pathResolution.GetLogsPath();
+            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
+            
+            // Ensure log directory exists
             Directory.CreateDirectory(_logDirectory);
             _logger.LogInformation("File logging service initialized. Log directory: {LogDirectory}", _logDirectory);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create log directory: {LogDirectory}", _logDirectory);
+            _logger.LogError(ex, "Failed to initialize file logging service - will retry on StartAsync");
+            // Use temp directory as fallback
+            _logDirectory = Path.Combine(Path.GetTempPath(), ".codesearch", "logs");
+            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
         }
     }
 
@@ -249,8 +252,16 @@ public class FileLoggingService : IHostedService, IDisposable
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
-        // Auto-start file logging with Debug level
-        StartLogging(LogEventLevel.Debug);
+        try
+        {
+            // Auto-start file logging with Debug level
+            StartLogging(LogEventLevel.Debug);
+        }
+        catch (Exception ex)
+        {
+            // Don't let file logging failures prevent other services from starting
+            _logger.LogError(ex, "Failed to start file logging service - continuing without file logging");
+        }
         return Task.CompletedTask;
     }
 
