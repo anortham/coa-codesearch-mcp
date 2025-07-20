@@ -39,7 +39,8 @@ public class SimpleIndexingTest
             })
             .Build();
             
-        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config);
+        var pathResolutionService = new PathResolutionService(config);
+        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config, pathResolutionService);
         var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService);
         
         // Create test file

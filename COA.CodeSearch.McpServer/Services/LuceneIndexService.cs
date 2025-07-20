@@ -33,6 +33,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
 {
     private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
+    private readonly IPathResolutionService _pathResolution;
     private readonly StandardAnalyzer _analyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
@@ -74,10 +75,11 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         public int PendingChanges { get; set; }
     }
     
-    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration)
+    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration, IPathResolutionService pathResolution)
     {
         _logger = logger;
         _configuration = configuration;
+        _pathResolution = pathResolution;
         _analyzer = new StandardAnalyzer(Version);
         
         // Default 15 minute timeout for stuck locks (same as intranet)
@@ -255,14 +257,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     /// </summary>
     private bool IsProtectedMemoryIndex(string indexPath)
     {
-        var basePath = GetBasePath();
-        var protectedPaths = new[]
-        {
-            Path.Combine(basePath, "project-memory"),
-            Path.Combine(basePath, "local-memory")
-        };
-        
-        return protectedPaths.Any(p => indexPath.Equals(p, StringComparison.OrdinalIgnoreCase));
+        return _pathResolution.IsProtectedPath(indexPath);
     }
     
     /// <summary>
@@ -412,62 +407,22 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetIndexPath(string workspacePath)
     {
-        var basePath = GetBasePath(); // This returns absolute path like C:\source\COA Roslyn MCP\.codesearch
+        var indexPath = _pathResolution.GetIndexPath(workspacePath);
         
-        // Check if this is a memory-related path
-        if (workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase))
+        // Update metadata for code indexes (not memory indexes)
+        if (!workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase))
         {
-            // Memory paths should use friendly directory names
-            
-            // If it's already an absolute path, use it
-            if (Path.IsPathRooted(workspacePath))
-            {
-                return workspacePath;
-            }
-            
-            // If it starts with .codesearch, strip it since basePath already includes it
-            if (workspacePath.StartsWith(".codesearch", StringComparison.OrdinalIgnoreCase))
-            {
-                // Remove .codesearch/ or .codesearch\ prefix
-                var memoryPart = workspacePath.Substring(".codesearch".Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                return Path.Combine(basePath, memoryPart);
-            }
-            
-            // Otherwise just append to basePath
-            return Path.Combine(basePath, workspacePath);
+            var normalizedPath = NormalizeToWorkspaceRoot(workspacePath);
+            var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
+            UpdateMetadata(normalizedPath, hashPath);
         }
         
-        // For code project indexes, use hash-based naming for consistency
-        var normalizedPath = NormalizeToWorkspaceRoot(workspacePath);
-        
-        // Use hash-based directory name for code indexes
-        var indexRoot = Path.Combine(basePath, "index");
-        var hashPath = GenerateHashPath(normalizedPath);
-        var fullPath = Path.Combine(indexRoot, hashPath);
-        
-        // Update metadata with the normalized path
-        UpdateMetadata(normalizedPath, hashPath);
-        
-        return fullPath;
+        return indexPath;
     }
     
     private string GetBasePath()
     {
-        var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
-        
-        // Convert to absolute path if relative
-        if (!Path.IsPathRooted(basePath))
-        {
-            // Find project root by looking for .git directory
-            var projectRoot = FindProjectRoot(Environment.CurrentDirectory);
-            
-            // Fall back to current directory if no .git found
-            var baseDirectory = projectRoot ?? Environment.CurrentDirectory;
-            
-            basePath = Path.Combine(baseDirectory, basePath);
-        }
-        
-        return basePath;
+        return _pathResolution.GetBasePath();
     }
     
     private string? FindProjectRoot(string startPath)
@@ -580,10 +535,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetMetadataPath()
     {
-        var basePath = GetBasePath();
-        var indexRoot = Path.Combine(basePath, "index");
-        System.IO.Directory.CreateDirectory(indexRoot);
-        return Path.Combine(indexRoot, MetadataFilename);
+        return _pathResolution.GetWorkspaceMetadataPath();
     }
     
     private IndexMetadata LoadMetadata(string metadataPath)
@@ -694,9 +646,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     /// </summary>
     public (bool projectMemoryExists, bool localMemoryExists) CheckMemoryIndexHealth()
     {
-        var basePath = GetBasePath();
-        var projectMemoryPath = Path.Combine(basePath, "project-memory");
-        var localMemoryPath = Path.Combine(basePath, "local-memory");
+        var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
+        var localMemoryPath = _pathResolution.GetLocalMemoryPath();
         
         var projectMemoryExists = System.IO.Directory.Exists(projectMemoryPath) && 
                                   File.Exists(Path.Combine(projectMemoryPath, SegmentsFilename));
@@ -714,7 +665,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     /// </summary>
     public void CleanupStuckIndexes()
     {
-        var basePath = GetBasePath();
+        var basePath = _pathResolution.GetBasePath();
         var indexRoot = Path.Combine(basePath, "index");
         
         if (!System.IO.Directory.Exists(indexRoot))

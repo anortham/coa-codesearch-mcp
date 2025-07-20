@@ -50,9 +50,11 @@ public class FastTextSearchIntegrationTests : IDisposable
         });
         _configuration = configBuilder.Build();
 
+        var pathResolutionService = new PathResolutionService(_configuration);
         _luceneIndexService = new LuceneIndexService(
             _loggerFactory.CreateLogger<LuceneIndexService>(),
-            _configuration);
+            _configuration,
+            pathResolutionService);
 
         _fileIndexingService = new FileIndexingService(
             _loggerFactory.CreateLogger<FileIndexingService>(),

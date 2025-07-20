@@ -14,7 +14,7 @@ public class FileLoggingService : IDisposable
 {
     private readonly ILogger<FileLoggingService> _logger;
     private readonly ILoggerFactory _loggerFactory;
-    private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IPathResolutionService _pathResolution;
     private Logger? _fileLogger;
     private FileLoggingProvider? _fileLoggingProvider;
     private readonly string _logDirectory;
@@ -26,16 +26,14 @@ public class FileLoggingService : IDisposable
     public string CurrentLogFile { get; private set; } = string.Empty;
     public LogEventLevel CurrentLogLevel => _levelSwitch.MinimumLevel;
 
-    public FileLoggingService(ILogger<FileLoggingService> logger, ILoggerFactory loggerFactory, ILuceneIndexService luceneIndexService)
+    public FileLoggingService(ILogger<FileLoggingService> logger, ILoggerFactory loggerFactory, IPathResolutionService pathResolution)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
-        _luceneIndexService = luceneIndexService;
+        _pathResolution = pathResolution;
         
-        // Use the same base path as indexes and memories, but in a logs subdirectory
-        var basePath = _luceneIndexService.GetPhysicalIndexPath(".codesearch");
-        // Strip the .codesearch suffix since it's already in the base path
-        _logDirectory = Path.Combine(Path.GetDirectoryName(basePath)!, "logs");
+        // Use the centralized logs directory
+        _logDirectory = _pathResolution.GetLogsPath();
         _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Information);
         
         // Ensure log directory exists
