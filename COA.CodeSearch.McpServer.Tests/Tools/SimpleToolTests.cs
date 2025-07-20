@@ -104,10 +104,13 @@ public class SimpleToolTests : TestBase
     public async Task GetHoverInfoTool_Should_Return_Error_For_Missing_Document()
     {
         // Arrange
+        var mockInstaller = new TypeScriptInstaller(
+            Mock.Of<ILogger<TypeScriptInstaller>>(),
+            null); // null for httpClientFactory is OK
         var mockTsService = new Mock<TypeScriptAnalysisService>(
             Mock.Of<ILogger<TypeScriptAnalysisService>>(),
             Mock.Of<IConfiguration>(),
-            Mock.Of<TypeScriptInstaller>());
+            mockInstaller);
         var tsHoverTool = new TypeScriptHoverInfoTool(
             Mock.Of<ILogger<TypeScriptHoverInfoTool>>(),
             mockTsService.Object);
