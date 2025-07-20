@@ -26,6 +26,9 @@ public static class MemoryToolRegistrations
         
         // Migration tool
         RegisterMigrateMemories(registry, serviceProvider.GetRequiredService<MigrateMemoriesTool>());
+        
+        // Diagnostic tool
+        RegisterDiagnoseMemoryIndex(registry, serviceProvider.GetRequiredService<DiagnoseMemoryIndexTool>());
     }
     
     private static void RegisterRememberDecision(ToolRegistry registry, ClaudeMemoryTools tool)
@@ -307,6 +310,28 @@ public static class MemoryToolRegistrations
         );
     }
     
+    private static void RegisterDiagnoseMemoryIndex(ToolRegistry registry, DiagnoseMemoryIndexTool tool)
+    {
+        registry.RegisterTool<DiagnoseMemoryIndexParams>(
+            name: "diagnose_memory_index",
+            description: "Diagnostic tool to inspect the memory index and see what documents are stored",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspace = new { type = "string", description = "Workspace to diagnose (default: project-memory)", @default = "project-memory" }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.DiagnoseMemoryIndex(parameters?.Workspace ?? "project-memory");
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
     // Parameter classes
     private class RememberDecisionParams
     {
@@ -363,5 +388,10 @@ public static class MemoryToolRegistrations
     {
         public string[]? Scopes { get; set; }
         public bool? IncludeLocal { get; set; }
+    }
+    
+    private class DiagnoseMemoryIndexParams
+    {
+        public string? Workspace { get; set; }
     }
 }
