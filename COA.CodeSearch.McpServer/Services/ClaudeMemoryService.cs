@@ -260,6 +260,7 @@ public class ClaudeMemoryService : IDisposable
         doc.Add(new TextField("keywords", string.Join(" ", memory.Keywords), Field.Store.YES));
         doc.Add(new TextField("files", string.Join(" ", memory.FilesInvolved), Field.Store.YES));
         doc.Add(new StringField("timestamp", memory.Timestamp.ToString("O"), Field.Store.YES));
+        doc.Add(new Int64Field("timestamp_ticks", memory.Timestamp.Ticks, Field.Store.YES));
         doc.Add(new StringField("session_id", memory.SessionId, Field.Store.YES));
         doc.Add(new StringField("confidence", memory.Confidence.ToString(), Field.Store.YES));
         

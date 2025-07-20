@@ -225,7 +225,7 @@ public class MemoryBackupService : IDisposable
             // Incremental - only get modified documents
             var ticks = lastBackupTime.Ticks;
             timeQuery = NumericRangeQuery.NewInt64Range("timestamp_ticks", ticks, long.MaxValue, false, true);
-            _logger.LogDebug("BackupScopeAsync: Using incremental backup from {LastBackup}", lastBackupTime);
+            _logger.LogDebug("BackupScopeAsync: Using incremental backup from {LastBackup} (ticks: {Ticks})", lastBackupTime, ticks);
         }
         
         // Combine with scope filter
@@ -251,19 +251,26 @@ public class MemoryBackupService : IDisposable
             searcher.Search(allDocsQuery, debugCollector);
             var debugHits = debugCollector.GetTopDocs().ScoreDocs;
             
+            _logger.LogDebug("BackupScopeAsync: Total documents in index: {DocCount}", debugHits.Length);
+            
             var scopesFound = new HashSet<string>();
+            var sampleDocs = new List<string>();
             foreach (var hit in debugHits.Take(20)) // Check first 20 docs
             {
                 var doc = searcher.Doc(hit.Doc);
                 var docScope = doc.Get("scope");
+                var docContent = doc.Get("content");
                 if (!string.IsNullOrEmpty(docScope))
                 {
-                    scopesFound.Add(docScope);
+                    scopesFound.Add($"'{docScope}'");
+                    sampleDocs.Add($"scope='{docScope}', content='{docContent?.Substring(0, Math.Min(50, docContent?.Length ?? 0))}'");
                 }
             }
             
             _logger.LogDebug("BackupScopeAsync: Found scopes in index: {Scopes}", string.Join(", ", scopesFound));
+            _logger.LogDebug("BackupScopeAsync: Sample documents: {Docs}", string.Join("; ", sampleDocs.Take(3)));
             _logger.LogDebug("BackupScopeAsync: We are searching for scope: '{Scope}'", scope);
+            _logger.LogDebug("BackupScopeAsync: Workspace path: '{Workspace}'", workspace);
         }
         
         if (hits.Length == 0)
