@@ -34,7 +34,7 @@ public class TypeScriptAnalysisService : IDisposable
             var available = _initialized && !string.IsNullOrEmpty(_tsServerPath) && File.Exists(_tsServerPath);
             if (!available)
             {
-                _logger.LogDebug("TypeScript service availability check: initialized={Initialized}, tsServerPath={Path}, exists={Exists}",
+                _logger.LogInformation("TypeScript service availability check: initialized={Initialized}, tsServerPath={Path}, exists={Exists}",
                     _initialized,
                     _tsServerPath ?? "null",
                     !string.IsNullOrEmpty(_tsServerPath) && File.Exists(_tsServerPath));
@@ -86,7 +86,7 @@ public class TypeScriptAnalysisService : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Failed to get Node.js version");
+                    _logger.LogInformation(ex, "Failed to get Node.js version");
                 }
             });
         }
@@ -96,7 +96,7 @@ public class TypeScriptAnalysisService : IDisposable
     {
         if (_initialized)
         {
-            _logger.LogDebug("TypeScript service already initialized");
+            _logger.LogInformation("TypeScript service already initialized");
             return true;
         }
 
@@ -222,13 +222,13 @@ public class TypeScriptAnalysisService : IDisposable
                         var fullPath = Path.Combine(dir, nodeName);
                         if (File.Exists(fullPath))
                         {
-                            _logger.LogDebug("Found Node.js in PATH at: {Path}", fullPath);
+                            _logger.LogInformation("Found Node.js in PATH at: {Path}", fullPath);
                             return fullPath;
                         }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug(ex, "Error checking path {Path}/{Node}", dir, nodeName);
+                        _logger.LogInformation(ex, "Error checking path {Path}/{Node}", dir, nodeName);
                     }
                 }
             }
@@ -254,7 +254,7 @@ public class TypeScriptAnalysisService : IDisposable
             {
                 if (File.Exists(path))
                 {
-                    _logger.LogDebug("Found Node.js at common location: {Path}", path);
+                    _logger.LogInformation("Found Node.js at common location: {Path}", path);
                     return path;
                 }
             }
@@ -368,7 +368,7 @@ public class TypeScriptAnalysisService : IDisposable
                     File.Exists(Path.Combine(directory, ".gitignore")) ||
                     directory.EndsWith("node_modules", StringComparison.OrdinalIgnoreCase))
                 {
-                    _logger.LogDebug("Stopped searching at project boundary: {Directory}", directory);
+                    _logger.LogInformation("Stopped searching at project boundary: {Directory}", directory);
                     break;
                 }
             }
@@ -438,8 +438,8 @@ public class TypeScriptAnalysisService : IDisposable
         _logger.LogInformation("TypeScript server process started. PID: {PID}", _tsServerProcess.Id);
         
         // Add more detailed logging
-        _logger.LogDebug("TypeScript server started with: Node={Node}, TSServer={TSServer}", _nodeExecutable, _tsServerPath);
-        _logger.LogDebug("Working directory: {WorkingDir}", startInfo.WorkingDirectory);
+        _logger.LogInformation("TypeScript server started with: Node={Node}, TSServer={TSServer}", _nodeExecutable, _tsServerPath);
+        _logger.LogInformation("Working directory: {WorkingDir}", startInfo.WorkingDirectory);
         
         // Wait a moment for the process to initialize
         await Task.Delay(500);
@@ -502,7 +502,7 @@ public class TypeScriptAnalysisService : IDisposable
             await EnsureServerStartedAsync();
             
             var requestJson = JsonSerializer.Serialize(request);
-            _logger.LogDebug("Sending TypeScript request: {Request}", requestJson);
+            _logger.LogInformation("Sending TypeScript request: {Request}", requestJson);
             
             // Write the request with a newline terminator (stdio protocol)
             await _tsServerInput!.WriteLineAsync(requestJson);
@@ -545,7 +545,7 @@ public class TypeScriptAnalysisService : IDisposable
                 }
                 
                 messageCount++;
-                _logger.LogDebug("Received TypeScript message #{Count}: {Message}", messageCount, 
+                _logger.LogInformation("Received TypeScript message #{Count}: {Message}", messageCount, 
                     line.Length > 200 ? line.Substring(0, 200) + "..." : line);
                 
                 try
@@ -565,12 +565,12 @@ public class TypeScriptAnalysisService : IDisposable
                                 seqElement.GetInt32() == (int?)requestSeq)
                             {
                                 response = line;
-                                _logger.LogDebug("Found matching response for seq {Seq}", requestSeq);
+                                _logger.LogInformation("Found matching response for seq {Seq}", requestSeq);
                                 break;
                             }
                             else
                             {
-                                _logger.LogDebug("Received response for different request seq: {Seq}", 
+                                _logger.LogInformation("Received response for different request seq: {Seq}", 
                                     root.TryGetProperty("request_seq", out var s) ? s.GetInt32() : -1);
                             }
                         }
@@ -578,11 +578,11 @@ public class TypeScriptAnalysisService : IDisposable
                         {
                             // Log events but continue waiting
                             var eventName = root.TryGetProperty("event", out var e) ? e.GetString() : "unknown";
-                            _logger.LogDebug("Received TypeScript event: {Event}", eventName);
+                            _logger.LogInformation("Received TypeScript event: {Event}", eventName);
                         }
                         else
                         {
-                            _logger.LogDebug("Received TypeScript message type: {Type}", messageType);
+                            _logger.LogInformation("Received TypeScript message type: {Type}", messageType);
                         }
                         
                         // Check for error responses
@@ -656,7 +656,7 @@ public class TypeScriptAnalysisService : IDisposable
                 return false;
             }
             
-            _logger.LogDebug("Successfully opened file {File} in TypeScript server", filePath);
+            _logger.LogInformation("Successfully opened file {File} in TypeScript server", filePath);
             return true;
         }
         catch (Exception ex)
@@ -733,7 +733,7 @@ public class TypeScriptAnalysisService : IDisposable
                 offset++;
             }
             
-            _logger.LogDebug("Converted column {Column} to offset {Offset} for line: {Line}", column, offset, lineContent);
+            _logger.LogInformation("Converted column {Column} to offset {Offset} for line: {Line}", column, offset, lineContent);
             return offset;
         }
         catch (Exception ex)
@@ -998,7 +998,7 @@ public class TypeScriptAnalysisService : IDisposable
                     var nodeModulesPath = Path.Combine(basePath, "node_modules", "typescript", "lib", "tsserver.js");
                     if (File.Exists(nodeModulesPath))
                     {
-                        _logger.LogDebug("Found tsserver.js at: {Path}", nodeModulesPath);
+                        _logger.LogInformation("Found tsserver.js at: {Path}", nodeModulesPath);
                         return nodeModulesPath;
                     }
                     
@@ -1009,7 +1009,7 @@ public class TypeScriptAnalysisService : IDisposable
                         var subPath = Path.Combine(basePath, subDir, "node_modules", "typescript", "lib", "tsserver.js");
                         if (File.Exists(subPath))
                         {
-                            _logger.LogDebug("Found tsserver.js at: {Path}", subPath);
+                            _logger.LogInformation("Found tsserver.js at: {Path}", subPath);
                             return subPath;
                         }
                     }
@@ -1023,7 +1023,7 @@ public class TypeScriptAnalysisService : IDisposable
                             var tsPath = Path.Combine(nodeModules, "typescript", "lib", "tsserver.js");
                             if (File.Exists(tsPath))
                             {
-                                _logger.LogDebug("Found tsserver.js at: {Path}", tsPath);
+                                _logger.LogInformation("Found tsserver.js at: {Path}", tsPath);
                                 return tsPath;
                             }
                         }
@@ -1035,11 +1035,11 @@ public class TypeScriptAnalysisService : IDisposable
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogDebug(ex, "Error searching in {Path}", basePath);
+                    _logger.LogInformation(ex, "Error searching in {Path}", basePath);
                 }
             }
             
-            _logger.LogDebug("No project-specific TypeScript installation found");
+            _logger.LogInformation("No project-specific TypeScript installation found");
             return null;
         });
     }
