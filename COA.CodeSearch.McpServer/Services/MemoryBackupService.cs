@@ -17,21 +17,23 @@ public class MemoryBackupService : IDisposable
     private readonly ILogger<MemoryBackupService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _luceneService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly string _backupDbPath;
     private readonly SemaphoreSlim _backupLock = new(1, 1);
     
     public MemoryBackupService(
         ILogger<MemoryBackupService> logger,
         IConfiguration configuration,
-        ILuceneIndexService luceneService)
+        ILuceneIndexService luceneService,
+        IPathResolutionService pathResolutionService)
     {
         _logger = logger;
         _configuration = configuration;
         _luceneService = luceneService;
+        _pathResolutionService = pathResolutionService;
         
-        // Get backup database path from config or use default
-        var basePath = configuration["ClaudeMemory:BasePath"] ?? ".codesearch";
-        _backupDbPath = Path.Combine(basePath, "memories.db");
+        // Get backup database path using PathResolutionService
+        _backupDbPath = Path.Combine(_pathResolutionService.GetBasePath(), "memories.db");
         
         // Ensure database exists with proper schema
         InitializeDatabase();
@@ -385,7 +387,6 @@ public class MemoryBackupService : IDisposable
     {
         // Build the workspace path that will be resolved by ILuceneIndexService
         // This must match the logic in ClaudeMemoryService.IsProjectScope for consistency
-        var basePath = _configuration["ClaudeMemory:BasePath"] ?? ".codesearch";
         
         // Project-level scopes (shared with team via version control)
         // Must match ClaudeMemoryService.IsProjectScope() logic exactly
@@ -394,9 +395,10 @@ public class MemoryBackupService : IDisposable
                                    or "SecurityRule" 
                                    or "ProjectInsight";
         
+        // Return just the memory path names - PathResolutionService will handle the full path resolution
         return isProjectScope
-            ? Path.Combine(basePath, _configuration["ClaudeMemory:ProjectMemoryPath"] ?? "project-memory")
-            : Path.Combine(basePath, _configuration["ClaudeMemory:LocalMemoryPath"] ?? "local-memory");
+            ? _configuration["ClaudeMemory:ProjectMemoryPath"] ?? "project-memory"
+            : _configuration["ClaudeMemory:LocalMemoryPath"] ?? "local-memory";
     }
     
     private async Task<DateTime> GetLastBackupTimeAsync()

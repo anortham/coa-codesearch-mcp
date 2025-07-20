@@ -45,8 +45,9 @@ public class ClaudeMemoryService : IDisposable
         _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
         
         // Create workspace paths for memory indexes
-        _projectMemoryWorkspace = Path.Combine(_config.BasePath, _config.ProjectMemoryPath);
-        _localMemoryWorkspace = Path.Combine(_config.BasePath, _config.LocalMemoryPath);
+        // Just use the memory path names - PathResolutionService will handle the full path resolution
+        _projectMemoryWorkspace = _config.ProjectMemoryPath;
+        _localMemoryWorkspace = _config.LocalMemoryPath;
         
         _logger.LogInformation("Claude Memory Service initialized with session {SessionId}", _currentSessionId);
     }
