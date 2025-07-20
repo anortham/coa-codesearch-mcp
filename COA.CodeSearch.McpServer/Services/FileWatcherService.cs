@@ -94,15 +94,23 @@ public class FileWatcherService : BackgroundService
         }
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         if (!_enabled)
         {
             _logger.LogInformation("File watching is disabled - FileWatcherService will not process changes");
-            return;
+            return Task.CompletedTask;
         }
 
-        _logger.LogInformation("FileWatcherService started");
+        // Start the background processing task
+        _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("FileWatcherService started processing changes");
 
         // Process changes in batches
         while (!stoppingToken.IsCancellationRequested)
