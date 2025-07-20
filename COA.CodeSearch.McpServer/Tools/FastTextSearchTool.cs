@@ -67,6 +67,12 @@ public class FastTextSearchTool
                     error = "Workspace path cannot be empty"
                 };
             }
+            
+            // Log warning if a file path is passed instead of a directory
+            if (File.Exists(workspacePath))
+            {
+                _logger.LogWarning("File path provided as workspace: {FilePath}. Will use parent directory or project root for indexing.", workspacePath);
+            }
 
             // Ensure the directory is indexed first
             if (!await EnsureIndexedAsync(workspacePath, cancellationToken))
