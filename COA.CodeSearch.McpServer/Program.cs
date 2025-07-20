@@ -66,6 +66,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddHttpClient(); // For TypeScript installer
         
         // Core services
+        services.AddSingleton<IPathResolutionService, PathResolutionService>();
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         
