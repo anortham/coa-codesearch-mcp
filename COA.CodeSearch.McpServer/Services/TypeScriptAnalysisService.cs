@@ -461,7 +461,16 @@ public class TypeScriptAnalysisService : IDisposable
             {
                 seq = 0,
                 type = "request",
-                command = "status"
+                command = "configure",
+                arguments = new
+                {
+                    hostInfo = "COA CodeSearch MCP Server",
+                    preferences = new
+                    {
+                        allowTextChangesInNewFiles = true,
+                        includePackageJsonAutoImports = "on"
+                    }
+                }
             };
             
             var testResponse = await SendRequestAsync(testRequest, cts.Token);
@@ -522,13 +531,24 @@ public class TypeScriptAnalysisService : IDisposable
                 string? line = null;
                 try
                 {
-                    // Create a task for reading with its own timeout
-                    var readTask = Task.Run(async () => await _tsServerOutput!.ReadLineAsync(), timeoutCts.Token);
-                    line = await readTask;
+                    // Read line with cancellation support
+                    var readLineTask = _tsServerOutput!.ReadLineAsync();
+                    var completedTask = await Task.WhenAny(readLineTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
+                    
+                    if (completedTask == readLineTask)
+                    {
+                        line = await readLineTask;
+                    }
+                    else
+                    {
+                        // Timeout occurred
+                        _logger.LogWarning("Timeout waiting for TypeScript server response after {Count} messages", messageCount);
+                        return null;
+                    }
                 }
                 catch (OperationCanceledException)
                 {
-                    _logger.LogWarning("Timeout waiting for TypeScript server response after {Count} messages", messageCount);
+                    _logger.LogWarning("Operation cancelled while waiting for TypeScript server response");
                     return null;
                 }
                 
