@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
 using Serilog.Core;
@@ -10,7 +11,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// IMPORTANT: This service ensures logs are ONLY written to files, never to stdout
 /// to avoid contaminating the MCP protocol stream
 /// </summary>
-public class FileLoggingService : IDisposable
+public class FileLoggingService : IHostedService, IDisposable
 {
     private readonly ILogger<FileLoggingService> _logger;
     private readonly ILoggerFactory _loggerFactory;
@@ -21,10 +22,16 @@ public class FileLoggingService : IDisposable
     private readonly object _lock = new();
     private bool _isEnabled = false;
     private readonly LoggingLevelSwitch _levelSwitch;
+    private static Logger? _globalFileLogger;
 
     public bool IsEnabled => _isEnabled;
     public string CurrentLogFile { get; private set; } = string.Empty;
     public LogEventLevel CurrentLogLevel => _levelSwitch.MinimumLevel;
+    
+    /// <summary>
+    /// Global file logger for direct debug logging
+    /// </summary>
+    public static Serilog.ILogger GlobalFileLogger => _globalFileLogger ?? Serilog.Log.Logger;
 
     public FileLoggingService(ILogger<FileLoggingService> logger, ILoggerFactory loggerFactory, IPathResolutionService pathResolution)
     {
@@ -82,6 +89,9 @@ public class FileLoggingService : IDisposable
                         retainedFileCountLimit: 10,
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
+                
+                // Set global file logger for direct access
+                _globalFileLogger = _fileLogger;
 
                 // Create our custom file logging provider and add it to the logger factory
                 // This ensures logs go through the normal ILogger interface but are written only to our file
@@ -232,6 +242,25 @@ public class FileLoggingService : IDisposable
     public void Dispose()
     {
         StopLogging();
+    }
+
+    /// <summary>
+    /// Start file logging automatically when the service starts
+    /// </summary>
+    public Task StartAsync(CancellationToken cancellationToken)
+    {
+        // Auto-start file logging with Debug level
+        StartLogging(LogEventLevel.Debug);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Stop file logging when the service stops
+    /// </summary>
+    public Task StopAsync(CancellationToken cancellationToken)
+    {
+        StopLogging();
+        return Task.CompletedTask;
     }
 }
 
