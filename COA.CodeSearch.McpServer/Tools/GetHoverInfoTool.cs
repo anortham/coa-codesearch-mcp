@@ -11,11 +11,16 @@ public class GetHoverInfoTool
 {
     private readonly ILogger<GetHoverInfoTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
+    private readonly TypeScriptHoverInfoTool _tsHoverTool;
 
-    public GetHoverInfoTool(ILogger<GetHoverInfoTool> logger, CodeAnalysisService workspaceService)
+    public GetHoverInfoTool(
+        ILogger<GetHoverInfoTool> logger, 
+        CodeAnalysisService workspaceService,
+        TypeScriptHoverInfoTool tsHoverTool)
     {
         _logger = logger;
         _workspaceService = workspaceService;
+        _tsHoverTool = tsHoverTool;
     }
 
     public async Task<object> ExecuteAsync(
@@ -27,6 +32,14 @@ public class GetHoverInfoTool
         try
         {
             _logger.LogInformation("GetHoverInfo request for {FilePath} at {Line}:{Column}", filePath, line, column);
+
+            // Check if this is a TypeScript/JavaScript file
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            if (extension == ".ts" || extension == ".tsx" || extension == ".js" || extension == ".jsx" || extension == ".mjs" || extension == ".cjs")
+            {
+                _logger.LogDebug("Delegating to TypeScript hover info for {FilePath}", filePath);
+                return await _tsHoverTool.ExecuteAsync(filePath, line, column, cancellationToken);
+            }
 
             // Get the document
             var document = await _workspaceService.GetDocumentAsync(filePath, cancellationToken);
