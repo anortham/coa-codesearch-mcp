@@ -1,5 +1,4 @@
 using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
@@ -12,7 +11,6 @@ public class FileWatcherService : BackgroundService
     private readonly ILogger<FileWatcherService> _logger;
     private readonly IConfiguration _configuration;
     private readonly FileIndexingService _fileIndexingService;
-    private readonly IServiceProvider _serviceProvider;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
     private readonly ConcurrentDictionary<string, DateTime> _pendingUpdates = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
@@ -25,13 +23,11 @@ public class FileWatcherService : BackgroundService
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
-        FileIndexingService fileIndexingService,
-        IServiceProvider serviceProvider)
+        FileIndexingService fileIndexingService)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
-        _serviceProvider = serviceProvider;
 
         // Load configuration
         _enabled = configuration.GetValue("FileWatcher:Enabled", true);
@@ -113,70 +109,14 @@ public class FileWatcherService : BackgroundService
             return Task.CompletedTask;
         }
 
-        // Start watching previously indexed workspaces
-        _ = Task.Run(async () => await StartWatchingIndexedWorkspaces(), stoppingToken);
-
         // Start the background processing task
+        // Note: Watching of workspaces is initiated by WorkspaceAutoIndexService on startup
+        // and by IndexWorkspaceTool when manually indexing
         _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
         
         return Task.CompletedTask;
     }
 
-    private async Task StartWatchingIndexedWorkspaces()
-    {
-        try
-        {
-            // Wait a bit for services to fully initialize
-            await Task.Delay(2000);
-
-            // Get ILuceneIndexService from DI container
-            using var scope = _serviceProvider.CreateScope();
-            var luceneService = scope.ServiceProvider.GetService<ILuceneIndexService>();
-            
-            if (luceneService == null)
-            {
-                _logger.LogWarning("ILuceneIndexService not available, cannot auto-start watching indexed workspaces");
-                return;
-            }
-
-            // Get all indexed workspaces
-            var indexMappings = luceneService.GetAllIndexMappings();
-            
-            if (indexMappings.Count == 0)
-            {
-                _logger.LogInformation("No previously indexed workspaces found");
-                return;
-            }
-
-            _logger.LogInformation("Found {Count} previously indexed workspaces, starting file watchers", indexMappings.Count);
-
-            foreach (var mapping in indexMappings)
-            {
-                var workspacePath = mapping.Key;
-                
-                // Verify the workspace still exists
-                if (!Directory.Exists(workspacePath))
-                {
-                    _logger.LogWarning("Previously indexed workspace no longer exists: {WorkspacePath}", workspacePath);
-                    continue;
-                }
-
-                try
-                {
-                    StartWatching(workspacePath);
-                    _logger.LogInformation("Auto-started watching previously indexed workspace: {WorkspacePath}", workspacePath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to auto-start watching workspace: {WorkspacePath}", workspacePath);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during startup of file watching for indexed workspaces");
-        }
-    }
 
     private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
     {

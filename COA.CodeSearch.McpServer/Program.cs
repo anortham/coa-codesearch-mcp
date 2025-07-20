@@ -79,6 +79,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
         
+        // Auto-reindex service - runs on startup to catch changes made between sessions
+        services.AddHostedService<WorkspaceAutoIndexService>();
+        
         // Claude Memory System
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<MemoryBackupService>();

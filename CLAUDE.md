@@ -172,6 +172,35 @@ public async Task<ToolResult> ToolName(
 - Test with various project types (.NET Core, Framework, etc.)
 - Memory usage tests for long-running scenarios
 
+## File Watcher and Auto-Indexing
+
+### Auto-Indexing on Startup
+The MCP server now automatically re-indexes all previously indexed workspaces on startup to catch changes made between sessions:
+- Runs 3 seconds after server startup (configurable)
+- Re-indexes each workspace to detect changes made while the server was off
+- Automatically starts file watching after indexing
+- Can be disabled via `WorkspaceAutoIndex:Enabled` in appsettings.json
+
+### File Watcher Improvements
+- **Windows Compatibility**: Fixed file modification detection with expanded NotifyFilter flags
+- **Auto-Start**: File watchers are started automatically after workspace indexing
+- **Real-time Updates**: Index updates as files are created, modified, or deleted
+
+### Configuration
+```json
+{
+  "FileWatcher": {
+    "Enabled": true,
+    "DebounceMilliseconds": 500,
+    "BatchSize": 50
+  },
+  "WorkspaceAutoIndex": {
+    "Enabled": true,
+    "StartupDelayMilliseconds": 3000
+  }
+}
+```
+
 ## Common Tasks
 
 ### 1. **Adding a new navigation feature**
