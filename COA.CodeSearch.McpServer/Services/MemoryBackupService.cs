@@ -5,6 +5,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
+using Serilog;
 
 namespace COA.CodeSearch.McpServer.Services;
 
@@ -105,10 +106,12 @@ public class MemoryBackupService : IDisposable
             using var transaction = connection.BeginTransaction();
             
             _logger.LogDebug("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
+            FileLoggingService.GlobalFileLogger.Debug("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
             foreach (var scope in scopes)
             {
                 var workspace = GetWorkspaceForScope(scope);
                 _logger.LogDebug("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
+                FileLoggingService.GlobalFileLogger.Debug("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
                 var backedUp = await BackupScopeAsync(
                     connection, 
                     transaction, 
@@ -117,6 +120,7 @@ public class MemoryBackupService : IDisposable
                     lastBackupTime,
                     cancellationToken);
                 
+                _logger.LogInformation("BackupMemoriesAsync: Backed up {Count} memories for scope '{Scope}'", backedUp, scope);
                 result.DocumentsBackedUp += backedUp;
             }
             
@@ -207,9 +211,12 @@ public class MemoryBackupService : IDisposable
         try
         {
             _logger.LogDebug("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
+            FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
             
             var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
             _logger.LogDebug("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
+                workspace, searcher.IndexReader.NumDocs);
+            FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
                 workspace, searcher.IndexReader.NumDocs);
         
         // Query for all documents modified since last backup
@@ -241,6 +248,7 @@ public class MemoryBackupService : IDisposable
         var hits = collector.GetTopDocs().ScoreDocs;
         
         _logger.LogDebug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
+        FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
         
         // Debug: Let's check what scopes actually exist in the index
         if (hits.Length == 0)
@@ -305,6 +313,19 @@ public class MemoryBackupService : IDisposable
             var content = doc.Get("content") ?? "";
             var timestamp = doc.GetField("timestamp_ticks")?.GetInt64Value() ?? DateTime.UtcNow.Ticks;
             
+            // Debug logging to understand what's happening
+            var docScope = doc.Get("scope");
+            _logger.LogDebug("BackupScopeAsync: Processing document ID={Id}, Scope={DocScope} (expected: {ExpectedScope})", 
+                id, docScope, scope);
+            
+            // Skip if scope doesn't match (this shouldn't happen, but let's check)
+            if (docScope != scope)
+            {
+                _logger.LogWarning("BackupScopeAsync: Scope mismatch! Document scope '{DocScope}' != expected '{Scope}'", 
+                    docScope, scope);
+                continue;
+            }
+            
             // Build JSON representation of all fields
             var jsonData = JsonSerializer.Serialize(DocumentToDict(doc));
             
@@ -315,8 +336,16 @@ public class MemoryBackupService : IDisposable
             modifiedParam.Value = DateTime.UtcNow.Ticks;
             jsonParam.Value = jsonData;
             
-            await cmd.ExecuteNonQueryAsync(cancellationToken);
-            count++;
+            try
+            {
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+                count++;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to insert/update memory ID={Id}, Scope={Scope}", id, scope);
+                throw;
+            }
         }
         
         return count;

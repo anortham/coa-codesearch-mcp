@@ -40,15 +40,23 @@ var host = Host.CreateDefaultBuilder(args)
         // Redirect console output to stderr
         Console.SetOut(Console.Error);
         
-        logging.AddSimpleConsole(options =>
+        // Only add console logging in non-production environments
+        // In production, we rely on file logging to avoid stdout contamination
+        if (context.HostingEnvironment.IsDevelopment())
         {
-            options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Disabled;
-            options.IncludeScopes = false;
-            options.TimestampFormat = "HH:mm:ss ";
-        });
+            logging.AddSimpleConsole(options =>
+            {
+                options.ColorBehavior = Microsoft.Extensions.Logging.Console.LoggerColorBehavior.Disabled;
+                options.IncludeScopes = false;
+                options.TimestampFormat = "HH:mm:ss ";
+            });
+        }
         
         // Configure logging from appsettings.json which includes namespace-specific levels
         logging.AddConfiguration(context.Configuration.GetSection("Logging"));
+        
+        // Set minimum level to Debug so file logger can control actual output
+        logging.SetMinimumLevel(LogLevel.Debug);
     })
     .ConfigureServices((context, services) =>
     {
@@ -85,8 +93,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<MemoryBackupService>();
         
-        // File Logging Service
+        // File Logging Service - starts automatically as hosted service
         services.AddSingleton<FileLoggingService>();
+        services.AddHostedService(provider => provider.GetRequiredService<FileLoggingService>());
         
         // TypeScript Analysis
         services.AddSingleton<TypeScriptInstaller>();
