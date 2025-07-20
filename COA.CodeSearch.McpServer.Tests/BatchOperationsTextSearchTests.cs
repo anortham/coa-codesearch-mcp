@@ -165,6 +165,11 @@ public class BatchOperationsTextSearchTests : TestBase
         services.AddSingleton<FileIndexingService>();
         services.AddScoped<CodeAnalysisService>();
         
+        // Register TypeScript services
+        services.AddScoped<TypeScriptInstaller>();
+        services.AddScoped<TypeScriptAnalysisService>();
+        services.AddScoped<TypeScriptHoverInfoTool>();
+        
         // Register all tools
         services.AddScoped<FastTextSearchTool>();
         services.AddScoped<GoToDefinitionTool>();
