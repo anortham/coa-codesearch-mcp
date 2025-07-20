@@ -91,6 +91,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TypeScriptAnalysisService>();
         services.AddSingleton<TypeScriptTextAnalysisService>();
         
+        // Initialize TypeScript on startup
+        services.AddHostedService<TypeScriptInitializationService>();
+        
         // Lucene lifecycle management
         services.AddHostedService<LuceneLifecycleService>();
         
