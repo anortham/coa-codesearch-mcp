@@ -42,7 +42,6 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private const string WriteLockFilename = "write.lock";
     private const string SegmentsFilename = "segments.gen";
-    private const string MetadataFilename = "metadata.json";
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
     
     private readonly ConcurrentDictionary<string, IndexMetadata> _metadataCache = new();
