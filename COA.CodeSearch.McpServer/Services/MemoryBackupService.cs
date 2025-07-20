@@ -104,11 +104,11 @@ public class MemoryBackupService : IDisposable
             
             using var transaction = connection.BeginTransaction();
             
-            _logger.LogDebug("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
+            _logger.LogInformation("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
             foreach (var scope in scopes)
             {
                 var workspace = GetWorkspaceForScope(scope);
-                _logger.LogDebug("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
+                _logger.LogInformation("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
                 var backedUp = await BackupScopeAsync(
                     connection, 
                     transaction, 
@@ -206,10 +206,10 @@ public class MemoryBackupService : IDisposable
     {
         try
         {
-            _logger.LogDebug("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
+            _logger.LogInformation("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
             
             var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
-            _logger.LogDebug("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
+            _logger.LogInformation("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
                 workspace, searcher.IndexReader.NumDocs);
         
         // Query for all documents modified since last backup
@@ -218,14 +218,14 @@ public class MemoryBackupService : IDisposable
         {
             // First backup - get everything
             timeQuery = new MatchAllDocsQuery();
-            _logger.LogDebug("BackupScopeAsync: Using MatchAllDocsQuery for initial backup");
+            _logger.LogInformation("BackupScopeAsync: Using MatchAllDocsQuery for initial backup");
         }
         else
         {
             // Incremental - only get modified documents
             var ticks = lastBackupTime.Ticks;
             timeQuery = NumericRangeQuery.NewInt64Range("timestamp_ticks", ticks, long.MaxValue, false, true);
-            _logger.LogDebug("BackupScopeAsync: Using incremental backup from {LastBackup} (ticks: {Ticks})", lastBackupTime, ticks);
+            _logger.LogInformation("BackupScopeAsync: Using incremental backup from {LastBackup} (ticks: {Ticks})", lastBackupTime, ticks);
         }
         
         // Combine with scope filter
@@ -234,24 +234,24 @@ public class MemoryBackupService : IDisposable
         boolQuery.Add(new TermQuery(new Term("scope", scope)), Occur.MUST);
         
         var query = boolQuery;
-        _logger.LogDebug("BackupScopeAsync: Filtering for scope '{Scope}'", scope);
+        _logger.LogInformation("BackupScopeAsync: Filtering for scope '{Scope}'", scope);
         
         var collector = TopScoreDocCollector.Create(10000, true);
         searcher.Search(query, collector);
         var hits = collector.GetTopDocs().ScoreDocs;
         
-        _logger.LogDebug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
+        _logger.LogInformation("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
         
         // Debug: Let's check what scopes actually exist in the index
         if (hits.Length == 0)
         {
-            _logger.LogDebug("BackupScopeAsync: No hits found. Let's check what scopes exist in the index...");
+            _logger.LogInformation("BackupScopeAsync: No hits found. Let's check what scopes exist in the index...");
             var allDocsQuery = new MatchAllDocsQuery();
             var debugCollector = TopScoreDocCollector.Create(100, true);
             searcher.Search(allDocsQuery, debugCollector);
             var debugHits = debugCollector.GetTopDocs().ScoreDocs;
             
-            _logger.LogDebug("BackupScopeAsync: Total documents in index: {DocCount}", debugHits.Length);
+            _logger.LogInformation("BackupScopeAsync: Total documents in index: {DocCount}", debugHits.Length);
             
             var scopesFound = new HashSet<string>();
             var sampleDocs = new List<string>();
@@ -267,10 +267,10 @@ public class MemoryBackupService : IDisposable
                 }
             }
             
-            _logger.LogDebug("BackupScopeAsync: Found scopes in index: {Scopes}", string.Join(", ", scopesFound));
-            _logger.LogDebug("BackupScopeAsync: Sample documents: {Docs}", string.Join("; ", sampleDocs.Take(3)));
-            _logger.LogDebug("BackupScopeAsync: We are searching for scope: '{Scope}'", scope);
-            _logger.LogDebug("BackupScopeAsync: Workspace path: '{Workspace}'", workspace);
+            _logger.LogInformation("BackupScopeAsync: Found scopes in index: {Scopes}", string.Join(", ", scopesFound));
+            _logger.LogInformation("BackupScopeAsync: Sample documents: {Docs}", string.Join("; ", sampleDocs.Take(3)));
+            _logger.LogInformation("BackupScopeAsync: We are searching for scope: '{Scope}'", scope);
+            _logger.LogInformation("BackupScopeAsync: Workspace path: '{Workspace}'", workspace);
         }
         
         if (hits.Length == 0)
