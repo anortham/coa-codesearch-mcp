@@ -9,6 +9,9 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
+// Track server start time for version tool
+Program.ServerStartTime = DateTime.UtcNow;
+
 // Register MSBuild before anything else
 SetupMSBuildEnvironment();
 MSBuildLocator.RegisterDefaults();
@@ -130,6 +133,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
         services.AddSingleton<SetLoggingTool>();
+        services.AddSingleton<GetVersionTool>();
         
         // TypeScript tools
         services.AddSingleton<TypeScriptGoToDefinitionTool>();
@@ -211,4 +215,15 @@ public class ToolRegistrationService : IHostedService
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+}
+
+/// <summary>
+/// Program class to hold static properties
+/// </summary>
+public partial class Program
+{
+    /// <summary>
+    /// Server start time for uptime tracking
+    /// </summary>
+    public static DateTime ServerStartTime { get; set; }
 }

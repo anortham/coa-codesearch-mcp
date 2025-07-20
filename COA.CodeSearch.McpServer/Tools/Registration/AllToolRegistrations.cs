@@ -53,6 +53,9 @@ public static class AllToolRegistrations
         
         // Logging control tool
         RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
+        
+        // Version information tool
+        RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
@@ -1035,5 +1038,24 @@ public static class AllToolRegistrations
         public string? Action { get; set; }
         public string? Level { get; set; }
         public bool? Cleanup { get; set; }
+    }
+    
+    private static void RegisterGetVersion(ToolRegistry registry, GetVersionTool tool)
+    {
+        registry.RegisterTool<object>(
+            name: "get_version",
+            description: "Get the version and build information of the running MCP server. Shows version number, build date, runtime info, and helps identify if running code matches edited code.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new { },
+                required = Array.Empty<string>()
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync();
+                return CreateSuccessResult(result);
+            }
+        );
     }
 }
