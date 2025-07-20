@@ -283,7 +283,7 @@ public static class MemoryToolRegistrations
     
     private static void RegisterMigrateMemories(ToolRegistry registry, MigrateMemoriesTool tool)
     {
-        registry.RegisterTool<EmptyParams>(
+        registry.RegisterTool<object?>(
             name: "migrate_memories_add_ticks",
             description: "Migrate existing memories to add timestamp_ticks field. This is needed for memories created before the backup enhancement. Run this once to fix old memories that aren't being backed up.",
             inputSchema: new
@@ -393,9 +393,5 @@ public static class MemoryToolRegistrations
     private class DiagnoseMemoryIndexParams
     {
         public string? Workspace { get; set; }
-    }
-    
-    private class EmptyParams
-    {
     }
 }
