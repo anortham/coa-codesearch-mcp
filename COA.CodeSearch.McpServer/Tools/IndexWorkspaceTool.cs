@@ -83,22 +83,16 @@ public class IndexWorkspaceTool
             if (forceRebuild && indexExists)
             {
                 _logger.LogInformation("Force rebuild requested, clearing existing index");
-                var indexPath = Path.Combine(workspacePath, ".codesearch");
-                if (Directory.Exists(indexPath))
+                try
                 {
-                    try
-                    {
-                        // Close the index first
-                        _luceneIndexService.Dispose();
-                        await Task.Delay(100); // Brief delay to ensure file handles are released
-                        
-                        Directory.Delete(indexPath, true);
-                        _logger.LogInformation("Cleared existing index at {IndexPath}", indexPath);
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to clear existing index, will overwrite");
-                    }
+                    // Use the service's built-in method to clear the index safely
+                    // This will ONLY clear the specific index directory, not memories or backups
+                    await _luceneIndexService.ClearIndexAsync(workspacePath);
+                    _logger.LogInformation("Cleared existing index for workspace {WorkspacePath}", workspacePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to clear existing index, will overwrite");
                 }
             }
 
