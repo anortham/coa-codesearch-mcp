@@ -8,15 +8,18 @@ public class IndexWorkspaceTool
     private readonly ILogger<IndexWorkspaceTool> _logger;
     private readonly FileIndexingService _fileIndexingService;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly FileWatcherService? _fileWatcherService;
 
     public IndexWorkspaceTool(
         ILogger<IndexWorkspaceTool> logger,
         FileIndexingService fileIndexingService,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        FileWatcherService? fileWatcherService = null)
     {
         _logger = logger;
         _fileIndexingService = fileIndexingService;
         _luceneIndexService = luceneIndexService;
+        _fileWatcherService = fileWatcherService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -108,6 +111,21 @@ public class IndexWorkspaceTool
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("Indexed {Count} files in {Duration:F2} seconds", indexedCount, duration.TotalSeconds);
 
+            // Start file watching for this workspace
+            if (_fileWatcherService != null)
+            {
+                try
+                {
+                    _fileWatcherService.StartWatching(workspacePath);
+                    _logger.LogInformation("Started file watching for workspace: {WorkspacePath}", workspacePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to start file watching for workspace: {WorkspacePath}", workspacePath);
+                    // Don't fail the entire operation if file watching fails
+                }
+            }
+
             return new
             {
                 success = true,
@@ -115,7 +133,8 @@ public class IndexWorkspaceTool
                 workspacePath = workspacePath,
                 filesIndexed = indexedCount,
                 duration = $"{duration.TotalSeconds:F2} seconds",
-                action = forceRebuild ? "rebuilt" : "created"
+                action = forceRebuild ? "rebuilt" : "created",
+                fileWatching = _fileWatcherService != null ? "enabled" : "disabled"
             };
         }
         catch (Exception ex)

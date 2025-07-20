@@ -75,6 +75,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<FileIndexingService>();
         
+        // File watching service
+        services.AddSingleton<FileWatcherService>();
+        services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
+        
         // Claude Memory System
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<MemoryBackupService>();

@@ -266,6 +266,28 @@ public class FileIndexingService
         return await IndexFileAsync(workspacePath, filePath, cancellationToken);
     }
 
+    public async Task<bool> DeleteFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken);
+            
+            // Delete document by file path (using the "id" field)
+            indexWriter.DeleteDocuments(new Term("id", filePath));
+            
+            // Commit the deletion
+            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+            
+            _logger.LogDebug("Deleted file from index: {FilePath}", filePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting file from index: {FilePath}", filePath);
+            return false;
+        }
+    }
+
     private static string GetLanguageFromExtension(string extension)
     {
         return extension.ToLowerInvariant() switch
