@@ -106,12 +106,10 @@ public class MemoryBackupService : IDisposable
             using var transaction = connection.BeginTransaction();
             
             _logger.LogDebug("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
-            FileLoggingService.GlobalFileLogger.Debug("BackupMemoriesAsync: Processing {ScopeCount} scopes", scopes.Length);
             foreach (var scope in scopes)
             {
                 var workspace = GetWorkspaceForScope(scope);
                 _logger.LogDebug("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
-                FileLoggingService.GlobalFileLogger.Debug("BackupMemoriesAsync: Processing scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
                 var backedUp = await BackupScopeAsync(
                     connection, 
                     transaction, 
@@ -211,12 +209,9 @@ public class MemoryBackupService : IDisposable
         try
         {
             _logger.LogDebug("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
-            FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Starting backup for scope '{Scope}' with workspace '{Workspace}'", scope, workspace);
             
             var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
             _logger.LogDebug("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
-                workspace, searcher.IndexReader.NumDocs);
-            FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Got IndexSearcher for workspace '{Workspace}', Reader has {NumDocs} documents", 
                 workspace, searcher.IndexReader.NumDocs);
         
         // Query for all documents modified since last backup
@@ -248,7 +243,6 @@ public class MemoryBackupService : IDisposable
         var hits = collector.GetTopDocs().ScoreDocs;
         
         _logger.LogDebug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
-        FileLoggingService.GlobalFileLogger.Debug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
         
         // Debug: Let's check what scopes actually exist in the index
         if (hits.Length == 0)
