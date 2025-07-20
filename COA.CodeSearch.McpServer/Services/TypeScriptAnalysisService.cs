@@ -510,8 +510,13 @@ public class TypeScriptAnalysisService : IDisposable
         {
             await EnsureServerStartedAsync();
             
+            // Extract request metadata
+            var requestSeq = request.GetType().GetProperty("seq")?.GetValue(request);
+            var requestCommand = request.GetType().GetProperty("command")?.GetValue(request) as string;
+            
             var requestJson = JsonSerializer.Serialize(request);
-            _logger.LogInformation("Sending TypeScript request: {Request}", requestJson);
+            _logger.LogInformation("Sending TypeScript request (command: {Command}, seq: {Seq}): {Request}", 
+                requestCommand ?? "unknown", requestSeq ?? -1, requestJson);
             
             // Write the request with a newline terminator (stdio protocol)
             await _tsServerInput!.WriteLineAsync(requestJson);
@@ -519,7 +524,6 @@ public class TypeScriptAnalysisService : IDisposable
             
             // Read response - tsserver may send multiple messages (events) before the actual response
             string? response = null;
-            var requestSeq = request.GetType().GetProperty("seq")?.GetValue(request);
             
             // Add a timeout to prevent infinite waiting
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
@@ -599,6 +603,23 @@ public class TypeScriptAnalysisService : IDisposable
                             // Log events but continue waiting
                             var eventName = root.TryGetProperty("event", out var e) ? e.GetString() : "unknown";
                             _logger.LogInformation("Received TypeScript event: {Event}", eventName);
+                            
+                            // Special handling for configure request - typingsInstallerPid event indicates success
+                            // Some versions of tsserver send this event without a formal response
+                            if (eventName == "typingsInstallerPid" && requestCommand == "configure")
+                            {
+                                _logger.LogInformation("Received typingsInstallerPid event for configure request - treating as success");
+                                // Return a synthetic success response for configure
+                                var syntheticResponse = JsonDocument.Parse(JsonSerializer.Serialize(new
+                                {
+                                    seq = 0,
+                                    type = "response",
+                                    command = "configure",
+                                    request_seq = requestSeq,
+                                    success = true
+                                }));
+                                return syntheticResponse;
+                            }
                         }
                         else
                         {
