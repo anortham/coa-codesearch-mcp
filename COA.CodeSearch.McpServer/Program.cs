@@ -46,14 +46,9 @@ var host = Host.CreateDefaultBuilder(args)
             options.IncludeScopes = false;
             options.TimestampFormat = "HH:mm:ss ";
         });
-        logging.SetMinimumLevel(LogLevel.Information);
         
-        // Override from config
-        var logLevel = context.Configuration["Logging:LogLevel:Default"];
-        if (Enum.TryParse<LogLevel>(logLevel, out var level))
-        {
-            logging.SetMinimumLevel(level);
-        }
+        // Configure logging from appsettings.json which includes namespace-specific levels
+        logging.AddConfiguration(context.Configuration.GetSection("Logging"));
     })
     .ConfigureServices((context, services) =>
     {
