@@ -412,18 +412,35 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetIndexPath(string workspacePath)
     {
-        var basePath = GetBasePath();
+        var basePath = GetBasePath(); // This returns absolute path like C:\source\COA Roslyn MCP\.codesearch
         
-        // If the workspace path already starts with our base path, it's a memory path - use it directly
-        if (workspacePath.StartsWith(basePath))
+        // Check if this is a memory-related path
+        if (workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase))
         {
-            return workspacePath;
+            // Memory paths should use friendly directory names
+            
+            // If it's already an absolute path, use it
+            if (Path.IsPathRooted(workspacePath))
+            {
+                return workspacePath;
+            }
+            
+            // If it starts with .codesearch, strip it since basePath already includes it
+            if (workspacePath.StartsWith(".codesearch", StringComparison.OrdinalIgnoreCase))
+            {
+                // Remove .codesearch/ or .codesearch\ prefix
+                var memoryPart = workspacePath.Substring(".codesearch".Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                return Path.Combine(basePath, memoryPart);
+            }
+            
+            // Otherwise just append to basePath
+            return Path.Combine(basePath, workspacePath);
         }
         
-        // Normalize to workspace root for consistent indexing
+        // For code project indexes, use hash-based naming for consistency
         var normalizedPath = NormalizeToWorkspaceRoot(workspacePath);
         
-        // Otherwise it's a code search index - use hash-based directory name
+        // Use hash-based directory name for code indexes
         var indexRoot = Path.Combine(basePath, "index");
         var hashPath = GenerateHashPath(normalizedPath);
         var fullPath = Path.Combine(indexRoot, hashPath);
@@ -960,6 +977,14 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         await Task.Run(() => ClearIndex(indexPath), cancellationToken);
         
         _logger.LogInformation("Cleared index for workspace {WorkspacePath}", workspacePath);
+    }
+    
+    /// <summary>
+    /// Get the physical index path for a workspace - single source of truth for path resolution
+    /// </summary>
+    public string GetPhysicalIndexPath(string workspacePath)
+    {
+        return GetIndexPath(workspacePath);
     }
     
     #endregion

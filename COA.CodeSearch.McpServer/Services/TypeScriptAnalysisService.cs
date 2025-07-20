@@ -471,6 +471,49 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
+    /// Ensure a file is opened and synchronized with tsserver
+    /// </summary>
+    private async Task<bool> EnsureFileOpenAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var normalizedPath = NormalizePathForTypeScript(filePath);
+            
+            // Read the file content
+            var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+            
+            // Send open request with file content
+            var openRequest = new
+            {
+                seq = Interlocked.Increment(ref _requestSequence),
+                type = "request",
+                command = "open",
+                arguments = new
+                {
+                    file = normalizedPath,
+                    fileContent = fileContent,
+                    projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
+                }
+            };
+            
+            var response = await SendRequestAsync(openRequest, cancellationToken);
+            if (response == null)
+            {
+                _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+                return false;
+            }
+            
+            _logger.LogDebug("Successfully opened file {File} in TypeScript server", filePath);
+            return true;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to ensure file {File} is open", filePath);
+            return false;
+        }
+    }
+
+    /// <summary>
     /// Open a TypeScript project
     /// </summary>
     public async Task<bool> OpenProjectAsync(string projectPath, CancellationToken cancellationToken = default)
@@ -500,34 +543,74 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
+    /// Convert a 1-based column number to a 1-based character offset for tsserver
+    /// </summary>
+    private async Task<int> ConvertColumnToOffsetAsync(string filePath, int line, int column)
+    {
+        try
+        {
+            // Read the specific line from the file
+            var lines = await File.ReadAllLinesAsync(filePath);
+            if (line > lines.Length || line < 1)
+            {
+                _logger.LogWarning("Line {Line} is out of range for file {File}", line, filePath);
+                return column; // Fallback to column
+            }
+            
+            // Get the line content (0-based index)
+            var lineContent = lines[line - 1];
+            
+            // Calculate offset: For tsserver, offset is 1-based position in the line
+            // Column is also 1-based, so we need to handle tab expansion
+            var offset = 1;
+            var visualColumn = 1;
+            
+            for (int i = 0; i < lineContent.Length && visualColumn < column; i++)
+            {
+                if (lineContent[i] == '\t')
+                {
+                    // Tab typically expands to next multiple of 4 (or 8)
+                    // But for character offset, we count it as 1
+                    visualColumn += 4 - ((visualColumn - 1) % 4);
+                }
+                else
+                {
+                    visualColumn++;
+                }
+                offset++;
+            }
+            
+            _logger.LogDebug("Converted column {Column} to offset {Offset} for line: {Line}", column, offset, lineContent);
+            return offset;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to convert column to offset for {File}:{Line}:{Column}", filePath, line, column);
+            return column; // Fallback
+        }
+    }
+
+    /// <summary>
     /// Get definition location for a symbol at a given position
     /// </summary>
     public async Task<TypeScriptLocation?> GetDefinitionAsync(
         string filePath, 
         int line, 
-        int offset, 
+        int column, 
         CancellationToken cancellationToken = default)
     {
+        // Convert column to offset for tsserver
+        var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
+        
         // Normalize the file path for TypeScript (forward slashes)
         var normalizedPath = NormalizePathForTypeScript(filePath);
         
-        // First ensure the file is opened in tsserver
-        var openRequest = new
+        // First ensure the file is opened and synchronized in tsserver
+        var fileOpened = await EnsureFileOpenAsync(filePath, cancellationToken);
+        if (!fileOpened)
         {
-            seq = Interlocked.Increment(ref _requestSequence),
-            type = "request",
-            command = "open",
-            arguments = new
-            {
-                file = normalizedPath,
-                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
-            }
-        };
-        
-        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
-        if (openResponse == null)
-        {
-            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+            _logger.LogError("Failed to open file {File} in TypeScript server", filePath);
+            return null;
         }
         
         var request = new
@@ -574,31 +657,22 @@ public class TypeScriptAnalysisService : IDisposable
     public async Task<List<TypeScriptLocation>> FindReferencesAsync(
         string filePath,
         int line,
-        int offset,
+        int column,
         CancellationToken cancellationToken = default)
     {
+        // Convert column to offset for tsserver
+        var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
         var references = new List<TypeScriptLocation>();
         
         // Normalize the file path for TypeScript (forward slashes)
         var normalizedPath = NormalizePathForTypeScript(filePath);
         
-        // First ensure the file is opened in tsserver
-        var openRequest = new
+        // First ensure the file is opened and synchronized in tsserver
+        var fileOpened = await EnsureFileOpenAsync(filePath, cancellationToken);
+        if (!fileOpened)
         {
-            seq = Interlocked.Increment(ref _requestSequence),
-            type = "request",
-            command = "open",
-            arguments = new
-            {
-                file = normalizedPath,
-                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
-            }
-        };
-        
-        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
-        if (openResponse == null)
-        {
-            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+            _logger.LogError("Failed to open file {File} in TypeScript server", filePath);
+            return references; // Return empty list
         }
         
         var request = new
@@ -648,29 +722,21 @@ public class TypeScriptAnalysisService : IDisposable
     public async Task<object?> GetQuickInfoAsync(
         string filePath,
         int line,
-        int offset,
+        int column,
         CancellationToken cancellationToken = default)
     {
+        // Convert column to offset for tsserver
+        var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
+        
         // Normalize the file path for TypeScript (forward slashes)
         var normalizedPath = NormalizePathForTypeScript(filePath);
         
-        // First ensure the file is opened in tsserver
-        var openRequest = new
+        // First ensure the file is opened and synchronized in tsserver
+        var fileOpened = await EnsureFileOpenAsync(filePath, cancellationToken);
+        if (!fileOpened)
         {
-            seq = Interlocked.Increment(ref _requestSequence),
-            type = "request",
-            command = "open",
-            arguments = new
-            {
-                file = normalizedPath,
-                projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
-            }
-        };
-        
-        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
-        if (openResponse == null)
-        {
-            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+            _logger.LogError("Failed to open file {File} in TypeScript server", filePath);
+            return null;
         }
         
         var request = new

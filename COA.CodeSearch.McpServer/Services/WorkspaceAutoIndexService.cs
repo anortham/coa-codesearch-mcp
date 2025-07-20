@@ -67,6 +67,13 @@ public class WorkspaceAutoIndexService : BackgroundService
             {
                 var workspacePath = mapping.Key;
                 
+                // CRITICAL: Skip memory indexes - they should NEVER be re-indexed as code directories
+                if (workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Skipping memory index path from auto-indexing: {WorkspacePath}", workspacePath);
+                    continue;
+                }
+                
                 // Verify the workspace still exists
                 if (!Directory.Exists(workspacePath))
                 {

@@ -46,7 +46,7 @@ dotnet list package --outdated
 
 ### MCP Server Commands
 ```bash
-# Run server in STDIO mode for Claude Desktop
+# Run server in STDIO mode for Claude Code
 dotnet run -- stdio
 
 # Run server with verbose logging
@@ -92,10 +92,10 @@ COA.CodeSearch.McpServer/
 - Cached semantic models
 
 ### 2. **MCP Implementation**
-- STDIO transport for Claude Desktop integration
-- Strongly-typed tools using [McpTool] attributes
+- STDIO transport for Claude Code integration
+- Strongly-typed tools with manual registration via ToolRegistry
 - Resources for read-only data access
-- Structured error handling
+- Structured error handling with protocol-level wrapping
 
 ### 3. **Performance Optimizations**
 - Native AOT compilation for faster startup
@@ -135,33 +135,128 @@ COA.CodeSearch.McpServer/
 - Document public APIs with XML comments
 
 ### MCP Tool Implementation Pattern
+
+Tools in this project follow a functional registration pattern:
+
+#### 1. Tool Class Implementation
 ```csharp
-[McpTool("tool_name")]
-[Description("Clear description of what this tool does")]
-public async Task<ToolResult> ToolName(
-    [Description("Parameter description")] string param1,
-    [Description("Optional parameter")] string? param2 = null)
+public class MyTool
 {
-    try
+    private readonly ILogger<MyTool> _logger;
+    private readonly ICodeAnalysisService _codeAnalysisService;
+    
+    public MyTool(ILogger<MyTool> logger, ICodeAnalysisService codeAnalysisService)
+    {
+        _logger = logger;
+        _codeAnalysisService = codeAnalysisService;
+    }
+    
+    public async Task<MyResult> ExecuteAsync(string param1, string? param2 = null)
+    {
+        try
+        {
+            // Tool implementation logic
+            return new MyResult { /* results */ };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in MyTool");
+            throw; // Let registration layer handle error wrapping
+        }
+    }
+}
+```
+
+#### 2. Tool Registration (in AllToolRegistrations.cs)
+```csharp
+private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
+{
+    registry.RegisterTool<MyToolParams>(
+        name: "my_tool",
+        description: "Clear description of what this tool does",
+        inputSchema: new
+        {
+            type = "object",
+            properties = new
+            {
+                param1 = new { type = "string", description = "Parameter description" },
+                param2 = new { type = "string", description = "Optional parameter" }
+            },
+            required = new[] { "param1" }
+        },
+        handler: async (parameters, ct) =>
+        {
+            var result = await tool.ExecuteAsync(parameters.Param1, parameters.Param2);
+            return CreateSuccessResult(result);
+        }
+    );
+}
+```
+
+#### 3. Parameter Model
+```csharp
+public class MyToolParams
+{
+    public required string Param1 { get; set; }
+    public string? Param2 { get; set; }
+}
+```
+
+### Base Classes for Tools
+
+#### McpToolBase
+For tools that need token limit handling and response optimization:
+```csharp
+public class MyTool : McpToolBase
+{
+    protected override int MaxTokens => 10000; // Override default limit
+    
+    public async Task<object> ExecuteAsync(params)
     {
         // Implementation
-        return new ToolResult { Success = true, Data = result };
+        return CreateResponse(data, estimatedTokens);
     }
-    catch (Exception ex)
+}
+```
+
+#### ClaudeOptimizedToolBase
+For v2 tools with progressive disclosure and smart summaries:
+```csharp
+public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
+{
+    protected override async Task<MyData> GetFullDataAsync(params)
     {
-        _logger.LogError(ex, "Error in ToolName");
-        return new ToolResult { Success = false, Error = ex.Message };
+        // Get all data
+    }
+    
+    protected override SummaryData CreateSummary(MyData fullData, int estimatedTokens)
+    {
+        // Create smart summary with insights
     }
 }
 ```
 
 ### Adding New Tools
 
-1. Create a new class in the Tools folder
-2. Inherit from `McpToolBase` or implement `IMcpTool`
-3. Add the `[McpTool]` attribute with a unique name
-4. Implement the tool logic using Roslyn APIs
-5. Register in DI container in Program.cs
+1. Create a new tool class in the Tools folder
+   - Inherit from `McpToolBase` or `ClaudeOptimizedToolBase` for advanced features (optional)
+   - Implement an `ExecuteAsync` method with your tool logic
+   - Inject required services via constructor
+
+2. Create a parameter model class for strongly-typed parameters
+
+3. Add registration method in `AllToolRegistrations.cs`:
+   - Define the tool name, description, and JSON schema
+   - Create handler that calls your tool's ExecuteAsync method
+   - Wrap results using `CreateSuccessResult` or `CreateErrorResult`
+
+4. Register the tool in DI container in `Program.cs`:
+   ```csharp
+   services.AddSingleton<MyTool>();
+   ```
+
+5. Call your registration method in `AllToolRegistrations.RegisterAll()`
+
 6. Add integration tests
 
 ### Testing Strategy
@@ -175,7 +270,7 @@ public async Task<ToolResult> ToolName(
 ## File Watcher and Auto-Indexing
 
 ### Auto-Indexing on Startup
-The MCP server now automatically re-indexes all previously indexed workspaces on startup to catch changes made between sessions:
+The `WorkspaceAutoIndexService` automatically re-indexes all previously indexed workspaces on startup:
 - Runs 3 seconds after server startup (configurable)
 - Re-indexes each workspace to detect changes made while the server was off
 - Automatically starts file watching after indexing
@@ -185,6 +280,7 @@ The MCP server now automatically re-indexes all previously indexed workspaces on
 - **Windows Compatibility**: Fixed file modification detection with expanded NotifyFilter flags
 - **Auto-Start**: File watchers are started automatically after workspace indexing
 - **Real-time Updates**: Index updates as files are created, modified, or deleted
+- **Debouncing**: Batches rapid file changes to avoid excessive re-indexing
 
 ### Configuration
 ```json
@@ -298,20 +394,15 @@ Claude: "Review hotspots" (uses cached detail request)
 - Symbol search: < 100ms for prefix match
 - Memory usage: < 500MB for typical solution
 
-## Integration with Claude Desktop
+## Integration with Claude Code
+
+The MCP server is integrated with Claude Code differently than Claude Desktop:
 
 1. Build the server: `dotnet publish -c Release`
-2. Add to Claude Desktop config:
-```json
-{
-  "mcpServers": {
-    "codesearch": {
-      "command": "C:\\path\\to\\COA.CodeSearch.McpServer.exe",
-      "args": ["stdio"]
-    }
-  }
-}
-```
+2. Follow Claude Code's MCP server integration process
+3. The server runs in STDIO mode for communication
+
+Note: Claude Code manages MCP servers through its own configuration system, not through manual JSON configuration files.
 
 ## Troubleshooting
 
@@ -391,7 +482,7 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 # 3. Drill down as needed using provided commands
 ```
 
-# Future Enhancements
+## Future Enhancements
 
 - WebSocket transport for remote deployment
 - Integration with OmniSharp for additional features
@@ -433,30 +524,34 @@ Example workflow:
 ## TypeScript Support
 
 ### Automatic Installation
-TypeScript support is automatically configured on first use:
-1. Checks for existing TypeScript installation
+TypeScript support is automatically configured on server startup:
+1. `TypeScriptInitializationService` checks for existing TypeScript installation
 2. Downloads and installs TypeScript + tsserver if needed
-3. Caches installation for future sessions
+3. Caches installation in local app data for future sessions
+4. Validates installation and starts tsserver process
 
 ### TypeScript Tools
 - `search_typescript` - Search for TypeScript symbols
+- `typescript_go_to_definition` - Navigate to TypeScript definitions using tsserver
+- `typescript_find_references` - Find TypeScript references using tsserver
 - `GoToDefinition` - Automatically delegates to TypeScript for .ts/.js files
 - `FindReferences` - Works seamlessly across C# and TypeScript
+- `GetHoverInfo` - Shows type information and documentation for TypeScript symbols
 
-### Fast Text Search - Straight Blazin' Performance
+## Fast Text Search - Blazing Performance
 
 #### Index Management
 - `index_workspace` - Build search index (required before fast_text_search)
 - Indexes are cached in `.codesearch/index/{hash}` directories
 - Automatic index updates on file changes
 
-#### Blazin' Fast Search Tools
-- `fast_text_search` - Straight blazin' fast text search across millions of lines in milliseconds
+### Fast Search Tools
+- `fast_text_search` - Blazing fast text search across millions of lines in milliseconds
   - Supports wildcards (*), fuzzy (~), exact phrases (""), and regex patterns
   - Context lines for better understanding
   - File pattern filtering (e.g., *.cs, src/**/*.ts)
 
-- `fast_file_search` - Straight blazin' fast file search with fuzzy matching and typo correction
+- `fast_file_search` - Blazing fast file search with fuzzy matching and typo correction
   - Find files by name with typo tolerance (e.g., "UserServce" finds "UserService.cs")
   - Supports wildcards, fuzzy matching, exact, and regex modes
   - Performance: < 10ms for most searches

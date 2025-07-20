@@ -20,7 +20,7 @@ public class ClaudeMemoryService : IDisposable
 {
     private readonly ILogger<ClaudeMemoryService> _logger;
     private readonly MemoryConfiguration _config;
-    private readonly ILuceneWriterManager _indexService;
+    private readonly ILuceneIndexService _indexService;
     
     // Workspace paths for project and local memories
     private readonly string _projectMemoryWorkspace;
@@ -34,7 +34,7 @@ public class ClaudeMemoryService : IDisposable
     public ClaudeMemoryService(
         ILogger<ClaudeMemoryService> logger, 
         IConfiguration configuration,
-        ILuceneWriterManager indexService)
+        ILuceneIndexService indexService)
     {
         _logger = logger;
         _config = configuration.GetSection("ClaudeMemory").Get<MemoryConfiguration>() ?? new MemoryConfiguration();
@@ -63,9 +63,9 @@ public class ClaudeMemoryService : IDisposable
             var document = CreateLuceneDocument(memory);
             var workspacePath = IsProjectScope(memory.Scope) ? _projectMemoryWorkspace : _localMemoryWorkspace;
             
-            var writer = _indexService.GetOrCreateWriter(workspacePath);
+            var writer = await _indexService.GetIndexWriterAsync(workspacePath);
             writer.AddDocument(document);
-            writer.Commit();
+            await _indexService.CommitAsync(workspacePath);
             
             var scopeType = IsProjectScope(memory.Scope) ? "project" : "local";
             _logger.LogInformation("Stored {ScopeType} memory: {Content}", scopeType, memory.Content[..Math.Min(50, memory.Content.Length)]);
@@ -202,22 +202,15 @@ public class ClaudeMemoryService : IDisposable
     {
         var memories = new List<MemoryEntry>();
         
-        // Get the index path from the workspace
-        var indexPath = GetIndexPath(workspacePath);
-        
-        // Check if index exists
-        if (!System.IO.Directory.Exists(indexPath))
-        {
-            _logger.LogDebug("No index found at {IndexPath} for workspace {WorkspacePath}", indexPath, workspacePath);
-            return memories;
-        }
-        
-        using var directory = FSDirectory.Open(indexPath);
-        
         try
         {
-            using var reader = DirectoryReader.Open(directory);
-            var searcher = new IndexSearcher(reader);
+            // Use LuceneIndexService to get the searcher - single source of truth for paths
+            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
+            if (searcher == null)
+            {
+                _logger.LogDebug("No index searcher available for workspace {WorkspacePath}", workspacePath);
+                return memories;
+            }
             var parser = new QueryParser(LuceneVersion.LUCENE_48, "content", _analyzer);
             
             // Build query
@@ -349,28 +342,7 @@ public class ClaudeMemoryService : IDisposable
         return keywords;
     }
     
-    private string GetIndexPath(string workspacePath)
-    {
-        // Need to resolve to the actual hashed index path that LuceneIndexService uses
-        // The LuceneIndexService stores indexes in .codesearch/index/{hash}
-        using var sha256 = System.Security.Cryptography.SHA256.Create();
-        var bytes = sha256.ComputeHash(System.Text.Encoding.UTF8.GetBytes(workspacePath));
-        var hash = BitConverter.ToString(bytes).Replace("-", "").ToLowerInvariant().Substring(0, 8);
-        
-        var basePath = _config.BasePath;
-        if (!Path.IsPathRooted(basePath))
-        {
-            // Find project root by looking for .git directory
-            var projectRoot = FindProjectRoot(Environment.CurrentDirectory);
-            
-            // Fall back to current directory if no .git found
-            var baseDirectory = projectRoot ?? Environment.CurrentDirectory;
-            
-            basePath = Path.Combine(baseDirectory, basePath);
-        }
-        
-        return Path.Combine(basePath, "index", hash);
-    }
+    // REMOVED: GetIndexPath method - now using ILuceneIndexService.GetPhysicalIndexPath() as single source of truth
     
     private string? FindProjectRoot(string startPath)
     {
@@ -398,23 +370,15 @@ public class ClaudeMemoryService : IDisposable
     
     public void Dispose()
     {
-        // Close writers through the index service
+        // Commit any pending changes
         try
         {
-            _indexService.CloseWriter(_projectMemoryWorkspace, commit: true);
+            _indexService.CommitAsync(_projectMemoryWorkspace).Wait();
+            _indexService.CommitAsync(_localMemoryWorkspace).Wait();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error closing project memory writer");
-        }
-        
-        try
-        {
-            _indexService.CloseWriter(_localMemoryWorkspace, commit: true);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error closing local memory writer");
+            _logger.LogError(ex, "Error committing memory indexes during dispose");
         }
         
         _analyzer?.Dispose();

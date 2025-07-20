@@ -13,4 +13,9 @@ public interface ILuceneIndexService : IDisposable
     Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
     Dictionary<string, string> GetAllIndexMappings();
+    
+    /// <summary>
+    /// Get the physical index path for a workspace - single source of truth for path resolution
+    /// </summary>
+    string GetPhysicalIndexPath(string workspacePath);
 }
