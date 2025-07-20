@@ -276,7 +276,7 @@ public class TypeScriptAnalysisService : IDisposable
         var startInfo = new ProcessStartInfo
         {
             FileName = _nodeExecutable,
-            Arguments = $"\"{_tsServerPath}\" --stdio",
+            Arguments = $"\"{_tsServerPath}\"",
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
