@@ -213,20 +213,28 @@ public class MemoryBackupService : IDisposable
                 workspace, searcher.IndexReader.NumDocs);
         
         // Query for all documents modified since last backup
-        Query query;
+        Query timeQuery;
         if (lastBackupTime == DateTime.MinValue)
         {
             // First backup - get everything
-            query = new MatchAllDocsQuery();
+            timeQuery = new MatchAllDocsQuery();
             _logger.LogDebug("BackupScopeAsync: Using MatchAllDocsQuery for initial backup");
         }
         else
         {
             // Incremental - only get modified documents
             var ticks = lastBackupTime.Ticks;
-            query = NumericRangeQuery.NewInt64Range("timestamp_ticks", ticks, long.MaxValue, false, true);
+            timeQuery = NumericRangeQuery.NewInt64Range("timestamp_ticks", ticks, long.MaxValue, false, true);
             _logger.LogDebug("BackupScopeAsync: Using incremental backup from {LastBackup}", lastBackupTime);
         }
+        
+        // Combine with scope filter
+        var boolQuery = new BooleanQuery();
+        boolQuery.Add(timeQuery, Occur.MUST);
+        boolQuery.Add(new TermQuery(new Term("scope", scope)), Occur.MUST);
+        
+        var query = boolQuery;
+        _logger.LogDebug("BackupScopeAsync: Filtering for scope '{Scope}'", scope);
         
         var collector = TopScoreDocCollector.Create(10000, true);
         searcher.Search(query, collector);
