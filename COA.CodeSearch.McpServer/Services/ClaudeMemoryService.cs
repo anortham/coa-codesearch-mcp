@@ -360,21 +360,40 @@ public class ClaudeMemoryService : IDisposable
         var basePath = _config.BasePath;
         if (!Path.IsPathRooted(basePath))
         {
-            // Use application base directory instead of searching for .git
-            // This ensures indexes are always stored relative to the MCP server location
-            var appBasePath = AppContext.BaseDirectory;
+            // Find project root by looking for .git directory
+            var projectRoot = FindProjectRoot(Environment.CurrentDirectory);
             
-            // If running from bin directory, go up to project root
-            if (appBasePath.Contains("\\bin\\", StringComparison.OrdinalIgnoreCase))
-            {
-                var binIndex = appBasePath.LastIndexOf("\\bin\\", StringComparison.OrdinalIgnoreCase);
-                appBasePath = appBasePath.Substring(0, binIndex);
-            }
+            // Fall back to current directory if no .git found
+            var baseDirectory = projectRoot ?? Environment.CurrentDirectory;
             
-            basePath = Path.Combine(appBasePath, basePath);
+            basePath = Path.Combine(baseDirectory, basePath);
         }
         
         return Path.Combine(basePath, "index", hash);
+    }
+    
+    private string? FindProjectRoot(string startPath)
+    {
+        var currentPath = startPath;
+        
+        while (!string.IsNullOrEmpty(currentPath))
+        {
+            var gitPath = Path.Combine(currentPath, ".git");
+            if (System.IO.Directory.Exists(gitPath))
+            {
+                _logger.LogDebug("Found .git directory at {Path}, using as project root", currentPath);
+                return currentPath;
+            }
+            
+            var parent = System.IO.Directory.GetParent(currentPath);
+            if (parent == null)
+                break;
+                
+            currentPath = parent.FullName;
+        }
+        
+        _logger.LogDebug("No .git directory found, using current directory as base");
+        return null;
     }
     
     public void Dispose()
