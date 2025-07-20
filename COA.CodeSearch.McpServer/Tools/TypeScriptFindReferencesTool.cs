@@ -30,6 +30,18 @@ public class TypeScriptFindReferencesTool
         {
             _logger.LogInformation("TypeScript FindReferences: {File}:{Line}:{Column}", filePath, line, column);
 
+            // Check if TypeScript server is available
+            if (!_tsService.IsAvailable)
+            {
+                _logger.LogWarning("TypeScript server is not available. Node.js may not be installed or TypeScript may not be configured.");
+                return new
+                {
+                    success = false,
+                    error = "TypeScript server is not available. Please ensure Node.js is installed and in PATH.",
+                    hint = "TypeScript features require Node.js. Install Node.js from https://nodejs.org/ and restart the MCP server."
+                };
+            }
+
             // Ensure the file exists
             if (!File.Exists(filePath))
             {
