@@ -420,13 +420,16 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             return workspacePath;
         }
         
+        // Normalize to workspace root for consistent indexing
+        var normalizedPath = NormalizeToWorkspaceRoot(workspacePath);
+        
         // Otherwise it's a code search index - use hash-based directory name
         var indexRoot = Path.Combine(basePath, "index");
-        var hashPath = GenerateHashPath(workspacePath);
+        var hashPath = GenerateHashPath(normalizedPath);
         var fullPath = Path.Combine(indexRoot, hashPath);
         
-        // Update metadata
-        UpdateMetadata(workspacePath, hashPath);
+        // Update metadata with the normalized path
+        UpdateMetadata(normalizedPath, hashPath);
         
         return fullPath;
     }
@@ -472,6 +475,48 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         
         _logger.LogDebug("No .git directory found, using current directory as base");
         return null;
+    }
+    
+    /// <summary>
+    /// Normalizes any path (file or directory) to its workspace root.
+    /// This ensures we always use the project root for indexing, not individual files or subdirectories.
+    /// </summary>
+    private string NormalizeToWorkspaceRoot(string path)
+    {
+        // Get the absolute path
+        var absolutePath = Path.GetFullPath(path);
+        
+        // If it's a file, get its directory
+        string searchPath;
+        if (File.Exists(absolutePath))
+        {
+            searchPath = Path.GetDirectoryName(absolutePath) ?? absolutePath;
+            _logger.LogDebug("Path {Path} is a file, using directory {Directory} for root search", absolutePath, searchPath);
+        }
+        else
+        {
+            searchPath = absolutePath;
+        }
+        
+        // Find the project root from this path
+        var projectRoot = FindProjectRoot(searchPath);
+        
+        if (projectRoot != null)
+        {
+            _logger.LogDebug("Normalized path {Path} to workspace root {Root}", path, projectRoot);
+            return projectRoot;
+        }
+        
+        // If no project root found, use the directory itself (not individual files)
+        if (File.Exists(absolutePath))
+        {
+            var directory = Path.GetDirectoryName(absolutePath) ?? absolutePath;
+            _logger.LogDebug("No project root found for file {Path}, using directory {Directory}", absolutePath, directory);
+            return directory;
+        }
+        
+        _logger.LogDebug("No project root found for {Path}, using as-is", absolutePath);
+        return absolutePath;
     }
     
     private string GenerateHashPath(string workspacePath)
