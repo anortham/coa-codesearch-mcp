@@ -242,6 +242,30 @@ public class MemoryBackupService : IDisposable
         
         _logger.LogDebug("BackupScopeAsync: Found {HitCount} documents to backup for scope '{Scope}'", hits.Length, scope);
         
+        // Debug: Let's check what scopes actually exist in the index
+        if (hits.Length == 0)
+        {
+            _logger.LogDebug("BackupScopeAsync: No hits found. Let's check what scopes exist in the index...");
+            var allDocsQuery = new MatchAllDocsQuery();
+            var debugCollector = TopScoreDocCollector.Create(100, true);
+            searcher.Search(allDocsQuery, debugCollector);
+            var debugHits = debugCollector.GetTopDocs().ScoreDocs;
+            
+            var scopesFound = new HashSet<string>();
+            foreach (var hit in debugHits.Take(20)) // Check first 20 docs
+            {
+                var doc = searcher.Doc(hit.Doc);
+                var docScope = doc.Get("scope");
+                if (!string.IsNullOrEmpty(docScope))
+                {
+                    scopesFound.Add(docScope);
+                }
+            }
+            
+            _logger.LogDebug("BackupScopeAsync: Found scopes in index: {Scopes}", string.Join(", ", scopesFound));
+            _logger.LogDebug("BackupScopeAsync: We are searching for scope: '{Scope}'", scope);
+        }
+        
         if (hits.Length == 0)
             return 0;
         
