@@ -68,14 +68,25 @@ public class FastTextSearchTool
                 };
             }
             
-            // Log warning if a file path is passed instead of a directory
+            // Handle file paths by converting to directory paths
+            string effectiveWorkspacePath = workspacePath;
             if (File.Exists(workspacePath))
             {
                 _logger.LogWarning("File path provided as workspace: {FilePath}. Will use parent directory or project root for indexing.", workspacePath);
+                
+                // Get the parent directory or project root
+                var directory = Path.GetDirectoryName(workspacePath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    // Try to find project root (containing .csproj, .sln, etc.)
+                    var projectRoot = FindProjectRoot(directory);
+                    effectiveWorkspacePath = projectRoot ?? directory;
+                    _logger.LogInformation("Resolved file path to workspace: {EffectiveWorkspacePath}", effectiveWorkspacePath);
+                }
             }
 
             // Ensure the directory is indexed first
-            if (!await EnsureIndexedAsync(workspacePath, cancellationToken))
+            if (!await EnsureIndexedAsync(effectiveWorkspacePath, cancellationToken))
             {
                 return new
                 {
@@ -84,9 +95,9 @@ public class FastTextSearchTool
                 };
             }
 
-            // Get the searcher
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
-            var analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
+            // Get the searcher - use effective workspace path
+            var searcher = await _luceneIndexService.GetIndexSearcherAsync(effectiveWorkspacePath, cancellationToken);
+            var analyzer = await _luceneIndexService.GetAnalyzerAsync(effectiveWorkspacePath, cancellationToken);
 
             // Build the query
             var luceneQuery = BuildQuery(query, searchType, caseSensitive, filePattern, extensions, analyzer);
@@ -207,15 +218,28 @@ public class FastTextSearchTool
     {
         try
         {
+            // Normalize the workspace path to avoid individual file indexing
+            string effectiveWorkspacePath = workspacePath;
+            if (File.Exists(workspacePath))
+            {
+                var directory = Path.GetDirectoryName(workspacePath);
+                if (!string.IsNullOrEmpty(directory))
+                {
+                    var projectRoot = FindProjectRoot(directory);
+                    effectiveWorkspacePath = projectRoot ?? directory;
+                    _logger.LogDebug("EnsureIndexedAsync: Resolved file path to workspace: {EffectiveWorkspacePath}", effectiveWorkspacePath);
+                }
+            }
+            
             // Check if index exists and is recent
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            var searcher = await _luceneIndexService.GetIndexSearcherAsync(effectiveWorkspacePath, cancellationToken);
             var indexReader = searcher.IndexReader;
             
             // If index is empty or very small, reindex
             if (indexReader.NumDocs < 10)
             {
-                _logger.LogInformation("Index is empty or small, performing initial indexing for {WorkspacePath}", workspacePath);
-                await _fileIndexingService.IndexDirectoryAsync(workspacePath, workspacePath, cancellationToken);
+                _logger.LogInformation("Index is empty or small, performing initial indexing for {WorkspacePath}", effectiveWorkspacePath);
+                await _fileIndexingService.IndexDirectoryAsync(effectiveWorkspacePath, effectiveWorkspacePath, cancellationToken);
             }
             
             return true;
@@ -227,7 +251,19 @@ public class FastTextSearchTool
             // Try to create a new index
             try
             {
-                await _fileIndexingService.IndexDirectoryAsync(workspacePath, workspacePath, cancellationToken);
+                // Normalize here too
+                string effectiveWorkspacePath = workspacePath;
+                if (File.Exists(workspacePath))
+                {
+                    var directory = Path.GetDirectoryName(workspacePath);
+                    if (!string.IsNullOrEmpty(directory))
+                    {
+                        var projectRoot = FindProjectRoot(directory);
+                        effectiveWorkspacePath = projectRoot ?? directory;
+                    }
+                }
+                
+                await _fileIndexingService.IndexDirectoryAsync(effectiveWorkspacePath, effectiveWorkspacePath, cancellationToken);
                 return true;
             }
             catch
@@ -317,6 +353,62 @@ public class FastTextSearchTool
         }
         
         return escapedQuery;
+    }
+
+    /// <summary>
+    /// Find the project root directory by looking for common project markers
+    /// </summary>
+    private string? FindProjectRoot(string startPath)
+    {
+        var currentPath = startPath;
+        
+        while (!string.IsNullOrEmpty(currentPath))
+        {
+            // Check for various project root indicators
+            var projectIndicators = new[]
+            {
+                ".git",
+                "*.sln",
+                "*.csproj",
+                "package.json",
+                "tsconfig.json",
+                "Cargo.toml",
+                "go.mod"
+            };
+            
+            foreach (var indicator in projectIndicators)
+            {
+                if (indicator.Contains('*'))
+                {
+                    // It's a pattern, check for files
+                    var files = Directory.GetFiles(currentPath, indicator);
+                    if (files.Length > 0)
+                    {
+                        _logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
+                        return currentPath;
+                    }
+                }
+                else
+                {
+                    // It's a directory or file name
+                    var indicatorPath = Path.Combine(currentPath, indicator);
+                    if (Directory.Exists(indicatorPath) || File.Exists(indicatorPath))
+                    {
+                        _logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
+                        return currentPath;
+                    }
+                }
+            }
+            
+            var parent = Directory.GetParent(currentPath);
+            if (parent == null)
+                break;
+                
+            currentPath = parent.FullName;
+        }
+        
+        _logger.LogDebug("No project root indicators found, will use parent directory");
+        return null;
     }
 
     private class SearchResult
