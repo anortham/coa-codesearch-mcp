@@ -383,13 +383,20 @@ public class MemoryBackupService : IDisposable
     
     private string GetWorkspaceForScope(string scope)
     {
+        // Build the workspace path that will be resolved by ILuceneIndexService
+        // This must match the logic in ClaudeMemoryService.IsProjectScope for consistency
         var basePath = _configuration["ClaudeMemory:BasePath"] ?? ".codesearch";
-        return scope switch
-        {
-            "ArchitecturalDecision" or "CodePattern" or "SecurityRule" => 
-                Path.Combine(basePath, "project-memory"),
-            _ => Path.Combine(basePath, "local-memory")
-        };
+        
+        // Project-level scopes (shared with team via version control)
+        // Must match ClaudeMemoryService.IsProjectScope() logic exactly
+        var isProjectScope = scope is "ArchitecturalDecision" 
+                                   or "CodePattern" 
+                                   or "SecurityRule" 
+                                   or "ProjectInsight";
+        
+        return isProjectScope
+            ? Path.Combine(basePath, _configuration["ClaudeMemory:ProjectMemoryPath"] ?? "project-memory")
+            : Path.Combine(basePath, _configuration["ClaudeMemory:LocalMemoryPath"] ?? "local-memory");
     }
     
     private async Task<DateTime> GetLastBackupTimeAsync()
