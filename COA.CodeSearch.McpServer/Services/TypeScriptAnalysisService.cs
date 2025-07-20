@@ -324,6 +324,61 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
+    /// Find the nearest tsconfig.json by searching upward from a file path
+    /// </summary>
+    public async Task<string?> FindNearestTypeScriptProjectAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        return await Task.Run(() =>
+        {
+            var directory = File.Exists(filePath) ? Path.GetDirectoryName(filePath) : filePath;
+            
+            while (!string.IsNullOrEmpty(directory))
+            {
+                // Check for tsconfig.json in current directory
+                var tsconfigPath = Path.Combine(directory, "tsconfig.json");
+                if (File.Exists(tsconfigPath))
+                {
+                    _logger.LogInformation("Found tsconfig.json at {Path} for file {FilePath}", tsconfigPath, filePath);
+                    return tsconfigPath;
+                }
+                
+                // Also check for other common TypeScript config files
+                var alternativeConfigs = new[] { "tsconfig.app.json", "tsconfig.base.json", "tsconfig.lib.json" };
+                foreach (var configName in alternativeConfigs)
+                {
+                    var altPath = Path.Combine(directory, configName);
+                    if (File.Exists(altPath))
+                    {
+                        _logger.LogInformation("Found {ConfigName} at {Path} for file {FilePath}", configName, altPath, filePath);
+                        return altPath;
+                    }
+                }
+                
+                // Move up to parent directory
+                var parent = Directory.GetParent(directory);
+                if (parent == null || parent.FullName == directory)
+                {
+                    break; // Reached root
+                }
+                
+                directory = parent.FullName;
+                
+                // Stop if we hit common project boundaries
+                if (File.Exists(Path.Combine(directory, ".git")) || 
+                    File.Exists(Path.Combine(directory, ".gitignore")) ||
+                    directory.EndsWith("node_modules", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogDebug("Stopped searching at project boundary: {Directory}", directory);
+                    break;
+                }
+            }
+            
+            _logger.LogWarning("No tsconfig.json found for file {FilePath}", filePath);
+            return null;
+        }, cancellationToken);
+    }
+
+    /// <summary>
     /// Start the TypeScript language server process
     /// </summary>
     private async Task EnsureServerStartedAsync()
@@ -382,10 +437,26 @@ public class TypeScriptAnalysisService : IDisposable
         
         _logger.LogInformation("TypeScript server process started. PID: {PID}", _tsServerProcess.Id);
         
-        // No initial ready message in stdio mode - server is ready immediately
-        // Send a simple request to verify the server is responsive
+        // Add more detailed logging
+        _logger.LogDebug("TypeScript server started with: Node={Node}, TSServer={TSServer}", _nodeExecutable, _tsServerPath);
+        _logger.LogDebug("Working directory: {WorkingDir}", startInfo.WorkingDirectory);
+        
+        // Wait a moment for the process to initialize
+        await Task.Delay(500);
+        
+        // Check if process has already exited
+        if (_tsServerProcess.HasExited)
+        {
+            _logger.LogError("TypeScript server process exited immediately with code {ExitCode}", _tsServerProcess.ExitCode);
+            throw new InvalidOperationException($"TypeScript server process exited immediately with code {_tsServerProcess.ExitCode}");
+        }
+        
+        // Send a simple request to verify the server is responsive with timeout
         try
         {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(30)); // 30 second timeout
+            _logger.LogInformation("Verifying TypeScript server responsiveness...");
+            
             var testRequest = new
             {
                 seq = 0,
@@ -393,14 +464,25 @@ public class TypeScriptAnalysisService : IDisposable
                 command = "status"
             };
             
-            var testResponse = await SendRequestAsync(testRequest);
+            var testResponse = await SendRequestAsync(testRequest, cts.Token);
             if (testResponse == null)
             {
-                _logger.LogError("TypeScript server is not responding to requests");
+                _logger.LogError("TypeScript server is not responding to requests after 30 seconds");
                 throw new InvalidOperationException("TypeScript server is not responding");
             }
             
             _logger.LogInformation("TypeScript server is ready and responding");
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogError("TypeScript server initialization timed out after 30 seconds");
+            // Kill the process if it's still running
+            if (_tsServerProcess != null && !_tsServerProcess.HasExited)
+            {
+                _logger.LogWarning("Killing unresponsive TypeScript server process");
+                _tsServerProcess.Kill();
+            }
+            throw new TimeoutException("TypeScript server failed to respond within 30 seconds. This may indicate missing dependencies or configuration issues.");
         }
         catch (Exception ex)
         {
