@@ -218,14 +218,64 @@ public class TypeScriptAnalysisService : IDisposable
             await EnsureServerStartedAsync();
             
             var requestJson = JsonSerializer.Serialize(request);
+            _logger.LogDebug("Sending TypeScript request: {Request}", requestJson);
             await _tsServerInput!.WriteLineAsync(requestJson);
             await _tsServerInput.FlushAsync();
             
-            // Read response
-            var response = await _tsServerOutput!.ReadLineAsync();
-            if (string.IsNullOrEmpty(response))
+            // Read response - tsserver may send multiple messages (events) before the actual response
+            string? response = null;
+            var requestSeq = request.GetType().GetProperty("seq")?.GetValue(request);
+            
+            // Add a timeout to prevent infinite waiting
+            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+            
+            while (!timeoutCts.Token.IsCancellationRequested)
             {
-                return null;
+                var readTask = _tsServerOutput!.ReadLineAsync();
+                var completedTask = await Task.WhenAny(readTask, Task.Delay(-1, timeoutCts.Token));
+                
+                if (completedTask != readTask)
+                {
+                    _logger.LogWarning("Timeout waiting for TypeScript server response");
+                    return null;
+                }
+                
+                var line = await readTask;
+                _logger.LogDebug("Received TypeScript message: {Message}", line);
+                
+                if (string.IsNullOrEmpty(line))
+                {
+                    _logger.LogWarning("Received empty response from TypeScript server");
+                    return null;
+                }
+                
+                try
+                {
+                    var doc = JsonDocument.Parse(line);
+                    var root = doc.RootElement;
+                    
+                    // Check if this is a response to our request
+                    if (root.TryGetProperty("type", out var typeElement) && 
+                        typeElement.GetString() == "response" &&
+                        root.TryGetProperty("request_seq", out var seqElement) &&
+                        seqElement.GetInt32() == (int?)requestSeq)
+                    {
+                        response = line;
+                        break;
+                    }
+                    
+                    // Log other message types but continue waiting
+                    if (root.TryGetProperty("type", out var msgType))
+                    {
+                        _logger.LogDebug("Received TypeScript {Type} message, waiting for response...", msgType.GetString());
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogError(ex, "Failed to parse TypeScript server response: {Response}", line);
+                    return null;
+                }
             }
             
             return JsonDocument.Parse(response);
@@ -274,6 +324,25 @@ public class TypeScriptAnalysisService : IDisposable
         int offset, 
         CancellationToken cancellationToken = default)
     {
+        // First ensure the file is opened in tsserver
+        var openRequest = new
+        {
+            seq = Interlocked.Increment(ref _requestSequence),
+            type = "request",
+            command = "open",
+            arguments = new
+            {
+                file = filePath,
+                projectRootPath = Path.GetDirectoryName(filePath)
+            }
+        };
+        
+        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
+        if (openResponse == null)
+        {
+            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+        }
+        
         var request = new
         {
             seq = Interlocked.Increment(ref _requestSequence),
@@ -322,6 +391,25 @@ public class TypeScriptAnalysisService : IDisposable
         CancellationToken cancellationToken = default)
     {
         var references = new List<TypeScriptLocation>();
+        
+        // First ensure the file is opened in tsserver
+        var openRequest = new
+        {
+            seq = Interlocked.Increment(ref _requestSequence),
+            type = "request",
+            command = "open",
+            arguments = new
+            {
+                file = filePath,
+                projectRootPath = Path.GetDirectoryName(filePath)
+            }
+        };
+        
+        var openResponse = await SendRequestAsync(openRequest, cancellationToken);
+        if (openResponse == null)
+        {
+            _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
+        }
         
         var request = new
         {
