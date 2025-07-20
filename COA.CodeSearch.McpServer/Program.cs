@@ -86,6 +86,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<MemoryBackupService>();
         
+        // File Logging Service
+        services.AddSingleton<FileLoggingService>();
+        
         // TypeScript Analysis
         services.AddSingleton<TypeScriptInstaller>();
         services.AddSingleton<TypeScriptAnalysisService>();
@@ -125,6 +128,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FastDirectorySearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
+        services.AddSingleton<SetLoggingTool>();
         
         // TypeScript tools
         services.AddSingleton<TypeScriptGoToDefinitionTool>();

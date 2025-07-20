@@ -538,6 +538,41 @@ TypeScript support is automatically configured on server startup:
 - `FindReferences` - Works seamlessly across C# and TypeScript
 - `GetHoverInfo` - Shows type information and documentation for TypeScript symbols
 
+## Debugging with File Logging
+
+### Dynamic File Logging Control
+The MCP server includes a file-based logging system that can be enabled/disabled at runtime without affecting the MCP protocol:
+
+#### Using the set_logging Tool
+```bash
+# Start file logging with debug level
+mcp__codesearch__set_logging --action start --level debug
+
+# Check logging status
+mcp__codesearch__set_logging --action status
+
+# List all log files
+mcp__codesearch__set_logging --action list
+
+# Change log level on the fly
+mcp__codesearch__set_logging --action setlevel --level verbose
+
+# Stop logging
+mcp__codesearch__set_logging --action stop
+
+# Clean up old logs (keeps most recent 10)
+mcp__codesearch__set_logging --action cleanup --cleanup true
+```
+
+#### Log File Location
+Logs are written to: `%LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\`
+
+#### Important Notes
+- Logs are ONLY written to files, never to stdout (to avoid MCP protocol contamination)
+- Log files are automatically rotated hourly and limited to 50MB each
+- TypeScript server logs are written to `%TEMP%\tsserver.log`
+- The `.codesearch\logs\` directory is excluded from git
+
 ## Fast Text Search - Blazing Performance
 
 #### Index Management

@@ -350,7 +350,7 @@ public class TypeScriptAnalysisService : IDisposable
         var startInfo = new ProcessStartInfo
         {
             FileName = _nodeExecutable,
-            Arguments = $"\"{_tsServerPath}\"",
+            Arguments = $"\"{_tsServerPath}\" --stdio",  // Use stdio mode for simpler communication
             UseShellExecute = false,
             RedirectStandardInput = true,
             RedirectStandardOutput = true,
@@ -380,14 +380,33 @@ public class TypeScriptAnalysisService : IDisposable
         _tsServerInput = _tsServerProcess.StandardInput;
         _tsServerOutput = _tsServerProcess.StandardOutput;
         
-        // Read the initial server ready message
-        var readyMsg = await _tsServerOutput.ReadLineAsync();
-        if (string.IsNullOrEmpty(readyMsg))
+        _logger.LogInformation("TypeScript server process started. PID: {PID}", _tsServerProcess.Id);
+        
+        // No initial ready message in stdio mode - server is ready immediately
+        // Send a simple request to verify the server is responsive
+        try
         {
-            _logger.LogError("TypeScript server failed to start - no ready message received");
-            throw new InvalidOperationException("TypeScript server failed to start");
+            var testRequest = new
+            {
+                seq = 0,
+                type = "request",
+                command = "status"
+            };
+            
+            var testResponse = await SendRequestAsync(testRequest);
+            if (testResponse == null)
+            {
+                _logger.LogError("TypeScript server is not responding to requests");
+                throw new InvalidOperationException("TypeScript server is not responding");
+            }
+            
+            _logger.LogInformation("TypeScript server is ready and responding");
         }
-        _logger.LogDebug("TypeScript server started: {Message}", readyMsg);
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to verify TypeScript server responsiveness");
+            throw new InvalidOperationException("TypeScript server failed to start properly", ex);
+        }
     }
 
     /// <summary>
@@ -402,6 +421,8 @@ public class TypeScriptAnalysisService : IDisposable
             
             var requestJson = JsonSerializer.Serialize(request);
             _logger.LogDebug("Sending TypeScript request: {Request}", requestJson);
+            
+            // Write the request with a newline terminator (stdio protocol)
             await _tsServerInput!.WriteLineAsync(requestJson);
             await _tsServerInput.FlushAsync();
             
@@ -411,28 +432,39 @@ public class TypeScriptAnalysisService : IDisposable
             
             // Add a timeout to prevent infinite waiting
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(TimeSpan.FromSeconds(10));
+            timeoutCts.CancelAfter(TimeSpan.FromSeconds(30)); // Increase timeout for slower operations
             
+            var messageCount = 0;
             while (!timeoutCts.Token.IsCancellationRequested)
             {
-                var readTask = _tsServerOutput!.ReadLineAsync();
-                var completedTask = await Task.WhenAny(readTask, Task.Delay(-1, timeoutCts.Token));
-                
-                if (completedTask != readTask)
+                string? line = null;
+                try
                 {
-                    _logger.LogWarning("Timeout waiting for TypeScript server response");
+                    // Create a task for reading with its own timeout
+                    var readTask = Task.Run(async () => await _tsServerOutput!.ReadLineAsync(), timeoutCts.Token);
+                    line = await readTask;
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning("Timeout waiting for TypeScript server response after {Count} messages", messageCount);
                     return null;
                 }
                 
-                var line = await readTask;
+                if (line == null)
+                {
+                    _logger.LogWarning("TypeScript server stream ended unexpectedly");
+                    return null;
+                }
                 
                 if (string.IsNullOrEmpty(line))
                 {
-                    _logger.LogWarning("Received empty response from TypeScript server");
-                    return null;
+                    // Empty lines can be ignored in stdio mode
+                    continue;
                 }
                 
-                _logger.LogDebug("Received TypeScript message: {Message}", line);
+                messageCount++;
+                _logger.LogDebug("Received TypeScript message #{Count}: {Message}", messageCount, 
+                    line.Length > 200 ? line.Substring(0, 200) + "..." : line);
                 
                 try
                 {
@@ -440,29 +472,68 @@ public class TypeScriptAnalysisService : IDisposable
                     var root = doc.RootElement;
                     
                     // Check if this is a response to our request
-                    if (root.TryGetProperty("type", out var typeElement) && 
-                        typeElement.GetString() == "response" &&
-                        root.TryGetProperty("request_seq", out var seqElement) &&
-                        seqElement.GetInt32() == (int?)requestSeq)
+                    if (root.TryGetProperty("type", out var typeElement))
                     {
-                        response = line;
-                        break;
-                    }
-                    
-                    // Log other message types but continue waiting
-                    if (root.TryGetProperty("type", out var msgType))
-                    {
-                        _logger.LogDebug("Received TypeScript {Type} message, waiting for response...", msgType.GetString());
+                        var messageType = typeElement.GetString();
+                        
+                        if (messageType == "response")
+                        {
+                            // Check if it's our response
+                            if (root.TryGetProperty("request_seq", out var seqElement) &&
+                                seqElement.GetInt32() == (int?)requestSeq)
+                            {
+                                response = line;
+                                _logger.LogDebug("Found matching response for seq {Seq}", requestSeq);
+                                break;
+                            }
+                            else
+                            {
+                                _logger.LogDebug("Received response for different request seq: {Seq}", 
+                                    root.TryGetProperty("request_seq", out var s) ? s.GetInt32() : -1);
+                            }
+                        }
+                        else if (messageType == "event")
+                        {
+                            // Log events but continue waiting
+                            var eventName = root.TryGetProperty("event", out var e) ? e.GetString() : "unknown";
+                            _logger.LogDebug("Received TypeScript event: {Event}", eventName);
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Received TypeScript message type: {Type}", messageType);
+                        }
+                        
+                        // Check for error responses
+                        if (root.TryGetProperty("success", out var success) && !success.GetBoolean())
+                        {
+                            var errorMessage = root.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
+                            _logger.LogError("TypeScript server returned error: {Error}", errorMessage);
+                            if (root.TryGetProperty("request_seq", out var errSeq) && errSeq.GetInt32() == (int?)requestSeq)
+                            {
+                                // This is an error response to our request
+                                return doc;
+                            }
+                        }
                     }
                 }
                 catch (JsonException ex)
                 {
                     _logger.LogError(ex, "Failed to parse TypeScript server response: {Response}", line);
-                    return null;
+                    // Continue reading, might be a malformed event
                 }
             }
             
+            if (response == null)
+            {
+                _logger.LogWarning("No response received for request seq {Seq} after {Count} messages", requestSeq, messageCount);
+            }
+            
             return response != null ? JsonDocument.Parse(response) : null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in SendRequestAsync");
+            return null;
         }
         finally
         {

@@ -41,6 +41,12 @@ COA CodeSearch MCP Server leverages Microsoft's Roslyn compiler platform for C# 
 - **Context Recall** - Intelligent search across all stored memories
 - **Claude Code Hooks** - Automatic context loading on session start, tool execution, and file edits
 
+### Debugging & Diagnostics
+- **Dynamic File Logging** - Enable/disable file logging at runtime without restarting
+- **Log Level Control** - Change log levels on the fly (Verbose, Debug, Info, Warning, Error)
+- **Log Management** - List, view, and clean up log files via MCP tools
+- **Safe Logging** - Logs only to files, never to stdout (preserves MCP protocol integrity)
+
 ### Performance & Architecture  
 - **Multi-Language Support** - C# via Roslyn, TypeScript/JavaScript via tsserver, all other files via Lucene
 - **Workspace Management** - Efficient caching with LRU eviction for large solutions
@@ -312,6 +318,39 @@ Parameters:
 - `symbolName`: Symbol to search for
 - `workspacePath`: Path to search
 - `mode`: 'definition', 'references', or 'both' (optional)
+
+#### Debugging Tools
+
+##### SetLogging
+Control file-based logging for debugging without affecting MCP protocol.
+
+Parameters:
+- `action`: 'start', 'stop', 'status', 'list', 'setlevel', 'cleanup'
+- `level`: Log level for 'start' or 'setlevel' (Verbose, Debug, Information, Warning, Error, Fatal)
+- `cleanup`: Boolean to confirm deletion of old logs (for 'cleanup' action)
+
+Examples:
+```
+# Start debug logging
+set_logging --action start --level debug
+
+# Check status and see log file location
+set_logging --action status
+
+# List all log files
+set_logging --action list
+
+# Change to verbose logging
+set_logging --action setlevel --level verbose
+
+# Stop logging
+set_logging --action stop
+
+# Clean up old logs (keeps most recent 10)
+set_logging --action cleanup --cleanup true
+```
+
+Log files are written to: `%LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\`
 
 #### Memory System Tools
 

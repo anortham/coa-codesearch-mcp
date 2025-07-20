@@ -50,6 +50,9 @@ public static class AllToolRegistrations
         
         // TypeScript tools
         TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
+        
+        // Logging control tool
+        RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
@@ -984,5 +987,53 @@ public static class AllToolRegistrations
     {
         public string? WorkspacePath { get; set; }
         public bool? ForceRebuild { get; set; }
+    }
+    
+    private static void RegisterSetLogging(ToolRegistry registry, SetLoggingTool tool)
+    {
+        registry.RegisterTool<SetLoggingParams>(
+            name: "set_logging",
+            description: "Control file-based logging for debugging. Logs are written to .codesearch/logs directory. Actions: start, stop, status, list, setlevel, cleanup",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    action = new { 
+                        type = "string", 
+                        description = "Action to perform: 'start', 'stop', 'status', 'list', 'setlevel', 'cleanup'",
+                        @enum = new[] { "start", "stop", "status", "list", "setlevel", "cleanup" }
+                    },
+                    level = new { 
+                        type = "string", 
+                        description = "Log level for 'start' or 'setlevel' actions: Verbose, Debug, Information, Warning, Error, Fatal" 
+                    },
+                    cleanup = new { 
+                        type = "boolean", 
+                        description = "For 'cleanup' action: set to true to confirm deletion of old log files" 
+                    }
+                },
+                required = new[] { "action" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Action, "action"),
+                    parameters.Level,
+                    parameters.Cleanup,
+                    ct);
+                
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class SetLoggingParams
+    {
+        public string? Action { get; set; }
+        public string? Level { get; set; }
+        public bool? Cleanup { get; set; }
     }
 }

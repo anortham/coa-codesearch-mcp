@@ -427,3 +427,7 @@ COA.CodeSearch.McpServer/.codesearch/
 !.codesearch/memories.db
 !.codesearch/memories.db-wal
 !.codesearch/memories.db-shm
+
+# Logs directory - always exclude
+.codesearch/logs/
+**/.codesearch/logs/
