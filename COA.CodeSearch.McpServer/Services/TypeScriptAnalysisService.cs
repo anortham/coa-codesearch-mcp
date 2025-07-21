@@ -364,7 +364,7 @@ public class TypeScriptAnalysisService : IDisposable
                 directory = parent.FullName;
                 
                 // Stop if we hit common project boundaries
-                if (File.Exists(Path.Combine(directory, ".git")) || 
+                if (Directory.Exists(Path.Combine(directory, ".git")) || 
                     File.Exists(Path.Combine(directory, ".gitignore")) ||
                     directory.EndsWith("node_modules", StringComparison.OrdinalIgnoreCase))
                 {
@@ -428,6 +428,14 @@ public class TypeScriptAnalysisService : IDisposable
                 _logger.LogWarning("TypeScript server error: {Error}", e.Data);
             }
         };
+        
+        // Set up exit handler
+        _tsServerProcess.Exited += (sender, e) =>
+        {
+            _logger.LogError("TypeScript server process exited unexpectedly. Exit code: {ExitCode}", 
+                _tsServerProcess?.ExitCode ?? -1);
+        };
+        _tsServerProcess.EnableRaisingEvents = true;
         
         _tsServerProcess.Start();
         _tsServerProcess.BeginErrorReadLine();
@@ -493,7 +501,9 @@ public class TypeScriptAnalysisService : IDisposable
 
     /// <summary>
     /// Read an LSP message from the TypeScript server output stream
+    /// NOTE: This method is not used because tsserver uses simple newline-delimited JSON, not LSP protocol
     /// </summary>
+    [Obsolete("tsserver uses stdio protocol (newline-delimited JSON), not LSP protocol")]
     private async Task<string?> ReadLspMessageAsync(StreamReader reader, CancellationToken cancellationToken)
     {
         var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
@@ -564,12 +574,13 @@ public class TypeScriptAnalysisService : IDisposable
             await EnsureServerStartedAsync();
             
             // Extract request metadata
-            var requestSeq = request.GetType().GetProperty("seq")?.GetValue(request);
+            var requestSeqObj = request.GetType().GetProperty("seq")?.GetValue(request);
+            var requestSeq = requestSeqObj != null ? Convert.ToInt32(requestSeqObj) : -1;
             var requestCommand = request.GetType().GetProperty("command")?.GetValue(request) as string;
             
             var requestJson = JsonSerializer.Serialize(request);
             _logger.LogInformation("Sending TypeScript request (command: {Command}, seq: {Seq}): {Request}", 
-                requestCommand ?? "unknown", requestSeq ?? -1, requestJson);
+                requestCommand ?? "unknown", requestSeq, requestJson);
             
             // Write the request with a newline terminator (stdio protocol)
             await _tsServerInput!.WriteLineAsync(requestJson);
@@ -588,27 +599,20 @@ public class TypeScriptAnalysisService : IDisposable
                 string? messageContent = null;
                 try
                 {
-                    // Try to read as LSP message first
-                    var readTask = ReadLspMessageAsync(_tsServerOutput!, timeoutCts.Token);
-                    messageContent = await readTask;
-                    
-                    if (messageContent == null)
+                    // tsserver uses simple newline-delimited JSON, not LSP protocol
+                    var line = await _tsServerOutput!.ReadLineAsync();
+                    if (line == null)
                     {
-                        // If LSP reading failed, try reading as plain line
-                        var line = await _tsServerOutput!.ReadLineAsync();
-                        if (line == null)
-                        {
-                            _logger.LogWarning("TypeScript server stream ended unexpectedly");
-                            return null;
-                        }
-                        
-                        if (string.IsNullOrEmpty(line))
-                        {
-                            continue; // Skip empty lines
-                        }
-                        
-                        messageContent = line;
+                        _logger.LogWarning("TypeScript server stream ended unexpectedly");
+                        return null;
                     }
+                    
+                    if (string.IsNullOrEmpty(line))
+                    {
+                        continue; // Skip empty lines
+                    }
+                    
+                    messageContent = line;
                 }
                 catch (OperationCanceledException)
                 {
@@ -618,25 +622,25 @@ public class TypeScriptAnalysisService : IDisposable
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Error reading TypeScript server response");
-                    
-                    // Try to recover by reading a plain line
-                    try
-                    {
-                        var line = await _tsServerOutput!.ReadLineAsync();
-                        if (string.IsNullOrEmpty(line))
-                        {
-                            continue;
-                        }
-                        messageContent = line;
-                    }
-                    catch
-                    {
-                        continue;
-                    }
+                    continue;
                 }
                 
                 if (string.IsNullOrEmpty(messageContent))
                 {
+                    continue;
+                }
+                
+                // Skip lines that look like LSP headers (shouldn't be there for tsserver)
+                if (messageContent.StartsWith("Content-Length:", StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogWarning("Skipping unexpected LSP header in tsserver output: {Line}", messageContent);
+                    continue;
+                }
+                
+                // Skip lines that don't look like JSON
+                if (!messageContent.TrimStart().StartsWith("{"))
+                {
+                    _logger.LogWarning("Skipping non-JSON line in tsserver output: {Line}", messageContent);
                     continue;
                 }
                 
@@ -658,7 +662,7 @@ public class TypeScriptAnalysisService : IDisposable
                         {
                             // Check if it's our response
                             if (root.TryGetProperty("request_seq", out var seqElement) &&
-                                seqElement.GetInt32() == (int?)requestSeq)
+                                seqElement.GetInt32() == requestSeq)
                             {
                                 response = messageContent;
                                 _logger.LogInformation("Found matching response for seq {Seq}", requestSeq);
@@ -686,7 +690,7 @@ public class TypeScriptAnalysisService : IDisposable
                         {
                             var errorMessage = root.TryGetProperty("message", out var msg) ? msg.GetString() : "Unknown error";
                             _logger.LogError("TypeScript server returned error: {Error}", errorMessage);
-                            if (root.TryGetProperty("request_seq", out var errSeq) && errSeq.GetInt32() == (int?)requestSeq)
+                            if (root.TryGetProperty("request_seq", out var errSeq) && errSeq.GetInt32() == requestSeq)
                             {
                                 // This is an error response to our request
                                 return doc;
