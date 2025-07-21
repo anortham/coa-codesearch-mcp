@@ -153,6 +153,7 @@ public static class MemoryTypes
     public const string Documentation = "Documentation";
     public const string Dependency = "Dependency";
     public const string Configuration = "Configuration";
+    public const string WorkingMemory = "WorkingMemory";
 }
 
 /// <summary>
