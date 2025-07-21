@@ -9,6 +9,25 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Service for analyzing TypeScript code using the TypeScript Language Service via Node.js interop
 /// </summary>
+/// <remarks>
+/// TypeScript server commands are divided into two categories:
+/// 
+/// Notifications (no response expected):
+/// - open: Open a file
+/// - close: Close a file  
+/// - change: Update file content
+/// - updateOpen: Update open file list
+/// 
+/// Requests (response expected):
+/// - definition: Get definition location
+/// - references: Find all references
+/// - quickinfo: Get hover information
+/// - rename: Get rename locations
+/// - completions: Get code completions
+/// - configure: Configure server (note: sometimes doesn't respond properly)
+/// 
+/// Use SendNotificationAsync for notifications and SendRequestAsync for requests.
+/// </remarks>
 public class TypeScriptAnalysisService : IDisposable
 {
     private readonly ILogger<TypeScriptAnalysisService> _logger;
@@ -564,6 +583,39 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
+    /// Send a notification to the TypeScript server (no response expected)
+    /// </summary>
+    private async Task SendNotificationAsync(object notification, CancellationToken cancellationToken = default)
+    {
+        await _requestLock.WaitAsync(cancellationToken);
+        try
+        {
+            await EnsureServerStartedAsync();
+            
+            var notificationJson = JsonSerializer.Serialize(notification);
+            var command = notification.GetType().GetProperty("command")?.GetValue(notification) as string;
+            _logger.LogInformation("Sending TypeScript notification (command: {Command}): {Notification}", 
+                command ?? "unknown", notificationJson);
+            
+            // Write the notification with a newline terminator (stdio protocol)
+            await _tsServerInput!.WriteLineAsync(notificationJson);
+            await _tsServerInput.FlushAsync();
+            
+            // For notifications, we don't wait for a response
+            _logger.LogInformation("TypeScript notification sent successfully");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in SendNotificationAsync");
+            throw;
+        }
+        finally
+        {
+            _requestLock.Release();
+        }
+    }
+
+    /// <summary>
     /// Send a request to the TypeScript server and get the response
     /// </summary>
     private async Task<JsonDocument?> SendRequestAsync(object request, CancellationToken cancellationToken = default)
@@ -742,9 +794,10 @@ public class TypeScriptAnalysisService : IDisposable
             // Read the file content
             var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
             
-            // Send open request with file content
-            // Note: TypeScript server "open" command only accepts: file, fileContent, and scriptKindName
-            var openRequest = new
+            // Send open notification with file content
+            // Note: TypeScript server "open" command is a notification (no response expected)
+            // It only accepts: file, fileContent, and scriptKindName
+            var openNotification = new
             {
                 seq = Interlocked.Increment(ref _requestSequence),
                 type = "request",
@@ -757,12 +810,10 @@ public class TypeScriptAnalysisService : IDisposable
                 }
             };
             
-            var response = await SendRequestAsync(openRequest, cancellationToken);
-            if (response == null)
-            {
-                _logger.LogWarning("Failed to open file {File} in TypeScript server", filePath);
-                return false;
-            }
+            await SendNotificationAsync(openNotification, cancellationToken);
+            
+            // Give tsserver a moment to process the file
+            await Task.Delay(100, cancellationToken);
             
             _logger.LogInformation("Successfully opened file {File} in TypeScript server", filePath);
             return true;
