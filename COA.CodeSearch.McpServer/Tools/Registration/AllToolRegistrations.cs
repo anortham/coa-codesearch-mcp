@@ -62,6 +62,9 @@ public static class AllToolRegistrations
         
         // Version information tool
         RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
+        
+        // Cleanup and maintenance tools
+        CleanupToolRegistrations.RegisterCleanupTools(registry, serviceProvider);
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)

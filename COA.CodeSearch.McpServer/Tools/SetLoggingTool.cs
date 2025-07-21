@@ -11,13 +11,16 @@ public class SetLoggingTool
 {
     private readonly ILogger<SetLoggingTool> _logger;
     private readonly FileLoggingService _fileLoggingService;
+    private readonly IPathResolutionService _pathResolution;
 
     public SetLoggingTool(
         ILogger<SetLoggingTool> logger,
-        FileLoggingService fileLoggingService)
+        FileLoggingService fileLoggingService,
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _fileLoggingService = fileLoggingService;
+        _pathResolution = pathResolution;
     }
 
     /// <summary>
@@ -95,8 +98,7 @@ public class SetLoggingTool
             isEnabled = _fileLoggingService.IsEnabled,
             currentLogFile = _fileLoggingService.CurrentLogFile,
             currentLogLevel = _fileLoggingService.CurrentLogLevel.ToString(),
-            logDirectory = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), 
-                "COA.CodeSearch", ".codesearch", "logs"),
+            logDirectory = _pathResolution.GetLogsPath(),
             logFileCount = logFiles.Count,
             totalSize = logFiles.Sum(f => f.SizeInBytes),
             totalSizeFormatted = FormatFileSize(logFiles.Sum(f => f.SizeInBytes))

@@ -47,4 +47,11 @@ public interface IPathResolutionService
     /// <param name="indexPath">The path to check</param>
     /// <returns>True if the path is protected</returns>
     bool IsProtectedPath(string indexPath);
+    
+    /// <summary>
+    /// Gets the backup directory path for a specific timestamp
+    /// </summary>
+    /// <param name="timestamp">Optional timestamp string (defaults to current UTC time)</param>
+    /// <returns>The full path to the backup directory</returns>
+    string GetBackupPath(string? timestamp = null);
 }

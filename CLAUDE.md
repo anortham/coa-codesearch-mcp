@@ -127,6 +127,26 @@ COA.CodeSearch.McpServer/
 
 ## Development Guidelines
 
+### ⚠️ CRITICAL: Path Resolution Requirements
+
+**ALL file and directory operations MUST use `IPathResolutionService`.**
+
+See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md) for the authoritative guide on path handling.
+
+**Key Rules:**
+1. **NEVER** construct paths manually (e.g., `Path.Combine(basePath, "logs")`)
+2. **NEVER** call `Directory.CreateDirectory()` directly
+3. **NEVER** read configuration for paths - always use `IPathResolutionService`
+4. **ALWAYS** inject `IPathResolutionService` and use its methods:
+   - `GetBasePath()` - Base .codesearch directory
+   - `GetIndexPath(workspace)` - Index path for a workspace
+   - `GetProjectMemoryPath()` - Project memory location
+   - `GetLocalMemoryPath()` - Local memory location
+   - `GetLogsPath()` - Logs directory
+   - `GetBackupPath()` - Backup directory
+
+This is the SINGLE SOURCE OF TRUTH for all path operations to prevent the recurring path-related bugs.
+
 ### Code Style
 - Use C# 12 features with nullable reference types
 - Follow standard C# naming conventions

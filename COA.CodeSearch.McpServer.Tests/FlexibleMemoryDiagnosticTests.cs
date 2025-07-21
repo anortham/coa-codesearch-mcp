@@ -14,6 +14,7 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
     private readonly ITestOutputHelper _output;
     private readonly Mock<ILogger<FlexibleMemoryService>> _loggerMock;
     private readonly Mock<ILogger<LuceneIndexService>> _indexLoggerMock;
+    private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly IConfiguration _configuration;
     private readonly FlexibleMemoryService _memoryService;
     private readonly ILuceneIndexService _indexService;
@@ -24,10 +25,17 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
         _output = output;
         _loggerMock = new Mock<ILogger<FlexibleMemoryService>>();
         _indexLoggerMock = new Mock<ILogger<LuceneIndexService>>();
+        _pathResolutionMock = new Mock<IPathResolutionService>();
         _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_diag_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testBasePath);
         
         Environment.CurrentDirectory = _testBasePath;
+        
+        // Setup path resolution mocks
+        _pathResolutionMock.Setup(x => x.GetProjectMemoryPath())
+            .Returns(Path.Combine(_testBasePath, "test-project-memory"));
+        _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
+            .Returns(Path.Combine(_testBasePath, "test-local-memory"));
         
         var configDict = new Dictionary<string, string?>
         {
@@ -41,9 +49,8 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
             .Build();
         
         // Create real services
-        var pathService = new PathResolutionService(_configuration);
-        _indexService = new LuceneIndexService(_indexLoggerMock.Object, _configuration, pathService);
-        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configuration, _indexService);
+        _indexService = new LuceneIndexService(_indexLoggerMock.Object, _configuration, _pathResolutionMock.Object);
+        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object);
     }
     
     public void Dispose()

@@ -17,6 +17,7 @@ public class FlexibleMemoryQueryTests
     private readonly Mock<ILogger<FlexibleMemoryService>> _loggerMock;
     private readonly Mock<IConfiguration> _configMock;
     private readonly Mock<ILuceneIndexService> _indexServiceMock;
+    private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly FlexibleMemoryService _memoryService;
     
     public FlexibleMemoryQueryTests()
@@ -24,8 +25,15 @@ public class FlexibleMemoryQueryTests
         _loggerMock = new Mock<ILogger<FlexibleMemoryService>>();
         _configMock = new Mock<IConfiguration>();
         _indexServiceMock = new Mock<ILuceneIndexService>();
+        _pathResolutionMock = new Mock<IPathResolutionService>();
         
-        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object);
+        // Setup path resolution mocks
+        _pathResolutionMock.Setup(x => x.GetProjectMemoryPath())
+            .Returns(Path.Combine(Path.GetTempPath(), "test-project-memory"));
+        _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
+            .Returns(Path.Combine(Path.GetTempPath(), "test-local-memory"));
+        
+        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object);
     }
     
     [Fact]

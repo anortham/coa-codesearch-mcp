@@ -337,7 +337,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                 _logger.LogInformation("Cleared index directory at {Path}", indexPath);
             }
             
-            System.IO.Directory.CreateDirectory(indexPath);
+            // PathResolutionService already creates the directory
         }
         catch (Exception ex)
         {
@@ -348,7 +348,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private IndexContext CreateIndexContext(string indexPath, bool forceRecreate)
     {
-        System.IO.Directory.CreateDirectory(indexPath);
+        // PathResolutionService already creates the directory when GetIndexPath is called
         
         var directory = FSDirectory.Open(indexPath);
         var writer = CreateWriter(directory, forceRecreate, indexPath);

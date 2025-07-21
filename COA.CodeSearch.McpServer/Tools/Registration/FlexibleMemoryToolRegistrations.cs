@@ -32,6 +32,7 @@ public static class FlexibleMemoryToolRegistrations
         RegisterArchiveMemories(registry, memoryTools);
         RegisterGetMemoryById(registry, memoryTools);
         RegisterSummarizeMemories(registry, memoryTools);
+        RegisterMemoryDashboard(registry, memoryTools);
     }
     
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
@@ -433,6 +434,25 @@ public static class FlexibleMemoryToolRegistrations
                     parameters.BatchSize ?? 10,
                     parameters.PreserveOriginals ?? false);
                     
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterMemoryDashboard(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<object>(
+            name: "memory_dashboard",
+            description: "Get memory system dashboard with statistics, health checks, and insights. Shows total memories, type distribution, recent activity, storage info, and health recommendations.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new { },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.GetMemoryDashboardAsync();
                 return CreateSuccessResult(result);
             }
         );
