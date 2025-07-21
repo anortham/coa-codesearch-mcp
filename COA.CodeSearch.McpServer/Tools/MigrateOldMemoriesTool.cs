@@ -80,7 +80,7 @@ public class MigrateOldMemoriesTool
     {
         var result = new WorkspaceMigrationResult { Workspace = workspace };
         
-        var indexWriter = await _indexService.GetIndexWriterAsync(workspace);
+        // Only get searcher for reading - don't create writer until we need it
         var indexSearcher = await _indexService.GetIndexSearcherAsync(workspace);
         if (indexSearcher == null)
         {
@@ -135,10 +135,6 @@ public class MigrateOldMemoriesTool
             if (!dryRun && migratedMemories.Count > 0)
             {
                 _logger.LogInformation("Storing {Count} migrated memories in {Workspace}", migratedMemories.Count, workspace);
-                
-                // Clear the old index
-                indexWriter.DeleteAll();
-                indexWriter.Commit();
                 
                 // Store all migrated memories using the memory service
                 foreach (var memory in migratedMemories)
