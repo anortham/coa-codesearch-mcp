@@ -93,7 +93,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "Find every place a symbol is used throughout your codebase. Returns full details for <5000 tokens, otherwise auto-switches to smart summary with hotspots and insights. Use responseMode='summary' to force summary view.",
+            description: "Find every place a symbol is used throughout your codebase. Supports C# and TypeScript - returns references ONLY within the same language. C# symbols return C# references, TypeScript symbols return TypeScript references. Returns full details for <5000 tokens, otherwise auto-switches to smart summary with hotspots and insights. Use responseMode='summary' to force summary view.",
             inputSchema: new
             {
                 type = "object",
@@ -172,7 +172,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetImplementationsParams>(
             name: "get_implementations",
-            description: "Discover all concrete implementations of interfaces or abstract classes - essential for navigating inheritance hierarchies",
+            description: "Discover all concrete implementations of interfaces or abstract classes - essential for navigating inheritance hierarchies. C# ONLY. For TypeScript, use typescript_find_references on interfaces.",
             inputSchema: new
             {
                 type = "object",
@@ -234,7 +234,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDocumentSymbolsParams>(
             name: "get_document_symbols",
-            description: "Get a complete outline of all classes, methods, and properties in a file - perfect for understanding file structure",
+            description: "Get a complete outline of all classes, methods, and properties in a file - perfect for understanding file structure. Supports C# and TypeScript.",
             inputSchema: new
             {
                 type = "object",
@@ -263,7 +263,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDiagnosticsParams>(
             name: "get_diagnostics",
-            description: "Check for compilation errors and warnings across your codebase. Returns full diagnostics for <5000 tokens, otherwise groups by severity with smart insights. Use responseMode='summary' for overview.",
+            description: "Check for compilation errors and warnings across your codebase. C# ONLY - uses Roslyn compiler diagnostics. TypeScript diagnostics not supported. Returns full diagnostics for <5000 tokens, otherwise groups by severity with smart insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -302,7 +302,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetCallHierarchyParams>(
             name: "get_call_hierarchy",
-            description: "Trace method call chains to understand execution flow - see what calls a method and what it calls",
+            description: "Trace method call chains to understand execution flow - see what calls a method and what it calls. C# ONLY - uses Roslyn semantic analysis.",
             inputSchema: new
             {
                 type = "object",
@@ -337,7 +337,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<RenameSymbolParams>(
             name: "rename_symbol",
-            description: "Safely rename any symbol across your entire codebase - all references updated automatically. Shows full changes for <5000 tokens, otherwise provides impact summary with risk assessment. Set preview=false to apply changes.",
+            description: "Safely rename any symbol across your entire codebase - all references updated automatically. C# ONLY - uses Roslyn refactoring engine. For TypeScript renaming, use typescript tools. Shows full changes for <5000 tokens, otherwise provides impact summary with risk assessment. Set preview=false to apply changes.",
             inputSchema: new
             {
                 type = "object",
@@ -381,7 +381,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<BatchOperationsParams>(
             name: "batch_operations",
-            description: "Perform multiple code analysis operations in one request - dramatically faster for complex workflows. Supports: text_search, search_symbols, find_references, go_to_definition, get_hover_info, get_implementations, get_document_symbols, get_diagnostics, get_call_hierarchy, analyze_dependencies",
+            description: "Perform multiple code analysis operations in one request - dramatically faster for complex workflows. Language support varies by operation: C# only (search_symbols, get_implementations, get_diagnostics, get_call_hierarchy, analyze_dependencies), Both C# and TypeScript (find_references, go_to_definition, get_hover_info, get_document_symbols), All languages (text_search).",
             inputSchema: new
             {
                 type = "object",
@@ -467,7 +467,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<DependencyAnalysisParams>(
             name: "dependency_analysis",
-            description: "Analyze code dependencies to understand coupling and architecture. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
+            description: "Analyze code dependencies to understand coupling and architecture. C# ONLY - analyzes .NET project references and namespace dependencies. Does not include TypeScript/JavaScript dependencies. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -513,7 +513,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<ProjectStructureAnalysisParams>(
             name: "project_structure_analysis",
-            description: "Analyze project structure with metrics on size, complexity, and organization. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
+            description: "Analyze project structure with metrics on size, complexity, and organization. .NET PROJECTS ONLY - analyzes .sln/.csproj files using MSBuildWorkspace. Does not include TypeScript, JavaScript, or frontend code. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
