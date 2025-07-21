@@ -502,11 +502,28 @@ To use the memory system effectively:
 
 ### Available Memory Tools
 
-#### Store Knowledge
+#### Store Knowledge (Legacy)
 - `remember_decision` - Store architectural decisions with reasoning
 - `remember_pattern` - Document reusable code patterns
 - `remember_security_rule` - Track security requirements
 - `remember_session` - Save work session summary
+
+#### Flexible Memory System (Recommended)
+- `flexible_store_memory` - Store any type of memory with custom fields
+- `flexible_search_memories` - Advanced search with faceting and filtering
+- `flexible_update_memory` - Update existing memories
+- `flexible_get_memory` - Retrieve specific memory by ID
+- `flexible_mark_memory_resolved` - Mark memories as resolved
+- `flexible_find_similar_memories` - Find related memories using AI
+- `flexible_archive_memories` - Archive old memories by type and age
+- `flexible_store_technical_debt` - Specialized tool for technical debt
+- `flexible_store_deferred_task` - Store tasks for future consideration
+- `flexible_store_question` - Store questions with tracking
+
+#### Memory Linking (New!)
+- `flexible_link_memories` - Create relationships between memories
+- `flexible_get_related_memories` - Traverse memory relationships
+- `flexible_unlink_memories` - Remove relationships
 
 #### Recall Knowledge
 - `recall_context` - Search all memories for relevant context
@@ -520,6 +537,38 @@ Example workflow:
 1. Before major changes: `mcp__codesearch__backup_memories_to_sqlite`
 2. Check in `memories.db` to source control
 3. On new machine: `mcp__codesearch__restore_memories_from_sqlite`
+
+### Memory Linking Examples
+
+Create relationships between related memories:
+```bash
+# Link a bug report to its resolution
+flexible_link_memories --sourceId "bug-123" --targetId "fix-456" --relationshipType "resolvedBy"
+
+# Create bidirectional parent-child relationship
+flexible_link_memories --sourceId "epic-001" --targetId "task-002" --relationshipType "parentOf" --bidirectional true
+
+# Link related architectural decisions
+flexible_link_memories --sourceId "caching-decision" --targetId "performance-analysis" --relationshipType "implements"
+```
+
+Traverse memory relationships:
+```bash
+# Find all memories related to a specific memory (depth 2)
+flexible_get_related_memories --memoryId "epic-001" --maxDepth 2
+
+# Find only specific relationship types
+flexible_get_related_memories --memoryId "bug-123" --relationshipTypes ["resolvedBy", "causedBy"]
+```
+
+Common relationship types:
+- `relatedTo` - General relationship
+- `blockedBy`/`blocks` - Dependency tracking
+- `implements`/`implementedBy` - Implementation relationships
+- `supersedes`/`supersededBy` - Replacement tracking
+- `parentOf`/`childOf` - Hierarchical relationships
+- `resolves`/`resolvedBy` - Problem/solution tracking
+- `duplicates`/`duplicatedBy` - Duplicate tracking
 
 ## TypeScript Support
 

@@ -88,6 +88,7 @@ var host = Host.CreateDefaultBuilder(args)
         // Flexible Memory System
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
+        services.AddSingleton<MemoryLinkingTools>();
         
         // File Logging Service
         services.AddSingleton<FileLoggingService>();

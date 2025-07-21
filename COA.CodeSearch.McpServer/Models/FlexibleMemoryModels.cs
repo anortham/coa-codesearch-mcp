@@ -209,6 +209,32 @@ public static class MemoryPriority
 }
 
 /// <summary>
+/// Common relationship types between memories
+/// </summary>
+public static class MemoryRelationshipTypes
+{
+    public const string RelatedTo = "relatedTo";
+    public const string BlockedBy = "blockedBy";
+    public const string Blocks = "blocks";
+    public const string Implements = "implements";
+    public const string ImplementedBy = "implementedBy";
+    public const string Supersedes = "supersedes";
+    public const string SupersededBy = "supersededBy";
+    public const string DependsOn = "dependsOn";
+    public const string DependedOnBy = "dependedOnBy";
+    public const string ParentOf = "parentOf";
+    public const string ChildOf = "childOf";
+    public const string References = "references";
+    public const string ReferencedBy = "referencedBy";
+    public const string Causes = "causes";
+    public const string CausedBy = "causedBy";
+    public const string Resolves = "resolves";
+    public const string ResolvedBy = "resolvedBy";
+    public const string Duplicates = "duplicates";
+    public const string DuplicatedBy = "duplicatedBy";
+}
+
+/// <summary>
 /// Enhanced search request with faceting and advanced filters
 /// </summary>
 public class FlexibleMemorySearchRequest

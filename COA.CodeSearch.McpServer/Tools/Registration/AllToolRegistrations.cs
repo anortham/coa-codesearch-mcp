@@ -51,6 +51,9 @@ public static class AllToolRegistrations
         // Flexible Memory System tools
         FlexibleMemoryToolRegistrations.RegisterFlexibleMemoryTools(registry, serviceProvider);
         
+        // Memory Linking tools
+        MemoryLinkingToolRegistrations.RegisterAll(registry, serviceProvider.GetRequiredService<MemoryLinkingTools>());
+        
         // TypeScript tools
         TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
         
