@@ -171,7 +171,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         Assert.All(result.Memories, m => Assert.Equal(MemoryTypes.TechnicalDebt, m.Type));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task GetMemoryByIdAsync_ExistingMemory_ReturnsMemory()
     {
         // Arrange
@@ -196,7 +196,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         Assert.Equal("Repository pattern implementation", result.Content);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task UpdateMemoryAsync_ValidUpdate_ReturnsTrue()
     {
         // Arrange
@@ -234,7 +234,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         Assert.Equal(MemoryStatus.InProgress, updated.GetField<string>(MemoryFields.Status));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact(Skip = "TODO: Fix NumericRangeQuery date filtering - memories are stored but date range query returns 0 results")]
     public async Task ArchiveMemoriesAsync_OldMemories_ReturnsCount()
     {
         // Arrange
@@ -243,6 +243,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
             Type = MemoryTypes.TemporaryNote,
             Content = "Old temporary note",
             Created = DateTime.UtcNow.AddDays(-35),
+            Modified = DateTime.UtcNow.AddDays(-35),
             IsShared = false
         };
         
@@ -267,7 +268,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         Assert.Equal(1, archivedCount);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task FindSimilarMemoriesAsync_ExistingMemory_ReturnsResults()
     {
         // Arrange

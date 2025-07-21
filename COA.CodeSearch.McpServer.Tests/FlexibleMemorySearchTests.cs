@@ -337,7 +337,7 @@ public class FlexibleMemorySearchTests : IDisposable
         Assert.Contains(result.Insights.RecommendedActions, a => a.Contains("critical"));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task UpdateMemory_ModifiesExistingMemory()
     {
         // Arrange
@@ -370,7 +370,7 @@ public class FlexibleMemorySearchTests : IDisposable
         Assert.True(updated.Modified > memory.Modified);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task FindSimilarMemories_ReturnsRelatedContent()
     {
         // Arrange
@@ -393,15 +393,17 @@ public class FlexibleMemorySearchTests : IDisposable
         Assert.Contains(similar, m => m.Content.Contains("Repository")); // Should find related
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact(Skip = "TODO: Fix NumericRangeQuery date filtering - memories are stored but date range query returns 0 results")]
     public async Task ArchiveMemories_MarksOldMemoriesAsArchived()
     {
         // Arrange
         var oldMemory = CreateMemory(MemoryTypes.TemporaryNote, "Old note");
         oldMemory.Created = DateTime.UtcNow.AddDays(-40);
+        oldMemory.Modified = DateTime.UtcNow.AddDays(-40);
         
         var recentMemory = CreateMemory(MemoryTypes.TemporaryNote, "Recent note");
         recentMemory.Created = DateTime.UtcNow.AddDays(-5);
+        recentMemory.Modified = DateTime.UtcNow.AddDays(-5);
         
         await _memoryService.StoreMemoryAsync(oldMemory);
         await _memoryService.StoreMemoryAsync(recentMemory);

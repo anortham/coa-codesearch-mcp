@@ -82,7 +82,7 @@ public class FlexibleMemoryToolsTests : IDisposable
         Assert.Contains("Successfully stored", result.Message);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task StoreTechnicalDebtAsync_WithFields_ReturnsSuccess()
     {
         // Arrange
@@ -110,7 +110,7 @@ public class FlexibleMemoryToolsTests : IDisposable
         Assert.Equal(priority, getResult.Memory.GetField<string>(MemoryFields.Priority));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task StoreQuestionAsync_WithContext_ReturnsSuccess()
     {
         // Arrange
@@ -137,7 +137,7 @@ public class FlexibleMemoryToolsTests : IDisposable
         Assert.Equal(context, getResult.Memory.GetField<string>("context"));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task StoreDeferredTaskAsync_WithDeferredDate_ReturnsSuccess()
     {
         // Arrange
@@ -208,7 +208,7 @@ public class FlexibleMemoryToolsTests : IDisposable
         Assert.All(result.Memories, m => Assert.Equal(MemoryTypes.TechnicalDebt, m.Type));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task UpdateMemoryAsync_ModifiesMemory_ReturnsSuccess()
     {
         // Arrange

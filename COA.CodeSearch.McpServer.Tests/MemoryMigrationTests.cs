@@ -55,7 +55,7 @@ public class MemoryMigrationTests : IDisposable
         }
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact(Skip = "TODO: Fix IOException file locking in test cleanup - Directory.Delete fails")]
     public async Task ConvertToFlexibleMemory_ArchitecturalDecision_MapsCorrectly()
     {
         // Arrange
@@ -104,7 +104,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.Contains("data-access", tags);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact(Skip = "TODO: Fix IOException file locking in test cleanup - Directory.Delete fails")]
     public async Task ConvertToFlexibleMemory_WorkSession_MapsAsLocal()
     {
         // Arrange
@@ -128,7 +128,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.Equal(MemoryStatus.Done, flexibleMemory.GetField<string>("status"));
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task MigrateAllMemories_CreatesBackup()
     {
         // Arrange - Create some test memories
@@ -164,7 +164,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.True(backedUpMemories.Count >= 2);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task MigrateAllMemories_HandlesEmptyMemoryStore()
     {
         // Act
@@ -177,7 +177,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.Empty(result.Errors);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task MigrateAllMemories_PreservesAllMemoryTypes()
     {
         // Arrange - Create one memory of each type
@@ -223,7 +223,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.True(Directory.Exists(flexibleProjectPath) || Directory.Exists(flexibleLocalPath));
     }
     
-    [Theory(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Theory(Skip = "TODO: Fix IOException file locking in test cleanup - Directory.Delete fails")]
     [InlineData("Use CQRS pattern", "ArchitecturalDecision", true)]
     [InlineData("TODO: Fix login bug", "TemporaryNote", false)]
     [InlineData("Security: Encrypt PII", "SecurityRule", true)]
@@ -247,7 +247,7 @@ public class MemoryMigrationTests : IDisposable
         Assert.Equal(expectedShared, flexibleMemory.IsShared);
     }
     
-    [Fact(Skip = "Temporarily disabled for CI/CD pipeline")]
+    [Fact]
     public async Task MigrateAllMemories_HandlesPartialFailure()
     {
         // This test would require a more complex setup to simulate failures
