@@ -287,6 +287,27 @@ public class FlexibleMemoryTools
     }
     
     /// <summary>
+    /// Mark a memory as resolved/completed
+    /// </summary>
+    public async Task<UpdateMemoryResult> MarkMemoryResolvedAsync(
+        string id,
+        string? resolutionNote = null)
+    {
+        var fieldUpdates = new Dictionary<string, JsonElement?>
+        {
+            [MemoryFields.Status] = JsonDocument.Parse($"\"{MemoryStatus.Resolved}\"").RootElement,
+            ["resolvedAt"] = JsonDocument.Parse($"\"{DateTime.UtcNow:O}\"").RootElement
+        };
+        
+        if (!string.IsNullOrEmpty(resolutionNote))
+        {
+            fieldUpdates["resolutionNote"] = JsonDocument.Parse($"\"{resolutionNote}\"").RootElement;
+        }
+        
+        return await UpdateMemoryAsync(id, fieldUpdates: fieldUpdates);
+    }
+    
+    /// <summary>
     /// Archive old memories of a specific type
     /// </summary>
     public async Task<ArchiveMemoriesResult> ArchiveMemoriesAsync(string type, int daysOld)

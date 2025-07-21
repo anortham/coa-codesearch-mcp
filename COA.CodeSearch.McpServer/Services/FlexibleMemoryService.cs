@@ -3,6 +3,7 @@ using COA.CodeSearch.McpServer.Models;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.Queries.Mlt;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
@@ -840,21 +841,34 @@ public class FlexibleMemoryService
                 return similar;
             }
             
-            // Use MoreLikeThis would go here, but for now use simple content similarity
-            var parser = new QueryParser(LUCENE_VERSION, "content", _analyzer);
-            
-            // Extract key terms from source memory
-            var keyTerms = ExtractKeyTerms(sourceMemory.Content);
-            var queryStr = string.Join(" OR ", keyTerms.Select(t => $"\"{t}\""));
-            
-            var query = parser.Parse(queryStr);
-            var topDocs = searcher.Search(query, maxResults + 1);
-            
-            foreach (var scoreDoc in topDocs.ScoreDocs)
+            // Use Lucene's MoreLikeThis for better similarity matching
+            var mlt = new MoreLikeThis(searcher.IndexReader)
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
-                var memory = DocumentToMemory(doc);
-                similar.Add(memory);
+                Analyzer = _analyzer,
+                MinTermFreq = 1,    // Minimum times a term must appear in source doc
+                MinDocFreq = 1,     // Minimum docs a term must appear in
+                MinWordLen = 3,     // Minimum word length
+                MaxWordLen = 30,    // Maximum word length
+                MaxQueryTerms = 25  // Maximum number of query terms
+            };
+            
+            // Set fields to analyze for similarity
+            mlt.FieldNames = new[] { "content", "type" };
+            
+            // Create a StringReader from the source memory content
+            using var reader = new StringReader(sourceMemory.Content);
+            var query = mlt.Like(reader, "content");
+            
+            if (query != null)
+            {
+                var topDocs = searcher.Search(query, maxResults + 1);
+                
+                foreach (var scoreDoc in topDocs.ScoreDocs)
+                {
+                    var doc = searcher.Doc(scoreDoc.Doc);
+                    var memory = DocumentToMemory(doc);
+                    similar.Add(memory);
+                }
             }
         }
         catch (Exception ex)
@@ -863,18 +877,6 @@ public class FlexibleMemoryService
         }
         
         return similar;
-    }
-    
-    private List<string> ExtractKeyTerms(string content)
-    {
-        // Simple term extraction - in production, use TF-IDF or similar
-        var words = content.Split(' ', StringSplitOptions.RemoveEmptyEntries)
-            .Where(w => w.Length > 3)
-            .Distinct()
-            .Take(10)
-            .ToList();
-        
-        return words;
     }
     
     private async Task<bool> UpdateMemoryAsync(FlexibleMemoryEntry memory)
