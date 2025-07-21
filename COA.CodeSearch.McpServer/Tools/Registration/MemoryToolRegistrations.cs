@@ -24,10 +24,6 @@ public static class MemoryToolRegistrations
         RegisterBackupMemories(registry, memoryTools);
         RegisterRestoreMemories(registry, memoryTools);
         
-        // Migration tools
-        RegisterMigrateMemories(registry, serviceProvider.GetRequiredService<MigrateMemoriesTool>());
-        RegisterMigrateOldMemories(registry, serviceProvider.GetRequiredService<MigrateOldMemoriesTool>());
-        
         // Diagnostic tool
         RegisterDiagnoseMemoryIndex(registry, serviceProvider.GetRequiredService<DiagnoseMemoryIndexTool>());
     }
@@ -282,35 +278,6 @@ public static class MemoryToolRegistrations
         );
     }
     
-    private static void RegisterMigrateMemories(ToolRegistry registry, MigrateMemoriesTool tool)
-    {
-        registry.RegisterTool<EmptyParams>(
-            name: "migrate_memories_add_ticks",
-            description: "Migrate existing memories to add timestamp_ticks field. This is needed for memories created before the backup enhancement. Run this once to fix old memories that aren't being backed up.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new { },
-                required = new string[] { }
-            },
-            handler: async (parameters, ct) =>
-            {
-                var result = await tool.MigrateAsync();
-                
-                return CreateSuccessResult(new
-                {
-                    success = true,
-                    message = $"Migration completed: {result.MigratedMemories} memories migrated, {result.SkippedMemories} already had timestamp_ticks",
-                    totalMemories = result.TotalMemories,
-                    migratedMemories = result.MigratedMemories,
-                    skippedMemories = result.SkippedMemories,
-                    migratedScopes = result.MigratedScopes,
-                    errors = result.Errors
-                });
-            }
-        );
-    }
-    
     private static void RegisterDiagnoseMemoryIndex(ToolRegistry registry, DiagnoseMemoryIndexTool tool)
     {
         registry.RegisterTool<DiagnoseMemoryIndexParams>(
@@ -329,64 +296,6 @@ public static class MemoryToolRegistrations
             {
                 var result = await tool.DiagnoseMemoryIndex(parameters?.Workspace ?? "project-memory");
                 return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterMigrateOldMemories(ToolRegistry registry, MigrateOldMemoriesTool tool)
-    {
-        registry.RegisterTool<MigrateOldMemoriesParams>(
-            name: "migrate_old_format_memories",
-            description: "Migrate memories from old format (id, scope, content, timestamp, last_modified, json_data) to new FlexibleMemoryEntry format (id, type, content, created, modified, is_shared, access_count, timestamp_ticks, fields). This fixes date range query issues. Run with dryRun=true first to preview changes.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    dryRun = new { type = "boolean", description = "If true, only preview what would be migrated without making changes (default: true)", @default = true }
-                },
-                required = new string[] { }
-            },
-            handler: async (parameters, ct) =>
-            {
-                var dryRun = parameters?.DryRun ?? true;
-                var result = await tool.MigrateOldMemoriesAsync(dryRun);
-                
-                return CreateSuccessResult(new
-                {
-                    success = result.Success,
-                    dryRun = result.DryRun,
-                    message = result.Success 
-                        ? $"Migration {(dryRun ? "preview" : "completed")}: {result.TotalOldFormatCount} old format memories found, {result.TotalMigratedCount} would be migrated"
-                        : $"Migration failed: {result.ErrorMessage}",
-                    projectMemories = new
-                    {
-                        workspace = result.ProjectMemories.Workspace,
-                        oldFormatCount = result.ProjectMemories.OldFormatCount,
-                        newFormatCount = result.ProjectMemories.NewFormatCount,
-                        migratedCount = result.ProjectMemories.MigratedIds.Count,
-                        failedCount = result.ProjectMemories.FailedCount,
-                        migratedIds = result.ProjectMemories.MigratedIds,
-                        failedIds = result.ProjectMemories.FailedIds
-                    },
-                    localMemories = new
-                    {
-                        workspace = result.LocalMemories.Workspace,
-                        oldFormatCount = result.LocalMemories.OldFormatCount,
-                        newFormatCount = result.LocalMemories.NewFormatCount,
-                        migratedCount = result.LocalMemories.MigratedIds.Count,
-                        failedCount = result.LocalMemories.FailedCount,
-                        migratedIds = result.LocalMemories.MigratedIds,
-                        failedIds = result.LocalMemories.FailedIds
-                    },
-                    summary = new
-                    {
-                        totalOldFormat = result.TotalOldFormatCount,
-                        totalNewFormat = result.TotalNewFormatCount,
-                        totalMigrated = result.TotalMigratedCount,
-                        totalFailed = result.TotalFailedCount
-                    }
-                });
             }
         );
     }
@@ -452,14 +361,5 @@ public static class MemoryToolRegistrations
     private class DiagnoseMemoryIndexParams
     {
         public string? Workspace { get; set; }
-    }
-    
-    private class EmptyParams
-    {
-    }
-    
-    private class MigrateOldMemoriesParams
-    {
-        public bool? DryRun { get; set; }
     }
 }

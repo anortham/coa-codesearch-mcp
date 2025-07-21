@@ -229,7 +229,6 @@ Memories aren't just static notes - they're living entities that need to be trac
 
 ### Additional Features Implemented
 - [x] SQLite backup/restore for version control (`backup_memories_to_sqlite`, `restore_memories_from_sqlite`)
-- [x] Memory migration from old schema (`migrate_memories_add_ticks`)
 - [x] Diagnostic tools (`diagnose_memory_index`)
 - [x] Session tracking and work history
 - [x] Custom analyzers for better search
