@@ -1,6 +1,7 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,33 +12,26 @@ namespace COA.CodeSearch.McpServer.Tests;
 public class FlexibleMemorySearchTests : IDisposable
 {
     private readonly Mock<ILogger<FlexibleMemoryService>> _loggerMock;
-    private readonly Mock<ILogger<LuceneIndexService>> _indexLoggerMock;
     private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly IConfiguration _configuration;
     private readonly FlexibleMemoryService _memoryService;
-    private readonly ILuceneIndexService _indexService;
-    private readonly string _testBasePath;
+    private readonly InMemoryTestIndexService _indexService;
     
     public FlexibleMemorySearchTests()
     {
         _loggerMock = new Mock<ILogger<FlexibleMemoryService>>();
-        _indexLoggerMock = new Mock<ILogger<LuceneIndexService>>();
         _pathResolutionMock = new Mock<IPathResolutionService>();
-        _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_search_test_{Guid.NewGuid()}");
-        Directory.CreateDirectory(_testBasePath);
-        
-        Environment.CurrentDirectory = _testBasePath;
         
         // Setup path resolution mocks
         _pathResolutionMock.Setup(x => x.GetProjectMemoryPath())
-            .Returns(Path.Combine(_testBasePath, "test-project-memory"));
+            .Returns("test-project-memory");
         _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
-            .Returns(Path.Combine(_testBasePath, "test-local-memory"));
+            .Returns("test-local-memory");
+        _pathResolutionMock.Setup(x => x.GetIndexPath(It.IsAny<string>()))
+            .Returns<string>(workspace => $"test-index-{workspace}");
         
         var configDict = new Dictionary<string, string?>
         {
-            ["LuceneIndex:BasePath"] = ".codesearch/index",
-            ["MemoryConfiguration:BasePath"] = ".codesearch",
             ["MemoryConfiguration:MaxSearchResults"] = "50"
         };
         
@@ -45,31 +39,15 @@ public class FlexibleMemorySearchTests : IDisposable
             .AddInMemoryCollection(configDict)
             .Build();
         
-        // Create real services like the working tests do
-        _indexService = new LuceneIndexService(_indexLoggerMock.Object, _configuration, _pathResolutionMock.Object);
+        // Use in-memory index service
+        _indexService = new InMemoryTestIndexService();
         _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object);
     }
     
     public void Dispose()
     {
-        // Dispose the index service to release file locks
+        // Clean up the in-memory index service
         _indexService?.Dispose();
-        
-        // Give it a moment to release locks
-        Thread.Sleep(200);
-        
-        if (Directory.Exists(_testBasePath))
-        {
-            try
-            {
-                Directory.Delete(_testBasePath, true);
-            }
-            catch (Exception ex)
-            {
-                // Log but don't fail tests due to cleanup issues
-                Console.WriteLine($"Failed to clean up test directory: {ex.Message}");
-            }
-        }
     }
     
     [Fact]

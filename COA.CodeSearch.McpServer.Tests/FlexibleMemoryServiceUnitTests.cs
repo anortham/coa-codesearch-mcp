@@ -1,6 +1,10 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tests.Helpers;
+using Lucene.Net.Documents;
+using Lucene.Net.Index;
+using Lucene.Net.Search;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -11,33 +15,26 @@ namespace COA.CodeSearch.McpServer.Tests;
 public class FlexibleMemoryServiceUnitTests : IDisposable
 {
     private readonly Mock<ILogger<FlexibleMemoryService>> _memoryLoggerMock;
-    private readonly Mock<ILogger<LuceneIndexService>> _indexLoggerMock;
+    private readonly InMemoryTestIndexService _indexService;
     private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly IConfiguration _configuration;
     private readonly FlexibleMemoryService _memoryService;
-    private readonly ILuceneIndexService _indexService;
-    private readonly string _testBasePath;
     
     public FlexibleMemoryServiceUnitTests()
     {
         _memoryLoggerMock = new Mock<ILogger<FlexibleMemoryService>>();
-        _indexLoggerMock = new Mock<ILogger<LuceneIndexService>>();
         _pathResolutionMock = new Mock<IPathResolutionService>();
-        _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_unit_test_{Guid.NewGuid()}");
-        Directory.CreateDirectory(_testBasePath);
-        
-        Environment.CurrentDirectory = _testBasePath;
         
         // Setup path resolution mocks
         _pathResolutionMock.Setup(x => x.GetProjectMemoryPath())
-            .Returns(Path.Combine(_testBasePath, "test-project-memory"));
+            .Returns("test-project-memory");
         _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
-            .Returns(Path.Combine(_testBasePath, "test-local-memory"));
+            .Returns("test-local-memory");
+        _pathResolutionMock.Setup(x => x.GetIndexPath(It.IsAny<string>()))
+            .Returns<string>(workspace => $"test-index-{workspace}");
         
         var configDict = new Dictionary<string, string?>
         {
-            ["LuceneIndex:BasePath"] = ".codesearch/index",
-            ["MemoryConfiguration:BasePath"] = ".codesearch",
             ["MemoryConfiguration:MaxSearchResults"] = "50"
         };
         
@@ -45,27 +42,16 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
             .AddInMemoryCollection(configDict)
             .Build();
         
-        // Create real services for simpler, more reliable tests
-        _indexService = new LuceneIndexService(_indexLoggerMock.Object, _configuration, _pathResolutionMock.Object);
+        // Use in-memory index service for testing
+        _indexService = new InMemoryTestIndexService();
+        
         _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object);
     }
     
     public void Dispose()
     {
+        // Clean up the in-memory index service
         _indexService?.Dispose();
-        Thread.Sleep(200);
-        
-        if (Directory.Exists(_testBasePath))
-        {
-            try
-            {
-                Directory.Delete(_testBasePath, true);
-            }
-            catch (Exception)
-            {
-                // Ignore cleanup failures
-            }
-        }
     }
     
     [Fact]
@@ -85,6 +71,13 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         
         // Assert
         Assert.True(result);
+        
+        // Verify the memory can be retrieved
+        var retrieved = await _memoryService.GetMemoryByIdAsync("test-123");
+        Assert.NotNull(retrieved);
+        Assert.Equal("test-123", retrieved.Id);
+        Assert.Equal(MemoryTypes.TechnicalDebt, retrieved.Type);
+        Assert.Equal("Refactor authentication", retrieved.Content);
     }
     
     [Fact]
@@ -108,6 +101,22 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         
         // Assert
         Assert.True(result);
+        
+        // Verify the memory was stored with extended fields
+        var retrieved = await _memoryService.GetMemoryByIdAsync("test-456");
+        Assert.NotNull(retrieved);
+        Assert.Equal("test-456", retrieved.Id);
+        Assert.Equal(MemoryTypes.Question, retrieved.Type);
+        Assert.Equal("How to handle caching?", retrieved.Content);
+        Assert.False(retrieved.IsShared); // Should be in local memory
+        
+        // Verify extended fields
+        Assert.Equal(MemoryStatus.Pending, retrieved.GetField<string>(MemoryFields.Status));
+        Assert.Equal(MemoryPriority.High, retrieved.GetField<string>(MemoryFields.Priority));
+        var tags = retrieved.GetField<string[]>(MemoryFields.Tags);
+        Assert.NotNull(tags);
+        Assert.Contains("performance", tags);
+        Assert.Contains("cache", tags);
     }
     
     [Fact]
@@ -163,8 +172,6 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         
         await _memoryService.StoreMemoryAsync(techDebt);
         await _memoryService.StoreMemoryAsync(question);
-        
-        await Task.Delay(100);
         
         // Act
         var searchRequest = new FlexibleMemorySearchRequest
