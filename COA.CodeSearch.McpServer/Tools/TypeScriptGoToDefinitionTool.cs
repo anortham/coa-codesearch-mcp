@@ -63,7 +63,8 @@ public class TypeScriptGoToDefinitionTool
             else
             {
                 _logger.LogInformation("Using TypeScript project at {ProjectPath} for file {FilePath}", projectPath, filePath);
-                await _tsService.OpenProjectAsync(projectPath, cancellationToken);
+                // Note: OpenProjectAsync is not implemented correctly and has been removed
+                // The TypeScript server will infer the project when we open the file
             }
 
             // Get the definition

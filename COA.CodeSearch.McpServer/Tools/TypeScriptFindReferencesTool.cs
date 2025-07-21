@@ -52,13 +52,14 @@ public class TypeScriptFindReferencesTool
                 };
             }
 
-            // Find and open the nearest TypeScript project
+            // Find the nearest TypeScript project
             var projectPath = await _tsService.FindNearestTypeScriptProjectAsync(filePath, cancellationToken);
             
             if (projectPath != null)
             {
                 _logger.LogInformation("Using TypeScript project at {ProjectPath} for file {FilePath}", projectPath, filePath);
-                await _tsService.OpenProjectAsync(projectPath, cancellationToken);
+                // Note: OpenProjectAsync is not implemented correctly and has been removed
+                // The TypeScript server will infer the project when we open the file
             }
             else
             {

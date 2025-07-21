@@ -492,6 +492,68 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
+    /// Read an LSP message from the TypeScript server output stream
+    /// </summary>
+    private async Task<string?> ReadLspMessageAsync(StreamReader reader, CancellationToken cancellationToken)
+    {
+        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        
+        // Read headers
+        while (true)
+        {
+            var headerLine = await reader.ReadLineAsync();
+            if (headerLine == null)
+            {
+                _logger.LogWarning("Stream ended while reading LSP headers");
+                return null;
+            }
+            
+            // Empty line indicates end of headers
+            if (string.IsNullOrEmpty(headerLine))
+            {
+                break;
+            }
+            
+            // Parse header
+            var colonIndex = headerLine.IndexOf(':');
+            if (colonIndex > 0)
+            {
+                var name = headerLine.Substring(0, colonIndex).Trim();
+                var value = headerLine.Substring(colonIndex + 1).Trim();
+                headers[name] = value;
+                _logger.LogDebug("LSP Header: {Name}: {Value}", name, value);
+            }
+        }
+        
+        // Get content length
+        if (!headers.TryGetValue("Content-Length", out var contentLengthStr) || 
+            !int.TryParse(contentLengthStr, out var contentLength))
+        {
+            _logger.LogError("Missing or invalid Content-Length header in LSP message");
+            return null;
+        }
+        
+        // Read the content
+        var buffer = new char[contentLength];
+        var totalRead = 0;
+        while (totalRead < contentLength)
+        {
+            var read = await reader.ReadAsync(buffer, totalRead, contentLength - totalRead);
+            if (read == 0)
+            {
+                _logger.LogWarning("Stream ended while reading LSP content. Expected {Expected}, got {Actual}", 
+                    contentLength, totalRead);
+                return null;
+            }
+            totalRead += read;
+        }
+        
+        var content = new string(buffer);
+        _logger.LogDebug("Read LSP message with {Length} bytes", contentLength);
+        return content;
+    }
+
+    /// <summary>
     /// Send a request to the TypeScript server and get the response
     /// </summary>
     private async Task<JsonDocument?> SendRequestAsync(object request, CancellationToken cancellationToken = default)
@@ -523,22 +585,29 @@ public class TypeScriptAnalysisService : IDisposable
             var messageCount = 0;
             while (!timeoutCts.Token.IsCancellationRequested)
             {
-                string? line = null;
+                string? messageContent = null;
                 try
                 {
-                    // Read line with cancellation support
-                    var readLineTask = _tsServerOutput!.ReadLineAsync();
-                    var completedTask = await Task.WhenAny(readLineTask, Task.Delay(Timeout.Infinite, timeoutCts.Token));
+                    // Try to read as LSP message first
+                    var readTask = ReadLspMessageAsync(_tsServerOutput!, timeoutCts.Token);
+                    messageContent = await readTask;
                     
-                    if (completedTask == readLineTask)
+                    if (messageContent == null)
                     {
-                        line = await readLineTask;
-                    }
-                    else
-                    {
-                        // Timeout occurred
-                        _logger.LogWarning("Timeout waiting for TypeScript server response after {Count} messages", messageCount);
-                        return null;
+                        // If LSP reading failed, try reading as plain line
+                        var line = await _tsServerOutput!.ReadLineAsync();
+                        if (line == null)
+                        {
+                            _logger.LogWarning("TypeScript server stream ended unexpectedly");
+                            return null;
+                        }
+                        
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            continue; // Skip empty lines
+                        }
+                        
+                        messageContent = line;
                     }
                 }
                 catch (OperationCanceledException)
@@ -546,26 +615,38 @@ public class TypeScriptAnalysisService : IDisposable
                     _logger.LogWarning("Operation cancelled while waiting for TypeScript server response");
                     return null;
                 }
-                
-                if (line == null)
+                catch (Exception ex)
                 {
-                    _logger.LogWarning("TypeScript server stream ended unexpectedly");
-                    return null;
+                    _logger.LogError(ex, "Error reading TypeScript server response");
+                    
+                    // Try to recover by reading a plain line
+                    try
+                    {
+                        var line = await _tsServerOutput!.ReadLineAsync();
+                        if (string.IsNullOrEmpty(line))
+                        {
+                            continue;
+                        }
+                        messageContent = line;
+                    }
+                    catch
+                    {
+                        continue;
+                    }
                 }
                 
-                if (string.IsNullOrEmpty(line))
+                if (string.IsNullOrEmpty(messageContent))
                 {
-                    // Empty lines can be ignored in stdio mode
                     continue;
                 }
                 
                 messageCount++;
                 _logger.LogInformation("Received TypeScript message #{Count}: {Message}", messageCount, 
-                    line.Length > 200 ? line.Substring(0, 200) + "..." : line);
+                    messageContent.Length > 200 ? messageContent.Substring(0, 200) + "..." : messageContent);
                 
                 try
                 {
-                    var doc = JsonDocument.Parse(line);
+                    var doc = JsonDocument.Parse(messageContent);
                     var root = doc.RootElement;
                     
                     // Check if this is a response to our request
@@ -579,7 +660,7 @@ public class TypeScriptAnalysisService : IDisposable
                             if (root.TryGetProperty("request_seq", out var seqElement) &&
                                 seqElement.GetInt32() == (int?)requestSeq)
                             {
-                                response = line;
+                                response = messageContent;
                                 _logger.LogInformation("Found matching response for seq {Seq}", requestSeq);
                                 break;
                             }
@@ -615,7 +696,7 @@ public class TypeScriptAnalysisService : IDisposable
                 }
                 catch (JsonException ex)
                 {
-                    _logger.LogError(ex, "Failed to parse TypeScript server response: {Response}", line);
+                    _logger.LogError(ex, "Failed to parse TypeScript server response: {Response}", messageContent);
                     // Continue reading, might be a malformed event
                 }
             }
@@ -645,12 +726,20 @@ public class TypeScriptAnalysisService : IDisposable
     {
         try
         {
+            // Ensure the file path is absolute
+            if (!Path.IsPathRooted(filePath))
+            {
+                _logger.LogWarning("Received relative file path: {FilePath}. Converting to absolute path.", filePath);
+                filePath = Path.GetFullPath(filePath);
+            }
+            
             var normalizedPath = NormalizePathForTypeScript(filePath);
             
             // Read the file content
             var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
             
             // Send open request with file content
+            // Note: TypeScript server "open" command only accepts: file, fileContent, and scriptKindName
             var openRequest = new
             {
                 seq = Interlocked.Increment(ref _requestSequence),
@@ -659,8 +748,8 @@ public class TypeScriptAnalysisService : IDisposable
                 arguments = new
                 {
                     file = normalizedPath,
-                    fileContent = fileContent,
-                    projectRootPath = NormalizePathForTypeScript(Path.GetDirectoryName(filePath) ?? "")
+                    fileContent = fileContent
+                    // Removed projectRootPath - not a valid parameter for tsserver open command
                 }
             };
             
@@ -684,31 +773,23 @@ public class TypeScriptAnalysisService : IDisposable
     /// <summary>
     /// Open a TypeScript project
     /// </summary>
+    /// <remarks>
+    /// Note: This method is currently not used and has an incorrect implementation.
+    /// The TypeScript server doesn't have an "open" command for projects.
+    /// To work with projects, you should:
+    /// 1. Use "openExternalProject" command for external projects
+    /// 2. Use "configure" command to set project settings
+    /// 3. Or simply open individual files and let tsserver infer the project
+    /// </remarks>
+    // TODO: Implement proper project handling if needed
+    /*
     public async Task<bool> OpenProjectAsync(string projectPath, CancellationToken cancellationToken = default)
     {
-        var request = new
-        {
-            seq = Interlocked.Increment(ref _requestSequence),
-            type = "request",
-            command = "open",
-            arguments = new
-            {
-                file = projectPath,
-                projectRootPath = Path.GetDirectoryName(projectPath)
-            }
-        };
-        
-        try
-        {
-            var response = await SendRequestAsync(request, cancellationToken);
-            return response != null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to open TypeScript project at {Path}", projectPath);
-            return false;
-        }
+        // Commented out - incorrect implementation
+        // The "open" command is for files, not projects
+        throw new NotImplementedException("Project opening not yet implemented. Use file-based operations instead.");
     }
+    */
 
     /// <summary>
     /// Convert a 1-based column number to a 1-based character offset for tsserver
@@ -767,6 +848,13 @@ public class TypeScriptAnalysisService : IDisposable
         int column, 
         CancellationToken cancellationToken = default)
     {
+        // Ensure the file path is absolute
+        if (!Path.IsPathRooted(filePath))
+        {
+            _logger.LogWarning("GetDefinitionAsync received relative path: {FilePath}. Converting to absolute.", filePath);
+            filePath = Path.GetFullPath(filePath);
+        }
+        
         // Convert column to offset for tsserver
         var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
         
@@ -828,6 +916,13 @@ public class TypeScriptAnalysisService : IDisposable
         int column,
         CancellationToken cancellationToken = default)
     {
+        // Ensure the file path is absolute
+        if (!Path.IsPathRooted(filePath))
+        {
+            _logger.LogWarning("FindReferencesAsync received relative path: {FilePath}. Converting to absolute.", filePath);
+            filePath = Path.GetFullPath(filePath);
+        }
+        
         // Convert column to offset for tsserver
         var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
         var references = new List<TypeScriptLocation>();
@@ -893,6 +988,13 @@ public class TypeScriptAnalysisService : IDisposable
         int column,
         CancellationToken cancellationToken = default)
     {
+        // Ensure the file path is absolute
+        if (!Path.IsPathRooted(filePath))
+        {
+            _logger.LogWarning("GetQuickInfoAsync received relative path: {FilePath}. Converting to absolute.", filePath);
+            filePath = Path.GetFullPath(filePath);
+        }
+        
         // Convert column to offset for tsserver
         var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
         
