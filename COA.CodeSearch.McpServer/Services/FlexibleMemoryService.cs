@@ -21,6 +21,7 @@ public class FlexibleMemoryService
     private readonly ILogger<FlexibleMemoryService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _indexService;
+    private readonly IPathResolutionService _pathResolution;
     private readonly string _projectMemoryWorkspace;
     private readonly string _localMemoryWorkspace;
     
@@ -31,18 +32,19 @@ public class FlexibleMemoryService
     public FlexibleMemoryService(
         ILogger<FlexibleMemoryService> logger, 
         IConfiguration configuration,
-        ILuceneIndexService indexService)
+        ILuceneIndexService indexService,
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _configuration = configuration;
         _indexService = indexService;
+        _pathResolution = pathResolution;
         
         _analyzer = new StandardAnalyzer(LUCENE_VERSION);
         
-        // Initialize workspace paths
-        var basePath = _configuration["MemoryConfiguration:BasePath"] ?? ".codesearch";
-        _projectMemoryWorkspace = Path.GetFullPath(Path.Combine(basePath, "project-memory"));
-        _localMemoryWorkspace = Path.GetFullPath(Path.Combine(basePath, "local-memory"));
+        // Initialize workspace paths from PathResolutionService
+        _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
+        _localMemoryWorkspace = _pathResolution.GetLocalMemoryPath();
     }
     
     /// <summary>

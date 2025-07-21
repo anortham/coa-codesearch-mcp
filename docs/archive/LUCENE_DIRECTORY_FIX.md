@@ -1,3 +1,11 @@
+# ⚠️ ARCHIVED - HISTORICAL CONTEXT ONLY
+
+**This document describes an old issue that has been resolved.**
+
+**For current path resolution guidance, see [docs/PATH_RESOLUTION_CRITICAL.md](../PATH_RESOLUTION_CRITICAL.md)**
+
+---
+
 # Lucene .codesearch Directory Fix - Session Note
 
 ## Issue Fixed

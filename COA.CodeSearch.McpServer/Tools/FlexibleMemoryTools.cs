@@ -688,6 +688,294 @@ public class FlexibleMemoryTools
         public string Theme { get; set; } = "";
         public int Count { get; set; }
     }
+    
+    /// <summary>
+    /// Get memory system dashboard with statistics and health information
+    /// </summary>
+    public async Task<MemoryDashboardResult> GetMemoryDashboardAsync()
+    {
+        try
+        {
+            var dashboard = new MemoryDashboardResult { Success = true };
+            
+            // Get all memories for analysis
+            var allMemoriesRequest = new FlexibleMemorySearchRequest
+            {
+                Query = "*",
+                MaxResults = 10000,
+                IncludeArchived = true
+            };
+            var allMemories = await _memoryService.SearchMemoriesAsync(allMemoriesRequest);
+            
+            // Calculate statistics
+            var stats = new MemoryStatistics();
+            var now = DateTime.UtcNow;
+            
+            foreach (var memory in allMemories.Memories)
+            {
+                stats.TotalMemories++;
+                
+                // Check status
+                var status = memory.GetField<string>(MemoryFields.Status);
+                if (status == MemoryStatus.Resolved)
+                    stats.ResolvedMemories++;
+                    
+                // Check if archived
+                if (memory.GetField<bool>("archived"))
+                    stats.ArchivedMemories++;
+                else
+                    stats.ActiveMemories++;
+                    
+                // Check if expired (working memory)
+                var expiresAt = memory.GetField<DateTime?>(MemoryFields.ExpiresAt);
+                if (expiresAt.HasValue && expiresAt.Value < now)
+                    stats.ExpiredMemories++;
+                    
+                // Check if working memory
+                if (memory.Type == MemoryTypes.WorkingMemory || memory.GetField<bool>("isWorkingMemory"))
+                    stats.WorkingMemories++;
+                    
+                // Check if has links
+                if (memory.Fields.Any(f => f.Key.StartsWith("link_") || f.Key.StartsWith("linkedTo")))
+                    stats.LinkedMemories++;
+            }
+            
+            if (allMemories.Memories.Any())
+            {
+                stats.OldestMemory = allMemories.Memories.Min(m => m.Created);
+                stats.NewestMemory = allMemories.Memories.Max(m => m.Created);
+                stats.AverageMemoryAgeInDays = allMemories.Memories
+                    .Average(m => (now - m.Created).TotalDays);
+            }
+            
+            dashboard.Statistics = stats;
+            
+            // Type distribution
+            dashboard.TypeDistribution = allMemories.Memories
+                .GroupBy(m => m.Type)
+                .ToDictionary(g => g.Key, g => g.Count())
+                .OrderByDescending(kv => kv.Value)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+                
+            // Status distribution
+            dashboard.StatusDistribution = allMemories.Memories
+                .Select(m => m.GetField<string>(MemoryFields.Status) ?? "none")
+                .GroupBy(s => s)
+                .ToDictionary(g => g.Key, g => g.Count())
+                .OrderByDescending(kv => kv.Value)
+                .ToDictionary(kv => kv.Key, kv => kv.Value);
+                
+            // Health checks
+            dashboard.HealthIssues = AnalyzeMemoryHealth(allMemories.Memories, stats);
+            
+            // Recent activity (last 24 hours)
+            var recentCutoff = now.AddDays(-1);
+            var recentMemories = allMemories.Memories
+                .Where(m => m.Created > recentCutoff || m.Modified > recentCutoff)
+                .ToList();
+                
+            dashboard.RecentActivities = new List<RecentActivity>
+            {
+                new RecentActivity
+                {
+                    Type = "Created",
+                    Action = "New memories",
+                    Timestamp = recentMemories.Any() ? recentMemories.Max(m => m.Created) : DateTime.MinValue,
+                    Count = recentMemories.Count(m => m.Created > recentCutoff)
+                },
+                new RecentActivity
+                {
+                    Type = "Modified",
+                    Action = "Updated memories",
+                    Timestamp = recentMemories.Any() ? recentMemories.Max(m => m.Modified) : DateTime.MinValue,
+                    Count = recentMemories.Count(m => m.Modified > recentCutoff && m.Modified != m.Created)
+                }
+            };
+            
+            // Storage info
+            dashboard.Storage = await GetStorageInfoAsync();
+            
+            // Build summary message
+            var messageParts = new List<string>
+            {
+                $"Memory System Dashboard - {stats.TotalMemories} total memories",
+                $"Active: {stats.ActiveMemories}, Archived: {stats.ArchivedMemories}, Resolved: {stats.ResolvedMemories}"
+            };
+            
+            if (dashboard.HealthIssues.Any(h => h.Severity == "error"))
+            {
+                messageParts.Add($"⚠️ {dashboard.HealthIssues.Count(h => h.Severity == "error")} critical issues detected");
+            }
+            
+            dashboard.Message = string.Join("\n", messageParts);
+            
+            return dashboard;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating memory dashboard");
+            return new MemoryDashboardResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    private List<MemoryHealthIssue> AnalyzeMemoryHealth(List<FlexibleMemoryEntry> memories, MemoryStatistics stats)
+    {
+        var issues = new List<MemoryHealthIssue>();
+        var now = DateTime.UtcNow;
+        
+        // Check for too many unresolved items
+        var unresolvedTechnicalDebt = memories
+            .Where(m => m.Type == MemoryTypes.TechnicalDebt && 
+                       m.GetField<string>(MemoryFields.Status) != MemoryStatus.Resolved)
+            .Count();
+            
+        if (unresolvedTechnicalDebt > 50)
+        {
+            issues.Add(new MemoryHealthIssue
+            {
+                Severity = "warning",
+                Issue = "High unresolved technical debt",
+                Recommendation = "Consider reviewing and prioritizing technical debt items",
+                AffectedCount = unresolvedTechnicalDebt
+            });
+        }
+        
+        // Check for expired working memories
+        if (stats.ExpiredMemories > 0)
+        {
+            issues.Add(new MemoryHealthIssue
+            {
+                Severity = "info",
+                Issue = "Expired working memories present",
+                Recommendation = "These will be filtered out automatically",
+                AffectedCount = stats.ExpiredMemories
+            });
+        }
+        
+        // Check for old unarchived memories
+        var oldActiveMemories = memories
+            .Where(m => !m.GetField<bool>("archived") && 
+                       (now - m.Created).TotalDays > 180)
+            .Count();
+            
+        if (oldActiveMemories > 100)
+        {
+            issues.Add(new MemoryHealthIssue
+            {
+                Severity = "warning",
+                Issue = "Many old active memories",
+                Recommendation = "Consider archiving or summarizing memories older than 6 months",
+                AffectedCount = oldActiveMemories
+            });
+        }
+        
+        // Check for memories without files
+        var memoriesWithoutFiles = memories
+            .Where(m => !m.FilesInvolved.Any() && 
+                       m.Type != MemoryTypes.WorkingMemory)
+            .Count();
+            
+        if (memoriesWithoutFiles > stats.TotalMemories * 0.3)
+        {
+            issues.Add(new MemoryHealthIssue
+            {
+                Severity = "info",
+                Issue = "Many memories lack file associations",
+                Recommendation = "Consider adding file references for better context",
+                AffectedCount = memoriesWithoutFiles
+            });
+        }
+        
+        // Check for duplicate content
+        var duplicateGroups = memories
+            .GroupBy(m => m.Content.Trim().ToLowerInvariant())
+            .Where(g => g.Count() > 1)
+            .ToList();
+            
+        if (duplicateGroups.Any())
+        {
+            issues.Add(new MemoryHealthIssue
+            {
+                Severity = "info",
+                Issue = "Potential duplicate memories detected",
+                Recommendation = "Review and consolidate duplicate entries",
+                AffectedCount = duplicateGroups.Sum(g => g.Count())
+            });
+        }
+        
+        return issues.OrderBy(i => i.Severity == "error" ? 0 : i.Severity == "warning" ? 1 : 2).ToList();
+    }
+    
+    private async Task<StorageInfo> GetStorageInfoAsync()
+    {
+        var storage = new StorageInfo();
+        
+        try
+        {
+            // Get workspace path from environment or config
+            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var baseDir = Path.Combine(localAppData, "COA.CodeSearch", ".codesearch");
+            
+            if (Directory.Exists(baseDir))
+            {
+                // Calculate total size
+                var dirInfo = new DirectoryInfo(baseDir);
+                storage.TotalSizeBytes = GetDirectorySize(dirInfo);
+                storage.FormattedSize = FormatBytes(storage.TotalSizeBytes);
+                
+                // Check for index directories
+                var indexDir = Path.Combine(baseDir, "memory-index");
+                if (Directory.Exists(indexDir))
+                {
+                    storage.IndexSizeBytes = GetDirectorySize(new DirectoryInfo(indexDir));
+                }
+                
+                // Check for backup file
+                var backupFile = Path.Combine(baseDir, "memories.db");
+                if (File.Exists(backupFile))
+                {
+                    var fileInfo = new FileInfo(backupFile);
+                    storage.BackupSizeBytes = fileInfo.Length;
+                    storage.LastBackup = fileInfo.LastWriteTimeUtc;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error calculating storage info");
+        }
+        
+        return storage;
+    }
+    
+    private long GetDirectorySize(DirectoryInfo dir)
+    {
+        try
+        {
+            return dir.GetFiles("*", SearchOption.AllDirectories).Sum(f => f.Length);
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+    
+    private string FormatBytes(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
 }
 
 // Result classes
@@ -733,4 +1021,56 @@ public class SummarizeMemoriesResult
     public int SummaryCount { get; set; }
     public List<FlexibleMemoryEntry> Summaries { get; set; } = new();
     public string Message { get; set; } = "";
+}
+
+public class MemoryDashboardResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public MemoryStatistics Statistics { get; set; } = new();
+    public List<MemoryHealthIssue> HealthIssues { get; set; } = new();
+    public Dictionary<string, int> TypeDistribution { get; set; } = new();
+    public Dictionary<string, int> StatusDistribution { get; set; } = new();
+    public List<RecentActivity> RecentActivities { get; set; } = new();
+    public StorageInfo Storage { get; set; } = new();
+}
+
+public class MemoryStatistics
+{
+    public int TotalMemories { get; set; }
+    public int ActiveMemories { get; set; }
+    public int ArchivedMemories { get; set; }
+    public int ExpiredMemories { get; set; }
+    public int ResolvedMemories { get; set; }
+    public int LinkedMemories { get; set; }
+    public int WorkingMemories { get; set; }
+    public DateTime OldestMemory { get; set; }
+    public DateTime NewestMemory { get; set; }
+    public double AverageMemoryAgeInDays { get; set; }
+}
+
+public class MemoryHealthIssue
+{
+    public string Severity { get; set; } = ""; // "warning", "error", "info"
+    public string Issue { get; set; } = "";
+    public string Recommendation { get; set; } = "";
+    public int AffectedCount { get; set; }
+}
+
+public class RecentActivity
+{
+    public string Type { get; set; } = "";
+    public string Action { get; set; } = "";
+    public DateTime Timestamp { get; set; }
+    public int Count { get; set; }
+}
+
+public class StorageInfo
+{
+    public long TotalSizeBytes { get; set; }
+    public string FormattedSize { get; set; } = "";
+    public long IndexSizeBytes { get; set; }
+    public long BackupSizeBytes { get; set; }
+    public DateTime? LastBackup { get; set; }
+    public DateTime? LastIndexOptimization { get; set; }
 }

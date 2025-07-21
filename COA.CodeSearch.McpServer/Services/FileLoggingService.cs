@@ -45,15 +45,23 @@ public class FileLoggingService : IHostedService, IDisposable
             _logDirectory = _pathResolution.GetLogsPath();
             _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
             
-            // Ensure log directory exists
-            Directory.CreateDirectory(_logDirectory);
+            // PathResolutionService already creates the directory
             _logger.LogInformation("File logging service initialized. Log directory: {LogDirectory}", _logDirectory);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to initialize file logging service - will retry on StartAsync");
-            // Use temp directory as fallback
-            _logDirectory = Path.Combine(Path.GetTempPath(), ".codesearch", "logs");
+            // Use temp directory as fallback - but still go through PathResolutionService if possible
+            try
+            {
+                _logDirectory = _pathResolution.GetLogsPath();
+            }
+            catch
+            {
+                // Only as last resort, use temp directory
+                _logDirectory = Path.Combine(Path.GetTempPath(), "COA.CodeSearch.logs");
+                Directory.CreateDirectory(_logDirectory);
+            }
             _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
         }
     }

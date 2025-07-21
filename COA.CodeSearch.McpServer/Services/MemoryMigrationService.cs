@@ -15,15 +15,18 @@ public class MemoryMigrationService
 {
     private readonly ILogger<MemoryMigrationService> _logger;
     private readonly ClaudeMemoryService _oldMemoryService;
+    private readonly IPathResolutionService _pathResolution;
     private readonly string _basePath;
 
     public MemoryMigrationService(
         ILogger<MemoryMigrationService> logger,
-        ClaudeMemoryService oldMemoryService)
+        ClaudeMemoryService oldMemoryService,
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _oldMemoryService = oldMemoryService;
-        _basePath = Path.Combine(Environment.CurrentDirectory, ".codesearch");
+        _pathResolution = pathResolution;
+        _basePath = _pathResolution.GetBasePath();
     }
 
     /// <summary>
@@ -86,12 +89,11 @@ public class MemoryMigrationService
     private async Task<string> CreateBackupAsync()
     {
         var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
-        var backupDir = Path.Combine(_basePath, "backups", $"pre_migration_{timestamp}");
-        System.IO.Directory.CreateDirectory(backupDir);
+        var backupDir = _pathResolution.GetBackupPath($"pre_migration_{timestamp}");
         
         // Copy existing index directories
-        var projectMemoryPath = Path.Combine(_basePath, "project-memory");
-        var localMemoryPath = Path.Combine(_basePath, "local-memory");
+        var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
+        var localMemoryPath = _pathResolution.GetLocalMemoryPath();
         
         if (System.IO.Directory.Exists(projectMemoryPath))
         {
@@ -226,15 +228,15 @@ public class MemoryMigrationService
         var sharedMemories = memories.Where(m => m.IsShared).ToList();
         var localMemories = memories.Where(m => !m.IsShared).ToList();
         
-        // Store in appropriate indexes
+        // Store in appropriate indexes using PathResolutionService
         if (sharedMemories.Any())
         {
-            await StoreMemoriesToIndexAsync(sharedMemories, Path.Combine(_basePath, "flexible-project-memory"));
+            await StoreMemoriesToIndexAsync(sharedMemories, _pathResolution.GetProjectMemoryPath());
         }
         
         if (localMemories.Any())
         {
-            await StoreMemoriesToIndexAsync(localMemories, Path.Combine(_basePath, "flexible-local-memory"));
+            await StoreMemoriesToIndexAsync(localMemories, _pathResolution.GetLocalMemoryPath());
         }
     }
     
@@ -243,7 +245,6 @@ public class MemoryMigrationService
     /// </summary>
     private async Task StoreMemoriesToIndexAsync(List<FlexibleMemoryEntry> memories, string indexPath)
     {
-        System.IO.Directory.CreateDirectory(indexPath);
         
         using var directory = FSDirectory.Open(indexPath);
         var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48);
@@ -344,7 +345,7 @@ public class MemoryMigrationService
     /// </summary>
     private void CopyDirectory(string sourceDir, string destDir)
     {
-        System.IO.Directory.CreateDirectory(destDir);
+        System.IO.Directory.CreateDirectory(destDir); // This is OK - it's for backup subdirectories
         
         foreach (var file in System.IO.Directory.GetFiles(sourceDir))
         {

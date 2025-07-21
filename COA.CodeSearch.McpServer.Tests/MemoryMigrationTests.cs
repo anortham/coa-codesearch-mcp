@@ -12,6 +12,7 @@ public class MemoryMigrationTests : IDisposable
 {
     private readonly Mock<ILogger<MemoryMigrationService>> _loggerMock;
     private readonly Mock<ILogger<ClaudeMemoryService>> _memoryLoggerMock;
+    private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly IConfiguration _configuration;
     private readonly Mock<ILuceneIndexService> _indexServiceMock;
     private readonly string _testBasePath;
@@ -22,12 +23,19 @@ public class MemoryMigrationTests : IDisposable
     {
         _loggerMock = new Mock<ILogger<MemoryMigrationService>>();
         _memoryLoggerMock = new Mock<ILogger<ClaudeMemoryService>>();
+        _pathResolutionMock = new Mock<IPathResolutionService>();
         _indexServiceMock = new Mock<ILuceneIndexService>();
         _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_migration_test_{Guid.NewGuid()}");
         Directory.CreateDirectory(_testBasePath);
         
         // Set working directory for test
         Environment.CurrentDirectory = _testBasePath;
+        
+        // Setup path resolution mocks
+        _pathResolutionMock.Setup(x => x.GetProjectMemoryPath())
+            .Returns(Path.Combine(_testBasePath, "test-project-memory"));
+        _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
+            .Returns(Path.Combine(_testBasePath, "test-local-memory"));
         
         // Create proper configuration
         var configDict = new Dictionary<string, string?>
@@ -43,7 +51,7 @@ public class MemoryMigrationTests : IDisposable
             .Build();
         
         _memoryService = new ClaudeMemoryService(_memoryLoggerMock.Object, _configuration, _indexServiceMock.Object);
-        _migrationService = new MemoryMigrationService(_loggerMock.Object, _memoryService);
+        _migrationService = new MemoryMigrationService(_loggerMock.Object, _memoryService, _pathResolutionMock.Object);
     }
     
     public void Dispose()

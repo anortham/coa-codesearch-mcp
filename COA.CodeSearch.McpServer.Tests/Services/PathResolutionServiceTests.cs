@@ -213,6 +213,23 @@ public class PathResolutionServiceTests : IDisposable
     }
     
     [Theory]
+    [InlineData("project-memory")]
+    [InlineData("local-memory")]
+    [InlineData(".codesearch/project-memory")]
+    [InlineData(".codesearch/local-memory")]
+    public void GetIndexPath_HandlesMemoryPathsSpecially(string memoryPath)
+    {
+        // Act
+        var indexPath = _service.GetIndexPath(memoryPath);
+        
+        // Assert - should return the direct memory path without hashing
+        var fileName = Path.GetFileName(indexPath);
+        Assert.False(fileName.Contains("_"), "Memory paths should not have hash suffixes");
+        Assert.True(indexPath.EndsWith("project-memory") || indexPath.EndsWith("local-memory"), 
+            "Should return direct memory path");
+    }
+    
+    [Theory]
     [InlineData(@"C:\path\with trailing slash\")]
     [InlineData(@"C:\path\with trailing slash")]
     [InlineData(@"C:/path/with/forward/slashes/")]

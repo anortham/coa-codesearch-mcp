@@ -121,4 +121,20 @@ public class PathResolutionService : IPathResolutionService
             return string.Equals(normalizedIndexPath, normalizedProtectedPath, StringComparison.OrdinalIgnoreCase);
         });
     }
+    
+    public string GetBackupPath(string? timestamp = null)
+    {
+        var backupRoot = Path.Combine(_basePath, "backups");
+        System.IO.Directory.CreateDirectory(backupRoot);
+        
+        if (string.IsNullOrEmpty(timestamp))
+        {
+            timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        }
+        
+        var backupPath = Path.Combine(backupRoot, $"backup_{timestamp}");
+        System.IO.Directory.CreateDirectory(backupPath);
+        
+        return backupPath;
+    }
 }

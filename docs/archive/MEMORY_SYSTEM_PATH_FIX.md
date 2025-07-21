@@ -1,3 +1,11 @@
+# ⚠️ ARCHIVED - OUTDATED INFORMATION
+
+**This document describes an old implementation that is no longer valid.**
+
+**For current path resolution guidance, see [docs/PATH_RESOLUTION_CRITICAL.md](../PATH_RESOLUTION_CRITICAL.md)**
+
+---
+
 # Memory System Path Resolution Fix - Critical Changes
 
 ## Date: 2025-07-20
