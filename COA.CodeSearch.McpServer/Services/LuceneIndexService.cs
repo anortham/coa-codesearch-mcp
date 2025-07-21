@@ -855,6 +855,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                     {
                         context.Writer.Commit();
                         
+                        // Invalidate the reader so next search gets fresh data
+                        context.Reader?.Dispose();
+                        context.Reader = null;
+                        
                         // Log extra info for memory indexes
                         if (IsProtectedMemoryIndex(indexPath))
                         {

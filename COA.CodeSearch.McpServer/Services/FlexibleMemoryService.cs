@@ -20,8 +20,8 @@ public class FlexibleMemoryService
     private readonly ILogger<FlexibleMemoryService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _indexService;
-    private readonly string _projectMemoryWorkspace = "flexible-project-memory";
-    private readonly string _localMemoryWorkspace = "flexible-local-memory";
+    private readonly string _projectMemoryWorkspace;
+    private readonly string _localMemoryWorkspace;
     
     // Lucene components
     private readonly StandardAnalyzer _analyzer;
@@ -37,6 +37,11 @@ public class FlexibleMemoryService
         _indexService = indexService;
         
         _analyzer = new StandardAnalyzer(LUCENE_VERSION);
+        
+        // Initialize workspace paths
+        var basePath = _configuration["MemoryConfiguration:BasePath"] ?? ".codesearch";
+        _projectMemoryWorkspace = Path.GetFullPath(Path.Combine(basePath, "project-memory"));
+        _localMemoryWorkspace = Path.GetFullPath(Path.Combine(basePath, "local-memory"));
     }
     
     /// <summary>
@@ -187,14 +192,23 @@ public class FlexibleMemoryService
     /// </summary>
     public async Task<FlexibleMemoryEntry?> GetMemoryByIdAsync(string id)
     {
-        var searchRequest = new FlexibleMemorySearchRequest
+        // Use direct term query for exact ID match instead of QueryParser
+        // This avoids issues with QueryParser not finding StringField values
+        try
         {
-            Query = $"id:{id}",
-            MaxResults = 1
-        };
-        
-        var result = await SearchMemoriesAsync(searchRequest);
-        return result.Memories.FirstOrDefault();
+            // Search both project and local memories
+            var projectMemory = await SearchMemoryByIdInIndexAsync(_projectMemoryWorkspace, id, true);
+            if (projectMemory != null)
+                return projectMemory;
+                
+            var localMemory = await SearchMemoryByIdInIndexAsync(_localMemoryWorkspace, id, false);
+            return localMemory;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting memory by ID: {Id}", id);
+            return null;
+        }
     }
     
     /// <summary>
@@ -238,24 +252,44 @@ public class FlexibleMemoryService
     public async Task<int> ArchiveMemoriesAsync(string type, TimeSpan olderThan)
     {
         var cutoffDate = DateTime.UtcNow - olderThan;
+        _logger.LogInformation("Archiving memories of type {Type} older than {Cutoff} (older than {Days} days)", 
+            type, cutoffDate, olderThan.TotalDays);
+            
         var searchRequest = new FlexibleMemorySearchRequest
         {
             Types = new[] { type },
-            DateRange = new DateRangeFilter { To = cutoffDate },
+            DateRange = new DateRangeFilter { From = DateTime.MinValue, To = cutoffDate },
             MaxResults = int.MaxValue
         };
         
-        var result = await SearchMemoriesAsync(searchRequest);
+        // Search without updating access counts to avoid conflicts
+        var memories = new List<FlexibleMemoryEntry>();
+        memories.AddRange(await SearchIndexAsync(_projectMemoryWorkspace, searchRequest, true));
+        memories.AddRange(await SearchIndexAsync(_localMemoryWorkspace, searchRequest, false));
+        
+        _logger.LogInformation("Found {Count} memories to archive of type {Type}", memories.Count, type);
+        
         var archived = 0;
         
-        foreach (var memory in result.Memories)
+        foreach (var memory in memories)
         {
             memory.SetField("archived", true);
             memory.SetField("archivedDate", DateTime.UtcNow);
             
-            if (await StoreMemoryAsync(memory))
+            try
             {
-                archived++;
+                if (await StoreMemoryAsync(memory))
+                {
+                    archived++;
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to store archived memory: {Id}", memory.Id);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error archiving memory: {Id}", memory.Id);
             }
         }
         
@@ -267,6 +301,44 @@ public class FlexibleMemoryService
     
     // Private helper methods
     
+    /// <summary>
+    /// Search for a memory by ID in a specific index using direct TermQuery
+    /// </summary>
+    private async Task<FlexibleMemoryEntry?> SearchMemoryByIdInIndexAsync(string workspacePath, string id, bool isShared)
+    {
+        try
+        {
+            // Get searcher from index service
+            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
+            if (searcher == null)
+            {
+                _logger.LogDebug("No index searcher available for workspace {WorkspacePath}", workspacePath);
+                return null;
+            }
+            
+            // Create direct term query for exact ID match
+            var termQuery = new TermQuery(new Term("id", id));
+            
+            // Execute search
+            var topDocs = searcher.Search(termQuery, 1);
+            
+            if (topDocs.ScoreDocs.Length > 0)
+            {
+                var doc = searcher.Doc(topDocs.ScoreDocs[0].Doc);
+                var memory = DocumentToMemory(doc);
+                memory.IsShared = isShared;
+                return memory;
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error searching for memory by ID in index at {Path}", workspacePath);
+            return null;
+        }
+    }
+    
     private Document CreateDocument(FlexibleMemoryEntry memory)
     {
         var doc = new Document();
@@ -275,9 +347,16 @@ public class FlexibleMemoryService
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        
+        // Date fields need both Int64Field (for storage) and NumericDocValuesField (for range queries)
         doc.Add(new Int64Field("created", memory.Created.Ticks, Field.Store.YES));
+        doc.Add(new NumericDocValuesField("created", memory.Created.Ticks));
+        
         doc.Add(new Int64Field("modified", memory.Modified.Ticks, Field.Store.YES));
+        doc.Add(new NumericDocValuesField("modified", memory.Modified.Ticks));
+        
         doc.Add(new Int64Field("timestamp_ticks", memory.TimestampTicks, Field.Store.YES));
+        doc.Add(new NumericDocValuesField("timestamp_ticks", memory.TimestampTicks));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
         doc.Add(new Int32Field("access_count", memory.AccessCount, Field.Store.YES));
         
@@ -289,6 +368,7 @@ public class FlexibleMemoryService
         if (memory.LastAccessed.HasValue)
         {
             doc.Add(new Int64Field("last_accessed", memory.LastAccessed.Value.Ticks, Field.Store.YES));
+            doc.Add(new NumericDocValuesField("last_accessed", memory.LastAccessed.Value.Ticks));
         }
         
         // Files
@@ -339,14 +419,17 @@ public class FlexibleMemoryService
                     if (value.TryGetInt32(out var intVal))
                     {
                         doc.Add(new Int32Field(fieldName, intVal, Field.Store.NO));
+                        doc.Add(new NumericDocValuesField(fieldName, intVal));
                     }
                     else if (value.TryGetInt64(out var longVal))
                     {
                         doc.Add(new Int64Field(fieldName, longVal, Field.Store.NO));
+                        doc.Add(new NumericDocValuesField(fieldName, longVal));
                     }
                     else if (value.TryGetDouble(out var doubleVal))
                     {
                         doc.Add(new DoubleField(fieldName, doubleVal, Field.Store.NO));
+                        doc.Add(new DoubleDocValuesField(fieldName, doubleVal));
                     }
                     break;
                     
