@@ -155,16 +155,33 @@ public class ClaudeMemoryTools
     {
         try
         {
+            // Log to file to avoid breaking MCP protocol
+            try
+            {
+                var logPath = Path.Combine(Path.GetTempPath(), "mcp-token-trace.log");
+                File.AppendAllText(logPath, $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] RememberSession input: summary={summary.Length} chars, files={filesWorkedOn?.Length ?? 0}\n");
+            }
+            catch { /* Ignore logging errors */ }
+            
             var success = await _memoryService.StoreWorkSessionAsync(summary, filesWorkedOn);
 
             if (success)
             {
                 _logger.LogInformation("Stored work session: {Summary}", summary);
-                return new 
+                var response = new 
                 { 
                     success = true, 
                     message = $"📝 Work session recorded: {summary}\n\nThis session summary is stored locally for your personal reference." 
                 };
+                
+                // Log response size to file
+                try
+                {
+                    var logPath = Path.Combine(Path.GetTempPath(), "mcp-token-trace.log");
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] RememberSession response object size: {System.Text.Json.JsonSerializer.Serialize(response).Length} chars\n");
+                }
+                catch { /* Ignore logging errors */ }
+                return response;
             }
             else
             {
