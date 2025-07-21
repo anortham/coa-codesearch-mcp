@@ -218,14 +218,14 @@ public class MemorySystemPathIntegrationTests : IDisposable
         Assert.Equal(Path.Combine(_testBasePath, "local-memory"), localMemoryPath);
         Assert.True(System.IO.Directory.Exists(localMemoryPath));
         
-        // Test 3: GetIndexPath with memory paths should NOT hash them
-        // This is where the bug was - it was treating memory paths as workspace paths
+        // Test 3: GetIndexPath with memory path keywords should return memory paths
+        // The API expects "project-memory" or "local-memory" as input, not full paths
         var indexService = _serviceProvider.GetRequiredService<LuceneIndexService>();
         
-        var projectIndexPath = indexService.GetPhysicalIndexPath(projectMemoryPath);
+        var projectIndexPath = indexService.GetPhysicalIndexPath("project-memory");
         Assert.Equal(projectMemoryPath, projectIndexPath);
         
-        var localIndexPath = indexService.GetPhysicalIndexPath(localMemoryPath);
+        var localIndexPath = indexService.GetPhysicalIndexPath("local-memory");
         Assert.Equal(localMemoryPath, localIndexPath);
         
         // Test 4: GetIndexPath with regular workspace should hash it
@@ -256,7 +256,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         
         // Ensure the index is properly closed before creating new instances
         var luceneService = _serviceProvider.GetRequiredService<LuceneIndexService>();
-        luceneService.CloseWriter(_pathResolution.GetProjectMemoryPath(), commit: true);
+        luceneService.CloseWriter("project-memory", commit: true);
         
         // Give time for the index to flush
         await Task.Delay(100);
@@ -306,7 +306,6 @@ public class MemorySystemPathIntegrationTests : IDisposable
         
         var expectedDirs = new[]
         {
-            ("index", Path.Combine(_pathResolution.GetBasePath(), "index")),
             ("project-memory", _pathResolution.GetProjectMemoryPath()),
             ("local-memory", _pathResolution.GetLocalMemoryPath()),
             ("logs", _pathResolution.GetLogsPath()),
@@ -326,6 +325,10 @@ public class MemorySystemPathIntegrationTests : IDisposable
             // Directory should be created
             Assert.True(System.IO.Directory.Exists(path), $"Directory {name} should exist at {path}");
         }
+        
+        // The index directory should be created on demand when indexing workspaces
+        var indexPath = Path.Combine(_pathResolution.GetBasePath(), "index");
+        _output.WriteLine($"Index path (created on demand): {indexPath}");
     }
 
     private ServiceProvider BuildNewServiceProvider()

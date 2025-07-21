@@ -42,9 +42,10 @@ public class FlexibleMemoryService
         
         _analyzer = new StandardAnalyzer(LUCENE_VERSION);
         
-        // Initialize workspace paths from PathResolutionService
-        _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
-        _localMemoryWorkspace = _pathResolution.GetLocalMemoryPath();
+        // Initialize workspace identifiers - these are passed to index service
+        // which will resolve them to actual paths
+        _projectMemoryWorkspace = "project-memory";
+        _localMemoryWorkspace = "local-memory";
     }
     
     /// <summary>

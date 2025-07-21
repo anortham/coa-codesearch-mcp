@@ -406,30 +406,19 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetIndexPath(string workspacePath)
     {
-        // Check if this is already a resolved memory path
-        // Memory paths come from PathResolutionService as full paths like:
-        // "C:\...\\.codesearch\project-memory" or "C:\...\\.codesearch\local-memory"
-        // Also handle test paths that might not have .codesearch in them
-        var normalizedPath = workspacePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
-        
-        // Check if this ends with our memory path patterns
-        if (normalizedPath.EndsWith(Path.DirectorySeparatorChar + "project-memory") || 
-            normalizedPath.EndsWith(Path.DirectorySeparatorChar + "local-memory") ||
-            normalizedPath.Equals("project-memory", StringComparison.OrdinalIgnoreCase) ||
-            normalizedPath.Equals("local-memory", StringComparison.OrdinalIgnoreCase))
-        {
-            // This is already a resolved memory path, use it directly
-            System.IO.Directory.CreateDirectory(workspacePath);
-            return workspacePath;
-        }
-        
-        // For regular workspace paths, use the hashing logic
+        // Let PathResolutionService handle ALL path resolution, including memory paths
         var indexPath = _pathResolution.GetIndexPath(workspacePath);
         
-        // Update metadata for code indexes (not memory indexes)
-        var workspaceRoot = NormalizeToWorkspaceRoot(workspacePath);
-        var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
-        UpdateMetadata(workspaceRoot, hashPath);
+        // Only update metadata for non-memory indexes
+        if (!_pathResolution.IsProtectedPath(indexPath))
+        {
+            var workspaceRoot = NormalizeToWorkspaceRoot(workspacePath);
+            if (workspaceRoot != null)
+            {
+                var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
+                UpdateMetadata(workspaceRoot, hashPath);
+            }
+        }
         
         return indexPath;
     }
@@ -517,6 +506,12 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private void UpdateMetadata(string originalPath, string hashPath)
     {
+        if (string.IsNullOrEmpty(originalPath) || string.IsNullOrEmpty(hashPath))
+        {
+            // Skip metadata update for invalid paths
+            return;
+        }
+        
         _metadataLock.Wait();
         try
         {
