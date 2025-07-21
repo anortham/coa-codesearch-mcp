@@ -622,3 +622,87 @@ The `batch_operations` tool allows executing multiple operations in parallel:
   ]
 }
 ```
+
+## Cross-Language Analysis for Full-Stack Applications
+
+### Important Language Boundaries
+
+When working with full-stack applications (e.g., ASP.NET backend + TypeScript/React/Vue frontend), be aware of these language boundaries:
+
+#### Language-Specific Tools
+- **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`
+- **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references`
+- **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`, `get_document_symbols`
+- **All Languages**: `fast_text_search`, `fast_file_search`, and other Lucene-based tools
+
+#### Key Limitation: No Cross-Language Reference Tracking
+- Finding references to a C# `UserProfile` class will NOT show TypeScript usages
+- Finding references to a TypeScript `UserProfile` interface will NOT show C# API endpoints
+- Each language is analyzed in isolation by its respective language server
+
+### Best Practices for Full-Stack Analysis
+
+#### 1. **Context-Aware Tool Usage**
+Developers typically work in language-specific contexts:
+- Frontend work: Use TypeScript tools for component analysis
+- Backend work: Use C# tools for API analysis
+- Switch tools when switching contexts
+
+#### 2. **System-Wide Analysis**
+For comprehensive analysis across the full stack:
+```bash
+# Example: Find all usages of UserProfile across C# and TypeScript
+1. mcp__codesearch__find_references --file Models/UserProfile.cs --line 5 --column 10
+2. mcp__codesearch__typescript_find_references --file models/UserProfile.ts --line 3 --column 15
+3. mcp__codesearch__fast_text_search --query "UserProfile" --workspacePath "C:/project"
+```
+
+#### 3. **API Contract Analysis**
+When analyzing API boundaries:
+- Check C# controller return types
+- Check TypeScript service method signatures
+- Use `fast_text_search` to find API endpoint URLs in both codebases
+
+#### 4. **Future Composite Tools**
+Planned tools will provide unified views:
+- `FindReferencesAcrossLanguages` - Combines C#, TypeScript, and text search results
+- `AnalyzeFullStackProject` - Shows both .NET and frontend project structure
+- Automatic result deduplication and organization
+
+### Example Workflow for Full-Stack Refactoring
+
+When renaming a model that spans backend and frontend:
+
+1. **Analyze Impact**:
+   ```bash
+   # Find C# usages
+   mcp__codesearch__find_references --file Models/User.cs
+   
+   # Find TypeScript usages
+   mcp__codesearch__find_references --file models/User.ts
+   
+   # Find string references (API routes, etc.)
+   mcp__codesearch__fast_text_search --query "\"User\"" --searchType phrase
+   ```
+
+2. **Rename Backend** (C# only):
+   ```bash
+   mcp__codesearch__rename_symbol --file Models/User.cs --newName Customer
+   ```
+
+3. **Manually Update Frontend**:
+   - TypeScript interfaces
+   - API service calls
+   - Component props
+
+4. **Verify Consistency**:
+   ```bash
+   mcp__codesearch__fast_text_search --query "User" --extensions [".cs",".ts"]
+   ```
+
+### Tips for AI Assistants
+
+- Always clarify which language/layer the user is working with
+- When asked about "all references", explain the language boundary
+- Suggest using multiple tools for comprehensive analysis
+- Set expectations: cross-stack operations require multiple steps
