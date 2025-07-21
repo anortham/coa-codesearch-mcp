@@ -21,6 +21,7 @@ public static class FlexibleMemoryToolRegistrations
         var memoryTools = serviceProvider.GetRequiredService<FlexibleMemoryTools>();
         
         RegisterStoreMemory(registry, memoryTools);
+        RegisterStoreWorkingMemory(registry, memoryTools);
         RegisterSearchMemories(registry, memoryTools);
         RegisterUpdateMemory(registry, memoryTools);
         RegisterMarkMemoryResolved(registry, memoryTools);
@@ -59,6 +60,40 @@ public static class FlexibleMemoryToolRegistrations
                     ValidateRequired(parameters.Type, "type"),
                     ValidateRequired(parameters.Content, "content"),
                     parameters.IsShared ?? true,
+                    parameters.SessionId,
+                    parameters.Files,
+                    parameters.Fields);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterStoreWorkingMemory(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<StoreWorkingMemoryParams>(
+            name: "flexible_store_working_memory",
+            description: "Store a temporary working memory for the current session. These are short-lived memories that help track context, decisions, and progress during a single work session. Defaults to end-of-session expiry.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    content = new { type = "string", description = "Content of the working memory (what you want to remember)" },
+                    expiresIn = new { type = "string", description = "Expiration time: 'end-of-session' (default), '1h', '4h', '24h', '7d', etc." },
+                    sessionId = new { type = "string", description = "Optional session ID (auto-generated if not provided)" },
+                    files = new { type = "array", items = new { type = "string" }, description = "Related files" },
+                    fields = new { type = "object", description = "Custom fields as JSON object (category, context, tags, etc.)" }
+                },
+                required = new[] { "content" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.StoreWorkingMemoryAsync(
+                    ValidateRequired(parameters.Content, "content"),
+                    parameters.ExpiresIn,
                     parameters.SessionId,
                     parameters.Files,
                     parameters.Fields);
@@ -457,4 +492,13 @@ public class MarkMemoryResolvedParams
 {
     public string Id { get; set; } = "";
     public string? ResolutionNote { get; set; }
+}
+
+public class StoreWorkingMemoryParams
+{
+    public string Content { get; set; } = "";
+    public string? ExpiresIn { get; set; }
+    public string? SessionId { get; set; }
+    public string[]? Files { get; set; }
+    public Dictionary<string, JsonElement>? Fields { get; set; }
 }

@@ -65,6 +65,83 @@ public class FlexibleMemoryTools
     }
     
     /// <summary>
+    /// Store a working memory (temporary, session-scoped)
+    /// </summary>
+    public async Task<StoreMemoryResult> StoreWorkingMemoryAsync(
+        string content,
+        string? expiresIn = "end-of-session",
+        string? sessionId = null,
+        string[]? files = null,
+        Dictionary<string, JsonElement>? fields = null)
+    {
+        try
+        {
+            // Calculate expiration time
+            DateTime? expiresAt = null;
+            if (!string.IsNullOrEmpty(expiresIn) && expiresIn != "end-of-session")
+            {
+                if (expiresIn.EndsWith("h"))
+                {
+                    var hours = int.Parse(expiresIn.TrimEnd('h'));
+                    expiresAt = DateTime.UtcNow.AddHours(hours);
+                }
+                else if (expiresIn.EndsWith("m"))
+                {
+                    var minutes = int.Parse(expiresIn.TrimEnd('m'));
+                    expiresAt = DateTime.UtcNow.AddMinutes(minutes);
+                }
+                else if (expiresIn.EndsWith("d"))
+                {
+                    var days = int.Parse(expiresIn.TrimEnd('d'));
+                    expiresAt = DateTime.UtcNow.AddDays(days);
+                }
+            }
+            
+            var workingFields = fields ?? new Dictionary<string, JsonElement>();
+            
+            // Add expiration field if specified
+            if (expiresAt.HasValue)
+            {
+                workingFields[MemoryFields.ExpiresAt] = JsonSerializer.SerializeToElement(expiresAt.Value);
+            }
+            
+            // Add working memory marker
+            workingFields["isWorkingMemory"] = JsonSerializer.SerializeToElement(true);
+            workingFields["sessionExpiry"] = JsonSerializer.SerializeToElement(expiresIn ?? "end-of-session");
+            
+            var memory = new FlexibleMemoryEntry
+            {
+                Type = MemoryTypes.WorkingMemory,
+                Content = content,
+                IsShared = false, // Working memories are always local
+                SessionId = sessionId ?? Guid.NewGuid().ToString(),
+                FilesInvolved = files ?? Array.Empty<string>(),
+                Fields = workingFields
+            };
+            
+            var success = await _memoryService.StoreMemoryAsync(memory);
+            
+            return new StoreMemoryResult
+            {
+                Success = success,
+                MemoryId = success ? memory.Id : null,
+                Message = success ? 
+                    $"Working memory stored (expires: {expiresIn})" : 
+                    "Failed to store working memory"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error storing working memory");
+            return new StoreMemoryResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
     /// Search memories with advanced filtering
     /// </summary>
     public async Task<FlexibleMemorySearchResult> SearchMemoriesAsync(
