@@ -85,6 +85,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<MemoryBackupService>();
         
+        // Flexible Memory System
+        services.AddSingleton<FlexibleMemoryService>();
+        services.AddSingleton<FlexibleMemoryTools>();
+        
         // File Logging Service
         services.AddSingleton<FileLoggingService>();
         
