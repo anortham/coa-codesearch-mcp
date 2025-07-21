@@ -31,6 +31,7 @@ public static class FlexibleMemoryToolRegistrations
         RegisterFindSimilarMemories(registry, memoryTools);
         RegisterArchiveMemories(registry, memoryTools);
         RegisterGetMemoryById(registry, memoryTools);
+        RegisterSummarizeMemories(registry, memoryTools);
     }
     
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
@@ -404,6 +405,38 @@ public static class FlexibleMemoryToolRegistrations
             }
         );
     }
+    
+    private static void RegisterSummarizeMemories(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<SummarizeMemoriesParams>(
+            name: "flexible_summarize_memories",
+            description: "Summarize old memories to save space and improve relevance. Creates condensed summaries of multiple memories while preserving key insights.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    type = new { type = "string", description = "Memory type to summarize" },
+                    daysOld = new { type = "integer", description = "Summarize memories older than this many days" },
+                    batchSize = new { type = "integer", description = "Number of memories to summarize together (default: 10)", @default = 10 },
+                    preserveOriginals = new { type = "boolean", description = "Keep original memories after summarization (default: false)", @default = false }
+                },
+                required = new[] { "type", "daysOld" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.SummarizeMemoriesAsync(
+                    ValidateRequired(parameters.Type, "type"),
+                    ValidatePositive(parameters.DaysOld, "daysOld"),
+                    parameters.BatchSize ?? 10,
+                    parameters.PreserveOriginals ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
 }
 
 // Parameter classes
@@ -486,6 +519,14 @@ public class ArchiveMemoriesParams
 public class GetMemoryByIdParams
 {
     public string Id { get; set; } = "";
+}
+
+public class SummarizeMemoriesParams
+{
+    public string Type { get; set; } = "";
+    public int DaysOld { get; set; }
+    public int? BatchSize { get; set; }
+    public bool? PreserveOriginals { get; set; }
 }
 
 public class MarkMemoryResolvedParams

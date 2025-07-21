@@ -525,9 +525,28 @@ To use the memory system effectively:
 - `flexible_get_related_memories` - Traverse memory relationships
 - `flexible_unlink_memories` - Remove relationships
 
+#### Working Memory (Phase 4 - New!)
+- `flexible_store_working_memory` - Store temporary memories with expiration
+  - Default: expires at end of session
+  - Time-based: '1h', '4h', '24h', '7d' 
+  - Automatically filtered out when expired
+  - Always local (not shared with team)
+
 #### Recall Knowledge
 - `recall_context` - Search all memories for relevant context
 - `list_memories_by_type` - List specific types of memories
+- **Smart Recall (Phase 4)**: The flexible_search_memories tool now includes automatic natural language understanding
+  - Detects natural language queries and expands them semantically
+  - Synonym expansion (e.g., "bug" → "defect", "issue", "error")
+  - Code term extraction (camelCase, PascalCase, snake_case)
+  - Flexible matching with boosted relevance
+
+#### Memory Summarization (Phase 4 - New!)
+- `flexible_summarize_memories` - Compress old memories into summaries
+  - Groups memories by time period and extracts key themes
+  - Preserves important files and insights
+  - Type-specific analysis (e.g., resolution rates for TechnicalDebt)
+  - Optionally archives originals after summarization
 
 ### Manual Backup/Restore
 - `backup_memories_to_sqlite` - Backup project memories to SQLite for version control
@@ -537,6 +556,40 @@ Example workflow:
 1. Before major changes: `mcp__codesearch__backup_memories_to_sqlite`
 2. Check in `memories.db` to source control
 3. On new machine: `mcp__codesearch__restore_memories_from_sqlite`
+
+### Working Memory Examples
+
+Store temporary session memories:
+```bash
+# Store a working memory for current session
+flexible_store_working_memory --content "User wants to refactor the auth system - start with UserService" 
+
+# Store with specific expiration
+flexible_store_working_memory --content "Remember to check performance after cache implementation" --expiresIn "4h"
+
+# Store with context fields
+flexible_store_working_memory --content "Debugging null reference in payment processing" --expiresIn "1h" --files ["PaymentService.cs"] --fields {"category": "debugging", "priority": "high"}
+```
+
+### Memory Summarization Examples
+
+Compress old memories into insightful summaries:
+```bash
+# Summarize old work sessions
+flexible_summarize_memories --type "WorkSession" --daysOld 30 --batchSize 10
+
+# Summarize technical debt with preservation
+flexible_summarize_memories --type "TechnicalDebt" --daysOld 90 --preserveOriginals true
+
+# Summarize architectural decisions
+flexible_summarize_memories --type "ArchitecturalDecision" --daysOld 180 --batchSize 20
+```
+
+The summarization includes:
+- Key themes and word frequency analysis
+- Most referenced files
+- Type-specific insights (resolution rates, patterns)
+- Date ranges and memory counts
 
 ### Memory Linking Examples
 

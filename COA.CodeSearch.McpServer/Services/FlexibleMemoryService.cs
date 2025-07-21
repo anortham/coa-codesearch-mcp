@@ -300,6 +300,52 @@ public class FlexibleMemoryService
         return archived;
     }
     
+    /// <summary>
+    /// Clean up expired working memories
+    /// </summary>
+    public async Task<int> CleanupExpiredMemoriesAsync()
+    {
+        _logger.LogInformation("Starting cleanup of expired working memories");
+        
+        // Search for all working memories
+        var searchRequest = new FlexibleMemorySearchRequest
+        {
+            Query = "*",
+            Types = new[] { MemoryTypes.WorkingMemory },
+            MaxResults = 1000,
+            IncludeArchived = false
+        };
+        
+        var result = await SearchMemoriesAsync(searchRequest);
+        var expiredCount = 0;
+        
+        foreach (var memory in result.Memories)
+        {
+            var expiresAt = memory.GetField<DateTime?>(MemoryFields.ExpiresAt);
+            if (expiresAt.HasValue && DateTime.UtcNow > expiresAt.Value)
+            {
+                try
+                {
+                    // Delete the expired memory
+                    var workspacePath = memory.IsShared ? _projectMemoryWorkspace : _localMemoryWorkspace;
+                    var writer = await _indexService.GetIndexWriterAsync(workspacePath);
+                    writer.DeleteDocuments(new Term("id", memory.Id));
+                    await _indexService.CommitAsync(workspacePath);
+                    
+                    expiredCount++;
+                    _logger.LogDebug("Deleted expired working memory: {Id}, expired at {ExpiresAt}", memory.Id, expiresAt.Value);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to delete expired memory: {Id}", memory.Id);
+                }
+            }
+        }
+        
+        _logger.LogInformation("Cleaned up {Count} expired working memories", expiredCount);
+        return expiredCount;
+    }
+    
     // Private helper methods
     
     /// <summary>
@@ -526,17 +572,27 @@ public class FlexibleMemoryService
         // Main search query
         if (!string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
         {
-            var parser = new QueryParser(LUCENE_VERSION, "_all", _analyzer);
-            try
+            // Check if this is a natural language query that needs smart recall
+            if (IsNaturalLanguageQuery(request.Query))
             {
-                var textQuery = parser.Parse(request.Query);
-                booleanQuery.Add(textQuery, Occur.MUST);
+                var enhancedQuery = BuildSmartRecallQuery(request.Query);
+                booleanQuery.Add(enhancedQuery, Occur.MUST);
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Error parsing query: {Query}", request.Query);
-                // Fall back to simple term query
-                booleanQuery.Add(new TermQuery(new Term("_all", request.Query)), Occur.MUST);
+                // Standard query parsing
+                var parser = new QueryParser(LUCENE_VERSION, "_all", _analyzer);
+                try
+                {
+                    var textQuery = parser.Parse(request.Query);
+                    booleanQuery.Add(textQuery, Occur.MUST);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error parsing query: {Query}", request.Query);
+                    // Fall back to simple term query
+                    booleanQuery.Add(new TermQuery(new Term("_all", request.Query)), Occur.MUST);
+                }
             }
         }
         
@@ -625,6 +681,19 @@ public class FlexibleMemoryService
     private List<FlexibleMemoryEntry> ApplyFilters(List<FlexibleMemoryEntry> memories, FlexibleMemorySearchRequest request)
     {
         var filtered = memories.AsEnumerable();
+        
+        // Filter out expired working memories
+        filtered = filtered.Where(m =>
+        {
+            // Check if this is a working memory with expiration
+            var expiresAt = m.GetField<DateTime?>(MemoryFields.ExpiresAt);
+            if (expiresAt.HasValue && DateTime.UtcNow > expiresAt.Value)
+            {
+                _logger.LogDebug("Filtering out expired working memory: {Id}, expired at {ExpiresAt}", m.Id, expiresAt.Value);
+                return false;
+            }
+            return true;
+        });
         
         // Filter by related IDs
         if (request.RelatedToIds != null && request.RelatedToIds.Any())
@@ -883,5 +952,187 @@ public class FlexibleMemoryService
     {
         // Simple update - just store it again
         return await StoreMemoryAsync(memory);
+    }
+    
+    // Smart Recall methods
+    
+    /// <summary>
+    /// Determines if a query is natural language that would benefit from smart recall
+    /// </summary>
+    private bool IsNaturalLanguageQuery(string query)
+    {
+        // Natural language indicators
+        var naturalLanguagePatterns = new[]
+        {
+            "that", "about", "where", "when", "how", "what", "which", "why",
+            "find", "show", "get", "need", "remember", "recall", "was", "were",
+            "discussed", "mentioned", "talked", "related", "regarding", "concerning"
+        };
+        
+        var lowerQuery = query.ToLowerInvariant();
+        
+        // Check for natural language patterns
+        var hasNaturalLanguage = naturalLanguagePatterns.Any(pattern => 
+            lowerQuery.Contains($" {pattern} ") || 
+            lowerQuery.StartsWith($"{pattern} ") || 
+            lowerQuery.EndsWith($" {pattern}"));
+        
+        // Also consider queries with multiple words and no special operators
+        var hasMultipleWords = query.Split(' ', StringSplitOptions.RemoveEmptyEntries).Length > 3;
+        var hasNoOperators = !query.Contains(":") && !query.Contains("AND") && !query.Contains("OR") 
+                            && !query.Contains("*") && !query.Contains("~");
+        
+        return hasNaturalLanguage || (hasMultipleWords && hasNoOperators);
+    }
+    
+    /// <summary>
+    /// Builds an enhanced query for smart recall with semantic understanding
+    /// </summary>
+    private Query BuildSmartRecallQuery(string naturalLanguageQuery)
+    {
+        var booleanQuery = new BooleanQuery();
+        
+        // Extract key concepts and expand them
+        var concepts = ExtractKeyConcepts(naturalLanguageQuery);
+        var expandedTerms = ExpandWithSynonyms(concepts);
+        
+        // Create a more flexible query
+        foreach (var term in expandedTerms)
+        {
+            // Use SHOULD for flexibility - matches don't need all terms
+            var termQuery = new TermQuery(new Term("_all", term.ToLowerInvariant()));
+            booleanQuery.Add(termQuery, Occur.SHOULD);
+        }
+        
+        // Also include the original query as a phrase for exact matches
+        if (naturalLanguageQuery.Length > 3)
+        {
+            try
+            {
+                var phraseQuery = new PhraseQuery();
+                var terms = naturalLanguageQuery.ToLowerInvariant().Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var term in terms.Where(t => t.Length > 2)) // Skip very short words
+                {
+                    phraseQuery.Add(new Term("_all", term));
+                }
+                if (phraseQuery.GetTerms().Length > 0)
+                {
+                    booleanQuery.Add(phraseQuery, Occur.SHOULD);
+                    booleanQuery.MinimumNumberShouldMatch = Math.Max(1, expandedTerms.Count / 3); // Require at least 1/3 of terms
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Could not create phrase query for: {Query}", naturalLanguageQuery);
+            }
+        }
+        
+        return booleanQuery;
+    }
+    
+    /// <summary>
+    /// Extracts key concepts from natural language query
+    /// </summary>
+    private List<string> ExtractKeyConcepts(string query)
+    {
+        var concepts = new List<string>();
+        
+        // Remove common stop words
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "as", "is", "was", "are", "were", "been",
+            "that", "this", "these", "those", "i", "we", "you", "me", "us"
+        };
+        
+        var words = query.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !stopWords.Contains(w) && w.Length > 2)
+            .ToList();
+        
+        concepts.AddRange(words);
+        
+        // Extract potential code-related terms (camelCase, PascalCase, snake_case)
+        var codeTerms = ExtractCodeTerms(query);
+        concepts.AddRange(codeTerms);
+        
+        return concepts.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+    
+    /// <summary>
+    /// Expands concepts with synonyms and related terms
+    /// </summary>
+    private List<string> ExpandWithSynonyms(List<string> concepts)
+    {
+        var expanded = new List<string>(concepts);
+        
+        // Common development synonyms
+        var synonymMap = new Dictionary<string, string[]>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["bug"] = new[] { "defect", "issue", "error", "problem", "fault" },
+            ["fix"] = new[] { "repair", "resolve", "patch", "correct", "solution" },
+            ["test"] = new[] { "testing", "tests", "unit", "integration", "spec" },
+            ["auth"] = new[] { "authentication", "authorization", "security", "login" },
+            ["db"] = new[] { "database", "data", "storage", "repository" },
+            ["api"] = new[] { "endpoint", "service", "interface", "rest" },
+            ["config"] = new[] { "configuration", "settings", "setup", "options" },
+            ["perf"] = new[] { "performance", "speed", "optimization", "efficiency" },
+            ["refactor"] = new[] { "restructure", "reorganize", "cleanup", "improve" },
+            ["user"] = new[] { "customer", "client", "account", "profile" },
+            ["error"] = new[] { "exception", "fault", "failure", "crash" },
+            ["cache"] = new[] { "caching", "cached", "memory", "storage" },
+            ["async"] = new[] { "asynchronous", "await", "task", "concurrent" }
+        };
+        
+        foreach (var concept in concepts.ToList())
+        {
+            // Check if concept has synonyms
+            if (synonymMap.TryGetValue(concept, out var synonyms))
+            {
+                expanded.AddRange(synonyms);
+            }
+            
+            // Check if concept is a synonym of something else
+            foreach (var (key, values) in synonymMap)
+            {
+                if (values.Contains(concept, StringComparer.OrdinalIgnoreCase))
+                {
+                    expanded.Add(key);
+                }
+            }
+        }
+        
+        return expanded.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+    
+    /// <summary>
+    /// Extracts code-related terms from the query
+    /// </summary>
+    private List<string> ExtractCodeTerms(string query)
+    {
+        var codeTerms = new List<string>();
+        
+        // Match camelCase, PascalCase, snake_case, CONSTANT_CASE
+        var codePatterns = new[]
+        {
+            @"\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b", // PascalCase
+            @"\b[a-z]+(?:[A-Z][a-z]+)+\b",      // camelCase
+            @"\b[a-z]+(?:_[a-z]+)+\b",          // snake_case
+            @"\b[A-Z]+(?:_[A-Z]+)+\b"           // CONSTANT_CASE
+        };
+        
+        foreach (var pattern in codePatterns)
+        {
+            var matches = System.Text.RegularExpressions.Regex.Matches(query, pattern);
+            foreach (System.Text.RegularExpressions.Match match in matches)
+            {
+                codeTerms.Add(match.Value);
+                
+                // Also split camelCase/PascalCase into parts
+                var parts = System.Text.RegularExpressions.Regex.Split(match.Value, @"(?<!^)(?=[A-Z])");
+                codeTerms.AddRange(parts.Where(p => p.Length > 2));
+            }
+        }
+        
+        return codeTerms;
     }
 }

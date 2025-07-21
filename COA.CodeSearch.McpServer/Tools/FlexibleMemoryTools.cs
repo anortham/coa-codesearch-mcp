@@ -449,6 +449,245 @@ public class FlexibleMemoryTools
             };
         }
     }
+    
+    /// <summary>
+    /// Summarize old memories to save space and improve relevance
+    /// </summary>
+    public async Task<SummarizeMemoriesResult> SummarizeMemoriesAsync(
+        string type,
+        int daysOld,
+        int batchSize = 10,
+        bool preserveOriginals = false)
+    {
+        try
+        {
+            // Search for old memories of the specified type
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = "*",
+                Types = new[] { type },
+                MaxResults = 1000,
+                OrderBy = "created",
+                OrderDescending = false
+            };
+            
+            var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
+            var cutoffDate = DateTime.UtcNow.AddDays(-daysOld);
+            var oldMemories = searchResult.Memories
+                .Where(m => m.Created < cutoffDate)
+                .ToList();
+            
+            if (oldMemories.Count == 0)
+            {
+                return new SummarizeMemoriesResult
+                {
+                    Success = true,
+                    ProcessedCount = 0,
+                    SummaryCount = 0,
+                    Message = $"No {type} memories older than {daysOld} days found"
+                };
+            }
+            
+            var summaries = new List<FlexibleMemoryEntry>();
+            var processedCount = 0;
+            
+            // Process memories in batches
+            for (int i = 0; i < oldMemories.Count; i += batchSize)
+            {
+                var batch = oldMemories.Skip(i).Take(batchSize).ToList();
+                var summary = CreateBatchSummary(batch, type);
+                
+                // Store the summary
+                var summaryMemory = new FlexibleMemoryEntry
+                {
+                    Type = $"{type}Summary",
+                    Content = summary.Content,
+                    IsShared = batch.Any(m => m.IsShared),
+                    Fields = new Dictionary<string, JsonElement>
+                    {
+                        ["originalType"] = JsonSerializer.SerializeToElement(type),
+                        ["dateRange"] = JsonSerializer.SerializeToElement(new
+                        {
+                            from = batch.Min(m => m.Created),
+                            to = batch.Max(m => m.Created)
+                        }),
+                        ["originalCount"] = JsonSerializer.SerializeToElement(batch.Count),
+                        ["summarizedOn"] = JsonSerializer.SerializeToElement(DateTime.UtcNow)
+                    }
+                };
+                
+                // Add combined files from all memories
+                var allFiles = batch.SelectMany(m => m.FilesInvolved).Distinct().ToArray();
+                summaryMemory.FilesInvolved = allFiles;
+                
+                if (await _memoryService.StoreMemoryAsync(summaryMemory))
+                {
+                    summaries.Add(summaryMemory);
+                    
+                    // Archive or delete originals
+                    if (!preserveOriginals)
+                    {
+                        foreach (var memory in batch)
+                        {
+                            memory.SetField("summarizedIn", summaryMemory.Id);
+                            memory.SetField("archived", true);
+                            memory.SetField("archivedDate", DateTime.UtcNow);
+                            await _memoryService.StoreMemoryAsync(memory);
+                        }
+                    }
+                }
+                
+                processedCount += batch.Count;
+            }
+            
+            return new SummarizeMemoriesResult
+            {
+                Success = true,
+                ProcessedCount = processedCount,
+                SummaryCount = summaries.Count,
+                Summaries = summaries,
+                Message = $"Summarized {processedCount} memories into {summaries.Count} summaries"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error summarizing memories");
+            return new SummarizeMemoriesResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    private BatchSummary CreateBatchSummary(List<FlexibleMemoryEntry> memories, string type)
+    {
+        var summary = new BatchSummary();
+        
+        // Group memories by common themes/patterns
+        var keyThemes = ExtractKeyThemes(memories);
+        var commonFiles = memories
+            .SelectMany(m => m.FilesInvolved)
+            .GroupBy(f => f)
+            .Where(g => g.Count() > 1)
+            .Select(g => new { File = g.Key, Count = g.Count() })
+            .OrderByDescending(x => x.Count)
+            .Take(5)
+            .ToList();
+        
+        // Build summary content
+        var contentParts = new List<string>
+        {
+            $"Summary of {memories.Count} {type} memories from {memories.Min(m => m.Created):yyyy-MM-dd} to {memories.Max(m => m.Created):yyyy-MM-dd}",
+            "",
+            "Key Themes:"
+        };
+        
+        foreach (var theme in keyThemes.Take(5))
+        {
+            contentParts.Add($"- {theme.Theme} ({theme.Count} occurrences)");
+        }
+        
+        if (commonFiles.Any())
+        {
+            contentParts.Add("");
+            contentParts.Add("Most referenced files:");
+            foreach (var file in commonFiles)
+            {
+                contentParts.Add($"- {Path.GetFileName(file.File)} ({file.Count} references)");
+            }
+        }
+        
+        // Add specific insights based on memory type
+        var typeSpecificInsights = GetTypeSpecificInsights(memories, type);
+        if (typeSpecificInsights.Any())
+        {
+            contentParts.Add("");
+            contentParts.Add("Insights:");
+            contentParts.AddRange(typeSpecificInsights);
+        }
+        
+        summary.Content = string.Join("\n", contentParts);
+        return summary;
+    }
+    
+    private List<ThemeCount> ExtractKeyThemes(List<FlexibleMemoryEntry> memories)
+    {
+        var wordFrequency = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        var stopWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for",
+            "of", "with", "by", "from", "as", "is", "was", "are", "were", "been"
+        };
+        
+        foreach (var memory in memories)
+        {
+            var words = memory.Content.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+                .Where(w => w.Length > 3 && !stopWords.Contains(w))
+                .Select(w => w.Trim('.', ',', '!', '?', ';', ':'));
+            
+            foreach (var word in words)
+            {
+                wordFrequency[word] = wordFrequency.GetValueOrDefault(word) + 1;
+            }
+        }
+        
+        return wordFrequency
+            .Where(kv => kv.Value > 1)
+            .OrderByDescending(kv => kv.Value)
+            .Select(kv => new ThemeCount { Theme = kv.Key, Count = kv.Value })
+            .ToList();
+    }
+    
+    private List<string> GetTypeSpecificInsights(List<FlexibleMemoryEntry> memories, string type)
+    {
+        var insights = new List<string>();
+        
+        switch (type)
+        {
+            case "WorkSession":
+                var totalSessions = memories.Count;
+                var avgSessionsPerWeek = totalSessions / Math.Max(1, (memories.Max(m => m.Created) - memories.Min(m => m.Created)).TotalDays / 7);
+                insights.Add($"Average {avgSessionsPerWeek:F1} sessions per week");
+                break;
+                
+            case "TechnicalDebt":
+                var resolvedCount = memories.Count(m => m.GetField<string>("status") == "resolved");
+                var pendingCount = memories.Count(m => m.GetField<string>("status") == "pending");
+                insights.Add($"{resolvedCount} resolved, {pendingCount} still pending");
+                if (pendingCount > 0)
+                {
+                    insights.Add($"Resolution rate: {(resolvedCount * 100.0 / memories.Count):F1}%");
+                }
+                break;
+                
+            case "ArchitecturalDecision":
+                var categories = memories
+                    .Select(m => m.GetField<string>("category"))
+                    .Where(c => !string.IsNullOrEmpty(c))
+                    .GroupBy(c => c)
+                    .OrderByDescending(g => g.Count())
+                    .Take(3);
+                foreach (var cat in categories)
+                {
+                    insights.Add($"{cat.Key}: {cat.Count()} decisions");
+                }
+                break;
+        }
+        
+        return insights;
+    }
+    
+    private class BatchSummary
+    {
+        public string Content { get; set; } = "";
+    }
+    
+    private class ThemeCount
+    {
+        public string Theme { get; set; } = "";
+        public int Count { get; set; }
+    }
 }
 
 // Result classes
@@ -484,5 +723,14 @@ public class GetMemoryResult
 {
     public bool Success { get; set; }
     public FlexibleMemoryEntry? Memory { get; set; }
+    public string Message { get; set; } = "";
+}
+
+public class SummarizeMemoriesResult
+{
+    public bool Success { get; set; }
+    public int ProcessedCount { get; set; }
+    public int SummaryCount { get; set; }
+    public List<FlexibleMemoryEntry> Summaries { get; set; } = new();
     public string Message { get; set; } = "";
 }
