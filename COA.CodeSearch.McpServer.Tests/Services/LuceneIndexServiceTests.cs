@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.IO;
 using System.Threading.Tasks;
 using COA.CodeSearch.McpServer.Services;
@@ -20,7 +19,7 @@ public class LuceneIndexServiceTests : IDisposable
 {
     private readonly string _testBasePath;
     private readonly Mock<ILogger<LuceneIndexService>> _mockLogger;
-    private readonly IConfiguration _configuration;
+    private readonly Mock<IConfiguration> _mockConfiguration;
     private readonly Mock<IPathResolutionService> _mockPathResolution;
     private readonly LuceneIndexService _service;
 
@@ -30,54 +29,42 @@ public class LuceneIndexServiceTests : IDisposable
         System.IO.Directory.CreateDirectory(_testBasePath);
 
         _mockLogger = new Mock<ILogger<LuceneIndexService>>();
-        
-        // Setup logger to capture calls (for debugging)
-        _mockLogger.Setup(x => x.Log(
-            It.IsAny<LogLevel>(),
-            It.IsAny<EventId>(),
-            It.IsAny<It.IsAnyType>(),
-            It.IsAny<Exception>(),
-            (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()));
+        _mockConfiguration = new Mock<IConfiguration>();
         _mockPathResolution = new Mock<IPathResolutionService>();
 
-        // Setup real configuration with short timeout for testing stuck locks
-        var configData = new Dictionary<string, string>
-        {
-            ["Lucene:LockTimeoutMinutes"] = "1" // 1 minute timeout for testing
-        };
-        _configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(configData)
-            .Build();
+        // Setup default configuration
+        _mockConfiguration.Setup(x => x.GetSection("Lucene:LockTimeoutMinutes"))
+            .Returns(Mock.Of<IConfigurationSection>(s => s.Value == "15"));
 
         // Setup path resolution
         _mockPathResolution.Setup(x => x.GetBasePath()).Returns(_testBasePath);
         _mockPathResolution.Setup(x => x.GetWorkspaceMetadataPath())
             .Returns(Path.Combine(_testBasePath, "workspace_metadata.json"));
 
-        _service = new LuceneIndexService(_mockLogger.Object, _configuration, _mockPathResolution.Object);
+        _service = new LuceneIndexService(_mockLogger.Object, _mockConfiguration.Object, _mockPathResolution.Object);
     }
 
     [Fact]
     public async Task GetIndexPath_MemoryPath_ShouldUseDirectly_ProjectMemory()
     {
         // Arrange
-        var projectMemoryPath = Path.Combine(_testBasePath, "project-memory");
-        System.IO.Directory.CreateDirectory(projectMemoryPath);
+        var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
+        var localMemoryPath = Path.Combine(_testBasePath, ".codesearch", "local-memory");
         
-        // Setup PathResolutionService to recognize "project-memory" and return the path
-        _mockPathResolution.Setup(x => x.GetIndexPath("project-memory")).Returns(projectMemoryPath);
-        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
+        _mockPathResolution.Setup(x => x.GetProjectMemoryPath()).Returns(projectMemoryPath);
+        _mockPathResolution.Setup(x => x.GetLocalMemoryPath()).Returns(localMemoryPath);
 
-        // Act - Pass the workspace identifier, not the full path
-        var writer = await _service.GetIndexWriterAsync("project-memory");
-        var physicalPath = _service.GetPhysicalIndexPath("project-memory");
+        // Act
+        var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
+        var physicalPath = _service.GetPhysicalIndexPath(projectMemoryPath);
 
         // Assert
         Assert.NotNull(writer);
         Assert.Equal(projectMemoryPath, physicalPath);
+        Assert.True(System.IO.Directory.Exists(projectMemoryPath));
         
-        // Verify GetIndexPath WAS called with the workspace identifier
-        _mockPathResolution.Verify(x => x.GetIndexPath("project-memory"), Times.AtLeastOnce);
+        // Verify GetIndexPath was NOT called for memory paths
+        _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
         
         // Cleanup
         writer.Dispose();
@@ -87,20 +74,21 @@ public class LuceneIndexServiceTests : IDisposable
     public async Task GetIndexPath_MemoryPath_ShouldUseDirectly_LocalMemory()
     {
         // Arrange
-        var localMemoryPath = Path.Combine(_testBasePath, "local-memory");
-        System.IO.Directory.CreateDirectory(localMemoryPath);
+        var localMemoryPath = Path.Combine(_testBasePath, ".codesearch", "local-memory");
         
-        // Setup PathResolutionService to recognize "local-memory" and return the path
-        _mockPathResolution.Setup(x => x.GetIndexPath("local-memory")).Returns(localMemoryPath);
-        _mockPathResolution.Setup(x => x.IsProtectedPath(localMemoryPath)).Returns(true);
+        _mockPathResolution.Setup(x => x.GetLocalMemoryPath()).Returns(localMemoryPath);
 
-        // Act - Pass the workspace identifier, not the full path
-        var writer = await _service.GetIndexWriterAsync("local-memory");
-        var physicalPath = _service.GetPhysicalIndexPath("local-memory");
+        // Act
+        var writer = await _service.GetIndexWriterAsync(localMemoryPath);
+        var physicalPath = _service.GetPhysicalIndexPath(localMemoryPath);
 
         // Assert
         Assert.NotNull(writer);
         Assert.Equal(localMemoryPath, physicalPath);
+        Assert.True(System.IO.Directory.Exists(localMemoryPath));
+        
+        // Verify GetIndexPath was NOT called for memory paths
+        _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
         
         // Cleanup
         writer.Dispose();
@@ -109,26 +97,26 @@ public class LuceneIndexServiceTests : IDisposable
     [Fact]
     public async Task GetIndexPath_MemoryPath_CrossPlatform()
     {
-        // Test that memory workspace identifiers work correctly
-        var projectMemoryPath = Path.Combine(_testBasePath, "project-memory");
-        var localMemoryPath = Path.Combine(_testBasePath, "local-memory");
-        
-        // Setup mocks to return platform-specific paths
-        _mockPathResolution.Setup(x => x.GetIndexPath("project-memory")).Returns(projectMemoryPath);
-        _mockPathResolution.Setup(x => x.GetIndexPath("local-memory")).Returns(localMemoryPath);
-        _mockPathResolution.Setup(x => x.IsProtectedPath(It.IsAny<string>())).Returns(true);
+        // Test both Windows and Unix-style paths
+        var testPaths = new[]
+        {
+            Path.Combine("C:", "source", ".codesearch", "project-memory"),
+            "/home/user/.codesearch/project-memory",
+            Path.Combine(_testBasePath, ".codesearch", "local-memory"),
+            "/var/lib/app/.codesearch/local-memory"
+        };
 
-        // Act & Assert for project-memory
-        var projectPhysicalPath = _service.GetPhysicalIndexPath("project-memory");
-        Assert.Equal(projectMemoryPath, projectPhysicalPath);
-        
-        // Act & Assert for local-memory
-        var localPhysicalPath = _service.GetPhysicalIndexPath("local-memory");
-        Assert.Equal(localMemoryPath, localPhysicalPath);
-        
-        // Verify GetIndexPath WAS called with the workspace identifiers
-        _mockPathResolution.Verify(x => x.GetIndexPath("project-memory"), Times.Once);
-        _mockPathResolution.Verify(x => x.GetIndexPath("local-memory"), Times.Once);
+        foreach (var memoryPath in testPaths)
+        {
+            // Act
+            var physicalPath = _service.GetPhysicalIndexPath(memoryPath);
+
+            // Assert
+            Assert.Equal(memoryPath, physicalPath);
+            
+            // Verify GetIndexPath was NOT called for memory paths
+            _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
+        }
     }
 
     [Fact]
@@ -161,19 +149,18 @@ public class LuceneIndexServiceTests : IDisposable
     public async Task MemoryPath_ShouldNotBeCleared()
     {
         // Arrange
-        var projectMemoryPath = Path.Combine(_testBasePath, "project-memory");
+        var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         System.IO.Directory.CreateDirectory(projectMemoryPath);
         
         var testFile = Path.Combine(projectMemoryPath, "test.txt");
         File.WriteAllText(testFile, "important data");
         
-        _mockPathResolution.Setup(x => x.GetIndexPath("project-memory")).Returns(projectMemoryPath);
         _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
 
-        // Act & Assert - use workspace identifier
+        // Act & Assert
         await Assert.ThrowsAsync<InvalidOperationException>(async () =>
         {
-            await _service.ClearIndexAsync("project-memory");
+            await _service.ClearIndexAsync(projectMemoryPath);
         });
 
         // Verify the file still exists
@@ -232,73 +219,40 @@ public class LuceneIndexServiceTests : IDisposable
         firstWriter.Dispose();
     }
 
-    [Fact(Skip = "Lock recovery mechanism needs redesign after path refactoring - see issue #XYZ")]
+    [Fact]
     public async Task StuckLock_MemoryIndex_ShouldRecover()
     {
         // Arrange
-        var projectMemoryPath = Path.Combine(_testBasePath, "project-memory");
+        var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         System.IO.Directory.CreateDirectory(projectMemoryPath);
         
-        // Setup PathResolutionService to return our test memory path
-        _mockPathResolution.Setup(x => x.GetIndexPath("project-memory")).Returns(projectMemoryPath);
-        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
-        
-        // First, create an index so there are some segments
-        var firstWriter = await _service.GetIndexWriterAsync("project-memory");
-        var doc = new Lucene.Net.Documents.Document();
-        doc.Add(new Lucene.Net.Documents.StringField("test", "value", Lucene.Net.Documents.Field.Store.YES));
-        firstWriter.AddDocument(doc);
-        firstWriter.Commit();
-        firstWriter.Dispose();
-        
-        // Important: Close the writer properly to ensure it's removed from cache
-        _service.CloseWriter("project-memory", commit: true);
-        
-        // Dispose the service to clear all caches
-        _service.Dispose();
-        
-        // Create a new service instance (simulating server restart)
-        var newService = new LuceneIndexService(_mockLogger.Object, _configuration, _mockPathResolution.Object);
-        
-        // Now create a stuck lock file (simulating a previous writer that crashed)
+        // Create a stuck lock file
         var lockPath = Path.Combine(projectMemoryPath, "write.lock");
         File.WriteAllText(lockPath, "lock");
-        File.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddMinutes(-5)); // Lock older than 1 minute timeout
-
-        // Verify the lock file exists and is old enough
-        Assert.True(File.Exists(lockPath), "Lock file should exist before calling GetIndexWriterAsync");
-        var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
-        Assert.True(lockAge.TotalMinutes > 1, $"Lock should be old enough (age: {lockAge.TotalMinutes} minutes)");
+        File.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddHours(-2)); // Old lock
         
-        // Debug: Check what path the service will actually use
-        var actualIndexPath = newService.GetPhysicalIndexPath("project-memory");
-        Assert.Equal(projectMemoryPath, actualIndexPath);
+        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
 
-        // Act - try to get another writer (this should detect and remove the stuck lock)
-        var secondWriter = await newService.GetIndexWriterAsync("project-memory");
+        // Act
+        var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
 
         // Assert
-        Assert.NotNull(secondWriter);
-        Assert.False(File.Exists(lockPath), "Lock should be removed after GetIndexWriterAsync"); 
+        Assert.NotNull(writer);
+        Assert.False(File.Exists(lockPath)); // Lock should be removed
         
         // Cleanup
-        secondWriter.Dispose();
-        newService.Dispose();
+        writer.Dispose();
     }
 
     [Fact]
     public async Task MemoryIndex_WriterCanWriteDocuments()
     {
         // Arrange
-        var projectMemoryPath = Path.Combine(_testBasePath, "project-memory");
-        System.IO.Directory.CreateDirectory(projectMemoryPath);
+        var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-        
-        _mockPathResolution.Setup(x => x.GetIndexPath("project-memory")).Returns(projectMemoryPath);
-        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
 
-        // Act - use workspace identifier
-        var writer = await _service.GetIndexWriterAsync("project-memory");
+        // Act
+        var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
         
         // Add a document
         var doc = new Document();
@@ -306,10 +260,10 @@ public class LuceneIndexServiceTests : IDisposable
         doc.Add(new TextField("content", "This is a test memory", Field.Store.YES));
         writer.AddDocument(doc);
         
-        await _service.CommitAsync("project-memory");
+        await _service.CommitAsync(projectMemoryPath);
         
         // Search for the document
-        var searcher = await _service.GetIndexSearcherAsync("project-memory");
+        var searcher = await _service.GetIndexSearcherAsync(projectMemoryPath);
         var query = new TermQuery(new Term("id", "test-123"));
         var hits = searcher.Search(query, 10);
 
@@ -325,35 +279,43 @@ public class LuceneIndexServiceTests : IDisposable
     }
 
     [Fact]
-    public void GetPhysicalIndexPath_AlwaysDelegatesToPathResolutionService()
+    public void EdgeCases_MemoryPathDetection()
     {
-        // Test that LuceneIndexService always delegates path resolution to PathResolutionService
-        var testCases = new[]
+        // Test various edge cases for memory path detection
+        var testCases = new (string path, bool isMemoryPath)[]
         {
-            "project-memory",
-            "local-memory",
-            "C:\\some\\workspace",
-            "/home/user/project",
-            "relative/path"
+            (Path.Combine("C:", "project-memory-backup"), false), // Not in .codesearch
+            (Path.Combine("C:", ".codesearch", "project-memory"), true),
+            (Path.Combine("C:", ".codesearch", "local-memory"), true),
+            (Path.Combine("C:", ".codesearch", "project-memory-old"), false), // Different name
+            (Path.Combine("C:", ".codesearch", "index", "project-memory_hash"), false), // Hashed path
+            ("/home/user/.codesearch/project-memory", true),
+            ("/home/user/.codesearch/local-memory", true),
+            ("\\\\network\\.codesearch\\project-memory", true), // UNC path
+            (Path.Combine("project-memory"), false), // Just the directory name
+            (Path.Combine(".codesearch", "PROJECT-MEMORY"), false), // Case sensitive
         };
 
-        foreach (var inputPath in testCases)
+        foreach (var (path, expectedIsMemoryPath) in testCases)
         {
-            // Setup mock to return a specific resolved path
-            var expectedResolvedPath = $"{_testBasePath}\\resolved\\{inputPath.Replace('/', '_').Replace('\\', '_')}";
-            _mockPathResolution.Setup(x => x.GetIndexPath(inputPath)).Returns(expectedResolvedPath);
+            var physicalPath = _service.GetPhysicalIndexPath(path);
             
-            // Call GetPhysicalIndexPath
-            var actualPath = _service.GetPhysicalIndexPath(inputPath);
+            if (expectedIsMemoryPath)
+            {
+                Assert.Equal(path, physicalPath);
+                _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
+            }
+            else
+            {
+                // For non-memory paths, GetIndexPath should be called
+                var hashedPath = Path.Combine(_testBasePath, "index", "hashed_path");
+                _mockPathResolution.Setup(x => x.GetIndexPath(path)).Returns(hashedPath);
+                
+                physicalPath = _service.GetPhysicalIndexPath(path);
+                Assert.Equal(hashedPath, physicalPath);
+            }
             
-            // Verify it returns exactly what PathResolutionService returns
-            Assert.Equal(expectedResolvedPath, actualPath);
-            
-            // Verify PathResolutionService was called exactly once with the correct parameter
-            _mockPathResolution.Verify(x => x.GetIndexPath(inputPath), Times.Once);
-            
-            // Reset for next iteration
-            _mockPathResolution.Invocations.Clear();
+            _mockPathResolution.ResetCalls();
         }
     }
 
