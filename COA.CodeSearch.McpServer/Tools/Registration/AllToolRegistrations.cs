@@ -48,6 +48,9 @@ public static class AllToolRegistrations
         // Claude Memory System tools
         MemoryToolRegistrations.RegisterMemoryTools(registry, serviceProvider);
         
+        // Flexible Memory System tools
+        FlexibleMemoryToolRegistrations.RegisterFlexibleMemoryTools(registry, serviceProvider);
+        
         // TypeScript tools
         TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
         
