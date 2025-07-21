@@ -16,7 +16,7 @@ public static class ToolRegistrationHelper
     {
         var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
         { 
-            WriteIndented = true,
+            WriteIndented = false,
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         });
