@@ -81,6 +81,22 @@ public class McpServer : BackgroundService
                 if (response != null)
                 {
                     var responseJson = JsonSerializer.Serialize(response, _jsonOptions);
+                    
+                    // Token tracing to file (can't use Console.WriteLine in MCP)
+                    if (request.Method == "tools/call")
+                    {
+                        try
+                        {
+                            var byteCount = System.Text.Encoding.UTF8.GetByteCount(responseJson);
+                            var estimatedTokens = byteCount / 4;
+                            var logPath = Path.Combine(Path.GetTempPath(), "mcp-token-trace.log");
+                            var logMessage = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] MCP Response: {byteCount} bytes, ~{estimatedTokens} tokens\n";
+                            logMessage += $"Response preview: {responseJson.Substring(0, Math.Min(500, responseJson.Length))}...\n\n";
+                            File.AppendAllText(logPath, logMessage);
+                        }
+                        catch { /* Ignore logging errors */ }
+                    }
+                    
                     await writer.WriteLineAsync(responseJson);
                 }
             }
