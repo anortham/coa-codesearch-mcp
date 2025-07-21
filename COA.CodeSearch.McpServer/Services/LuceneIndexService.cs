@@ -406,15 +406,30 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetIndexPath(string workspacePath)
     {
+        // Check if this is already a resolved memory path
+        // Memory paths come from PathResolutionService as full paths like:
+        // "C:\...\\.codesearch\project-memory" or "C:\...\\.codesearch\local-memory"
+        // Also handle test paths that might not have .codesearch in them
+        var normalizedPath = workspacePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        
+        // Check if this ends with our memory path patterns
+        if (normalizedPath.EndsWith(Path.DirectorySeparatorChar + "project-memory") || 
+            normalizedPath.EndsWith(Path.DirectorySeparatorChar + "local-memory") ||
+            normalizedPath.Equals("project-memory", StringComparison.OrdinalIgnoreCase) ||
+            normalizedPath.Equals("local-memory", StringComparison.OrdinalIgnoreCase))
+        {
+            // This is already a resolved memory path, use it directly
+            System.IO.Directory.CreateDirectory(workspacePath);
+            return workspacePath;
+        }
+        
+        // For regular workspace paths, use the hashing logic
         var indexPath = _pathResolution.GetIndexPath(workspacePath);
         
         // Update metadata for code indexes (not memory indexes)
-        if (!workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase))
-        {
-            var normalizedPath = NormalizeToWorkspaceRoot(workspacePath);
-            var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
-            UpdateMetadata(normalizedPath, hashPath);
-        }
+        var workspaceRoot = NormalizeToWorkspaceRoot(workspacePath);
+        var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
+        UpdateMetadata(workspaceRoot, hashPath);
         
         return indexPath;
     }

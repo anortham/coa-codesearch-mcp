@@ -552,6 +552,14 @@ To use the memory system effectively:
   - Automatically filtered out when expired
   - Always local (not shared with team)
 
+#### Persistent Checklists (New!)
+- `create_checklist` - Create persistent checklists for cross-session task tracking
+- `add_checklist_item` - Add items with notes and file references
+- `toggle_checklist_item` - Mark items complete/incomplete with tracking
+- `update_checklist_item` - Update item text, notes, or custom fields
+- `view_checklist` - View checklist with progress and optional markdown export
+- `list_checklists` - List all checklists with filtering options
+
 #### Recall Knowledge
 - `recall_context` - Search all memories for relevant context
 - `list_memories_by_type` - List specific types of memories
@@ -642,6 +650,35 @@ Common relationship types:
 - `parentOf`/`childOf` - Hierarchical relationships
 - `resolves`/`resolvedBy` - Problem/solution tracking
 - `duplicates`/`duplicatedBy` - Duplicate tracking
+
+### Persistent Checklist Examples
+
+Create and manage checklists that persist across sessions:
+```bash
+# Create a new checklist
+create_checklist --title "Implement Authentication System" --description "Full auth implementation with JWT" --isShared true
+
+# Add items to the checklist
+add_checklist_item --checklistId "abc123" --itemText "Create login endpoint" --notes "Use JWT tokens"
+add_checklist_item --checklistId "abc123" --itemText "Implement password reset" --relatedFiles ["AuthService.cs"]
+add_checklist_item --checklistId "abc123" --itemText "Add user registration"
+
+# Mark items as complete
+toggle_checklist_item --itemId "item456" --completedBy "claude"
+
+# View checklist with progress
+view_checklist --checklistId "abc123" --exportAsMarkdown true
+
+# List all active checklists
+list_checklists --includeCompleted false --onlyShared true
+```
+
+Checklists automatically:
+- Track progress percentage
+- Link items to parent checklist
+- Update status when all items complete
+- Support markdown export for documentation
+- Can be personal (local) or shared (team)
 
 ## TypeScript Support
 

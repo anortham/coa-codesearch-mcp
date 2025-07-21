@@ -240,10 +240,16 @@ Memories aren't just static notes - they're living entities that need to be trac
 - [ ] Improve performance for large memory stores
 - [ ] Add memory export formats (JSON, Markdown, etc.)
 - [ ] Implement memory versioning/history
-- [ ] **Implement persistent checklist feature (Option 3)**
-  - Create dedicated checklist tools for cross-session task tracking
-  - Support hierarchical checklists with categories/phases
-  - Include progress tracking and markdown export
-  - Tools: `create_checklist`, `add_checklist_item`, `update_checklist_item`, `view_checklist`
-  - Link checklist items to other memories
-  - Replace/complement in-memory TodoWrite with persistent storage
+- [x] **Implement persistent checklist feature (Option 3)** ✅ COMPLETED
+  - Created dedicated checklist tools for cross-session task tracking
+  - Support hierarchical checklists with parent-child relationships
+  - Includes progress tracking and markdown export
+  - Tools implemented:
+    - `create_checklist` - Create persistent checklists (personal or shared)
+    - `add_checklist_item` - Add items with notes and file references
+    - `toggle_checklist_item` - Mark items complete/incomplete with tracking
+    - `update_checklist_item` - Update item text, notes, or custom fields
+    - `view_checklist` - View with progress and optional markdown export
+    - `list_checklists` - List all checklists with filtering options
+  - Checklist items are automatically linked to parent checklists
+  - Complements in-memory TodoWrite with persistent cross-session storage
