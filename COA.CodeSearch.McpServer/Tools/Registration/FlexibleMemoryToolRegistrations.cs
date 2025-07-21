@@ -23,6 +23,7 @@ public static class FlexibleMemoryToolRegistrations
         RegisterStoreMemory(registry, memoryTools);
         RegisterSearchMemories(registry, memoryTools);
         RegisterUpdateMemory(registry, memoryTools);
+        RegisterMarkMemoryResolved(registry, memoryTools);
         RegisterStoreTechnicalDebt(registry, memoryTools);
         RegisterStoreQuestion(registry, memoryTools);
         RegisterStoreDeferredTask(registry, memoryTools);
@@ -137,6 +138,33 @@ public static class FlexibleMemoryToolRegistrations
                     parameters.FieldUpdates,
                     parameters.AddFiles,
                     parameters.RemoveFiles);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterMarkMemoryResolved(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<MarkMemoryResolvedParams>(
+            name: "flexible_mark_memory_resolved",
+            description: "Mark a memory as resolved/completed. Adds resolved timestamp and optional resolution note.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    id = new { type = "string", description = "Memory ID to mark as resolved" },
+                    resolutionNote = new { type = "string", description = "Optional note about the resolution" }
+                },
+                required = new[] { "id" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.MarkMemoryResolvedAsync(
+                    parameters.Id,
+                    parameters.ResolutionNote
+                );
                     
                 return CreateSuccessResult(result);
             }
@@ -423,4 +451,10 @@ public class ArchiveMemoriesParams
 public class GetMemoryByIdParams
 {
     public string Id { get; set; } = "";
+}
+
+public class MarkMemoryResolvedParams
+{
+    public string Id { get; set; } = "";
+    public string? ResolutionNote { get; set; }
 }

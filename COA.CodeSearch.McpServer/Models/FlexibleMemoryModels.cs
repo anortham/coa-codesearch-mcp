@@ -190,6 +190,7 @@ public static class MemoryStatus
     public const string Blocked = "blocked";
     public const string Deferred = "deferred";
     public const string Cancelled = "cancelled";
+    public const string Resolved = "resolved";
     public const string UnderReview = "under-review";
     public const string Approved = "approved";
     public const string Rejected = "rejected";
