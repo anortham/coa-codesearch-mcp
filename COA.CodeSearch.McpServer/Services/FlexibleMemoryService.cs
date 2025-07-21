@@ -397,14 +397,22 @@ public class FlexibleMemoryService
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
         
-        // Date fields need both Int64Field (for storage) and NumericDocValuesField (for range queries)
-        doc.Add(new Int64Field("created", memory.Created.Ticks, Field.Store.YES));
+        // Date fields with custom field type for proper numeric range query support
+        var dateFieldType = new FieldType 
+        { 
+            IsIndexed = true,
+            IsStored = true,
+            NumericType = NumericType.INT64,
+            NumericPrecisionStep = 8 // Required for NumericRangeQuery to work properly
+        };
+        
+        doc.Add(new Int64Field("created", memory.Created.Ticks, dateFieldType));
         doc.Add(new NumericDocValuesField("created", memory.Created.Ticks));
         
-        doc.Add(new Int64Field("modified", memory.Modified.Ticks, Field.Store.YES));
+        doc.Add(new Int64Field("modified", memory.Modified.Ticks, dateFieldType));
         doc.Add(new NumericDocValuesField("modified", memory.Modified.Ticks));
         
-        doc.Add(new Int64Field("timestamp_ticks", memory.TimestampTicks, Field.Store.YES));
+        doc.Add(new Int64Field("timestamp_ticks", memory.TimestampTicks, dateFieldType));
         doc.Add(new NumericDocValuesField("timestamp_ticks", memory.TimestampTicks));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
         doc.Add(new Int32Field("access_count", memory.AccessCount, Field.Store.YES));
@@ -416,7 +424,7 @@ public class FlexibleMemoryService
         
         if (memory.LastAccessed.HasValue)
         {
-            doc.Add(new Int64Field("last_accessed", memory.LastAccessed.Value.Ticks, Field.Store.YES));
+            doc.Add(new Int64Field("last_accessed", memory.LastAccessed.Value.Ticks, dateFieldType));
             doc.Add(new NumericDocValuesField("last_accessed", memory.LastAccessed.Value.Ticks));
         }
         
@@ -617,7 +625,7 @@ public class FlexibleMemoryService
             var fromTicks = request.DateRange.From?.Ticks ?? 0L;
             var toTicks = request.DateRange.To?.Ticks ?? DateTime.MaxValue.Ticks;
             
-            var dateQuery = NumericRangeQuery.NewInt64Range("created", fromTicks, toTicks, true, true);
+            var dateQuery = NumericRangeQuery.NewInt64Range("created", 8, fromTicks, toTicks, true, true);
             booleanQuery.Add(dateQuery, Occur.MUST);
         }
         
