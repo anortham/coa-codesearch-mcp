@@ -21,7 +21,7 @@
 3. Check if there's a mismatch between field storage and query field names
 4. Investigate if NumericDocValuesField alone is sufficient or if additional indexing is needed
 
-## MemoryMigration File Locking Issue (3 tests)
+## MemoryMigration File Locking Issue (8 tests)
 
 **Problem**: IOException occurs during test cleanup when trying to delete temporary directories. The error message is "The process cannot access the file because it is being used by another process."
 
@@ -29,14 +29,20 @@
 - `MemoryMigrationTests.ConvertToFlexibleMemory_ArchitecturalDecision_MapsCorrectly`
 - `MemoryMigrationTests.ConvertToFlexibleMemory_WorkSession_MapsAsLocal`
 - `MemoryMigrationTests.ConvertToFlexibleMemory_SetsCorrectSharingFlag` (Theory with 3 test cases)
+- `MemoryMigrationTests.MigrateAllMemories_CreatesBackup` (Assert.True() fails at line 188)
+- `MemoryMigrationTests.MigrateAllMemories_HandlesEmptyMemoryStore` (Related to file locking)
+- `MemoryMigrationTests.MigrateAllMemories_PreservesAllMemoryTypes` (NullReferenceException at line 232)
+- `MemoryMigrationTests.MigrateAllMemories_HandlesPartialFailure` (Assert.True() fails at line 292)
 
 **Investigation Notes**:
 - The issue occurs in the Dispose() method when trying to clean up test directories
 - Lucene index files might still be locked by index writers/readers
 - Need to ensure all Lucene resources are properly disposed before directory cleanup
+- Some tests fail due to assertions or null references, likely caused by underlying file locking issues
 
 **Potential Solutions**:
 1. Add more robust disposal logic with retries
 2. Ensure all IndexWriter and IndexReader instances are properly closed
 3. Add delays or force garbage collection before directory deletion
 4. Use a different test isolation strategy that doesn't require directory deletion
+5. Fix the ClaudeMemoryService to properly implement IDisposable and release Lucene resources
