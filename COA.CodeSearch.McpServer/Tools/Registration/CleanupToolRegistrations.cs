@@ -14,7 +14,8 @@ public static class CleanupToolRegistrations
     {
         var cleanupTool = serviceProvider.GetRequiredService<CleanupMemoryIndexesTool>();
         
-        RegisterCleanupMemoryIndexes(registry, cleanupTool);
+        // TODO: Remove this tool after migration is complete - no longer needed
+        // RegisterCleanupMemoryIndexes(registry, cleanupTool);
     }
     
     private static void RegisterCleanupMemoryIndexes(ToolRegistry registry, CleanupMemoryIndexesTool tool)

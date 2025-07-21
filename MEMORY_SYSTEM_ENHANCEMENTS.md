@@ -181,3 +181,70 @@ Memories aren't just static notes - they're living entities that need to be trac
    - Git integration
    - File context awareness
    - Memory dashboard
+
+## Implementation Progress Checklist
+
+### Phase 1: Core Schema Flexibility ✅ COMPLETED
+- [x] Implement flexible schema with extended fields (`FlexibleMemoryEntry` with `Fields` dictionary)
+- [x] Add new memory types (TechnicalDebt, Question, DeferredTask, etc.)
+- [x] Update storage and retrieval logic (`FlexibleMemoryService`)
+- [x] Create specialized storage tools (`flexible_store_technical_debt`, `flexible_store_question`, etc.)
+- [x] Implement `flexible_store_memory` for arbitrary memory types
+- [x] Add `flexible_update_memory` for modifying existing memories
+- [x] Add `flexible_mark_memory_resolved` for status updates
+
+### Phase 2: Advanced Search ✅ COMPLETED
+- [x] Implement faceted search with `flexible_search_memories`
+- [x] Add temporal queries (date ranges like "last-7-days")
+- [x] Enable "More Like This" functionality with `flexible_find_similar_memories`
+- [x] Add query boosting (boost recent, boost frequent)
+- [x] Implement smart insights generation
+- [x] Add facet counts in search results
+- [x] Support custom field filtering
+
+### Phase 3: Relationships & Lifecycle ✅ COMPLETED
+- [x] Add memory linking with `flexible_link_memories`
+- [x] Implement relationship traversal with `flexible_get_related_memories`
+- [x] Add `flexible_unlink_memories` for removing relationships
+- [x] Implement status tracking (pending, in-progress, done, etc.)
+- [x] Create archive capabilities with `flexible_archive_memories`
+- [x] Add memory lifecycle fields (created, modified, accessed, etc.)
+
+### Phase 4: AI Features 🚧 PARTIALLY COMPLETED
+- [x] Add working memory with `flexible_store_working_memory`
+- [x] Implement memory expiration (end-of-session, time-based)
+- [x] Create memory summarization with `flexible_summarize_memories`
+- [x] Add smart recall with natural language understanding in search
+- [ ] Implement semantic search with embeddings
+- [ ] Add memory templates/snippets
+- [ ] Create context-aware memory suggestions
+
+### Phase 5: Integrations ❌ NOT STARTED
+- [ ] Git integration (link memories to commits)
+- [ ] File context awareness (memories_for_file)
+- [ ] Memory dashboard/statistics
+- [ ] Export/import functionality
+- [ ] Memory analytics and insights
+- [ ] Integration with other tools (PRs, issues, etc.)
+
+### Additional Features Implemented
+- [x] SQLite backup/restore for version control (`backup_memories_to_sqlite`, `restore_memories_from_sqlite`)
+- [x] Memory migration from old schema (`migrate_memories_add_ticks`)
+- [x] Diagnostic tools (`diagnose_memory_index`)
+- [x] Session tracking and work history
+- [x] Custom analyzers for better search
+
+### Known Issues/TODOs
+- [ ] Fix date range filtering in archive operations (NumericRangeQuery issue)
+- [ ] Implement memory templates for common patterns
+- [ ] Add bulk operations for memory management
+- [ ] Improve performance for large memory stores
+- [ ] Add memory export formats (JSON, Markdown, etc.)
+- [ ] Implement memory versioning/history
+- [ ] **Implement persistent checklist feature (Option 3)**
+  - Create dedicated checklist tools for cross-session task tracking
+  - Support hierarchical checklists with categories/phases
+  - Include progress tracking and markdown export
+  - Tools: `create_checklist`, `add_checklist_item`, `update_checklist_item`, `view_checklist`
+  - Link checklist items to other memories
+  - Replace/complement in-memory TodoWrite with persistent storage

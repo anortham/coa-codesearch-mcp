@@ -826,27 +826,6 @@ public class TypeScriptAnalysisService : IDisposable
     }
 
     /// <summary>
-    /// Open a TypeScript project
-    /// </summary>
-    /// <remarks>
-    /// Note: This method is currently not used and has an incorrect implementation.
-    /// The TypeScript server doesn't have an "open" command for projects.
-    /// To work with projects, you should:
-    /// 1. Use "openExternalProject" command for external projects
-    /// 2. Use "configure" command to set project settings
-    /// 3. Or simply open individual files and let tsserver infer the project
-    /// </remarks>
-    // TODO: Implement proper project handling if needed
-    /*
-    public async Task<bool> OpenProjectAsync(string projectPath, CancellationToken cancellationToken = default)
-    {
-        // Commented out - incorrect implementation
-        // The "open" command is for files, not projects
-        throw new NotImplementedException("Project opening not yet implemented. Use file-based operations instead.");
-    }
-    */
-
-    /// <summary>
     /// Convert a 1-based column number to a 1-based character offset for tsserver
     /// </summary>
     private async Task<int> ConvertColumnToOffsetAsync(string filePath, int line, int column)
