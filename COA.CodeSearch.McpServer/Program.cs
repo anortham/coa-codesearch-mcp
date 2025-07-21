@@ -133,6 +133,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
         services.AddSingleton<MigrateMemoriesTool>();
+        services.AddSingleton<MigrateOldMemoriesTool>();
         services.AddSingleton<DiagnoseMemoryIndexTool>();
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
