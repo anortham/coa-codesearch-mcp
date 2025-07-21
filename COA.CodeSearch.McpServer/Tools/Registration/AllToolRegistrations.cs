@@ -54,6 +54,9 @@ public static class AllToolRegistrations
         // Memory Linking tools
         MemoryLinkingToolRegistrations.RegisterAll(registry, serviceProvider.GetRequiredService<MemoryLinkingTools>());
         
+        // Checklist tools
+        ChecklistToolRegistrations.RegisterChecklistTools(registry, serviceProvider);
+        
         // TypeScript tools
         TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
         

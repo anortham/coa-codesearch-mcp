@@ -154,6 +154,8 @@ public static class MemoryTypes
     public const string Dependency = "Dependency";
     public const string Configuration = "Configuration";
     public const string WorkingMemory = "WorkingMemory";
+    public const string Checklist = "Checklist";
+    public const string ChecklistItem = "ChecklistItem";
 }
 
 /// <summary>
@@ -178,6 +180,17 @@ public static class MemoryFields
     public const string Category = "category";
     public const string Confidence = "confidence";
     public const string ExpiresAt = "expiresAt";
+    
+    // Checklist-specific fields
+    public const string ChecklistId = "checklistId";
+    public const string ParentChecklistId = "parentChecklistId";
+    public const string IsCompleted = "isCompleted";
+    public const string CompletedAt = "completedAt";
+    public const string CompletedBy = "completedBy";
+    public const string ItemOrder = "itemOrder";
+    public const string ItemCount = "itemCount";
+    public const string CompletedCount = "completedCount";
+    public const string ChecklistDescription = "checklistDescription";
 }
 
 /// <summary>
