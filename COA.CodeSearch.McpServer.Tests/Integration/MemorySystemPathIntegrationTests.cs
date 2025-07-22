@@ -211,12 +211,12 @@ public class MemorySystemPathIntegrationTests : IDisposable
         // Test 1: GetProjectMemoryPath should return a simple path
         var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
         Assert.Equal(Path.Combine(_testBasePath, "project-memory"), projectMemoryPath);
-        Assert.True(System.IO.Directory.Exists(projectMemoryPath));
+        // PathResolutionService should only resolve paths, not create directories
         
         // Test 2: GetLocalMemoryPath should return a simple path
         var localMemoryPath = _pathResolution.GetLocalMemoryPath();
         Assert.Equal(Path.Combine(_testBasePath, "local-memory"), localMemoryPath);
-        Assert.True(System.IO.Directory.Exists(localMemoryPath));
+        // PathResolutionService should only resolve paths, not create directories
         
         // Test 3: GetIndexPath with memory paths should NOT hash them
         // This is where the bug was - it was treating memory paths as workspace paths

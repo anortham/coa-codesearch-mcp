@@ -37,31 +37,33 @@ public class PathResolutionService : IPathResolutionService
     
     public string GetIndexPath(string workspacePath)
     {
+        // Normalize the workspace path to handle both forward and backward slashes
+        var normalizedPath = workspacePath.Replace('/', Path.DirectorySeparatorChar).Replace('\\', Path.DirectorySeparatorChar);
+        
         // Check if this is a memory-related path
-        if (workspacePath.Equals(PathConstants.ProjectMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.ProjectMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
+        if (normalizedPath.Equals(PathConstants.ProjectMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
+            normalizedPath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.ProjectMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
         {
             return GetProjectMemoryPath();
         }
         
-        if (workspacePath.Equals(PathConstants.LocalMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.LocalMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
+        if (normalizedPath.Equals(PathConstants.LocalMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
+            normalizedPath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.LocalMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
         {
             return GetLocalMemoryPath();
         }
         
         // For regular workspace paths
         var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
-        System.IO.Directory.CreateDirectory(indexRoot);
         
         // Generate a hash-based folder name
         var fullPath = Path.GetFullPath(workspacePath);
-        var normalizedPath = fullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+        var normalizedFullPath = fullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
             .TrimEnd(Path.DirectorySeparatorChar)
             .ToLowerInvariant();
         
         using var sha256 = SHA256.Create();
-        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalizedPath));
+        var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalizedFullPath));
         var hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
         var truncatedHash = hashString.Substring(0, PathConstants.WorkspaceHashLength);
         
@@ -83,28 +85,24 @@ public class PathResolutionService : IPathResolutionService
     public string GetLogsPath()
     {
         var logsPath = Path.Combine(_basePath, PathConstants.LogsDirectoryName);
-        System.IO.Directory.CreateDirectory(logsPath);
         return logsPath;
     }
     
     public string GetProjectMemoryPath()
     {
         var path = Path.Combine(_basePath, PathConstants.ProjectMemoryDirectoryName);
-        System.IO.Directory.CreateDirectory(path);
         return path;
     }
     
     public string GetLocalMemoryPath()
     {
         var path = Path.Combine(_basePath, PathConstants.LocalMemoryDirectoryName);
-        System.IO.Directory.CreateDirectory(path);
         return path;
     }
     
     public string GetWorkspaceMetadataPath()
     {
         var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
-        System.IO.Directory.CreateDirectory(indexRoot);
         return Path.Combine(indexRoot, PathConstants.WorkspaceMetadataFileName);
     }
     
@@ -128,7 +126,6 @@ public class PathResolutionService : IPathResolutionService
     public string GetBackupPath(string? timestamp = null)
     {
         var backupRoot = Path.Combine(_basePath, PathConstants.BackupsDirectoryName);
-        System.IO.Directory.CreateDirectory(backupRoot);
         
         if (string.IsNullOrEmpty(timestamp))
         {
@@ -136,7 +133,6 @@ public class PathResolutionService : IPathResolutionService
         }
         
         var backupPath = Path.Combine(backupRoot, string.Format(PathConstants.BackupPrefixFormat, timestamp));
-        System.IO.Directory.CreateDirectory(backupPath);
         
         return backupPath;
     }
@@ -144,7 +140,6 @@ public class PathResolutionService : IPathResolutionService
     public string GetIndexRootPath()
     {
         var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
-        System.IO.Directory.CreateDirectory(indexRoot);
         return indexRoot;
     }
     
@@ -152,7 +147,6 @@ public class PathResolutionService : IPathResolutionService
     {
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var installPath = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
-        System.IO.Directory.CreateDirectory(installPath);
         return installPath;
     }
 }
