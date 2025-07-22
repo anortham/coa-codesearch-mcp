@@ -4,7 +4,6 @@ using Microsoft.Extensions.Configuration;
 using Moq;
 using System.IO;
 using COA.CodeSearch.McpServer.Services;
-using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace COA.CodeSearch.McpServer.Tests.Services;
@@ -37,30 +36,9 @@ public class PathViolationFixTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(_mockPathResolution.Object);
         services.AddSingleton(_mockConfiguration.Object);
-        services.AddSingleton<ILogger<CleanupMemoryIndexesTool>>(new Mock<ILogger<CleanupMemoryIndexesTool>>().Object);
         services.AddSingleton<ILogger<TypeScriptInstaller>>(new Mock<ILogger<TypeScriptInstaller>>().Object);
         
         _serviceProvider = services.BuildServiceProvider();
-    }
-
-    [Fact]
-    public void CleanupMemoryIndexesTool_ShouldUsePathResolutionService()
-    {
-        // This test verifies that CleanupMemoryIndexesTool should not construct paths manually
-        // Currently it does: Path.Combine(_pathResolution.GetBasePath(), "index")
-        // It should use a new method like _pathResolution.GetIndexRootPath()
-        
-        // Arrange
-        var tool = new CleanupMemoryIndexesTool(
-            _serviceProvider.GetRequiredService<ILogger<CleanupMemoryIndexesTool>>(),
-            _mockPathResolution.Object);
-        
-        // Act & Assert
-        // After refactoring, this should not throw and should use PathResolutionService
-        // The tool should call _pathResolution.GetIndexRootPath() instead of constructing paths
-        Assert.NotNull(tool);
-        
-        // Verify it doesn't construct paths manually (this will be tested after refactoring)
     }
 
     [Fact]

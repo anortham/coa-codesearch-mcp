@@ -136,7 +136,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<DiagnoseMemoryIndexTool>();
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
-        services.AddSingleton<CleanupMemoryIndexesTool>();
         
         // TypeScript tools
         services.AddSingleton<TypeScriptGoToDefinitionTool>();

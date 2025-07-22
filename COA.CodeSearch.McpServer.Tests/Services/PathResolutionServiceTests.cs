@@ -78,7 +78,7 @@ public class PathResolutionServiceTests : IDisposable
         
         // Assert
         Assert.Equal(Path.Combine(_testBasePath, "project-memory"), path);
-        Assert.True(Directory.Exists(path), "Directory should be created");
+        // Directory creation is handled by memory services, not by path resolution
     }
     
     [Fact]
@@ -89,7 +89,7 @@ public class PathResolutionServiceTests : IDisposable
         
         // Assert
         Assert.Equal(Path.Combine(_testBasePath, "local-memory"), path);
-        Assert.True(Directory.Exists(path), "Directory should be created");
+        // Directory creation is handled by memory services, not by path resolution
     }
     
     [Fact]
@@ -100,7 +100,7 @@ public class PathResolutionServiceTests : IDisposable
         
         // Assert
         Assert.Equal(Path.Combine(_testBasePath, "logs"), path);
-        Assert.True(Directory.Exists(path), "Directory should be created");
+        // Directory creation is handled by logging service, not by path resolution
     }
     
     [Theory]
@@ -132,7 +132,7 @@ public class PathResolutionServiceTests : IDisposable
         // Assert
         Assert.True(Path.IsPathRooted(indexPath));
         Assert.Contains("index", indexPath);
-        Assert.True(Directory.Exists(indexPath), "Directory should be created");
+        // Directory creation is handled by services that use the path, not by GetIndexPath itself
         
         // Verify path contains workspace name and hash
         var folderName = Path.GetFileName(indexPath);
@@ -264,7 +264,7 @@ public class PathResolutionServiceTests : IDisposable
         // Assert
         Assert.True(Path.IsPathRooted(indexPath));
         Assert.DoesNotContain(Path.GetInvalidFileNameChars(), Path.GetFileName(indexPath));
-        Assert.True(Directory.Exists(indexPath), "Directory should be created");
+        // Directory creation is handled by services that use the path, not by GetIndexPath itself
     }
     
     [Fact]
@@ -331,7 +331,7 @@ public class PathResolutionServiceTests : IDisposable
         Assert.All(resolvedPaths, path =>
         {
             Assert.True(Path.IsPathRooted(path));
-            Assert.True(Directory.Exists(path));
+            // Directory existence is not guaranteed by path resolution - only path computation
         });
         
         // Verify memory paths are resolved correctly

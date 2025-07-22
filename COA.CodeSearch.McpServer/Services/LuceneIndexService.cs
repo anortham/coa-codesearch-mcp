@@ -351,7 +351,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private IndexContext CreateIndexContext(string indexPath, bool forceRecreate)
     {
-        // PathResolutionService already creates the directory when GetIndexPath is called
+        // Ensure directory exists before creating index
+        System.IO.Directory.CreateDirectory(indexPath);
         
         var directory = FSDirectory.Open(indexPath);
         var writer = CreateWriter(directory, forceRecreate, indexPath);
@@ -452,11 +453,43 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         
         while (!string.IsNullOrEmpty(currentPath))
         {
-            var gitPath = Path.Combine(currentPath, ".git");
-            if (System.IO.Directory.Exists(gitPath))
+            // Check for various project root indicators
+            var projectIndicators = new[]
             {
-                _logger.LogDebug("Found .git directory at {Path}, using as project root", currentPath);
-                return currentPath;
+                ".git",
+                "*.sln",
+                "*.csproj",
+                "package.json",
+                "tsconfig.json",
+                "Cargo.toml",
+                "go.mod"
+            };
+            
+            foreach (var indicator in projectIndicators)
+            {
+                if (indicator.Contains('*'))
+                {
+                    // It's a pattern, check for files
+                    if (System.IO.Directory.Exists(currentPath))
+                    {
+                        var files = System.IO.Directory.GetFiles(currentPath, indicator);
+                        if (files.Length > 0)
+                        {
+                            _logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
+                            return currentPath;
+                        }
+                    }
+                }
+                else
+                {
+                    // It's a directory or file name
+                    var indicatorPath = Path.Combine(currentPath, indicator);
+                    if (System.IO.Directory.Exists(indicatorPath) || System.IO.File.Exists(indicatorPath))
+                    {
+                        _logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
+                        return currentPath;
+                    }
+                }
             }
             
             var parent = System.IO.Directory.GetParent(currentPath);
@@ -466,7 +499,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             currentPath = parent.FullName;
         }
         
-        _logger.LogDebug("No .git directory found, using current directory as base");
+        _logger.LogDebug("No project root indicators found, will use current directory as base");
         return null;
     }
     
