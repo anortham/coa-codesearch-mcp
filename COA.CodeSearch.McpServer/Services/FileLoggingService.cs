@@ -60,7 +60,7 @@ public class FileLoggingService : IHostedService, IDisposable
             {
                 // Only as last resort, use temp directory
                 // Let the file logger create the directory when it first writes
-                _logDirectory = Path.Combine(Path.GetTempPath(), "COA.CodeSearch.logs");
+                _logDirectory = Path.Combine(Path.GetTempPath(), PathConstants.BaseDirectoryName, PathConstants.LogsDirectoryName);
             }
             _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
         }

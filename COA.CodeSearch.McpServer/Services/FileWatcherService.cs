@@ -41,7 +41,7 @@ public class FileWatcherService : BackgroundService
 
         // Load excluded directories
         var excluded = configuration.GetSection("FileWatcher:ExcludePatterns").Get<string[]>()
-            ?? new[] { "bin", "obj", "node_modules", ".git", ".vs", "packages", "TestResults", ".codesearch" };
+            ?? PathConstants.DefaultExcludedDirectories;
         _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
     }
 
@@ -297,9 +297,9 @@ public class FileWatcherService : BackgroundService
     private bool ShouldIgnoreFile(string filePath)
     {
         // Always ignore anything in .codesearch directory
-        if (filePath.Contains(".codesearch", StringComparison.OrdinalIgnoreCase))
+        if (filePath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase))
         {
-            _logger.LogTrace("Ignoring file in .codesearch directory: {FilePath}", filePath);
+            _logger.LogTrace("Ignoring file in {BaseDir} directory: {FilePath}", PathConstants.BaseDirectoryName, filePath);
             return true;
         }
 

@@ -12,11 +12,16 @@ public class FlexibleMemoryTools
 {
     private readonly ILogger<FlexibleMemoryTools> _logger;
     private readonly FlexibleMemoryService _memoryService;
+    private readonly IPathResolutionService _pathResolution;
     
-    public FlexibleMemoryTools(ILogger<FlexibleMemoryTools> logger, FlexibleMemoryService memoryService)
+    public FlexibleMemoryTools(
+        ILogger<FlexibleMemoryTools> logger, 
+        FlexibleMemoryService memoryService,
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _memoryService = memoryService;
+        _pathResolution = pathResolution;
     }
     
     /// <summary>
@@ -1221,9 +1226,8 @@ public class FlexibleMemoryTools
         
         try
         {
-            // Get workspace path from environment or config
-            var localAppData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            var baseDir = Path.Combine(localAppData, "COA.CodeSearch", ".codesearch");
+            // Get base directory from PathResolutionService
+            var baseDir = _pathResolution.GetBasePath();
             
             if (Directory.Exists(baseDir))
             {

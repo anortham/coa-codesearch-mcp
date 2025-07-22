@@ -20,7 +20,7 @@ public class PathResolutionService : IPathResolutionService
     
     private string InitializeBasePath()
     {
-        var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
+        var basePath = _configuration[PathConstants.IndexBasePathConfigKey] ?? PathConstants.BaseDirectoryName;
         
         if (!Path.IsPathRooted(basePath))
         {
@@ -38,20 +38,20 @@ public class PathResolutionService : IPathResolutionService
     public string GetIndexPath(string workspacePath)
     {
         // Check if this is a memory-related path
-        if (workspacePath.Equals("project-memory", StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals(".codesearch/project-memory", StringComparison.OrdinalIgnoreCase))
+        if (workspacePath.Equals(PathConstants.ProjectMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
+            workspacePath.Equals($"{PathConstants.BaseDirectoryName}/{PathConstants.ProjectMemoryDirectoryName}", StringComparison.OrdinalIgnoreCase))
         {
             return GetProjectMemoryPath();
         }
         
-        if (workspacePath.Equals("local-memory", StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals(".codesearch/local-memory", StringComparison.OrdinalIgnoreCase))
+        if (workspacePath.Equals(PathConstants.LocalMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
+            workspacePath.Equals($"{PathConstants.BaseDirectoryName}/{PathConstants.LocalMemoryDirectoryName}", StringComparison.OrdinalIgnoreCase))
         {
             return GetLocalMemoryPath();
         }
         
         // For regular workspace paths
-        var indexRoot = Path.Combine(_basePath, "index");
+        var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
         System.IO.Directory.CreateDirectory(indexRoot);
         
         // Generate a hash-based folder name
@@ -61,14 +61,14 @@ public class PathResolutionService : IPathResolutionService
         using var sha256 = SHA256.Create();
         var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalizedPath));
         var hashString = BitConverter.ToString(hashBytes).Replace("-", "").ToLowerInvariant();
-        var truncatedHash = hashString.Substring(0, 16);
+        var truncatedHash = hashString.Substring(0, PathConstants.WorkspaceHashLength);
         
         // Create a folder name that includes part of the workspace name for readability
         var workspaceName = Path.GetFileName(fullPath) ?? "workspace";
         var safeName = string.Join("_", workspaceName.Split(Path.GetInvalidFileNameChars()));
-        if (safeName.Length > 30)
+        if (safeName.Length > PathConstants.MaxSafeWorkspaceName)
         {
-            safeName = safeName.Substring(0, 30);
+            safeName = safeName.Substring(0, PathConstants.MaxSafeWorkspaceName);
         }
         
         var indexPath = Path.Combine(indexRoot, $"{safeName}_{truncatedHash}");
@@ -79,30 +79,30 @@ public class PathResolutionService : IPathResolutionService
     
     public string GetLogsPath()
     {
-        var logsPath = Path.Combine(_basePath, "logs");
+        var logsPath = Path.Combine(_basePath, PathConstants.LogsDirectoryName);
         System.IO.Directory.CreateDirectory(logsPath);
         return logsPath;
     }
     
     public string GetProjectMemoryPath()
     {
-        var path = Path.Combine(_basePath, "project-memory");
+        var path = Path.Combine(_basePath, PathConstants.ProjectMemoryDirectoryName);
         System.IO.Directory.CreateDirectory(path);
         return path;
     }
     
     public string GetLocalMemoryPath()
     {
-        var path = Path.Combine(_basePath, "local-memory");
+        var path = Path.Combine(_basePath, PathConstants.LocalMemoryDirectoryName);
         System.IO.Directory.CreateDirectory(path);
         return path;
     }
     
     public string GetWorkspaceMetadataPath()
     {
-        var indexRoot = Path.Combine(_basePath, "index");
+        var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
         System.IO.Directory.CreateDirectory(indexRoot);
-        return Path.Combine(indexRoot, "workspace_metadata.json");
+        return Path.Combine(indexRoot, PathConstants.WorkspaceMetadataFileName);
     }
     
     public bool IsProtectedPath(string indexPath)
@@ -124,7 +124,7 @@ public class PathResolutionService : IPathResolutionService
     
     public string GetBackupPath(string? timestamp = null)
     {
-        var backupRoot = Path.Combine(_basePath, "backups");
+        var backupRoot = Path.Combine(_basePath, PathConstants.BackupsDirectoryName);
         System.IO.Directory.CreateDirectory(backupRoot);
         
         if (string.IsNullOrEmpty(timestamp))
@@ -132,9 +132,24 @@ public class PathResolutionService : IPathResolutionService
             timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
         }
         
-        var backupPath = Path.Combine(backupRoot, $"backup_{timestamp}");
+        var backupPath = Path.Combine(backupRoot, string.Format(PathConstants.BackupPrefixFormat, timestamp));
         System.IO.Directory.CreateDirectory(backupPath);
         
         return backupPath;
+    }
+    
+    public string GetIndexRootPath()
+    {
+        var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
+        System.IO.Directory.CreateDirectory(indexRoot);
+        return indexRoot;
+    }
+    
+    public string GetTypeScriptInstallPath()
+    {
+        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+        var installPath = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
+        System.IO.Directory.CreateDirectory(installPath);
+        return installPath;
     }
 }

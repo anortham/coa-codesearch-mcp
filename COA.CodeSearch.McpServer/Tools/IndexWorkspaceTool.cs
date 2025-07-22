@@ -43,13 +43,13 @@ public class IndexWorkspaceTool
 
             // CRITICAL: Protect memory indexes from being indexed as code
             if (workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase) || 
-                workspacePath.Contains(".codesearch", StringComparison.OrdinalIgnoreCase))
+                workspacePath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase))
             {
                 _logger.LogWarning("Attempted to index protected path as workspace: {WorkspacePath}", workspacePath);
                 return new
                 {
                     success = false,
-                    error = "Cannot index .codesearch directories or memory paths. These are managed internally by the indexing system."
+                    error = $"Cannot index {PathConstants.BaseDirectoryName} directories or memory paths. These are managed internally by the indexing system."
                 };
             }
 

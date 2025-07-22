@@ -35,7 +35,7 @@ public class FileIndexingService
         
         // Initialize excluded directories
         var excluded = configuration.GetSection("Lucene:ExcludedDirectories").Get<string[]>() 
-            ?? new[] { "bin", "obj", "node_modules", ".git", ".vs", "packages", "TestResults", ".codesearch" };
+            ?? PathConstants.DefaultExcludedDirectories;
         _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
     }
 

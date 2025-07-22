@@ -13,19 +13,23 @@ namespace COA.CodeSearch.McpServer.Services;
 public class TypeScriptInstaller
 {
     private readonly ILogger<TypeScriptInstaller> _logger;
+    private readonly IPathResolutionService _pathResolution;
     private readonly HttpClient _httpClient;
     private readonly string _installPath;
     private const string TYPESCRIPT_VERSION = "5.3.3";
     private const string NPM_REGISTRY = "https://registry.npmjs.org";
 
-    public TypeScriptInstaller(ILogger<TypeScriptInstaller> logger, IHttpClientFactory? httpClientFactory = null)
+    public TypeScriptInstaller(
+        ILogger<TypeScriptInstaller> logger, 
+        IPathResolutionService pathResolution,
+        IHttpClientFactory? httpClientFactory = null)
     {
         _logger = logger;
+        _pathResolution = pathResolution;
         _httpClient = httpClientFactory?.CreateClient() ?? new HttpClient();
         
-        // Install TypeScript in user's local app data directory
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        _installPath = Path.Combine(appData, "COA.CodeSearch.McpServer", "typescript");
+        // Get TypeScript install path from PathResolutionService
+        _installPath = _pathResolution.GetTypeScriptInstallPath();
     }
 
     /// <summary>
@@ -105,8 +109,7 @@ public class TypeScriptInstaller
                 }
             }
 
-            // Create package.json
-            Directory.CreateDirectory(_installPath);
+            // Create package.json (directory already created by PathResolutionService)
             var packageJson = Path.Combine(_installPath, "package.json");
             await File.WriteAllTextAsync(packageJson, $$"""
                 {
