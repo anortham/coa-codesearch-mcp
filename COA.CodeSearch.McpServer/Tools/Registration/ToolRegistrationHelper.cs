@@ -20,20 +20,6 @@ public static class ToolRegistrationHelper
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
             DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
         });
-        
-        // Log the actual size of what we're returning to a file
-        var byteCount = System.Text.Encoding.UTF8.GetByteCount(json);
-        var estimatedTokens = byteCount / 4; // Rough estimate: 1 token ≈ 4 bytes
-        
-        try
-        {
-            var logPath = Path.Combine(Path.GetTempPath(), "mcp-token-trace.log");
-            var logMessage = $"[{DateTime.UtcNow:yyyy-MM-dd HH:mm:ss.fff}] CreateSuccessResult: {byteCount} bytes, ~{estimatedTokens} tokens\n";
-            logMessage += $"First 500 chars: {json.Substring(0, Math.Min(500, json.Length))}\n\n";
-            File.AppendAllText(logPath, logMessage);
-        }
-        catch { /* Ignore logging errors */ }
-        
         return new CallToolResult
         {
             Content = new List<ToolContent>
