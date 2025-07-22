@@ -72,7 +72,8 @@ public class PathResolutionService : IPathResolutionService
         }
         
         var indexPath = Path.Combine(indexRoot, $"{safeName}_{truncatedHash}");
-        System.IO.Directory.CreateDirectory(indexPath);
+        // DO NOT create directory here - only compute the path
+        // Directory creation should happen only when actually creating an index
         
         return indexPath;
     }

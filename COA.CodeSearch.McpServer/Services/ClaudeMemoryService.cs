@@ -34,7 +34,8 @@ public class ClaudeMemoryService : IDisposable
     public ClaudeMemoryService(
         ILogger<ClaudeMemoryService> logger, 
         IConfiguration configuration,
-        ILuceneIndexService indexService)
+        ILuceneIndexService indexService,
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _config = configuration.GetSection("ClaudeMemory").Get<MemoryConfiguration>() ?? new MemoryConfiguration();
@@ -44,10 +45,9 @@ public class ClaudeMemoryService : IDisposable
         // Setup Lucene analyzer
         _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
         
-        // Create workspace paths for memory indexes
-        // Just use the memory path names - PathResolutionService will handle the full path resolution
-        _projectMemoryWorkspace = _config.ProjectMemoryPath;
-        _localMemoryWorkspace = _config.LocalMemoryPath;
+        // Use full paths from PathResolutionService to ensure IsProtectedPath works correctly
+        _projectMemoryWorkspace = pathResolution.GetProjectMemoryPath();
+        _localMemoryWorkspace = pathResolution.GetLocalMemoryPath();
         
         _logger.LogInformation("Claude Memory Service initialized with session {SessionId}", _currentSessionId);
     }
