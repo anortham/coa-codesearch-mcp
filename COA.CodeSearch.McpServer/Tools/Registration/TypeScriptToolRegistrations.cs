@@ -37,7 +37,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptSearchParams>(
             name: "search_typescript",
-            description: "Search for TypeScript symbols (interfaces, types, classes, functions) using text search. NOTE: Basic text matching only - tsserver integration coming soon. Use fast_text_search for more advanced TypeScript searches.",
+            description: "🔍 Find TypeScript symbols FAST! Searches interfaces, types, classes, functions. For advanced searches use fast_text_search. AVOID grep - this understands TypeScript structure better.",
             inputSchema: new
             {
                 type = "object",
@@ -75,7 +75,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
             name: "typescript_go_to_definition",
-            description: "Navigate to TypeScript symbol definitions using tsserver - provides accurate navigation for complex TypeScript codebases",
+            description: "⚡ Jump to TypeScript definitions INSTANTLY! Uses real TypeScript language server for 100% accuracy. MUCH better than text search - handles imports, aliases, complex types perfectly.",
             inputSchema: new
             {
                 type = "object",

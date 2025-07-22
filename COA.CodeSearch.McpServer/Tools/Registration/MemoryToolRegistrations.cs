@@ -160,7 +160,7 @@ public static class MemoryToolRegistrations
     {
         registry.RegisterTool<RecallContextParams>(
             name: "recall_context",
-            description: "Load previous architectural decisions, patterns, and context relevant to your current task - essential for maintaining consistency. Use at session start or when switching tasks.",
+            description: "🧠 LOAD RELEVANT CONTEXT - Start EVERY session with this! Loads past decisions, patterns, insights about what you're working on. Essential for consistency. Your memory assistant!",
             inputSchema: new
             {
                 type = "object",

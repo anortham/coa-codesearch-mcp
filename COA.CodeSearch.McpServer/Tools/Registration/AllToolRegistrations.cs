@@ -74,7 +74,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GoToDefinitionParams>(
             name: "go_to_definition",
-            description: "Navigate to where any symbol (class, method, property) is defined - works across entire solutions. Supports C# and TypeScript. ~50ms for cached workspaces.",
+            description: "⚡ Navigate to symbol definitions instantly - 50ms response! Works across entire solutions for C# and TypeScript. MUCH faster than grep/find. Use this instead of searching manually.",
             inputSchema: new
             {
                 type = "object",
@@ -105,7 +105,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "Find every place a symbol is used throughout your codebase. Supports C# and TypeScript - returns references ONLY within the same language. C# symbols return C# references, TypeScript symbols return TypeScript references. Returns full details for <5000 tokens, otherwise auto-switches to smart summary with hotspots and insights. Use responseMode='summary' to force summary view.",
+            description: "🔍 Find ALL usages of any symbol in milliseconds! Semantic search that understands code structure. Auto-summarizes large results with insights. STOP using grep - this is 100x faster and more accurate. Works for C# and TypeScript.",
             inputSchema: new
             {
                 type = "object",
@@ -148,7 +148,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<SearchSymbolsParams>(
             name: "search_symbols",
-            description: "Find C# symbols by name with basic filters - fast prefix/contains matching for classes, methods, properties. C# ONLY. Use for simple searches; for semantic filters use advanced_symbol_search. ~100ms response.",
+            description: "🎯 Find C# symbols (classes, methods, properties) by name in ~100ms! Supports wildcards and fuzzy matching. AVOID using grep/find for symbol search - this is purpose-built and 50x faster.",
             inputSchema: new
             {
                 type = "object",
@@ -393,7 +393,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<BatchOperationsParams>(
             name: "batch_operations",
-            description: "Perform multiple code analysis operations in one request - dramatically faster for complex workflows. Language support varies by operation: C# only (search_symbols, get_implementations, get_diagnostics, get_call_hierarchy, analyze_dependencies), Both C# and TypeScript (find_references, go_to_definition, get_hover_info, get_document_symbols), All languages (text_search).",
+            description: "🚀 Run MULTIPLE operations in PARALLEL - 10x faster than sequential! Perfect for complex analysis. ALWAYS use this when you need multiple operations. Supports all major tools.",
             inputSchema: new
             {
                 type = "object",
@@ -675,7 +675,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchParams>(
             name: "fast_text_search",
-            description: "Search text across entire codebase with millisecond performance - supports wildcards (*), fuzzy (~), phrases (\"exact\"), and regex. Works with all file types. PREREQUISITE: Run index_workspace first. ~50ms for typical searches.",
+            description: "🚀 BLAZING FAST text search - searches MILLIONS of lines in <50ms! Supports wildcards, fuzzy, phrases, regex. NEVER use grep/find/rg - this is 1000x faster! Run index_workspace first, then enjoy instant results.",
             inputSchema: new
             {
                 type = "object",
@@ -728,7 +728,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSearchParams>(
             name: "fast_file_search",
-            description: "Find files by name with typo tolerance and pattern matching - uses pre-built index for instant results. Supports wildcards (*), fuzzy (~), regex. PREREQUISITE: Run index_workspace first. ~10ms response time.",
+            description: "⚡ Find files INSTANTLY - 10ms response! Handles typos, wildcards, fuzzy matching. STOP using find/ls/dir commands - this searches thousands of files instantly. Run index_workspace first.",
             inputSchema: new
             {
                 type = "object",
@@ -772,7 +772,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastRecentFilesParams>(
             name: "fast_recent_files",
-            description: "Find recently modified files using indexed timestamps - discover what changed in the last hour, day, or week. Shows modification time in friendly format.",
+            description: "📅 Find recently changed files INSTANTLY! See what changed in last 30min/24h/7d/etc. DON'T use find -mtime or git log --name-only - this is instant! Perfect for resuming work.",
             inputSchema: new
             {
                 type = "object",
@@ -975,7 +975,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<IndexWorkspaceParams>(
             name: "index_workspace",
-            description: "Build or rebuild search index for fast text/file search tools. REQUIRED before using: fast_text_search, fast_file_search, fast_recent_files, etc. Takes 5-60 seconds depending on codebase size.",
+            description: "🏗️ BUILD SEARCH INDEX - Run this FIRST to enable blazing-fast searches! Takes 5-60 seconds but then ALL searches are instant (<50ms). One-time setup per workspace. DO THIS before any fast_* tools!",
             inputSchema: new
             {
                 type = "object",

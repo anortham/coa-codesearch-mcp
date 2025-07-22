@@ -429,7 +429,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         if (workspaceRoot != null)
         {
             var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
-            UpdateMetadata(workspaceRoot, hashPath);
+            if (!string.IsNullOrEmpty(hashPath))
+            {
+                UpdateMetadata(workspaceRoot, hashPath);
+            }
         }
         
         return indexPath;
@@ -518,6 +521,12 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private void UpdateMetadata(string originalPath, string hashPath)
     {
+        if (string.IsNullOrEmpty(hashPath))
+        {
+            _logger.LogWarning("Skipping metadata update for null or empty hashPath");
+            return;
+        }
+        
         _metadataLock.Wait();
         try
         {
