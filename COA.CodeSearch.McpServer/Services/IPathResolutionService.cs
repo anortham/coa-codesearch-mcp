@@ -54,4 +54,16 @@ public interface IPathResolutionService
     /// <param name="timestamp">Optional timestamp string (defaults to current UTC time)</param>
     /// <returns>The full path to the backup directory</returns>
     string GetBackupPath(string? timestamp = null);
+    
+    /// <summary>
+    /// Gets the root index directory path (without workspace-specific subdirectory)
+    /// </summary>
+    /// <returns>The full path to the index root directory</returns>
+    string GetIndexRootPath();
+    
+    /// <summary>
+    /// Gets the TypeScript installation directory path
+    /// </summary>
+    /// <returns>The full path to the TypeScript installation directory</returns>
+    string GetTypeScriptInstallPath();
 }

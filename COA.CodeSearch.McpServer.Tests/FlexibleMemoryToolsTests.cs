@@ -46,7 +46,7 @@ public class FlexibleMemoryToolsTests : IDisposable
         // Use in-memory index service
         _indexService = new InMemoryTestIndexService();
         _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object);
-        _memoryTools = new FlexibleMemoryTools(_toolsLoggerMock.Object, _memoryService);
+        _memoryTools = new FlexibleMemoryTools(_toolsLoggerMock.Object, _memoryService, _pathResolutionMock.Object);
     }
     
     public void Dispose()

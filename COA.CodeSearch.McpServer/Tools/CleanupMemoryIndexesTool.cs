@@ -27,7 +27,7 @@ public class CleanupMemoryIndexesTool
         
         try
         {
-            var indexPath = Path.Combine(_pathResolution.GetBasePath(), "index");
+            var indexPath = _pathResolution.GetIndexRootPath();
             if (!Directory.Exists(indexPath))
             {
                 result.Message = "No index directory found";

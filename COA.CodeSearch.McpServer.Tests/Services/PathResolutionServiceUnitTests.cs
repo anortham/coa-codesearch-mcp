@@ -17,7 +17,7 @@ public class PathResolutionServiceUnitTests
     public void GetBasePath_ShouldReturnCodesearchDirectory()
     {
         // Arrange
-    var config = CreateConfiguration(string.Empty, string.Empty);
+    var config = CreateConfiguration(string.Empty, null);
         var service = new PathResolutionService(config);
         
         // Act
@@ -113,7 +113,7 @@ public class PathResolutionServiceUnitTests
     public void GetIndexPath_ForMemoryPaths_BehaviorTest(string inputPath)
     {
         // Arrange
-    var config = CreateConfiguration(string.Empty, string.Empty);
+    var config = CreateConfiguration(string.Empty, null);
         var service = new PathResolutionService(config);
         
         // Act
@@ -135,7 +135,7 @@ public class PathResolutionServiceUnitTests
     public void IsProtectedPath_ShouldIdentifyMemoryPaths()
     {
         // Arrange
-    var config = CreateConfiguration(string.Empty, string.Empty);
+    var config = CreateConfiguration(string.Empty, null);
         var service = new PathResolutionService(config);
         
         // Test with actual paths from the service

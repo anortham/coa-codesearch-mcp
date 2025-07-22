@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Options;
 using FluentAssertions;
 using System.Text.Json;
+using System.IO;
 using Moq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -104,8 +105,12 @@ public class SimpleToolTests : TestBase
     public async Task GetHoverInfoTool_Should_Return_Error_For_Missing_Document()
     {
         // Arrange
+        var mockPathResolution = new Mock<IPathResolutionService>();
+        mockPathResolution.Setup(x => x.GetTypeScriptInstallPath())
+            .Returns(Path.Combine(Path.GetTempPath(), "typescript-test"));
         var mockInstaller = new TypeScriptInstaller(
             Mock.Of<ILogger<TypeScriptInstaller>>(),
+            mockPathResolution.Object,
             null); // null for httpClientFactory is OK
         var mockTsService = new Mock<TypeScriptAnalysisService>(
             Mock.Of<ILogger<TypeScriptAnalysisService>>(),
