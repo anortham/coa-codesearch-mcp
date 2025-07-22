@@ -50,42 +50,45 @@ public class RenameSymbolV2Test : TestBase
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Basic assertions
+        // Basic assertions - AI-optimized format
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        response.GetProperty("operation").GetString().Should().Be("rename_symbol");
         
-        // Check data structure
-        var data = response.GetProperty("data");
-        data.Should().NotBeNull();
+        // Check symbol structure (note: JSON is camelCase)
+        var symbol = response.GetProperty("symbol");
+        symbol.GetProperty("old").GetString().Should().Be("TestClass");
+        symbol.GetProperty("new").GetString().Should().Be("RenamedClass");
         
-        // Check overview
-        var overview = data.GetProperty("overview");
-        overview.GetProperty("totalItems").GetInt32().Should().BeGreaterThan(0);
+        // Check impact structure
+        var impact = response.GetProperty("impact");
+        impact.GetProperty("refs").GetInt32().Should().BeGreaterThan(0);
+        impact.GetProperty("files").GetInt32().Should().BeGreaterThan(0);
+        impact.GetProperty("risk").GetString().Should().NotBeEmpty();
         
-        // Check preview
-        if (data.TryGetProperty("preview", out var preview))
-        {
-            var topChanges = preview.GetProperty("topChanges");
-            topChanges.GetArrayLength().Should().BeGreaterThan(0);
-            
-            // First change should show the rename
-            var firstChange = topChanges.EnumerateArray().First();
-            var context = firstChange.GetProperty("context").GetString();
-            context.Should().Contain("TestClass");
-            context.Should().Contain("RenamedClass");
-        }
+        // Check we have actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
-        // Check next actions - should recommend applying the rename
-        var nextActions = response.GetProperty("nextActions");
-        var recommended = nextActions.GetProperty("recommended").EnumerateArray();
+        // Check preview flag
+        response.GetProperty("preview").GetBoolean().Should().BeTrue();
         
-        var applyAction = recommended.FirstOrDefault(a => 
-            a.GetProperty("action").GetString() == "apply_rename");
+        // Check hotspots
+        var hotspots = response.GetProperty("hotspots");
+        hotspots.GetArrayLength().Should().BeGreaterThan(0);
+        
+        // Check metadata
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("summary");
+        meta.GetProperty("tokens").GetInt32().Should().BeGreaterThan(0);
+        
+        // Check actions - should have an apply action
+        var applyAction = actions.EnumerateArray().FirstOrDefault(a => 
+            a.GetProperty("id").GetString() == "apply");
             
         if (applyAction.ValueKind != JsonValueKind.Undefined)
         {
-            Console.WriteLine("Found apply_rename action in recommendations");
-            applyAction.GetProperty("description").GetString().Should().Contain("Apply");
+            Console.WriteLine("Found apply action in actions array");
+            applyAction.GetProperty("priority").GetString().Should().NotBeEmpty();
         }
     }
 }

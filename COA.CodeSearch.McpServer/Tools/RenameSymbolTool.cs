@@ -124,16 +124,15 @@ public class RenameSymbolTool : McpToolBase
             var changes = new List<FileChange>();
             var originalSolution = solution;
             
-            foreach (var project in renameResult.Projects)
+            // Get only the documents that actually changed
+            var changedDocuments = renameResult.GetChanges(originalSolution);
+            
+            foreach (var projectChanges in changedDocuments.GetProjectChanges())
             {
-                var originalProject = originalSolution.GetProject(project.Id);
-                if (originalProject == null)
-                    continue;
-
-                foreach (var documentId in project.DocumentIds)
+                foreach (var documentId in projectChanges.GetChangedDocuments())
                 {
-                    var newDoc = project.GetDocument(documentId);
-                    var oldDoc = originalProject.GetDocument(documentId);
+                    var newDoc = renameResult.GetDocument(documentId);
+                    var oldDoc = originalSolution.GetDocument(documentId);
                     
                     if (newDoc == null || oldDoc == null)
                         continue;
@@ -153,7 +152,6 @@ public class RenameSymbolTool : McpToolBase
                         foreach (var change in textChanges)
                         {
                             var lineSpan = oldText.Lines.GetLinePositionSpan(change.Span);
-                            var newLineSpan = newText.Lines.GetLinePositionSpan(new Microsoft.CodeAnalysis.Text.TextSpan(change.Span.Start, change.NewText?.Length ?? 0));
                             
                             fileChange.Changes.Add(new TextChange
                             {
