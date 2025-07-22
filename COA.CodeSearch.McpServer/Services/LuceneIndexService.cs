@@ -809,6 +809,98 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         }
     }
     
+    public void CleanupDuplicateIndices()
+    {
+        var indexRoot = _pathResolution.GetIndexRootPath();
+        var metadataPath = _pathResolution.GetWorkspaceMetadataPath();
+        
+        if (!File.Exists(metadataPath))
+        {
+            _logger.LogInformation("No metadata file found, cannot cleanup duplicates");
+            return;
+        }
+        
+        _logger.LogInformation("Checking for duplicate indices");
+        
+        try
+        {
+            var metadata = LoadMetadata(metadataPath);
+            var duplicateGroups = metadata.Indexes
+                .GroupBy(kvp => kvp.Value.OriginalPath, StringComparer.OrdinalIgnoreCase)
+                .Where(g => g.Count() > 1)
+                .ToList();
+            
+            if (!duplicateGroups.Any())
+            {
+                _logger.LogInformation("No duplicate indices found");
+                return;
+            }
+            
+            foreach (var group in duplicateGroups)
+            {
+                var originalPath = group.Key;
+                var duplicates = group.OrderBy(kvp => kvp.Value.LastAccessed).ToList();
+                
+                // Keep the most recently accessed index, remove others
+                var toKeep = duplicates.Last();
+                var toRemove = duplicates.Take(duplicates.Count - 1).ToList();
+                
+                _logger.LogInformation("Found {Count} duplicate indices for {Path}, keeping {Keep}, removing {Remove}", 
+                    duplicates.Count, originalPath, toKeep.Key, 
+                    string.Join(", ", toRemove.Select(x => x.Key)));
+                
+                foreach (var duplicate in toRemove)
+                {
+                    try
+                    {
+                        var indexPath = Path.Combine(indexRoot, duplicate.Key);
+                        if (System.IO.Directory.Exists(indexPath))
+                        {
+                            // Close any open index context for this path
+                            if (_indexes.ContainsKey(indexPath))
+                            {
+                                var context = _indexes[indexPath];
+                                context.Lock.Wait();
+                                try
+                                {
+                                    context.Writer?.Dispose();
+                                    context.Reader?.Dispose();
+                                    context.Directory?.Dispose();
+                                }
+                                finally
+                                {
+                                    context.Lock.Release();
+                                    context.Lock.Dispose();
+                                }
+                                _indexes.Remove(indexPath, out _);
+                            }
+                            
+                            System.IO.Directory.Delete(indexPath, true);
+                            _logger.LogInformation("Removed duplicate index directory: {Path}", indexPath);
+                        }
+                        
+                        // Remove from metadata
+                        metadata.Indexes.Remove(duplicate.Key);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to remove duplicate index {HashPath} for {OriginalPath}", 
+                            duplicate.Key, originalPath);
+                    }
+                }
+            }
+            
+            // Save updated metadata
+            SaveMetadata(metadataPath, metadata);
+            _logger.LogInformation("Cleanup completed, removed {Count} duplicate indices", 
+                duplicateGroups.Sum(g => g.Count() - 1));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during duplicate index cleanup");
+        }
+    }
+    
     private void ThrowIfDisposed()
     {
         if (_disposed)

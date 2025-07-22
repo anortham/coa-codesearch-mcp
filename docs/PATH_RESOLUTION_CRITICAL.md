@@ -12,9 +12,11 @@ We've wasted significant time debugging path-related issues because different se
 - Creating directories in multiple places
 - Using inconsistent path resolution logic
 
-## The Golden Rule
+## The Golden Rules
 
-**NEVER** construct paths manually. **ALWAYS** use `IPathResolutionService`.
+1. **NEVER** construct paths manually. **ALWAYS** use `IPathResolutionService` for path computation.
+2. **PathResolutionService ONLY computes paths** - it does NOT create directories.
+3. **Services are responsible for creating their own directories** when needed.
 
 ## Directory Structure
 
@@ -66,9 +68,9 @@ string GetBackupPath(string? timestamp = null)
 ## Implementation Details
 
 ### Directory Creation
-- **ALL directories are created automatically** by PathResolutionService methods
-- **NEVER call `Directory.CreateDirectory()` directly**
-- Each getter method ensures its directory exists before returning the path
+- **PathResolutionService does NOT create directories** - it only computes paths
+- **Services MUST create their own directories** using `Directory.CreateDirectory()`
+- Services should create directories when first needed (lazy initialization)
 
 ### Path Normalization
 - All paths are converted to absolute paths
@@ -96,20 +98,34 @@ var basePath = _configuration["Lucene:IndexBasePath"] ?? ".codesearch";
 var memoryPath = _configuration["MemoryConfiguration:BasePath"];
 ```
 
-### ❌ DON'T: Create directories manually
+### ❌ DON'T: Create directories without using PathResolutionService paths
 ```csharp
-// WRONG - Never do this!
-Directory.CreateDirectory(indexPath);
-System.IO.Directory.CreateDirectory(logsPath);
+// WRONG - Never construct the path yourself!
+var logsPath = Path.Combine(basePath, "logs");
+Directory.CreateDirectory(logsPath);
+
+// WRONG - Don't hardcode paths!
+Directory.CreateDirectory(".codesearch/logs");
 ```
 
-### ✅ DO: Always use IPathResolutionService
+### ✅ DO: Always use IPathResolutionService for paths, then create directories as needed
 ```csharp
-// CORRECT - Always do this!
-var indexPath = _pathResolution.GetIndexPath(workspacePath);
+// CORRECT - Get path from PathResolutionService
 var logsPath = _pathResolution.GetLogsPath();
-var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
-var backupPath = _pathResolution.GetBackupPath();
+// Then create directory when needed
+Directory.CreateDirectory(logsPath);
+
+// CORRECT - For file operations
+var indexPath = _pathResolution.GetIndexPath(workspacePath);
+Directory.CreateDirectory(indexPath);
+var indexFile = Path.Combine(indexPath, "index.dat");
+
+// CORRECT - Lazy initialization pattern
+private void EnsureLogDirectory()
+{
+    var logsPath = _pathResolution.GetLogsPath();
+    Directory.CreateDirectory(logsPath);
+}
 ```
 
 ## Service Dependencies
@@ -130,6 +146,13 @@ public class MyService
     {
         // Always use PathResolutionService for paths
         var indexPath = _pathResolution.GetIndexPath("workspace");
+        
+        // Create directory when needed
+        Directory.CreateDirectory(indexPath);
+        
+        // Now use the path
+        var file = Path.Combine(indexPath, "data.json");
+        File.WriteAllText(file, jsonData);
     }
 }
 ```
@@ -171,12 +194,18 @@ If not specified, defaults to `.codesearch` in the current directory.
 
 If you need to add new paths:
 1. Add the method to `IPathResolutionService` interface
-2. Implement in `PathResolutionService` with automatic directory creation
+2. Implement in `PathResolutionService` to compute the path (NO directory creation)
 3. Update this documentation
-4. **NEVER** create paths outside of PathResolutionService
+4. **NEVER** compute paths outside of PathResolutionService
+5. Services using the new path are responsible for creating the directory
 
 ## Remember
 
-**PathResolutionService is the ONLY place where paths should be constructed and directories should be created.**
+**PathResolutionService is the ONLY place where paths should be computed.**
+**Services are responsible for creating their own directories.**
+
+This separation of concerns is critical:
+- PathResolutionService = Path computation only
+- Services = Directory creation and file operations
 
 This is not a suggestion - it's a requirement to prevent the path-related bugs we've been dealing with.

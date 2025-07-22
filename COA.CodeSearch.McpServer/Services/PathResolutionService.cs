@@ -56,10 +56,11 @@ public class PathResolutionService : IPathResolutionService
         // For regular workspace paths
         var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
         
-        // Generate a hash-based folder name
+        // Generate a hash-based folder name with robust path normalization
         var fullPath = Path.GetFullPath(workspacePath);
-        var normalizedFullPath = fullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
-            .TrimEnd(Path.DirectorySeparatorChar)
+        var normalizedFullPath = fullPath
+            .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             .ToLowerInvariant();
         
         using var sha256 = SHA256.Create();

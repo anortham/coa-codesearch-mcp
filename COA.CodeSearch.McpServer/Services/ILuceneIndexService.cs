@@ -18,4 +18,14 @@ public interface ILuceneIndexService : IDisposable
     /// Get the physical index path for a workspace - single source of truth for path resolution
     /// </summary>
     string GetPhysicalIndexPath(string workspacePath);
+    
+    /// <summary>
+    /// Clean up stuck index locks from previous sessions
+    /// </summary>
+    void CleanupStuckIndexes();
+    
+    /// <summary>
+    /// Clean up duplicate indices created due to path normalization issues
+    /// </summary>
+    void CleanupDuplicateIndices();
 }
