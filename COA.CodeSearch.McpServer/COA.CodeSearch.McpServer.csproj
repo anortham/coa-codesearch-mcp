@@ -23,12 +23,12 @@
     <FileVersion>$(Version)</FileVersion>
     <!-- Add build metadata -->
     <InformationalVersion>$(Version)+local.$(BuildHash)</InformationalVersion>
-    <Authors>Children of America</Authors>
-    <Company>Children of America</Company>
+    <Authors>YOUR-NAME</Authors>
+    <Company>YOUR-COMPANY</Company>
     <Description>High-performance MCP server for code search and navigation across multiple languages</Description>
     <PackageTags>mcp;codesearch;csharp;blazor;code-navigation;lsp;lucene</PackageTags>
-    <RepositoryUrl>https://childrensal.visualstudio.com/COA%20Roslyn%20MCP/_git/COA%20Roslyn%20MCP</RepositoryUrl>
-    <PackageProjectUrl>https://childrensal.visualstudio.com/COA%20Roslyn%20MCP/_git/COA%20Roslyn%20MCP</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/YOUR-ORG/codesearch-mcp-server</RepositoryUrl>
+    <PackageProjectUrl>https://github.com/YOUR-ORG/codesearch-mcp-server</PackageProjectUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
   </PropertyGroup>
 
