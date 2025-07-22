@@ -145,15 +145,23 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Register the MCP server as a hosted service
         services.AddHostedService<McpServer>();
-        
-        // Tool registration happens during startup
-        services.AddHostedService<ToolRegistrationService>();
     })
     .UseConsoleLifetime(options =>
     {
         options.SuppressStatusMessages = true;
     })
     .Build();
+
+// Register all tools before starting the host
+using (var scope = host.Services.CreateScope())
+{
+    var toolRegistry = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    
+    logger.LogInformation("Registering tools before server startup...");
+    AllToolRegistrations.RegisterAll(toolRegistry, scope.ServiceProvider);
+    logger.LogInformation("Tool registration complete");
+}
 
 await host.RunAsync();
 return 0;
@@ -187,38 +195,6 @@ static void ShowHelp()
     Console.WriteLine("Runs in STDIO mode for MCP clients (default)");
 }
 
-/// <summary>
-/// Service that registers all tools on startup
-/// </summary>
-public class ToolRegistrationService : IHostedService
-{
-    private readonly ToolRegistry _toolRegistry;
-    private readonly IServiceProvider _serviceProvider;
-    private readonly ILogger<ToolRegistrationService> _logger;
-
-    public ToolRegistrationService(
-        ToolRegistry toolRegistry,
-        IServiceProvider serviceProvider,
-        ILogger<ToolRegistrationService> logger)
-    {
-        _toolRegistry = toolRegistry;
-        _serviceProvider = serviceProvider;
-        _logger = logger;
-    }
-
-    public Task StartAsync(CancellationToken cancellationToken)
-    {
-        _logger.LogInformation("Registering tools...");
-
-        // Register all tools
-        AllToolRegistrations.RegisterAll(_toolRegistry, _serviceProvider);
-
-        _logger.LogInformation("Tool registration complete");
-        return Task.CompletedTask;
-    }
-
-    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
-}
 
 /// <summary>
 /// Program class to hold static properties
