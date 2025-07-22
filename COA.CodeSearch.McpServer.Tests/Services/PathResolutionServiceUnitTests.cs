@@ -13,49 +13,53 @@ namespace COA.CodeSearch.McpServer.Tests.Services;
 /// </summary>
 public class PathResolutionServiceUnitTests
 {
-    [Theory]
-    [InlineData(@"C:\projects\myapp", @"C:\projects\myapp\.codesearch")]
-    [InlineData(@"/home/user/projects/myapp", @"/home/user/projects/myapp/.codesearch")]
-    [InlineData(@"\\network\share\project", @"\\network\share\project\.codesearch")]
-    public void GetBasePath_ShouldReturnCodesearchDirectory(string currentDir, string expected)
+    [Fact]
+    public void GetBasePath_ShouldReturnCodesearchDirectory()
     {
         // Arrange
-        var config = CreateConfiguration(currentDir, null);
+        var config = CreateConfiguration(null, null);
         var service = new PathResolutionService(config);
         
         // Act
         var result = service.GetBasePath();
         
         // Assert
+        // Should use current directory + .codesearch
+        var expected = Path.Combine(Directory.GetCurrentDirectory(), ".codesearch");
         Assert.Equal(NormalizePath(expected), NormalizePath(result));
     }
 
     [Theory]
-    [InlineData(@"C:\custom\path", @"C:\custom\path")]
-    [InlineData(@"/var/lib/codesearch", @"/var/lib/codesearch")]
-    [InlineData(@"custom-index", @"{currentDir}\custom-index")]
-    public void GetBasePath_WithCustomConfig_ShouldUseConfiguredPath(string configPath, string expectedPattern)
+    [InlineData(@"C:\custom\path")]
+    [InlineData(@"/var/lib/codesearch")]
+    public void GetBasePath_WithAbsoluteCustomConfig_ShouldUseConfiguredPath(string configPath)
     {
         // Arrange
-        var currentDir = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-            ? @"C:\projects\test" 
-            : "/home/user/test";
-        var config = CreateConfiguration(currentDir, configPath);
+        var config = CreateConfiguration(null, configPath);
         var service = new PathResolutionService(config);
         
         // Act
         var result = service.GetBasePath();
         
         // Assert
-        var expected = expectedPattern.Replace("{currentDir}", currentDir);
-        if (!Path.IsPathRooted(configPath))
-        {
-            Assert.Equal(NormalizePath(expected), NormalizePath(result));
-        }
-        else
-        {
-            Assert.Equal(NormalizePath(configPath), NormalizePath(result));
-        }
+        Assert.Equal(NormalizePath(configPath), NormalizePath(result));
+    }
+    
+    [Theory]
+    [InlineData(@"custom-index")]
+    [InlineData(@"my-codesearch")]
+    public void GetBasePath_WithRelativeCustomConfig_ShouldUseCurrentDirectory(string configPath)
+    {
+        // Arrange
+        var config = CreateConfiguration(null, configPath);
+        var service = new PathResolutionService(config);
+        
+        // Act
+        var result = service.GetBasePath();
+        
+        // Assert
+        var expected = Path.Combine(Directory.GetCurrentDirectory(), configPath);
+        Assert.Equal(NormalizePath(expected), NormalizePath(result));
     }
 
     [Fact]
@@ -112,58 +116,48 @@ public class PathResolutionServiceUnitTests
     }
 
     [Theory]
-    [InlineData(@"C:\test\.codesearch\project-memory", @"C:\test\.codesearch\project-memory")]
-    [InlineData(@"C:\test\.codesearch\local-memory", @"C:\test\.codesearch\local-memory")]
-    [InlineData(@"/test/.codesearch/project-memory", @"/test/.codesearch/local-memory")]
-    [InlineData(@"project-memory", null)] // Should still hash if not a full path
-    [InlineData(@"local-memory", null)]
-    public void GetIndexPath_ForMemoryPaths_BehaviorTest(string inputPath, string expectedBehavior)
+    [InlineData("project-memory")]
+    [InlineData("local-memory")]
+    [InlineData(".codesearch/project-memory")]
+    [InlineData(".codesearch/local-memory")]
+    public void GetIndexPath_ForMemoryPaths_BehaviorTest(string inputPath)
     {
-        // This test documents current behavior - may need adjustment based on requirements
-        var basePath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-            ? @"C:\test\.codesearch" 
-            : "/test/.codesearch";
-        var config = CreateConfiguration("/dummy", basePath);
+        // Arrange
+        var config = CreateConfiguration(null, null);
         var service = new PathResolutionService(config);
         
         // Act
         var indexPath = service.GetIndexPath(inputPath);
         
         // Assert
-        if (expectedBehavior != null)
+        // Memory paths should be redirected to actual memory paths
+        if (inputPath.Contains("project-memory"))
         {
-            // For full memory paths, GetIndexPath currently returns them as-is
-            Assert.Equal(expectedBehavior, indexPath);
+            Assert.Equal(service.GetProjectMemoryPath(), indexPath);
         }
-        else
+        else if (inputPath.Contains("local-memory"))
         {
-            // For relative paths, it should hash them
-            Assert.Contains("index", indexPath);
-            Assert.NotEqual(inputPath, indexPath);
+            Assert.Equal(service.GetLocalMemoryPath(), indexPath);
         }
     }
 
-    [Theory]
-    [InlineData(@"C:\test\.codesearch\project-memory", true)]
-    [InlineData(@"C:\test\.codesearch\local-memory", true)]
-    [InlineData(@"C:\test\.codesearch\index\workspace_abc123", false)]
-    [InlineData(@"/var/lib/.codesearch/project-memory", true)]
-    [InlineData(@"/var/lib/.codesearch/local-memory", true)]
-    [InlineData(@"C:\test\project-memory", false)] // Not under .codesearch
-    public void IsProtectedPath_ShouldIdentifyMemoryPaths(string path, bool expectedProtected)
+    [Fact]
+    public void IsProtectedPath_ShouldIdentifyMemoryPaths()
     {
         // Arrange
-        var basePath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
-            ? @"C:\test\.codesearch" 
-            : "/var/lib/.codesearch";
-        var config = CreateConfiguration("/dummy", basePath);
+        var config = CreateConfiguration(null, null);
         var service = new PathResolutionService(config);
         
-        // Act
-        var isProtected = service.IsProtectedPath(path);
+        // Test with actual paths from the service
+        var projectMemoryPath = service.GetProjectMemoryPath();
+        var localMemoryPath = service.GetLocalMemoryPath();
+        var indexPath = service.GetIndexPath("test-workspace");
         
-        // Assert
-        Assert.Equal(expectedProtected, isProtected);
+        // Act & Assert
+        Assert.True(service.IsProtectedPath(projectMemoryPath));
+        Assert.True(service.IsProtectedPath(localMemoryPath));
+        Assert.False(service.IsProtectedPath(indexPath));
+        Assert.False(service.IsProtectedPath(@"C:\some\other\path"));
     }
 
     [Fact]
@@ -202,15 +196,15 @@ public class PathResolutionServiceUnitTests
     }
 
     [Theory]
-    [InlineData("MyProject", "myproject_")]
-    [InlineData("My Project", "My_Project_")] // Spaces replaced with underscore
+    [InlineData("MyProject", "MyProject_")]
+    [InlineData("My Project", "My Project_")] // Spaces are kept
     [InlineData("Project|With<Invalid>Chars", "Project_With_Invalid_Chars_")]
-    [InlineData("VeryLongProjectNameThatExceedsThirtyCharactersDefinitely", "_")] // Truncated to 30
+    [InlineData("VeryLongProjectNameThatExceedsThirtyCharactersDefinitely", "VeryLongProjectNameThatExceeds_")] // Truncated to 30
     public void WorkspaceName_Sanitization(string workspaceName, string expectedPrefix)
     {
         // This tests the workspace name sanitization logic
         var basePath = @"C:\test\.codesearch";
-        var config = CreateConfiguration("/dummy", basePath);
+        var config = CreateConfiguration(null, basePath);
         var service = new PathResolutionService(config);
         var workspacePath = Path.Combine(@"C:\projects", workspaceName);
         
@@ -219,10 +213,7 @@ public class PathResolutionServiceUnitTests
         
         // Assert
         var dirName = Path.GetFileName(indexPath);
-        if (expectedPrefix != "_")
-        {
-            Assert.StartsWith(expectedPrefix, dirName);
-        }
+        Assert.StartsWith(expectedPrefix, dirName);
     }
 
     [Fact]

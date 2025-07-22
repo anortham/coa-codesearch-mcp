@@ -246,7 +246,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDocumentSymbolsParams>(
             name: "get_document_symbols",
-            description: "Get a complete outline of all classes, methods, and properties in a file - perfect for understanding file structure. Supports C# and TypeScript.",
+            description: "Get a complete outline of all classes, methods, and properties in a file - perfect for understanding file structure. C# ONLY - uses Roslyn document symbols.",
             inputSchema: new
             {
                 type = "object",

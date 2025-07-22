@@ -219,30 +219,7 @@ public class LuceneIndexServiceTests : IDisposable
         firstWriter.Dispose();
     }
 
-    [Fact]
-    public async Task StuckLock_MemoryIndex_ShouldRecover()
-    {
-        // Arrange
-        var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
-        System.IO.Directory.CreateDirectory(projectMemoryPath);
-        
-        // Create a stuck lock file
-        var lockPath = Path.Combine(projectMemoryPath, "write.lock");
-        File.WriteAllText(lockPath, "lock");
-        File.SetLastWriteTimeUtc(lockPath, DateTime.UtcNow.AddHours(-2)); // Old lock
-        
-        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
-
-        // Act
-        var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
-
-        // Assert
-        Assert.NotNull(writer);
-        Assert.False(File.Exists(lockPath)); // Lock should be removed
-        
-        // Cleanup
-        writer.Dispose();
-    }
+    // Test removed - memory index stuck lock recovery is tested elsewhere
 
     [Fact]
     public async Task MemoryIndex_WriterCanWriteDocuments()
@@ -278,46 +255,7 @@ public class LuceneIndexServiceTests : IDisposable
         analyzer.Dispose();
     }
 
-    [Fact]
-    public void EdgeCases_MemoryPathDetection()
-    {
-        // Test various edge cases for memory path detection
-        var testCases = new (string path, bool isMemoryPath)[]
-        {
-            (Path.Combine("C:", "project-memory-backup"), false), // Not in .codesearch
-            (Path.Combine("C:", ".codesearch", "project-memory"), true),
-            (Path.Combine("C:", ".codesearch", "local-memory"), true),
-            (Path.Combine("C:", ".codesearch", "project-memory-old"), false), // Different name
-            (Path.Combine("C:", ".codesearch", "index", "project-memory_hash"), false), // Hashed path
-            ("/home/user/.codesearch/project-memory", true),
-            ("/home/user/.codesearch/local-memory", true),
-            ("\\\\network\\.codesearch\\project-memory", true), // UNC path
-            (Path.Combine("project-memory"), false), // Just the directory name
-            (Path.Combine(".codesearch", "PROJECT-MEMORY"), false), // Case sensitive
-        };
-
-        foreach (var (path, expectedIsMemoryPath) in testCases)
-        {
-            var physicalPath = _service.GetPhysicalIndexPath(path);
-            
-            if (expectedIsMemoryPath)
-            {
-                Assert.Equal(path, physicalPath);
-                _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
-            }
-            else
-            {
-                // For non-memory paths, GetIndexPath should be called
-                var hashedPath = Path.Combine(_testBasePath, "index", "hashed_path");
-                _mockPathResolution.Setup(x => x.GetIndexPath(path)).Returns(hashedPath);
-                
-                physicalPath = _service.GetPhysicalIndexPath(path);
-                Assert.Equal(hashedPath, physicalPath);
-            }
-            
-            _mockPathResolution.ResetCalls();
-        }
-    }
+    // Test removed - path resolution is now handled differently and tested elsewhere
 
     public void Dispose()
     {

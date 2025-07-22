@@ -789,9 +789,9 @@ The `batch_operations` tool allows executing multiple operations in parallel:
 When working with full-stack applications (e.g., ASP.NET backend + TypeScript/React/Vue frontend), be aware of these language boundaries:
 
 #### Language-Specific Tools
-- **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`
+- **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`, `get_document_symbols`
 - **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references`
-- **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`, `get_document_symbols`
+- **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`
 - **All Languages**: `fast_text_search`, `fast_file_search`, and other Lucene-based tools
 
 #### Key Limitation: No Cross-Language Reference Tracking
