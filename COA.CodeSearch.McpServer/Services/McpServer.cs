@@ -1,4 +1,4 @@
-using COA.Directus.Mcp.Protocol;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -240,12 +240,4 @@ public class McpServer : BackgroundService
             }
         };
     }
-}
-
-/// <summary>
-/// Exception thrown when tool parameters are invalid
-/// </summary>
-public class InvalidParametersException : Exception
-{
-    public InvalidParametersException(string message) : base(message) { }
 }

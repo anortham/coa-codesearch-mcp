@@ -1,5 +1,5 @@
 using COA.CodeSearch.McpServer.Services;
-using COA.Directus.Mcp.Protocol;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using static COA.CodeSearch.McpServer.Tools.Registration.ToolRegistrationHelper;
 
