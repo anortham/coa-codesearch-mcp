@@ -39,13 +39,13 @@ public class PathResolutionService : IPathResolutionService
     {
         // Check if this is a memory-related path
         if (workspacePath.Equals(PathConstants.ProjectMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals($"{PathConstants.BaseDirectoryName}/{PathConstants.ProjectMemoryDirectoryName}", StringComparison.OrdinalIgnoreCase))
+            workspacePath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.ProjectMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
         {
             return GetProjectMemoryPath();
         }
         
         if (workspacePath.Equals(PathConstants.LocalMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) || 
-            workspacePath.Equals($"{PathConstants.BaseDirectoryName}/{PathConstants.LocalMemoryDirectoryName}", StringComparison.OrdinalIgnoreCase))
+            workspacePath.Equals(Path.Combine(PathConstants.BaseDirectoryName, PathConstants.LocalMemoryDirectoryName), StringComparison.OrdinalIgnoreCase))
         {
             return GetLocalMemoryPath();
         }
@@ -56,7 +56,9 @@ public class PathResolutionService : IPathResolutionService
         
         // Generate a hash-based folder name
         var fullPath = Path.GetFullPath(workspacePath);
-        var normalizedPath = fullPath.Replace('\\', '/').TrimEnd('/').ToLowerInvariant();
+        var normalizedPath = fullPath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
+            .TrimEnd(Path.DirectorySeparatorChar)
+            .ToLowerInvariant();
         
         using var sha256 = SHA256.Create();
         var hashBytes = sha256.ComputeHash(Encoding.UTF8.GetBytes(normalizedPath));

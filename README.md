@@ -24,6 +24,18 @@ A high-performance Model Context Protocol (MCP) server that provides blazing-fas
 - Node.js (for TypeScript support - automatically installed if not present)
 - Visual Studio 2022 or Build Tools for Visual Studio (for MSBuild)
 
+## 🌍 Cross-Platform Support
+
+The CodeSearch MCP Server is fully cross-platform and runs on:
+- **Windows** (x64, ARM64)
+- **Linux** (x64, ARM64) 
+- **macOS** (x64, Apple Silicon)
+
+### Platform-Specific Notes
+- **Case Sensitivity**: Linux filesystems are case-sensitive. The server handles this gracefully but be aware that `UserService.cs` and `userservice.cs` are different files on Linux.
+- **Path Separators**: The server automatically handles path separator differences between platforms.
+- **MSBuild/SDK**: On Linux/macOS, ensure you have the .NET SDK installed (Visual Studio not required).
+
 ## 🏗️ Building from Source
 
 ```bash
