@@ -243,7 +243,7 @@ public class MemoryMigrationService
     /// <summary>
     /// Store memories to a specific Lucene index
     /// </summary>
-    private async Task StoreMemoriesToIndexAsync(List<FlexibleMemoryEntry> memories, string indexPath)
+    private Task StoreMemoriesToIndexAsync(List<FlexibleMemoryEntry> memories, string indexPath)
     {
         
         using var directory = FSDirectory.Open(indexPath);
@@ -260,6 +260,8 @@ public class MemoryMigrationService
         
         writer.Commit();
         writer.Flush(true, true);
+        
+        return Task.CompletedTask;
     }
     
     /// <summary>

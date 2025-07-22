@@ -58,12 +58,12 @@ This is a test project for Lucene indexing.");
     [Fact]
     public async Task FileIndexing_IndexesCreatedTestFiles()
     {
+        await Task.Yield();
         // Act
         _output.WriteLine($"Test directory: {_testDirectory}");
         _output.WriteLine($"Files in directory: {string.Join(", ", Directory.GetFiles(_testDirectory))}");
         
         var indexedCount = await _fileIndexingService.IndexDirectoryAsync(_testDirectory, _testDirectory);
-        
         // Assert
         _output.WriteLine($"Indexed {indexedCount} files");
         Assert.True(indexedCount >= 2, $"Should index at least 2 files, but indexed {indexedCount}");

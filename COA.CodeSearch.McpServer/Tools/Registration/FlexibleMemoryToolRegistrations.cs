@@ -198,10 +198,12 @@ public static class FlexibleMemoryToolRegistrations
             },
             handler: async (parameters, ct) =>
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference - parameters are marked as required
                 var result = await tool.MarkMemoryResolvedAsync(
-                    parameters.Id,
+                    parameters.Id ?? throw new ArgumentNullException(nameof(parameters.Id)),
                     parameters.ResolutionNote
                 );
+#pragma warning restore CS8602
                     
                 return CreateSuccessResult(result);
             }

@@ -287,6 +287,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
     [Fact]
     public async Task SearchMemories_WithDateRange_FindsMatchingMemories()
     {
+        await Task.Yield();
         // Arrange - Test basic date range functionality
         var oldMemory = new FlexibleMemoryEntry
         {
@@ -325,7 +326,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         var results = await _memoryService.SearchMemoriesAsync(searchRequest);
         
         // Assert - Should only find the new memory (created 1 hour ago)
-        Assert.Equal(1, results.Memories.Count);
+        Assert.Single(results.Memories);
         Assert.Equal("date-test-new", results.Memories[0].Id);
     }
     
@@ -375,6 +376,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
     [Fact]
     public async Task LuceneNumericRangeQuery_DateTicks_WorksCorrectly()
     {
+        await Task.Yield();
         // Test NumericRangeQuery directly with DateTime.Ticks to isolate the issue
         var directory = new Lucene.Net.Store.RAMDirectory();
         var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48);
@@ -486,6 +488,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
     [Fact]
     public async Task DateRangeProductionReplication_WorksCorrectly()
     {
+        await Task.Yield();
         // Test that replicates the EXACT production configuration to identify the issue
         DateRangeProductionTest.RunProductionTest();
     }
@@ -502,6 +505,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
     [Fact]
     public async Task FindSimilarMemoriesAsync_ExistingMemory_ReturnsResults()
     {
+        await Task.Yield();
         // Arrange
         var sourceMemory = new FlexibleMemoryEntry
         {

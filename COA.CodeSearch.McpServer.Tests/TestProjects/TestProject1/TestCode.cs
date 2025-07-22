@@ -8,11 +8,15 @@ namespace TestNamespace
     /// </summary>
     public class TestClass
     {
+        #pragma warning disable CS0414 // Field is assigned but its value is never used
         private int _field;
+        #pragma warning restore CS0414
         
         public string Property { get; set; } = string.Empty;
         
+        #pragma warning disable CS0067 // Event is never used
         public event EventHandler? TestEvent;
+        #pragma warning restore CS0067
         
         public TestClass()
         {

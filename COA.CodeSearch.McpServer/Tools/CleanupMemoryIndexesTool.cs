@@ -150,21 +150,21 @@ public class CleanupMemoryIndexesTool
         }
     }
     
-    private async Task<int> GetDocumentCountAsync(string indexPath)
+    private Task<int> GetDocumentCountAsync(string indexPath)
     {
         try
         {
             using var luceneDir = FSDirectory.Open(indexPath);
             using var reader = DirectoryReader.Open(luceneDir);
-            return reader.NumDocs;
+            return Task.FromResult(reader.NumDocs);
         }
         catch
         {
-            return 0;
+            return Task.FromResult(0);
         }
     }
     
-    private async Task MigrateIndexDataAsync(string sourcePath, string targetPath)
+    private Task MigrateIndexDataAsync(string sourcePath, string targetPath)
     {
         // If target already has data, we need to merge
         var targetHasData = Directory.Exists(targetPath) && File.Exists(Path.Combine(targetPath, "segments.gen"));
@@ -197,6 +197,8 @@ public class CleanupMemoryIndexesTool
             writer.AddIndexes(sourceDir);
             writer.Commit();
         }
+        
+        return Task.CompletedTask;
     }
     
     private long GetDirectorySize(DirectoryInfo dir)

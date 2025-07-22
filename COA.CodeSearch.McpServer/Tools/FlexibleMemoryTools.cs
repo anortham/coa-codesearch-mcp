@@ -910,7 +910,7 @@ public class FlexibleMemoryTools
         return issues.OrderBy(i => i.Severity == "error" ? 0 : i.Severity == "warning" ? 1 : 2).ToList();
     }
     
-    private async Task<StorageInfo> GetStorageInfoAsync()
+    private Task<StorageInfo> GetStorageInfoAsync()
     {
         var storage = new StorageInfo();
         
@@ -949,7 +949,7 @@ public class FlexibleMemoryTools
             _logger.LogWarning(ex, "Error calculating storage info");
         }
         
-        return storage;
+        return Task.FromResult(storage);
     }
     
     private long GetDirectorySize(DirectoryInfo dir)

@@ -71,7 +71,7 @@ public class ResultTruncator : IResultTruncator
         // Use provided estimator or default to serialization-based estimation
         if (tokenEstimator == null)
         {
-            tokenEstimator = item => _sizeEstimator.EstimateTokens(item);
+            tokenEstimator = item => item != null ? _sizeEstimator.EstimateTokens(item) : 0;
         }
         
         int currentTokens = BaseResponseOverhead;

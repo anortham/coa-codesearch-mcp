@@ -28,14 +28,14 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
     /// <summary>
     /// Creates a Claude-optimized response with automatic mode selection
     /// </summary>
-    protected async Task<object> CreateClaudeResponseAsync<T>(
+    protected Task<object> CreateClaudeResponseAsync<T>(
         T data,
         ResponseMode requestedMode,
         Func<T, ClaudeSummaryData>? summaryGenerator = null,
         CancellationToken cancellationToken = default)
     {
         // Estimate the full response size
-        var fullResponseTokens = SizeEstimator.EstimateTokens(data);
+        var fullResponseTokens = data != null ? SizeEstimator.EstimateTokens(data) : 0;
         var autoSwitched = false;
         var actualMode = requestedMode;
         
@@ -51,7 +51,7 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
         }
         
         // Create the response based on mode
-        object responseData;
+        object? responseData;
         ResponseMetadata metadata;
         
         if (actualMode == ResponseMode.Summary && summaryGenerator != null)
@@ -79,7 +79,7 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
         {
             // Full or compact mode - may need truncation
             var truncated = TruncateIfNeeded(data);
-            responseData = truncated.Data ?? data;
+            responseData = truncated.Data ?? (object?)data;
             metadata = truncated.Metadata;
         }
         
@@ -98,7 +98,7 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
         response.Context = AnalyzeResultContext(data);
         
         // Return object response directly - tools should return object, not typed responses
-        return response;
+        return Task.FromResult<object>(response);
     }
     
     /// <summary>
@@ -292,7 +292,7 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
                 Id = "full",
                 Name = "Full Details",
                 Description = "Complete information for all results",
-                EstimatedTokens = SizeEstimator.EstimateTokens(data)
+                EstimatedTokens = data != null ? SizeEstimator.EstimateTokens(data) : 0
             }
         };
     }
@@ -325,7 +325,7 @@ public abstract class ClaudeOptimizedToolBase : McpToolBase
         {
             TotalResults = 1,
             ReturnedResults = 1,
-            EstimatedTokens = SizeEstimator.EstimateTokens(data)
+            EstimatedTokens = data != null ? SizeEstimator.EstimateTokens(data) : 0
         });
     }
 }

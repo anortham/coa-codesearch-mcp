@@ -430,11 +430,11 @@ public class MemoryBackupService : IDisposable
             }
             else if (field.GetInt64Value() != null)
             {
-                dict[name] = field.GetInt64Value();
+                dict[name] = field.GetInt64Value()!;
             }
             else if (field.GetDoubleValue() != null)
             {
-                dict[name] = field.GetDoubleValue();
+                dict[name] = field.GetDoubleValue()!;
             }
         }
         return dict;

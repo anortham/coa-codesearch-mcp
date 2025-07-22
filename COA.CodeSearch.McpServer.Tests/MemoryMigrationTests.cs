@@ -62,6 +62,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix IOException file locking in test cleanup - Directory.Delete fails")]
     public async Task ConvertToFlexibleMemory_ArchitecturalDecision_MapsCorrectly()
     {
+        await Task.Yield();
         // Arrange
         var oldMemory = new MemoryEntry
         {
@@ -111,6 +112,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix IOException file locking in test cleanup - Directory.Delete fails")]
     public async Task ConvertToFlexibleMemory_WorkSession_MapsAsLocal()
     {
+        await Task.Yield();
         // Arrange
         var oldMemory = new MemoryEntry
         {
@@ -135,6 +137,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix migration test - Assert.True() fails at line 188")]
     public async Task MigrateAllMemories_CreatesBackup()
     {
+        await Task.Yield();
         // Arrange - Create some test memories
         await _memoryService.StoreArchitecturalDecisionAsync(
             "Use async/await throughout",
@@ -171,6 +174,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix migration test - related to file locking issues")]
     public async Task MigrateAllMemories_HandlesEmptyMemoryStore()
     {
+        await Task.Yield();
         // Act
         var result = await _migrationService.MigrateAllMemoriesAsync();
         
@@ -184,6 +188,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix migration test - NullReferenceException at line 232")]
     public async Task MigrateAllMemories_PreservesAllMemoryTypes()
     {
+        await Task.Yield();
         // Arrange - Create one memory of each type
         var testMemories = new[]
         {
@@ -229,6 +234,7 @@ public class MemoryMigrationTests : IDisposable
     [InlineData("Security: Encrypt PII", "SecurityRule", true)]
     public async Task ConvertToFlexibleMemory_SetsCorrectSharingFlag(string content, string scopeName, bool expectedShared)
     {
+        await Task.Yield();
         // Arrange
         var scope = Enum.Parse<MemoryScope>(scopeName);
         var oldMemory = new MemoryEntry
@@ -250,6 +256,7 @@ public class MemoryMigrationTests : IDisposable
     [Fact(Skip = "TODO: Fix migration test - Assert.True() fails at line 292")]
     public async Task MigrateAllMemories_HandlesPartialFailure()
     {
+        await Task.Yield();
         // This test would require a more complex setup to simulate failures
         // For now, we'll create a basic structure
         
