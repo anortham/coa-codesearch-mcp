@@ -842,7 +842,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         if (!_indexes.TryGetValue(indexPath, out var context))
         {
             // Check if index exists on disk before auto-creating
-            if (!Directory.Exists(indexPath) || !Directory.GetFiles(indexPath, "*.cfs").Any())
+            if (!System.IO.Directory.Exists(indexPath) || !System.IO.Directory.GetFiles(indexPath, "*.cfs").Any())
             {
                 throw new InvalidOperationException($"No index found for workspace: {workspacePath}. Please run index_workspace first.");
             }
