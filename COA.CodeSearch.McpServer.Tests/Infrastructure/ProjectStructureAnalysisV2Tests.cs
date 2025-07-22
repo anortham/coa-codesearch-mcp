@@ -88,6 +88,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         {
             insights = insightsProperty.EnumerateArray()
                 .Select(i => i.GetString())
+                .Where(s => s != null)
+                .Select(s => s!)
                 .ToList();
         }
         
@@ -162,6 +164,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         {
             insights = keyInsightsProperty.EnumerateArray()
                 .Select(i => i.GetString())
+                .Where(s => s != null)
+                .Select(s => s!)
                 .ToList();
         }
         
