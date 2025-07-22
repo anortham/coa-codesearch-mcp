@@ -20,6 +20,26 @@ This document provides context and guidelines for AI assistants working on the C
   3. Start a new Claude Code session to use the updated version
 - **Confusion Prevention**: Always remember that editing `ClaudeMemoryService.cs` or any other file won't change how `mcp__codesearch__remember_decision` behaves until the server is restarted with the new build
 
+## ⚠️ CRITICAL: Never Run MCP Server Locally
+
+**NEVER run the MCP server locally during development sessions!**
+
+DO NOT execute commands like:
+- `dotnet run --project COA.CodeSearch.McpServer -- stdio`
+- `dotnet run -- stdio --test-mode`
+- Any variation of running the MCP server directly
+
+**Why this is critical:**
+- Running the MCP server locally creates a separate process that locks the Lucene index
+- This process may not terminate when Claude session ends, creating an orphaned process
+- The orphaned process holds `write.lock` files, preventing the main MCP server from functioning
+- Results in complete failure of all search operations until manually resolved
+
+**If you need to test the MCP server:**
+- Build it: `dotnet build -c Release`
+- Let the user handle installation/restart
+- Test through the normal MCP tools interface
+
 ## Project Overview
 
 COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and includes TypeScript support through automatic tsserver integration. Features blazing-fast text search using Lucene indexing and an intelligent memory system for preserving architectural knowledge. Designed to be significantly faster than Python-based alternatives.

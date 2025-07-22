@@ -735,8 +735,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     /// </summary>
     public void CleanupStuckIndexes()
     {
-        var basePath = _pathResolution.GetBasePath();
-        var indexRoot = Path.Combine(basePath, "index");
+        var indexRoot = _pathResolution.GetIndexRootPath();
         
         if (!System.IO.Directory.Exists(indexRoot))
         {
@@ -842,14 +841,19 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         // Get or create context
         if (!_indexes.TryGetValue(indexPath, out var context))
         {
+            // Check if index exists on disk before auto-creating
+            if (!Directory.Exists(indexPath) || !Directory.GetFiles(indexPath, "*.cfs").Any())
+            {
+                throw new InvalidOperationException($"No index found for workspace: {workspacePath}. Please run index_workspace first.");
+            }
+            
             await _writerLock.WaitAsync(cancellationToken);
             try
             {
                 if (!_indexes.TryGetValue(indexPath, out context))
                 {
-                    // Ensure index exists by creating an empty one if needed
+                    // Open existing index (read-only mode)
                     context = CreateIndexContext(indexPath, false);
-                    context.Writer!.Commit(); // Create initial segments
                     _indexes.TryAdd(indexPath, context);
                 }
             }

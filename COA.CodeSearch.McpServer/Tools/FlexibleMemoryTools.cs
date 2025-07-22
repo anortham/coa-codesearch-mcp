@@ -1236,15 +1236,22 @@ public class FlexibleMemoryTools
                 storage.TotalSizeBytes = GetDirectorySize(dirInfo);
                 storage.FormattedSize = FormatBytes(storage.TotalSizeBytes);
                 
-                // Check for index directories
-                var indexDir = Path.Combine(baseDir, "memory-index");
-                if (Directory.Exists(indexDir))
+                // Check for memory directories
+                var projectMemoryDir = _pathResolution.GetProjectMemoryPath();
+                var localMemoryDir = _pathResolution.GetLocalMemoryPath();
+                
+                if (Directory.Exists(projectMemoryDir))
                 {
-                    storage.IndexSizeBytes = GetDirectorySize(new DirectoryInfo(indexDir));
+                    storage.IndexSizeBytes += GetDirectorySize(new DirectoryInfo(projectMemoryDir));
+                }
+                
+                if (Directory.Exists(localMemoryDir))
+                {
+                    storage.IndexSizeBytes += GetDirectorySize(new DirectoryInfo(localMemoryDir));
                 }
                 
                 // Check for backup file
-                var backupFile = Path.Combine(baseDir, "memories.db");
+                var backupFile = Path.Combine(_pathResolution.GetBackupPath(), "memories.db");
                 if (File.Exists(backupFile))
                 {
                     var fileInfo = new FileInfo(backupFile);
