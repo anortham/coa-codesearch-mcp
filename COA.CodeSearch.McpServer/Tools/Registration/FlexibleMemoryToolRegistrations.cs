@@ -39,7 +39,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<StoreMemoryParams>(
             name: "flexible_store_memory",
-            description: "Store a memory with flexible schema supporting custom fields and types. Enhanced replacement for remember_* tools with full JSON field support.",
+            description: "💾 Store ANY knowledge persistently - decisions, patterns, insights, issues. Flexible fields for easy querying later. Better than comments or TODOs - searchable across sessions!",
             inputSchema: new
             {
                 type = "object",
@@ -75,7 +75,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<StoreWorkingMemoryParams>(
             name: "flexible_store_working_memory",
-            description: "Store a temporary working memory for the current session. These are short-lived memories that help track context, decisions, and progress during a single work session. Defaults to end-of-session expiry.",
+            description: "📝 Track temporary context during work - auto-expires! Perfect for 'remember to check X' or 'user wants Y'. No cleanup needed - expires automatically. Better than mental notes!",
             inputSchema: new
             {
                 type = "object",
@@ -109,7 +109,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<SearchMemoriesParams>(
             name: "flexible_search_memories",
-            description: "Advanced memory search with faceted filtering, temporal queries, and smart insights. Supports full-text search, type filtering, date ranges, custom field filters, and intelligent ranking with recent/frequent boosting.",
+            description: "🔍 Search ALL stored knowledge INSTANTLY! Natural language queries, filters by type/date/status. Finds patterns, decisions, TODOs across sessions. Your external brain - use it!",
             inputSchema: new
             {
                 type = "object",

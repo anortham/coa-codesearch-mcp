@@ -53,6 +53,7 @@ public class LuceneIndexServiceTests : IDisposable
         
         _mockPathResolution.Setup(x => x.GetProjectMemoryPath()).Returns(projectMemoryPath);
         _mockPathResolution.Setup(x => x.GetLocalMemoryPath()).Returns(localMemoryPath);
+        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
 
         // Act
         var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
@@ -77,6 +78,7 @@ public class LuceneIndexServiceTests : IDisposable
         var localMemoryPath = Path.Combine(_testBasePath, ".codesearch", "local-memory");
         
         _mockPathResolution.Setup(x => x.GetLocalMemoryPath()).Returns(localMemoryPath);
+        _mockPathResolution.Setup(x => x.IsProtectedPath(localMemoryPath)).Returns(true);
 
         // Act
         var writer = await _service.GetIndexWriterAsync(localMemoryPath);
@@ -108,6 +110,12 @@ public class LuceneIndexServiceTests : IDisposable
 
         foreach (var memoryPath in testPaths)
         {
+            // Setup IsProtectedPath to return true for paths containing ".codesearch" and "memory"
+            if (memoryPath.Contains(".codesearch") && (memoryPath.Contains("project-memory") || memoryPath.Contains("local-memory")))
+            {
+                _mockPathResolution.Setup(x => x.IsProtectedPath(memoryPath)).Returns(true);
+            }
+            
             // Act
             var physicalPath = _service.GetPhysicalIndexPath(memoryPath);
 
@@ -227,6 +235,9 @@ public class LuceneIndexServiceTests : IDisposable
         // Arrange
         var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        
+        // Setup IsProtectedPath to return true for memory path
+        _mockPathResolution.Setup(x => x.IsProtectedPath(projectMemoryPath)).Returns(true);
 
         // Act
         var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
