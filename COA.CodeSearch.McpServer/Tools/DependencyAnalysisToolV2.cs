@@ -832,20 +832,20 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
         return context;
     }
 
-    private async Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
+    private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
         if (DetailCache == null || string.IsNullOrEmpty(request.DetailRequestToken))
         {
-            return CreateErrorResponse<object>("Detail request token is required");
+            return Task.FromResult<object>(CreateErrorResponse<object>("Detail request token is required"));
         }
 
         var cachedData = DetailCache.GetDetailData<DependencyData>(request.DetailRequestToken);
         if (cachedData == null)
         {
-            return CreateErrorResponse<object>("Invalid or expired detail request token");
+            return Task.FromResult<object>(CreateErrorResponse<object>("Invalid or expired detail request token"));
         }
 
-        return request.DetailLevelId switch
+        var result = request.DetailLevelId switch
         {
             "circular" => GetCircularDependencyDetails(cachedData, request),
             "hotspots" => GetHotspotDetails(cachedData, request),
@@ -853,6 +853,8 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
             "layer" => GetLayerDetails(cachedData, request),
             _ => CreateErrorResponse<object>($"Unknown detail level: {request.DetailLevelId}")
         };
+        
+        return Task.FromResult(result);
     }
 
     private object GetCircularDependencyDetails(DependencyData data, DetailRequest request)

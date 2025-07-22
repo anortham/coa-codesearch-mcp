@@ -64,7 +64,7 @@ public class DetailRequestCache : IDetailRequestCache
     {
         var cacheKey = GetCacheKey(token);
         
-        if (_cache.TryGetValue<CachedDetailData>(cacheKey, out var cachedData))
+        if (_cache.TryGetValue<CachedDetailData>(cacheKey, out var cachedData) && cachedData != null)
         {
             try
             {

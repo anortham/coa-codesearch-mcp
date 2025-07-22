@@ -17,7 +17,7 @@ public class PathResolutionServiceTests : IDisposable
         Directory.CreateDirectory(_testBasePath);
         
         // Setup configuration
-        var configData = new Dictionary<string, string>
+        var configData = new Dictionary<string, string?>
         {
             ["Lucene:IndexBasePath"] = _testBasePath,
             ["ClaudeMemory:ProjectMemoryPath"] = "project-memory",
@@ -55,7 +55,7 @@ public class PathResolutionServiceTests : IDisposable
     {
         // Arrange
         var relativeConfig = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
+            .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Lucene:IndexBasePath"] = ".codesearch"
             })

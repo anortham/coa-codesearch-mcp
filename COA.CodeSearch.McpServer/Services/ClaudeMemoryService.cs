@@ -190,13 +190,15 @@ public class ClaudeMemoryService : IDisposable
     /// <summary>
     /// Cleans up old temporary notes based on retention policy
     /// </summary>
-    public async Task CleanupOldMemoriesAsync()
+    public Task CleanupOldMemoriesAsync()
     {
         var cutoffDate = DateTime.UtcNow.AddDays(-_config.TemporaryNoteRetentionDays);
         
         // This is a simplified cleanup - in a full implementation, 
         // we'd need to rewrite the index excluding old temporary notes
         _logger.LogInformation("Memory cleanup completed for entries older than {CutoffDate}", cutoffDate);
+        
+        return Task.CompletedTask;
     }
     
     private async Task<List<MemoryEntry>> SearchIndex(string workspacePath, string query, MemoryScope? scopeFilter, int maxResults)

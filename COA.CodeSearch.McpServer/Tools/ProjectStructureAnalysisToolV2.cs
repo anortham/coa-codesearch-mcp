@@ -574,20 +574,20 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
         return circular.Distinct().ToList();
     }
 
-    private async Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
+    private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
         if (DetailCache == null || string.IsNullOrEmpty(request.DetailRequestToken))
         {
-            return CreateErrorResponse<object>("Detail request token is required");
+            return Task.FromResult<object>(CreateErrorResponse<object>("Detail request token is required"));
         }
 
         var cachedData = DetailCache.GetDetailData<ProjectStructureData>(request.DetailRequestToken);
         if (cachedData == null)
         {
-            return CreateErrorResponse<object>("Invalid or expired detail request token");
+            return Task.FromResult<object>(CreateErrorResponse<object>("Invalid or expired detail request token"));
         }
 
-        return request.DetailLevelId switch
+        var result = request.DetailLevelId switch
         {
             "projects" => GetProjectDetails(cachedData, request),
             "files" => GetFileDetails(cachedData, request),
@@ -595,6 +595,8 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
             "metrics" => GetMetricsDetails(cachedData, request),
             _ => CreateErrorResponse<object>($"Unknown detail level: {request.DetailLevelId}")
         };
+        
+        return Task.FromResult(result);
     }
 
     private object GetProjectDetails(ProjectStructureData data, DetailRequest request)

@@ -156,6 +156,7 @@ public class LuceneIndexServiceTests : IDisposable
     [Fact]
     public async Task MemoryPath_ShouldNotBeCleared()
     {
+        await Task.Yield();
         // Arrange
         var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         System.IO.Directory.CreateDirectory(projectMemoryPath);
@@ -179,6 +180,7 @@ public class LuceneIndexServiceTests : IDisposable
     [Fact]
     public async Task RegularPath_CanBeCleared()
     {
+        await Task.Yield();
         // Arrange
         var workspacePath = Path.Combine(_testBasePath, "MyProject");
         var hashedPath = Path.Combine(_testBasePath, "index", "MyProject_a1b2c3d4");
@@ -200,6 +202,7 @@ public class LuceneIndexServiceTests : IDisposable
     [Fact]
     public async Task ConcurrentAccess_ShouldBeThreadSafe()
     {
+        await Task.Yield();
         // Arrange
         var workspacePath = Path.Combine(_testBasePath, "ConcurrentTest");
         var hashedPath = Path.Combine(_testBasePath, "index", "ConcurrentTest_xyz");
@@ -232,6 +235,7 @@ public class LuceneIndexServiceTests : IDisposable
     [Fact]
     public async Task MemoryIndex_WriterCanWriteDocuments()
     {
+        await Task.Yield();
         // Arrange
         var projectMemoryPath = Path.Combine(_testBasePath, ".codesearch", "project-memory");
         var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);

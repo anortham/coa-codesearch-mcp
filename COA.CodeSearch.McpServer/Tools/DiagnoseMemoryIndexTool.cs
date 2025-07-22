@@ -74,7 +74,7 @@ public class DiagnoseMemoryIndexTool
                     var sample = new Dictionary<string, string>();
                     foreach (var field in doc.Fields)
                     {
-                        sample[field.Name] = field.GetStringValue() ?? field.ToString();
+                        sample[field.Name] = field.GetStringValue() ?? field.ToString() ?? string.Empty;
                     }
                     sampleDocs.Add(sample);
                 }

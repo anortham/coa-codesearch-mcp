@@ -147,7 +147,7 @@ public class FastFileSizeAnalysisTool
             {
                 ["success"] = true,
                 ["workspacePath"] = workspacePath,
-                ["mode"] = mode,
+                ["mode"] = mode ?? "largest",
                 ["totalResults"] = results.Count,
                 ["searchDurationMs"] = searchDuration,
                 ["results"] = results,

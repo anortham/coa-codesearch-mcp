@@ -392,7 +392,7 @@ public class RenameSymbolTool : McpToolBase
     /// <summary>
     /// Handles detail requests for progressive disclosure
     /// </summary>
-    public async Task<object> GetDetailsAsync(
+    public Task<object> GetDetailsAsync(
         DetailRequest request,
         CancellationToken cancellationToken = default)
     {
@@ -405,24 +405,24 @@ public class RenameSymbolTool : McpToolBase
             
             if (string.IsNullOrEmpty(request.DetailRequestToken))
             {
-                return new
+                return Task.FromResult<object>(new
                 {
                     success = false,
                     error = "Detail request token is required"
-                };
+                });
             }
             
             // Example response structure for different detail levels
-            return request.DetailLevelId switch
+            var result = request.DetailLevelId switch
             {
-                "files" => new
+                "files" => (object)new
                 {
                     success = true,
                     detailLevel = "files",
                     message = "File list details would be returned here",
                     // Would include full file list with change counts
                 },
-                "changes" => new
+                "changes" => (object)new
                 {
                     success = true,
                     detailLevel = "changes",
@@ -430,7 +430,7 @@ public class RenameSymbolTool : McpToolBase
                     message = "Detailed changes for requested files would be returned here",
                     // Would include specific changes for requested files
                 },
-                "preview" => new
+                "preview" => (object)new
                 {
                     success = true,
                     detailLevel = "preview",
@@ -438,21 +438,23 @@ public class RenameSymbolTool : McpToolBase
                     message = "Change previews with context would be returned here",
                     // Would include before/after previews
                 },
-                _ => new
+                _ => (object)new
                 {
                     success = false,
                     error = $"Unknown detail level: {request.DetailLevelId}"
                 }
             };
+            
+            return Task.FromResult<object>(result);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error getting rename details");
-            return new
+            return Task.FromResult<object>(new
             {
                 success = false,
                 error = ex.Message
-            };
+            });
         }
     }
 }

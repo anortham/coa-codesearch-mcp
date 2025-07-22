@@ -123,7 +123,7 @@ public class BatchOperationsTextSearchTests : TestBase
 
             // Act
             var result = await tool.ExecuteAsync(jsonElement.GetProperty("operations"), GetTestProjectPath());
-
+            await Task.CompletedTask;
             // Assert
             Assert.NotNull(result);
             

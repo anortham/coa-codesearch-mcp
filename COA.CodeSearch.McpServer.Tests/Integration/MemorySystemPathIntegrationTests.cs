@@ -36,7 +36,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         
         // Configuration
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
+            .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Lucene:IndexBasePath"] = _testBasePath,
                 ["Lucene:LockTimeoutMinutes"] = "15"
@@ -240,6 +240,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
     [Fact]
     public async Task MemoryPersistence_AcrossSessions()
     {
+        await Task.Yield();
         // Test that memories persist across service restarts
         var memoryId = Guid.NewGuid().ToString();
         
@@ -279,7 +280,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
             _output.WriteLine($"Total memories found: {searchResult.TotalFound}");
             foreach (var mem in searchResult.Memories)
             {
-                _output.WriteLine($"Found memory: ID={mem.Id}, Type={mem.Type}, Content={mem.Content?.Substring(0, Math.Min(50, mem.Content.Length))}...");
+                _output.WriteLine($"Found memory: ID={mem.Id}, Type={mem.Type}, Content={(mem.Content != null ? mem.Content.Substring(0, Math.Min(50, mem.Content.Length)) : string.Empty)}...");
             }
         }
         
@@ -302,7 +303,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         var services = new ServiceCollection();
         
         var configuration = new ConfigurationBuilder()
-            .AddInMemoryCollection(new Dictionary<string, string>
+            .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["Lucene:IndexBasePath"] = _testBasePath,
                 ["Lucene:LockTimeoutMinutes"] = "15"

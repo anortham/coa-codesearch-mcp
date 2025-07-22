@@ -841,6 +841,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             }
             
             context.LastAccessed = DateTime.UtcNow;
+            if (context.Reader == null)
+            {
+                throw new InvalidOperationException($"Failed to create or refresh index reader for workspace: {workspacePath}");
+            }
             return new IndexSearcher(context.Reader);
         }
         finally

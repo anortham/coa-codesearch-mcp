@@ -46,12 +46,14 @@ public static class MemoryLinkingToolRegistrations
             },
             handler: async (parameters, ct) =>
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference - parameters are marked as required
                 var result = await tool.LinkMemoriesAsync(
-                    parameters.SourceId,
-                    parameters.TargetId,
+                    parameters.SourceId ?? throw new ArgumentNullException(nameof(parameters.SourceId)),
+                    parameters.TargetId ?? throw new ArgumentNullException(nameof(parameters.TargetId)),
                     parameters.RelationshipType ?? "relatedTo",
                     parameters.Bidirectional ?? false
                 );
+#pragma warning restore CS8602
                 
                 if (result.Success)
                 {
@@ -100,11 +102,13 @@ public static class MemoryLinkingToolRegistrations
             },
             handler: async (parameters, ct) =>
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference - parameters are marked as required
                 var result = await tool.GetRelatedMemoriesAsync(
-                    parameters.MemoryId,
+                    parameters.MemoryId ?? throw new ArgumentNullException(nameof(parameters.MemoryId)),
                     parameters.MaxDepth ?? 2,
                     parameters.RelationshipTypes
                 );
+#pragma warning restore CS8602
                 
                 if (result.Success)
                 {
@@ -160,12 +164,14 @@ public static class MemoryLinkingToolRegistrations
             },
             handler: async (parameters, ct) =>
             {
+#pragma warning disable CS8602 // Dereference of a possibly null reference - parameters are marked as required
                 var result = await tool.UnlinkMemoriesAsync(
-                    parameters.SourceId,
-                    parameters.TargetId,
+                    parameters.SourceId ?? throw new ArgumentNullException(nameof(parameters.SourceId)),
+                    parameters.TargetId ?? throw new ArgumentNullException(nameof(parameters.TargetId)),
                     parameters.RelationshipType ?? "relatedTo",
                     parameters.Bidirectional ?? false
                 );
+#pragma warning restore CS8602
                 
                 if (result.Success)
                 {
