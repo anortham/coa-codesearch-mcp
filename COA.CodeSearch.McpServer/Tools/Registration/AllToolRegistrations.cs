@@ -125,9 +125,9 @@ public static class AllToolRegistrations
                 
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
-                    "summary" => ResponseMode.Summary,
+                    "full" => ResponseMode.Full,
                     "compact" => ResponseMode.Compact,
-                    _ => ResponseMode.Full
+                    _ => ResponseMode.Summary  // Default to summary
                 };
                 
                 var result = await tool.ExecuteAsync(
@@ -292,10 +292,11 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                // Default to Summary mode to prevent token explosions
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
-                    "summary" => ResponseMode.Summary,
-                    _ => ResponseMode.Full
+                    "full" => ResponseMode.Full,
+                    _ => ResponseMode.Summary  // Default to summary
                 };
                 
                 var result = await tool.ExecuteAsync(
@@ -360,7 +361,7 @@ public static class AllToolRegistrations
                     column = new { type = "integer", description = "Column number (1-based)" },
                     newName = new { type = "string", description = "New name for the symbol" },
                     preview = new { type = "boolean", description = "Preview changes without applying them", @default = true },
-                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary' for large operations", @default = "full" }
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full' for complete details", @default = "summary" }
                 },
                 required = new[] { "filePath", "line", "column", "newName" }
             },
@@ -368,10 +369,11 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                // Default to Summary mode to prevent token explosions
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
-                    "summary" => ResponseMode.Summary,
-                    _ => ResponseMode.Full
+                    "full" => ResponseMode.Full,
+                    _ => ResponseMode.Summary  // Default to summary, not full
                 };
                 
                 var result = await tool.ExecuteAsync(
@@ -499,10 +501,11 @@ public static class AllToolRegistrations
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                // Default to Summary mode to prevent token explosions
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
-                    "summary" => ResponseMode.Summary,
-                    _ => ResponseMode.Full
+                    "full" => ResponseMode.Full,
+                    _ => ResponseMode.Summary  // Default to summary
                 };
                 
                 var result = await tool.ExecuteAsync(
@@ -545,9 +548,9 @@ public static class AllToolRegistrations
                 
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
-                    "summary" => ResponseMode.Summary,
+                    "full" => ResponseMode.Full,
                     "compact" => ResponseMode.Compact,
-                    _ => ResponseMode.Full
+                    _ => ResponseMode.Summary  // Default to summary
                 };
                 
                 var result = await tool.ExecuteAsync(

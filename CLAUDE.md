@@ -40,6 +40,15 @@ DO NOT execute commands like:
 - Let the user handle installation/restart
 - Test through the normal MCP tools interface
 
+## ⚠️ CRITICAL: Build Configuration During Development
+
+**IMPORTANT: Build in Debug mode during development sessions!**
+
+- **During Development**: Claude should build using `dotnet build -c Debug` because the Release DLL is locked by the running session
+- **User Workflow**: When user exits Claude Code to load new code, they build in Release mode to update their setup
+- **Why**: The Release build would fail due to file locks from the running server
+- **Common Mistake**: Trying to build Release mode during active development will fail due to locked files
+
 ## Project Overview
 
 COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) server built in .NET 9.0 that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. It leverages Roslyn for C# code analysis and includes TypeScript support through automatic tsserver integration. Features blazing-fast text search using Lucene indexing and an intelligent memory system for preserving architectural knowledge. Designed to be significantly faster than Python-based alternatives.

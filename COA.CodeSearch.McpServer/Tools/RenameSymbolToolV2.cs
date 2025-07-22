@@ -102,6 +102,20 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
 
             // Get rename solution
             var solution = document.Project.Solution;
+            
+            // Quick scope estimation to avoid token explosion
+            var estimatedScope = await EstimateRenameScopeAsync(symbol, solution, cancellationToken);
+            Logger.LogInformation("Estimated rename scope: {References} references across {Files} files", estimatedScope.EstimatedReferences, estimatedScope.EstimatedFiles);
+
+            // Force summary mode for operations that might cause token overflow
+            // Lower thresholds to prevent token issues - even small renames can generate massive detailed responses
+            if (estimatedScope.EstimatedReferences > 5 || estimatedScope.EstimatedFiles > 3)
+            {
+                Logger.LogInformation("Forcing summary mode due to scope estimate: {References} refs across {Files} files", 
+                    estimatedScope.EstimatedReferences, estimatedScope.EstimatedFiles);
+                mode = ResponseMode.Summary;
+            }
+
             var newSolution = await Renamer.RenameSymbolAsync(
                 solution,
                 symbol,
@@ -109,8 +123,16 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
                 newName,
                 cancellationToken);
 
-            // Calculate changes
-            var renameData = await CalculateRenameChangesAsync(solution, newSolution, symbol, newName, cancellationToken);
+            // Calculate changes based on mode
+            RenameData renameData;
+            if (mode == ResponseMode.Summary)
+            {
+                renameData = await CalculateRenameSummaryAsync(solution, newSolution, symbol, newName, estimatedScope, cancellationToken);
+            }
+            else
+            {
+                renameData = await CalculateRenameChangesAsync(solution, newSolution, symbol, newName, cancellationToken);
+            }
 
             // Apply changes if not in preview mode
             if (!preview)
@@ -124,13 +146,8 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
                 renameData.ApplyMessage = applyResult.Message;
             }
 
-            // Create Claude-optimized response
-            var response = await CreateClaudeResponseAsync(
-                renameData,
-                mode,
-                data => CreateSummaryData(data, symbol, newName),
-                cancellationToken);
-
+            // Create AI-optimized response
+            var response = CreateAiOptimizedResponse(renameData, symbol, newName, mode, cancellationToken);
             return response;
         }
         catch (Exception ex)
@@ -138,6 +155,84 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
             Logger.LogError(ex, "Error in RenameSymbolV2");
             return CreateErrorResponse<object>(ex.Message);
         }
+    }
+
+    private async Task<RenameScope> EstimateRenameScopeAsync(
+        ISymbol symbol,
+        Solution solution,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Quick reference search to estimate scope without calculating all changes
+            var references = await SymbolFinder.FindReferencesAsync(symbol, solution, cancellationToken);
+            
+            var estimatedReferences = 0;
+            var estimatedFiles = new HashSet<string>();
+            
+            foreach (var reference in references)
+            {
+                foreach (var location in reference.Locations)
+                {
+                    if (!location.Location.IsInSource) continue;
+                    
+                    estimatedReferences++;
+                    if (location.Document?.FilePath != null)
+                    {
+                        estimatedFiles.Add(location.Document.FilePath);
+                    }
+                }
+            }
+            
+            return new RenameScope
+            {
+                EstimatedReferences = estimatedReferences,
+                EstimatedFiles = estimatedFiles.Count,
+                ReferencedFiles = estimatedFiles.ToList()
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogWarning(ex, "Failed to estimate rename scope, assuming small scope");
+            return new RenameScope { EstimatedReferences = 1, EstimatedFiles = 1, ReferencedFiles = new List<string>() };
+        }
+    }
+
+    private Task<RenameData> CalculateRenameSummaryAsync(
+        Solution originalSolution,
+        Solution newSolution,
+        ISymbol symbol,
+        string newName,
+        RenameScope scope,
+        CancellationToken cancellationToken)
+    {
+        // Create summary data without calculating all detailed changes
+        var fileChanges = new List<FileChange>();
+        
+        // Group files by estimated changes for summary
+        foreach (var filePath in scope.ReferencedFiles.Take(20)) // Limit for summary
+        {
+            var estimatedChanges = Math.Max(1, scope.EstimatedReferences / Math.Max(1, scope.EstimatedFiles));
+            fileChanges.Add(new FileChange
+            {
+                FilePath = filePath,
+                ChangeCount = estimatedChanges,
+                Changes = new List<TextChange>() // Empty for summary mode
+            });
+        }
+
+        return Task.FromResult(new RenameData
+        {
+            Symbol = CreateSymbolInfo(symbol),
+            OldName = symbol.Name,
+            NewName = newName,
+            FileChanges = fileChanges,
+            TotalChanges = scope.EstimatedReferences,
+            AffectedFiles = scope.EstimatedFiles,
+            Preview = true,
+            Applied = false,
+            IsSummary = true
+        });
     }
 
     private async Task<RenameData> CalculateRenameChangesAsync(
@@ -150,19 +245,15 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
         var changes = new List<FileChange>();
         var changedDocuments = new Dictionary<string, List<TextChange>>();
 
-        // Compare all documents to find changes
-        foreach (var projectId in newSolution.ProjectIds)
+        // Get only the documents that actually changed
+        var solutionChanges = newSolution.GetChanges(originalSolution);
+        
+        foreach (var projectChanges in solutionChanges.GetProjectChanges())
         {
-            var newProject = newSolution.GetProject(projectId);
-            var originalProject = originalSolution.GetProject(projectId);
-            
-            if (newProject == null || originalProject == null)
-                continue;
-                
-            foreach (var documentId in newProject.DocumentIds)
+            foreach (var documentId in projectChanges.GetChangedDocuments())
             {
-                var originalDoc = originalProject.GetDocument(documentId);
-                var newDoc = newProject.GetDocument(documentId);
+                var originalDoc = originalSolution.GetDocument(documentId);
+                var newDoc = newSolution.GetDocument(documentId);
             
             if (originalDoc == null || newDoc == null) continue;
 
@@ -225,6 +316,104 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
             Preview = true,
             Applied = false
         };
+    }
+
+    private object CreateAiOptimizedResponse(RenameData data, ISymbol symbol, string newName, ResponseMode mode, CancellationToken cancellationToken)
+    {
+        // Calculate risk assessment
+        var risk = AssessRenameRisk(data, symbol);
+        
+        // Get top hotspots
+        var hotspots = data.FileChanges
+            .OrderByDescending(fc => fc.ChangeCount)
+            .Take(5)
+            .Select(fc => new { file = fc.FilePath, refs = fc.ChangeCount })
+            .ToList();
+
+        // Generate actions with priority ordering
+        var actions = new List<object>();
+        
+        if (data.TotalChanges > 10)
+        {
+            actions.Add(new 
+            { 
+                id = "review_hotspots", 
+                cmd = new { detailLevel = "hotspots" }, 
+                tokens = Math.Min(3000, hotspots.Count * 600),
+                priority = "recommended"
+            });
+        }
+
+        if (!data.Applied && data.Preview)
+        {
+            actions.Add(new 
+            { 
+                id = "apply", 
+                cmd = new { preview = false }, 
+                tokens = 200,
+                priority = risk == "high" ? "caution" : "normal"
+            });
+        }
+
+        if (mode == ResponseMode.Summary && data.TotalChanges < 100)
+        {
+            actions.Add(new 
+            { 
+                id = "full_details", 
+                cmd = new { responseMode = "full" }, 
+                tokens = EstimateFullResponseTokens(data),
+                priority = "available"
+            });
+        }
+
+        return new
+        {
+            success = true,
+            operation = "rename_symbol",
+            symbol = new
+            {
+                old = symbol.Name,
+                @new = newName,
+                type = symbol.Kind.ToString().ToLowerInvariant(),
+                scope = symbol.DeclaredAccessibility.ToString().ToLowerInvariant()
+            },
+            impact = new
+            {
+                refs = data.TotalChanges,
+                files = data.AffectedFiles,
+                risk = risk
+            },
+            preview = data.Preview,
+            applied = data.Applied,
+            hotspots = hotspots,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                tokens = SizeEstimator.EstimateTokens(new { symbol = data.Symbol, changes = data.FileChanges.Take(5) }),
+                cached = $"rename_{Guid.NewGuid().ToString("N")[..8]}"
+            }
+        };
+    }
+
+    private string AssessRenameRisk(RenameData data, ISymbol symbol)
+    {
+        if (data.TotalChanges > 50 || data.AffectedFiles > 15)
+            return "high";
+        
+        if (symbol.DeclaredAccessibility == Accessibility.Public && data.AffectedFiles > 5)
+            return "high";
+            
+        if (data.TotalChanges > 20 || data.AffectedFiles > 8)
+            return "medium";
+            
+        return "low";
+    }
+
+    private int EstimateFullResponseTokens(RenameData data)
+    {
+        // Conservative estimate based on typical change details
+        return Math.Min(25000, data.TotalChanges * 150 + data.AffectedFiles * 100);
     }
 
     private ClaudeSummaryData CreateSummaryData(RenameData data, ISymbol symbol, string newName)
@@ -322,32 +511,13 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
             }
 
             // Save all changed documents
-            // Get all changed documents by comparing solutions
+            // Get only the documents that actually changed
             var changedDocs = new List<DocumentId>();
-            foreach (var projectId in newSolution.ProjectIds)
+            var solutionChanges = newSolution.GetChanges(workspace.CurrentSolution);
+            
+            foreach (var projectChanges in solutionChanges.GetProjectChanges())
             {
-                var newProject = newSolution.GetProject(projectId);
-                var oldProject = workspace.CurrentSolution.GetProject(projectId);
-                
-                if (newProject == null || oldProject == null)
-                    continue;
-                    
-                foreach (var documentId in newProject.DocumentIds)
-                {
-                    var newDoc = newProject.GetDocument(documentId);
-                    var oldDoc = oldProject.GetDocument(documentId);
-                    
-                    if (newDoc == null || oldDoc == null)
-                        continue;
-                        
-                    var newText = await newDoc.GetTextAsync(cancellationToken);
-                    var oldText = await oldDoc.GetTextAsync(cancellationToken);
-                    
-                    if (!newText.ContentEquals(oldText))
-                    {
-                        changedDocs.Add(documentId);
-                    }
-                }
+                changedDocs.AddRange(projectChanges.GetChangedDocuments());
             }
             foreach (var docId in changedDocs)
             {
@@ -701,6 +871,14 @@ public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
         public bool Preview { get; set; }
         public bool Applied { get; set; }
         public string? ApplyMessage { get; set; }
+        public bool IsSummary { get; set; }
+    }
+
+    private class RenameScope
+    {
+        public int EstimatedReferences { get; set; }
+        public int EstimatedFiles { get; set; }
+        public List<string> ReferencedFiles { get; set; } = new();
     }
 
     private class FileChange
