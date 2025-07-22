@@ -195,7 +195,7 @@ public class PathResolutionServiceTests : IDisposable
         
         // Assert
         Assert.Equal(Path.Combine(_testBasePath, "index", "workspace_metadata.json"), path);
-        Assert.True(Directory.Exists(Path.GetDirectoryName(path)), "Parent directory should be created");
+        // PathResolutionService should only resolve paths, not create directories
     }
     
     [Fact]
@@ -348,7 +348,7 @@ public class PathResolutionServiceTests : IDisposable
         var fullLogPath = Path.Combine(logsPath, logFileName);
         
         // Act & Assert
-        Assert.True(Directory.Exists(logsPath));
+        // PathResolutionService should only resolve paths, not create directories
         Assert.True(Path.IsPathRooted(fullLogPath));
         Assert.Equal(Path.Combine(_testBasePath, "logs", logFileName), fullLogPath);
     }

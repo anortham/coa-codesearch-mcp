@@ -58,7 +58,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // Assert
         var expected = Path.Combine(_testBasePath, PathConstants.LogsDirectoryName);
         Assert.Equal(expected, logsPath);
-        Assert.True(Directory.Exists(logsPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     [Fact]
@@ -70,7 +70,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // Assert
         var expected = Path.Combine(_testBasePath, PathConstants.ProjectMemoryDirectoryName);
         Assert.Equal(expected, projectMemoryPath);
-        Assert.True(Directory.Exists(projectMemoryPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     [Fact]
@@ -82,7 +82,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // Assert
         var expected = Path.Combine(_testBasePath, PathConstants.LocalMemoryDirectoryName);
         Assert.Equal(expected, localMemoryPath);
-        Assert.True(Directory.Exists(localMemoryPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     [Fact]
@@ -109,7 +109,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // Assert
         Assert.Contains(PathConstants.BackupsDirectoryName, backupPath);
         Assert.EndsWith(string.Format(PathConstants.BackupPrefixFormat, timestamp), backupPath);
-        Assert.True(Directory.Exists(backupPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     [Fact]
@@ -175,7 +175,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // Assert
         var expected = Path.Combine(_testBasePath, PathConstants.IndexDirectoryName);
         Assert.Equal(expected, indexRootPath);
-        Assert.True(Directory.Exists(indexRootPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     [Fact]
@@ -188,7 +188,7 @@ public class PathResolutionServiceConstantsTests : IDisposable
         var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         var expected = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
         Assert.Equal(expected, tsInstallPath);
-        Assert.True(Directory.Exists(tsInstallPath));
+        // PathResolutionService should only resolve paths, not create directories
     }
 
     public void Dispose()
