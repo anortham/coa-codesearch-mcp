@@ -81,6 +81,9 @@ public class FileLoggingService : IHostedService, IDisposable
 
             try
             {
+                // Ensure log directory exists
+                Directory.CreateDirectory(_logDirectory);
+                
                 // Create timestamped log file name
                 var timestamp = DateTime.Now.ToString("yyyy-MM-dd_HH-mm-ss");
                 var logFileName = $"codesearch_{timestamp}.log";

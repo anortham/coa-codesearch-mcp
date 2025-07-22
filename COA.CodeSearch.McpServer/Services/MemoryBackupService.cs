@@ -33,7 +33,12 @@ public class MemoryBackupService : IDisposable
         _pathResolutionService = pathResolutionService;
         
         // Get backup database path using PathResolutionService
-        _backupDbPath = Path.Combine(_pathResolutionService.GetBackupPath(), "memories.db");
+        var backupDir = _pathResolutionService.GetBackupPath();
+        
+        // Ensure backup directory exists
+        Directory.CreateDirectory(backupDir);
+        
+        _backupDbPath = Path.Combine(backupDir, "memories.db");
         
         // Ensure database exists with proper schema
         InitializeDatabase();

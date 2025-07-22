@@ -109,7 +109,10 @@ public class TypeScriptInstaller
                 }
             }
 
-            // Create package.json (directory already created by PathResolutionService)
+            // Create directory if it doesn't exist
+            Directory.CreateDirectory(_installPath);
+            
+            // Create package.json
             var packageJson = Path.Combine(_installPath, "package.json");
             await File.WriteAllTextAsync(packageJson, $$"""
                 {

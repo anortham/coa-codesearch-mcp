@@ -100,6 +100,16 @@ public class InMemoryTestIndexService : ILuceneIndexService, IDisposable
         return _indexes.ToDictionary(kvp => kvp.Key, kvp => GetPhysicalIndexPath(kvp.Key));
     }
     
+    public void CleanupStuckIndexes()
+    {
+        // No-op for in-memory implementation - no file locks to clean
+    }
+    
+    public void CleanupDuplicateIndices()
+    {
+        // No-op for in-memory implementation - no duplicates in memory
+    }
+    
     public void Dispose()
     {
         _analyzer?.Dispose();
