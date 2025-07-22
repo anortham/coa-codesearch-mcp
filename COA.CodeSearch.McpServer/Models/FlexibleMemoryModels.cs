@@ -148,6 +148,7 @@ public static class MemoryTypes
     public const string Idea = "Idea";
     public const string CodeReview = "CodeReview";
     public const string BugReport = "BugReport";
+    public const string GitCommit = "GitCommit";
     public const string PerformanceIssue = "PerformanceIssue";
     public const string Refactoring = "Refactoring";
     public const string Documentation = "Documentation";
@@ -506,6 +507,52 @@ public class MemoryUpdateRequest
     /// Remove these files from FilesInvolved
     /// </summary>
     public string[]? RemoveFiles { get; set; }
+}
+
+/// <summary>
+/// Result of listing available templates
+/// </summary>
+public class ListTemplatesResult
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public List<TemplateInfo> Templates { get; set; } = new();
+}
+
+/// <summary>
+/// Information about a memory template
+/// </summary>
+public class TemplateInfo
+{
+    public required string Id { get; set; }
+    public required string Name { get; set; }
+    public required string Description { get; set; }
+    public required string MemoryType { get; set; }
+    public required List<string> RequiredPlaceholders { get; set; }
+    public Dictionary<string, string> PlaceholderDescriptions { get; set; } = new();
+    public required string ExampleUsage { get; set; }
+}
+
+/// <summary>
+/// Result of getting memory suggestions
+/// </summary>
+public class MemorySuggestionsResult
+{
+    public bool Success { get; set; }
+    public string? Message { get; set; }
+    public List<MemorySuggestion> Suggestions { get; set; } = new();
+}
+
+/// <summary>
+/// A context-aware memory suggestion
+/// </summary>
+public class MemorySuggestion
+{
+    public required string Type { get; set; } // template, follow-up, reference, working-memory, file-context
+    public required string Title { get; set; }
+    public required string Description { get; set; }
+    public required string Action { get; set; } // The command to execute
+    public double Relevance { get; set; } // 0.0 to 1.0
 }
 
 /// <summary>

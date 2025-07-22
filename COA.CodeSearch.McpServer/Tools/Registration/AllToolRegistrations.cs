@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tools;
 using COA.Directus.Mcp.Protocol;
 using Microsoft.Extensions.DependencyInjection;
 using System.Text.Json;
@@ -45,8 +46,10 @@ public static class AllToolRegistrations
         RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>());
         RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>());
         
-        // Claude Memory System tools
-        MemoryToolRegistrations.RegisterMemoryTools(registry, serviceProvider);
+        // Claude Memory System tools - only essential tools that don't have flexible equivalents
+        var memoryTools = serviceProvider.GetRequiredService<ClaudeMemoryTools>();
+        RegisterRecallContext(registry, memoryTools);
+        RegisterBackupRestore(registry, memoryTools);
         
         // Flexible Memory System tools
         FlexibleMemoryToolRegistrations.RegisterFlexibleMemoryTools(registry, serviceProvider);
@@ -1069,5 +1072,112 @@ public static class AllToolRegistrations
                 return CreateSuccessResult(result);
             }
         );
+    }
+    
+    private static void RegisterRecallContext(ToolRegistry registry, ClaudeMemoryTools tool)
+    {
+        registry.RegisterTool<RecallContextParams>(
+            name: "recall_context",
+            description: "🧠 LOAD RELEVANT CONTEXT - Start EVERY session with this! Loads past decisions, patterns, insights about what you're working on. Essential for consistency. Your memory assistant!",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "What you're currently working on or want to learn about" },
+                    scopeFilter = new { type = "string", description = "Filter by type: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight, WorkSession, LocalInsight" },
+                    maxResults = new { type = "integer", description = "Maximum number of results to return (default: 10)", @default = 10 }
+                },
+                required = new[] { "query" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                MemoryScope? scopeFilter = null;
+                if (!string.IsNullOrEmpty(parameters.ScopeFilter))
+                {
+                    if (System.Enum.TryParse<MemoryScope>(parameters.ScopeFilter, out var scope))
+                    {
+                        scopeFilter = scope;
+                    }
+                }
+                
+                var result = await tool.RecallContext(
+                    ValidateRequired(parameters.Query, "query"),
+                    scopeFilter,
+                    parameters.MaxResults ?? 10);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterBackupRestore(ToolRegistry registry, ClaudeMemoryTools tool)
+    {
+        registry.RegisterTool<BackupMemoriesParams>(
+            name: "backup_memories_to_sqlite",
+            description: "Backup memories from Lucene index to SQLite database for version control and sharing. By default backs up only project-level memories (architectural decisions, patterns, security rules) which can be shared with the team.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to backup. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
+                    includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.BackupMemories(
+                    parameters?.Scopes,
+                    parameters?.IncludeLocal ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+        
+        registry.RegisterTool<RestoreMemoriesParams>(
+            name: "restore_memories_from_sqlite",
+            description: "Restore memories from SQLite database backup to Lucene index. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to restore. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
+                    includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.RestoreMemories(
+                    parameters?.Scopes,
+                    parameters?.IncludeLocal ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class RecallContextParams
+    {
+        public string? Query { get; set; }
+        public string? ScopeFilter { get; set; }
+        public int? MaxResults { get; set; }
+    }
+    
+    private class BackupMemoriesParams
+    {
+        public string[]? Scopes { get; set; }
+        public bool? IncludeLocal { get; set; }
+    }
+    
+    private class RestoreMemoriesParams
+    {
+        public string[]? Scopes { get; set; }
+        public bool? IncludeLocal { get; set; }
     }
 }

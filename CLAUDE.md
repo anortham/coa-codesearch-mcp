@@ -514,6 +514,8 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 
 ## Memory System Quick Start
 
+**SIMPLIFIED: Tool count reduced from 60+ to 49, then increased to 51 with new Git and file context tools**
+
 ### Session Startup
 To use the memory system effectively:
 1. Start each session with `mcp__codesearch__recall_context "what I'm working on"`
@@ -522,23 +524,19 @@ To use the memory system effectively:
 
 ### Available Memory Tools
 
-#### Store Knowledge (Legacy)
-- `remember_decision` - Store architectural decisions with reasoning
-- `remember_pattern` - Document reusable code patterns
-- `remember_security_rule` - Track security requirements
-- `remember_session` - Save work session summary
-
-#### Flexible Memory System (Recommended)
-- `flexible_store_memory` - Store any type of memory with custom fields
+#### Flexible Memory System (Primary API)
+- `flexible_store_memory` - Store ANY type of memory with custom fields
+  - Use `--type "TechnicalDebt"` instead of specialized tools
+  - Use `--type "Question"` for questions
+  - Use `--type "DeferredTask"` for deferred tasks
+  - Or create your own types!
 - `flexible_search_memories` - Advanced search with faceting and filtering
-- `flexible_update_memory` - Update existing memories
+- `flexible_update_memory` - Update existing memories (including marking as resolved)
 - `flexible_get_memory` - Retrieve specific memory by ID
-- `flexible_mark_memory_resolved` - Mark memories as resolved
 - `flexible_find_similar_memories` - Find related memories using AI
 - `flexible_archive_memories` - Archive old memories by type and age
-- `flexible_store_technical_debt` - Specialized tool for technical debt
-- `flexible_store_deferred_task` - Store tasks for future consideration
-- `flexible_store_question` - Store questions with tracking
+- `flexible_store_git_commit` - Link memories to specific Git commits (NEW!)
+- `flexible_memories_for_file` - Find all memories related to a specific file (NEW!)
 
 #### Memory Linking (New!)
 - `flexible_link_memories` - Create relationships between memories
@@ -560,9 +558,10 @@ To use the memory system effectively:
 - `view_checklist` - View checklist with progress and optional markdown export
 - `list_checklists` - List all checklists with filtering options
 
-#### Recall Knowledge
-- `recall_context` - Search all memories for relevant context
-- `list_memories_by_type` - List specific types of memories
+#### Essential Tools
+- `recall_context` - Load relevant context at session start (ALWAYS use this first!)
+- `backup_memories_to_sqlite` - Backup memories for version control
+- `restore_memories_from_sqlite` - Restore memories from backup
 - **Smart Recall (Phase 4)**: The flexible_search_memories tool now includes automatic natural language understanding
   - Detects natural language queries and expands them semantically
   - Synonym expansion (e.g., "bug" → "defect", "issue", "error")
@@ -632,6 +631,30 @@ flexible_link_memories --sourceId "epic-001" --targetId "task-002" --relationshi
 # Link related architectural decisions
 flexible_link_memories --sourceId "caching-decision" --targetId "performance-analysis" --relationshipType "implements"
 ```
+
+### Git Integration Examples
+
+Store memories linked to Git commits:
+```bash
+# Store architectural decision tied to a commit
+flexible_store_git_commit --sha "abc123def" --message "Refactor authentication system" --description "Implemented JWT-based authentication to improve security and scalability" --author "John Doe" --branch "feature/auth-refactor" --filesChanged ["AuthService.cs", "JwtHandler.cs"]
+
+# Track important bug fix
+flexible_store_git_commit --sha "def456ghi" --message "Fix null reference in payment processing" --description "Critical bug fix - payment service was crashing when processing refunds with null metadata" --filesChanged ["PaymentService.cs"]
+```
+
+### File Context Examples
+
+Find all memories related to a specific file:
+```bash
+# Find all memories for a file
+flexible_memories_for_file --filePath "Services/AuthService.cs"
+
+# Include archived memories
+flexible_memories_for_file --filePath "Services/AuthService.cs" --includeArchived true
+```
+
+The tool will return memories grouped by type (e.g., ArchitecturalDecision, TechnicalDebt, GitCommit) that reference the file.
 
 Traverse memory relationships:
 ```bash

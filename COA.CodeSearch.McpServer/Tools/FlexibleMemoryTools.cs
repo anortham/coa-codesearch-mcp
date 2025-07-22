@@ -690,6 +690,311 @@ public class FlexibleMemoryTools
     }
     
     /// <summary>
+    /// Create a memory from a template with placeholders
+    /// </summary>
+    public async Task<StoreMemoryResult> CreateFromTemplateAsync(
+        string templateId,
+        Dictionary<string, string> placeholders,
+        string[]? files = null,
+        Dictionary<string, JsonElement>? additionalFields = null)
+    {
+        try
+        {
+            var templates = MemoryTemplates.GetAll();
+            if (!templates.TryGetValue(templateId, out var template))
+            {
+                return new StoreMemoryResult
+                {
+                    Success = false,
+                    Message = $"Template '{templateId}' not found. Available templates: {string.Join(", ", templates.Keys)}"
+                };
+            }
+            
+            // Validate required placeholders
+            var missingPlaceholders = template.RequiredPlaceholders
+                .Where(p => !placeholders.ContainsKey(p) || string.IsNullOrWhiteSpace(placeholders[p]))
+                .ToList();
+                
+            if (missingPlaceholders.Any())
+            {
+                return new StoreMemoryResult
+                {
+                    Success = false,
+                    Message = $"Missing required placeholders: {string.Join(", ", missingPlaceholders)}"
+                };
+            }
+            
+            // Replace placeholders in content template
+            var content = template.ContentTemplate;
+            foreach (var placeholder in placeholders)
+            {
+                content = content.Replace($"{{{placeholder.Key}}}", placeholder.Value);
+            }
+            
+            // Merge fields
+            var fields = new Dictionary<string, JsonElement>(template.DefaultFields);
+            if (additionalFields != null)
+            {
+                foreach (var field in additionalFields)
+                {
+                    fields[field.Key] = field.Value;
+                }
+            }
+            
+            // Add template info to fields
+            fields["fromTemplate"] = JsonSerializer.SerializeToElement(templateId);
+            fields["createdFromTemplate"] = JsonSerializer.SerializeToElement(DateTime.UtcNow);
+            
+            // Add default tags
+            if (template.DefaultTags.Any())
+            {
+                var existingTags = fields.ContainsKey("tags") 
+                    ? JsonSerializer.Deserialize<List<string>>(fields["tags"]) ?? new List<string>()
+                    : new List<string>();
+                    
+                existingTags.AddRange(template.DefaultTags);
+                fields["tags"] = JsonSerializer.SerializeToElement(existingTags.Distinct().ToList());
+            }
+            
+            // Create the memory
+            var memory = new FlexibleMemoryEntry
+            {
+                Type = template.MemoryType,
+                Content = content,
+                IsShared = true,
+                FilesInvolved = files ?? Array.Empty<string>(),
+                Fields = fields
+            };
+            
+            var success = await _memoryService.StoreMemoryAsync(memory);
+            
+            return new StoreMemoryResult
+            {
+                Success = success,
+                MemoryId = success ? memory.Id : null,
+                Message = success 
+                    ? $"Created {template.Name} memory from template"
+                    : "Failed to store memory"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating memory from template");
+            return new StoreMemoryResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
+    /// List available memory templates
+    /// </summary>
+    public Task<ListTemplatesResult> ListTemplatesAsync()
+    {
+        try
+        {
+            var templates = MemoryTemplates.GetAll();
+            var templateList = templates.Values.Select(t => new TemplateInfo
+            {
+                Id = t.Id,
+                Name = t.Name,
+                Description = t.Description,
+                MemoryType = t.MemoryType,
+                RequiredPlaceholders = t.RequiredPlaceholders,
+                PlaceholderDescriptions = t.PlaceholderDescriptions,
+                ExampleUsage = GenerateExampleUsage(t)
+            }).ToList();
+            
+            return Task.FromResult(new ListTemplatesResult
+            {
+                Success = true,
+                Templates = templateList,
+                Message = $"Found {templateList.Count} templates"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error listing templates");
+            return Task.FromResult(new ListTemplatesResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            });
+        }
+    }
+    
+    private string GenerateExampleUsage(MemoryTemplate template)
+    {
+        var placeholders = string.Join(" ", template.RequiredPlaceholders.Select(p => $"--{p} \"...\""));
+        return $"flexible_create_from_template --templateId \"{template.Id}\" {placeholders}";
+    }
+    
+    /// <summary>
+    /// Get context-aware memory suggestions based on current work context
+    /// </summary>
+    public async Task<MemorySuggestionsResult> GetMemorySuggestionsAsync(
+        string currentContext,
+        string? currentFile = null,
+        string[]? recentFiles = null,
+        int maxSuggestions = 5)
+    {
+        try
+        {
+            var suggestions = new List<MemorySuggestion>();
+            
+            // 1. Find related memories based on context
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = currentContext,
+                MaxResults = 10,
+                BoostRecent = true
+            };
+            
+            var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
+            if (searchResult.Memories.Any())
+            {
+                // Suggest following up on pending items
+                var pendingMemories = searchResult.Memories
+                    .Where(m => m.GetField<string>("status") == "pending")
+                    .Take(2);
+                    
+                foreach (var memory in pendingMemories)
+                {
+                    suggestions.Add(new MemorySuggestion
+                    {
+                        Type = "follow-up",
+                        Title = $"Follow up on: {memory.Type}",
+                        Description = memory.Content.Length > 100 
+                            ? memory.Content.Substring(0, 100) + "..." 
+                            : memory.Content,
+                        Action = $"flexible_update_memory --id \"{memory.Id}\" --status \"in-progress\"",
+                        Relevance = 0.9
+                    });
+                }
+                
+                // Suggest related decisions or patterns
+                var relatedKnowledge = searchResult.Memories
+                    .Where(m => m.Type == "ArchitecturalDecision" || m.Type == "CodePattern")
+                    .Take(2);
+                    
+                foreach (var memory in relatedKnowledge)
+                {
+                    suggestions.Add(new MemorySuggestion
+                    {
+                        Type = "reference",
+                        Title = $"Consider: {memory.Type}",
+                        Description = memory.Content.Length > 100 
+                            ? memory.Content.Substring(0, 100) + "..." 
+                            : memory.Content,
+                        Action = $"flexible_get_memory --id \"{memory.Id}\"",
+                        Relevance = 0.7
+                    });
+                }
+            }
+            
+            // 2. Suggest templates based on context keywords
+            var templates = MemoryTemplates.GetAll();
+            var contextLower = currentContext.ToLowerInvariant();
+            
+            if (contextLower.Contains("review") || contextLower.Contains("code quality"))
+            {
+                suggestions.Add(new MemorySuggestion
+                {
+                    Type = "template",
+                    Title = "Create Code Review Finding",
+                    Description = "Document issues found during code review",
+                    Action = $"flexible_create_from_template --templateId \"code-review\" --file \"{currentFile ?? "file.cs"}\"",
+                    Relevance = 0.8
+                });
+            }
+            
+            if (contextLower.Contains("performance") || contextLower.Contains("slow") || contextLower.Contains("optimize"))
+            {
+                suggestions.Add(new MemorySuggestion
+                {
+                    Type = "template",
+                    Title = "Track Performance Issue",
+                    Description = "Document performance problems that need optimization",
+                    Action = "flexible_create_from_template --templateId \"performance-issue\"",
+                    Relevance = 0.8
+                });
+            }
+            
+            if (contextLower.Contains("security") || contextLower.Contains("vulnerability"))
+            {
+                suggestions.Add(new MemorySuggestion
+                {
+                    Type = "template",
+                    Title = "Document Security Finding",
+                    Description = "Record security vulnerabilities or concerns",
+                    Action = "flexible_create_from_template --templateId \"security-audit\"",
+                    Relevance = 0.9
+                });
+            }
+            
+            // 3. Suggest creating working memory for current task
+            if (!string.IsNullOrWhiteSpace(currentContext))
+            {
+                suggestions.Add(new MemorySuggestion
+                {
+                    Type = "working-memory",
+                    Title = "Save Current Context",
+                    Description = "Store this context as working memory for later reference",
+                    Action = $"flexible_store_working_memory --content \"{currentContext}\" --expiresIn \"4h\"",
+                    Relevance = 0.6
+                });
+            }
+            
+            // 4. If working with specific files, suggest file-specific memories
+            if (currentFile != null)
+            {
+                var fileMemoriesRequest = new FlexibleMemorySearchRequest
+                {
+                    Query = currentFile,
+                    MaxResults = 5
+                };
+                
+                var fileMemories = await _memoryService.SearchMemoriesAsync(fileMemoriesRequest);
+                if (fileMemories.Memories.Any())
+                {
+                    suggestions.Add(new MemorySuggestion
+                    {
+                        Type = "file-context",
+                        Title = $"View memories for {Path.GetFileName(currentFile)}",
+                        Description = $"Found {fileMemories.TotalFound} memories related to this file",
+                        Action = $"flexible_search_memories --query \"{currentFile}\"",
+                        Relevance = 0.7
+                    });
+                }
+            }
+            
+            // Sort by relevance and take top suggestions
+            var topSuggestions = suggestions
+                .OrderByDescending(s => s.Relevance)
+                .Take(maxSuggestions)
+                .ToList();
+            
+            return new MemorySuggestionsResult
+            {
+                Success = true,
+                Suggestions = topSuggestions,
+                Message = $"Generated {topSuggestions.Count} context-aware suggestions"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating memory suggestions");
+            return new MemorySuggestionsResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
     /// Get memory system dashboard with statistics and health information
     /// </summary>
     public async Task<MemoryDashboardResult> GetMemoryDashboardAsync()
@@ -976,6 +1281,111 @@ public class FlexibleMemoryTools
         }
         return $"{len:0.##} {sizes[order]}";
     }
+    
+    /// <summary>
+    /// Store a git commit memory
+    /// </summary>
+    public async Task<StoreMemoryResult> StoreGitCommitMemoryAsync(
+        string sha,
+        string message,
+        string description,
+        string? author = null,
+        DateTime? commitDate = null,
+        string[]? filesChanged = null,
+        string? branch = null,
+        Dictionary<string, JsonElement>? additionalFields = null)
+    {
+        try
+        {
+            var fields = additionalFields ?? new Dictionary<string, JsonElement>();
+            
+            // Add git-specific fields
+            fields["sha"] = JsonDocument.Parse($"\"{sha}\"").RootElement;
+            fields["commitMessage"] = JsonDocument.Parse($"\"{message}\"").RootElement;
+            
+            if (!string.IsNullOrEmpty(author))
+                fields["author"] = JsonDocument.Parse($"\"{author}\"").RootElement;
+            
+            if (commitDate.HasValue)
+                fields["commitDate"] = JsonDocument.Parse($"\"{commitDate.Value:O}\"").RootElement;
+            
+            if (!string.IsNullOrEmpty(branch))
+                fields["branch"] = JsonDocument.Parse($"\"{branch}\"").RootElement;
+            
+            if (filesChanged != null && filesChanged.Length > 0)
+                fields["filesChanged"] = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(filesChanged));
+            
+            return await StoreMemoryAsync(
+                MemoryTypes.GitCommit,
+                description,
+                isShared: true,
+                files: filesChanged,
+                fields: fields
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error storing git commit memory");
+            return new StoreMemoryResult
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Find all memories related to a specific file
+    /// </summary>
+    public async Task<FileMemoriesResult> GetMemoriesForFileAsync(string filePath, bool includeArchived = false)
+    {
+        try
+        {
+            // Normalize the file path
+            var normalizedPath = filePath.Replace('\\', '/');
+            
+            // Search for memories that mention this file
+            var searchParams = new FlexibleMemorySearchRequest
+            {
+                Query = $"\"{normalizedPath}\"",
+                MaxResults = 100,
+                IncludeArchived = includeArchived
+            };
+            
+            var searchResult = await _memoryService.SearchMemoriesAsync(searchParams);
+            
+            // Filter to memories that actually involve this file
+            var fileMemories = searchResult.Memories
+                .Where(m => m.FilesInvolved.Any(f => f.Replace('\\', '/').EndsWith(normalizedPath, StringComparison.OrdinalIgnoreCase)) ||
+                           m.Content.Contains(normalizedPath, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+            
+            // Group by memory type
+            var groupedByType = fileMemories
+                .GroupBy(m => m.Type)
+                .ToDictionary(g => g.Key, g => g.ToList());
+            
+            return new FileMemoriesResult
+            {
+                Success = true,
+                FilePath = filePath,
+                TotalMemories = fileMemories.Count,
+                MemoriesByType = groupedByType,
+                Memories = fileMemories,
+                Message = $"Found {fileMemories.Count} memories related to {Path.GetFileName(filePath)}"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error finding memories for file");
+            return new FileMemoriesResult
+            {
+                Success = false,
+                FilePath = filePath,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
 }
 
 // Result classes
@@ -1073,4 +1483,14 @@ public class StorageInfo
     public long BackupSizeBytes { get; set; }
     public DateTime? LastBackup { get; set; }
     public DateTime? LastIndexOptimization { get; set; }
+}
+
+public class FileMemoriesResult
+{
+    public bool Success { get; set; }
+    public string FilePath { get; set; } = "";
+    public int TotalMemories { get; set; }
+    public Dictionary<string, List<FlexibleMemoryEntry>> MemoriesByType { get; set; } = new();
+    public List<FlexibleMemoryEntry> Memories { get; set; } = new();
+    public string Message { get; set; } = "";
 }
