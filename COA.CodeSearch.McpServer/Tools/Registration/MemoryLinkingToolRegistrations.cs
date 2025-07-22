@@ -2,7 +2,7 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
-using COA.Directus.Mcp.Protocol;
+using COA.Mcp.Protocol;
 using System.Text.Json;
 using static COA.CodeSearch.McpServer.Tools.Registration.ToolRegistrationHelper;
 

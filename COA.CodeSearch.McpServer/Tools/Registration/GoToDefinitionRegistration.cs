@@ -1,6 +1,6 @@
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
-using COA.Directus.Mcp.Protocol;
+using COA.Mcp.Protocol;
 
 namespace COA.CodeSearch.McpServer.Tools.Registration;
 

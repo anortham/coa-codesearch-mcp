@@ -1,4 +1,4 @@
-using COA.Directus.Mcp.Protocol;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 using System.Collections.Concurrent;
