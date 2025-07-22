@@ -210,18 +210,32 @@ Memories aren't just static notes - they're living entities that need to be trac
 - [x] Create archive capabilities with `flexible_archive_memories`
 - [x] Add memory lifecycle fields (created, modified, accessed, etc.)
 
-### Phase 4: AI Features 🚧 PARTIALLY COMPLETED
+### Phase 4: AI Features ✅ MOSTLY COMPLETED
 - [x] Add working memory with `flexible_store_working_memory`
 - [x] Implement memory expiration (end-of-session, time-based)
 - [x] Create memory summarization with `flexible_summarize_memories`
 - [x] Add smart recall with natural language understanding in search
 - [ ] Implement semantic search with embeddings
-- [ ] Add memory templates/snippets
-- [ ] Create context-aware memory suggestions
+- [x] Add memory templates/snippets with `flexible_list_templates` and `flexible_create_from_template`
+  - Created 5 built-in templates: code-review, performance-issue, security-audit, refactoring, api-design
+  - Templates support placeholders, default fields, and tags
+  - Ensures consistent structure for common memory types
+- [x] Create context-aware memory suggestions with `flexible_get_memory_suggestions`
+  - Analyzes current context to suggest relevant memories
+  - Recommends appropriate templates based on keywords
+  - Suggests following up on pending memories
+  - Provides ready-to-use commands for each suggestion
+  - Ranks suggestions by relevance (0.0 to 1.0)
+- [x] **Clean up legacy memory tools** ✅ COMPLETED
+  - [x] Removed `remember_decision`, `remember_pattern`, `remember_security_rule`, `remember_session`
+  - [x] Kept only essential tools: `recall_context`, `backup_memories_to_sqlite`, `restore_memories_from_sqlite`
+  - [x] Removed specialized flexible tools (`flexible_store_technical_debt`, etc.) in favor of generic `flexible_store_memory`
+  - [x] **Reduced total tool count from 60+ to 49 tools**
+  - [x] **Added 2 new tools for Phase 5 integrations: now at 51 tools total**
 
-### Phase 5: Integrations ❌ NOT STARTED
-- [ ] Git integration (link memories to commits)
-- [ ] File context awareness (memories_for_file)
+### Phase 5: Integrations 🚧 IN PROGRESS
+- [x] Git integration (link memories to commits) - `flexible_store_git_commit` tool implemented
+- [x] File context awareness (memories_for_file) - `flexible_memories_for_file` tool implemented
 - [ ] Memory dashboard/statistics
 - [ ] Export/import functionality
 - [ ] Memory analytics and insights
@@ -234,8 +248,8 @@ Memories aren't just static notes - they're living entities that need to be trac
 - [x] Custom analyzers for better search
 
 ### Known Issues/TODOs
-- [ ] Fix date range filtering in archive operations (NumericRangeQuery issue)
-- [ ] Implement memory templates for common patterns
+- [x] Fix date range filtering in archive operations (NumericRangeQuery issue) ✅ FIXED
+- [x] Implement memory templates for common patterns ✅ COMPLETED
 - [ ] Add bulk operations for memory management
 - [ ] Improve performance for large memory stores
 - [ ] Add memory export formats (JSON, Markdown, etc.)

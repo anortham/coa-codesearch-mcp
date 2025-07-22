@@ -20,19 +20,39 @@ public static class FlexibleMemoryToolRegistrations
     {
         var memoryTools = serviceProvider.GetRequiredService<FlexibleMemoryTools>();
         
+        // Core memory operations
         RegisterStoreMemory(registry, memoryTools);
-        RegisterStoreWorkingMemory(registry, memoryTools);
         RegisterSearchMemories(registry, memoryTools);
         RegisterUpdateMemory(registry, memoryTools);
-        RegisterMarkMemoryResolved(registry, memoryTools);
-        RegisterStoreTechnicalDebt(registry, memoryTools);
-        RegisterStoreQuestion(registry, memoryTools);
-        RegisterStoreDeferredTask(registry, memoryTools);
-        RegisterFindSimilarMemories(registry, memoryTools);
-        RegisterArchiveMemories(registry, memoryTools);
         RegisterGetMemoryById(registry, memoryTools);
+        
+        // Memory relationships - handled by MemoryLinkingToolRegistrations
+        
+        // Intelligent features
+        RegisterStoreWorkingMemory(registry, memoryTools);
+        RegisterFindSimilarMemories(registry, memoryTools);
         RegisterSummarizeMemories(registry, memoryTools);
+        RegisterGetMemorySuggestions(registry, memoryTools);
+        
+        // Management
+        RegisterArchiveMemories(registry, memoryTools);
         RegisterMemoryDashboard(registry, memoryTools);
+        
+        // Templates
+        RegisterListTemplates(registry, memoryTools);
+        RegisterCreateFromTemplate(registry, memoryTools);
+        
+        // Git integration
+        RegisterStoreGitCommitMemory(registry, memoryTools);
+        
+        // File context
+        RegisterGetMemoriesForFile(registry, memoryTools);
+        
+        // REMOVED specialized tools - use flexible_store_memory with appropriate type instead:
+        // RegisterMarkMemoryResolved(registry, memoryTools); - use flexible_update_memory
+        // RegisterStoreTechnicalDebt(registry, memoryTools); - use flexible_store_memory or templates
+        // RegisterStoreQuestion(registry, memoryTools); - use flexible_store_memory or templates
+        // RegisterStoreDeferredTask(registry, memoryTools); - use flexible_store_memory or templates
     }
     
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
@@ -459,6 +479,166 @@ public static class FlexibleMemoryToolRegistrations
             }
         );
     }
+    
+    private static void RegisterListTemplates(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<ListTemplatesParams>(
+            name: "flexible_list_templates",
+            description: "List available memory templates for common scenarios like code reviews, performance issues, security findings",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new { },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ListTemplatesAsync();
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private static void RegisterCreateFromTemplate(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<CreateFromTemplateParams>(
+            name: "flexible_create_from_template",
+            description: "Create a memory from a predefined template with placeholders - ensures consistent structure for common memory types",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    templateId = new { type = "string", description = "Template ID (use flexible_list_templates to see available templates)" },
+                    placeholders = new { type = "object", description = "Key-value pairs for template placeholders" },
+                    files = new { type = "array", items = new { type = "string" }, description = "Related files (optional)" },
+                    additionalFields = new { type = "object", description = "Additional custom fields (optional)" }
+                },
+                required = new[] { "templateId", "placeholders" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.CreateFromTemplateAsync(
+                    ValidateRequired(parameters.TemplateId, "templateId"),
+                    parameters.Placeholders,
+                    parameters.Files,
+                    parameters.AdditionalFields);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterGetMemorySuggestions(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<GetMemorySuggestionsParams>(
+            name: "flexible_get_memory_suggestions",
+            description: "Get context-aware memory suggestions based on what you're currently working on - suggests relevant memories, templates, and actions",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    currentContext = new { type = "string", description = "Description of what you're currently working on" },
+                    currentFile = new { type = "string", description = "Path to the file you're currently working on (optional)" },
+                    recentFiles = new { type = "array", items = new { type = "string" }, description = "List of recently accessed files (optional)" },
+                    maxSuggestions = new { type = "integer", description = "Maximum number of suggestions to return (default: 5)", @default = 5 }
+                },
+                required = new[] { "currentContext" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.GetMemorySuggestionsAsync(
+                    ValidateRequired(parameters.CurrentContext, "currentContext"),
+                    parameters.CurrentFile,
+                    parameters.RecentFiles,
+                    parameters.MaxSuggestions ?? 5);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterStoreGitCommitMemory(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<StoreGitCommitMemoryParams>(
+            name: "flexible_store_git_commit",
+            description: "Link a memory to a specific Git commit - track important changes, architectural decisions, or insights tied to specific commits",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    sha = new { type = "string", description = "Git commit SHA" },
+                    message = new { type = "string", description = "Git commit message" },
+                    description = new { type = "string", description = "Additional description or insights about this commit" },
+                    author = new { type = "string", description = "Commit author (optional)" },
+                    commitDate = new { type = "string", description = "Commit date in ISO format (optional)" },
+                    filesChanged = new { type = "array", items = new { type = "string" }, description = "Files changed in this commit (optional)" },
+                    branch = new { type = "string", description = "Branch name (optional)" },
+                    additionalFields = new { type = "object", description = "Additional custom fields (optional)" }
+                },
+                required = new[] { "sha", "message", "description" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                DateTime? commitDate = null;
+                if (!string.IsNullOrEmpty(parameters.CommitDate))
+                {
+                    if (DateTime.TryParse(parameters.CommitDate, out var parsedDate))
+                    {
+                        commitDate = parsedDate;
+                    }
+                }
+                
+                var result = await tool.StoreGitCommitMemoryAsync(
+                    ValidateRequired(parameters.Sha, "sha"),
+                    ValidateRequired(parameters.Message, "message"),
+                    ValidateRequired(parameters.Description, "description"),
+                    parameters.Author,
+                    commitDate,
+                    parameters.FilesChanged,
+                    parameters.Branch,
+                    parameters.AdditionalFields);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterGetMemoriesForFile(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<GetMemoriesForFileParams>(
+            name: "flexible_memories_for_file",
+            description: "Find all memories related to a specific file - see architectural decisions, technical debt, patterns, and insights for any file",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the file (absolute or relative)" },
+                    includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false }
+                },
+                required = new[] { "filePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.GetMemoriesForFileAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    parameters.IncludeArchived ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
 }
 
 // Parameter classes
@@ -551,6 +731,26 @@ public class SummarizeMemoriesParams
     public bool? PreserveOriginals { get; set; }
 }
 
+public class ListTemplatesParams
+{
+}
+
+public class CreateFromTemplateParams
+{
+    public string TemplateId { get; set; } = "";
+    public Dictionary<string, string> Placeholders { get; set; } = new();
+    public string[]? Files { get; set; }
+    public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
+}
+
+public class GetMemorySuggestionsParams
+{
+    public string CurrentContext { get; set; } = "";
+    public string? CurrentFile { get; set; }
+    public string[]? RecentFiles { get; set; }
+    public int? MaxSuggestions { get; set; }
+}
+
 public class MarkMemoryResolvedParams
 {
     public string Id { get; set; } = "";
@@ -564,4 +764,22 @@ public class StoreWorkingMemoryParams
     public string? SessionId { get; set; }
     public string[]? Files { get; set; }
     public Dictionary<string, JsonElement>? Fields { get; set; }
+}
+
+public class StoreGitCommitMemoryParams
+{
+    public string Sha { get; set; } = "";
+    public string Message { get; set; } = "";
+    public string Description { get; set; } = "";
+    public string? Author { get; set; }
+    public string? CommitDate { get; set; }
+    public string[]? FilesChanged { get; set; }
+    public string? Branch { get; set; }
+    public Dictionary<string, JsonElement>? AdditionalFields { get; set; }
+}
+
+public class GetMemoriesForFileParams
+{
+    public string FilePath { get; set; } = "";
+    public bool? IncludeArchived { get; set; }
 }
