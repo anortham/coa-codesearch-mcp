@@ -10,8 +10,19 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>coa-codesearch-mcp</ToolCommandName>
     <PackageId>COA.CodeSearch.McpServer</PackageId>
-    <!-- Version is set by CI/CD pipeline - DO NOT SET HERE -->
-    <!-- <Version>1.0.0</Version> -->
+    <!-- Auto-incrementing version for local development -->
+    <!-- Major.Minor set manually, Build auto-increments based on date, Revision is time -->
+    <VersionMajor>1</VersionMajor>
+    <VersionMinor>5</VersionMinor>
+    <!-- Build = days since 2024-01-01 + hour * 100 (max 2400) -->
+    <!-- Revision = minute * 100 + second (max 5999) -->
+    <VersionBuild>$([MSBuild]::Subtract($([System.DateTime]::Now.DayOfYear), 1))</VersionBuild>
+    <VersionRevision>$([MSBuild]::Add($([MSBuild]::Multiply($([System.DateTime]::Now.Hour), 100)), $([MSBuild]::Add($([MSBuild]::Multiply($([System.DateTime]::Now.Minute), 10)), $([MSBuild]::Divide($([System.DateTime]::Now.Second), 6))))))</VersionRevision>
+    <Version>$(VersionMajor).$(VersionMinor).$(VersionBuild).$(VersionRevision)</Version>
+    <AssemblyVersion>$(VersionMajor).$(VersionMinor).0.0</AssemblyVersion>
+    <FileVersion>$(Version)</FileVersion>
+    <!-- Add build metadata -->
+    <InformationalVersion>$(Version)+local.$(BuildHash)</InformationalVersion>
     <Authors>Children of America</Authors>
     <Company>Children of America</Company>
     <Description>High-performance MCP server for code search and navigation across multiple languages</Description>
@@ -59,6 +70,43 @@
     <!-- HTTP Client for TypeScript installer -->
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
   </ItemGroup>
+
+  <!-- Auto-increment version properties -->
+  <PropertyGroup>
+    <!-- Get current timestamp for build metadata -->
+    <BuildTimestamp>$([System.DateTime]::UtcNow.ToString("yyyyMMdd.HHmmss"))</BuildTimestamp>
+  </PropertyGroup>
+
+  <!-- Get Git commit hash if available -->
+  <Target Name="GetGitHash" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo">
+    <PropertyGroup>
+      <GitHash Condition="'$(GitHash)' == ''">unknown</GitHash>
+    </PropertyGroup>
+    <Exec Command="git rev-parse --short=8 HEAD" 
+          ConsoleToMSBuild="true" 
+          ContinueOnError="true" 
+          Condition="'$(GitHash)' == 'unknown'">
+      <Output TaskParameter="ConsoleOutput" PropertyName="GitHash" />
+    </Exec>
+    <PropertyGroup>
+      <GitHash Condition="'$(GitHash)' == ''">unknown</GitHash>
+      <BuildHash>$(GitHash).$(BuildTimestamp)</BuildHash>
+      <!-- Update InformationalVersion with actual build hash -->
+      <InformationalVersion>$(Version)+local.$(BuildHash)</InformationalVersion>
+    </PropertyGroup>
+  </Target>
+
+  <!-- Add build date as assembly metadata -->
+  <Target Name="AddBuildMetadata" BeforeTargets="GetAssemblyVersion;GenerateAssemblyInfo">
+    <PropertyGroup>
+      <BuildDateUtc>$([System.DateTime]::UtcNow.ToString("yyyy-MM-dd HH:mm:ss UTC"))</BuildDateUtc>
+    </PropertyGroup>
+    <ItemGroup>
+      <AssemblyMetadata Include="BuildDate" Value="$(BuildDateUtc)" />
+      <AssemblyMetadata Include="GitCommit" Value="$(GitHash)" />
+      <AssemblyMetadata Include="BuildMachine" Value="$(COMPUTERNAME)" />
+    </ItemGroup>
+  </Target>
 
   <ItemGroup>
     <None Update="appsettings.json">

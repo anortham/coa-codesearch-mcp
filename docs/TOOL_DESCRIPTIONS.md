@@ -101,10 +101,11 @@ Use COA CodeSearch when you need:
 - **Example**: "Get documentation for the CalculateTotal method"
 
 #### `get_document_symbols`
-**When to use**: List all symbols in a file
+**When to use**: List all symbols in a C# file
 - Get file outline/structure
 - Find all classes and members
 - Navigate large files
+- **C# ONLY** - uses Roslyn document symbols
 - **Example**: "List all methods in UserService.cs"
 
 ### 🔧 Refactoring Tools

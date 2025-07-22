@@ -406,30 +406,31 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     
     private string GetIndexPath(string workspacePath)
     {
-        // Check if this is already a resolved memory path
-        // Memory paths come from PathResolutionService as full paths like:
-        // "C:\...\\.codesearch\project-memory" or "C:\...\\.codesearch\local-memory"
-        // Also handle test paths that might not have .codesearch in them
-        var normalizedPath = workspacePath.Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar);
+        _logger.LogWarning("GetIndexPath called with: {WorkspacePath}", workspacePath);
         
-        // Check if this ends with our memory path patterns
-        if (normalizedPath.EndsWith(Path.DirectorySeparatorChar + "project-memory") || 
-            normalizedPath.EndsWith(Path.DirectorySeparatorChar + "local-memory") ||
-            normalizedPath.Equals("project-memory", StringComparison.OrdinalIgnoreCase) ||
-            normalizedPath.Equals("local-memory", StringComparison.OrdinalIgnoreCase))
+        // Check if this is a memory path using PathResolutionService
+        var isProtected = _pathResolution.IsProtectedPath(workspacePath);
+        _logger.LogWarning("IsProtectedPath result: {IsProtected}", isProtected);
+        
+        if (isProtected)
         {
-            // This is already a resolved memory path, use it directly
-            System.IO.Directory.CreateDirectory(workspacePath);
+            // This is a memory path, use it directly
+            _logger.LogWarning("Using memory path directly: {Path}", workspacePath);
             return workspacePath;
         }
         
         // For regular workspace paths, use the hashing logic
+        _logger.LogWarning("Using hashed path for workspace: {WorkspacePath}", workspacePath);
         var indexPath = _pathResolution.GetIndexPath(workspacePath);
+        _logger.LogWarning("Hashed index path result: {IndexPath}", indexPath);
         
         // Update metadata for code indexes (not memory indexes)
         var workspaceRoot = NormalizeToWorkspaceRoot(workspacePath);
-        var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
-        UpdateMetadata(workspaceRoot, hashPath);
+        if (workspaceRoot != null)
+        {
+            var hashPath = Path.GetFileName(indexPath); // Extract just the directory name
+            UpdateMetadata(workspaceRoot, hashPath);
+        }
         
         return indexPath;
     }

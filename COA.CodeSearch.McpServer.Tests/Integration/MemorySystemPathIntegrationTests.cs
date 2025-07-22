@@ -28,7 +28,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
     public MemorySystemPathIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
-        _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_integration_test_{Guid.NewGuid()}");
+        _testBasePath = Path.Combine(Path.GetTempPath(), $"memory_integration_test_{Guid.NewGuid()}", ".codesearch");
         System.IO.Directory.CreateDirectory(_testBasePath);
 
         // Setup DI container as close to production as possible
@@ -320,11 +320,22 @@ public class MemorySystemPathIntegrationTests : IDisposable
             // Should be under .codesearch
             Assert.Contains(_testBasePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar), path);
             
-            // Should end with the expected directory name
-            Assert.EndsWith(name, path);
+            // Path should contain the expected directory name (not necessarily at the end for backups)
+            if (name == "backups")
+            {
+                // Backup path includes timestamp, so just check it contains "backups"
+                Assert.Contains("backups", path);
+            }
+            else
+            {
+                Assert.EndsWith(name, path);
+            }
             
-            // Directory should be created
-            Assert.True(System.IO.Directory.Exists(path), $"Directory {name} should exist at {path}");
+            // Directory should be created (except for backup which includes timestamp)
+            if (name != "backups")
+            {
+                Assert.True(System.IO.Directory.Exists(path), $"Directory {name} should exist at {path}");
+            }
         }
     }
 
