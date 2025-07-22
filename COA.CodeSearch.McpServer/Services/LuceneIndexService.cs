@@ -83,6 +83,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
+        
+        // Clean up any memory entries from metadata on startup
+        CleanupMemoryEntriesFromMetadata();
     }
     
     /// <summary>
@@ -527,6 +530,14 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             return;
         }
         
+        // Skip memory paths - they should not be tracked in workspace metadata
+        if (hashPath.Contains("memory", StringComparison.OrdinalIgnoreCase) ||
+            originalPath.Contains("memory", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("Skipping metadata update for memory path: {Path}", hashPath);
+            return;
+        }
+        
         _metadataLock.Wait();
         try
         {
@@ -594,6 +605,41 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to save metadata to {Path}", metadataPath);
+        }
+    }
+    
+    private void CleanupMemoryEntriesFromMetadata()
+    {
+        try
+        {
+            var metadataPath = GetMetadataPath();
+            if (!File.Exists(metadataPath))
+            {
+                return;
+            }
+            
+            var metadata = LoadMetadata(metadataPath);
+            var memoryKeys = metadata.Indexes
+                .Where(kvp => kvp.Key.Contains("memory", StringComparison.OrdinalIgnoreCase))
+                .Select(kvp => kvp.Key)
+                .ToList();
+                
+            if (memoryKeys.Count > 0)
+            {
+                _logger.LogInformation("Removing {Count} memory entries from workspace metadata", memoryKeys.Count);
+                
+                foreach (var key in memoryKeys)
+                {
+                    metadata.Indexes.Remove(key);
+                    _logger.LogDebug("Removed memory entry from metadata: {Key}", key);
+                }
+                
+                SaveMetadata(metadataPath, metadata);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cleanup memory entries from metadata");
         }
     }
     
