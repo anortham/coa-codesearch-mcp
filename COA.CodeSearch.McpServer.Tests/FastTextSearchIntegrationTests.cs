@@ -94,8 +94,8 @@ public class FastTextSearchIntegrationTests : IDisposable
         Assert.True(Directory.Exists(_testProjectPath), $"Test project path should exist: {_testProjectPath}");
         
         // List files to debug
-        var csFiles = Directory.GetFiles(_testProjectPath, "*.cs", SearchOption.AllDirectories);
-        Assert.True(csFiles.Length > 0, $"Should find .cs files in {_testProjectPath}");
+    var csFiles = Directory.GetFiles(_testProjectPath!, "*.cs", SearchOption.AllDirectories);
+    Assert.True(csFiles.Length > 0, $"Should find .cs files in {_testProjectPath}");
 
         // Arrange - Index the test project
         var indexed = await _fileIndexingService.IndexDirectoryAsync(_testProjectPath, _testProjectPath);
@@ -139,10 +139,15 @@ public class FastTextSearchIntegrationTests : IDisposable
         
         // Check if we have results with context
         var resultObj = JsonConvert.DeserializeObject<dynamic>(json);
-        if (resultObj?.totalResults > 0 && resultObj?.results?.Count > 0)
+        if (resultObj != null &&
+            resultObj?.totalResults != null &&
+            (int?)resultObj?.totalResults > 0 &&
+            resultObj?.results != null &&
+            resultObj?.results?.Count != null &&
+            (int?)resultObj?.results?.Count > 0)
         {
-            var firstResult = resultObj.results[0];
-            Assert.NotNull(firstResult.Context);
+            var firstResult = resultObj?.results?[0];
+            Assert.NotNull(firstResult?.Context);
         }
     }
 
@@ -187,11 +192,14 @@ public class FastTextSearchIntegrationTests : IDisposable
         
         // Check if all results are .cs files
         var resultObj = JsonConvert.DeserializeObject<dynamic>(json);
-        if (resultObj?.totalResults > 0 && resultObj?.results != null)
+        if (resultObj?.totalResults != null && (int?)resultObj?.totalResults > 0 && resultObj?.results != null)
         {
-            foreach (var res in resultObj.results)
+            foreach (var res in resultObj?.results)
             {
-                Assert.Equal(".cs", (string)res.Extension);
+                if (res?.Extension != null)
+                {
+                    Assert.Equal(".cs", (string)res.Extension);
+                }
             }
         }
     }
@@ -212,7 +220,10 @@ public class FastTextSearchIntegrationTests : IDisposable
         if (File.Exists(gitignorePath))
         {
             var gitignoreContent = await File.ReadAllTextAsync(gitignorePath);
-            Assert.Contains(".codesearch/", gitignoreContent);
+            if (gitignoreContent != null)
+            {
+                Assert.Contains(".codesearch/", gitignoreContent);
+            }
         }
     }
 

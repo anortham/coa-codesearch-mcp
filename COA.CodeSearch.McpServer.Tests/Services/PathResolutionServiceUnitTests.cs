@@ -17,7 +17,7 @@ public class PathResolutionServiceUnitTests
     public void GetBasePath_ShouldReturnCodesearchDirectory()
     {
         // Arrange
-        var config = CreateConfiguration(null, null);
+    var config = CreateConfiguration(string.Empty, string.Empty);
         var service = new PathResolutionService(config);
         
         // Act
@@ -41,7 +41,7 @@ public class PathResolutionServiceUnitTests
     public void GetBasePath_WithRelativeCustomConfig_ShouldUseCurrentDirectory(string configPath)
     {
         // Arrange
-        var config = CreateConfiguration(null, configPath);
+    var config = CreateConfiguration(string.Empty, configPath);
         var service = new PathResolutionService(config);
         
         // Act
@@ -59,7 +59,7 @@ public class PathResolutionServiceUnitTests
         var basePath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
             ? @"C:\test\.codesearch" 
             : "/test/.codesearch";
-        var config = CreateConfiguration("/dummy", basePath);
+    var config = CreateConfiguration("/dummy", basePath);
         var service = new PathResolutionService(config);
         
         // Act & Assert
@@ -80,7 +80,7 @@ public class PathResolutionServiceUnitTests
         var basePath = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
             ? @"C:\test\.codesearch" 
             : "/test/.codesearch";
-        var config = CreateConfiguration("/dummy", basePath);
+    var config = CreateConfiguration("/dummy", basePath);
         var service = new PathResolutionService(config);
         
         // Act
@@ -113,7 +113,7 @@ public class PathResolutionServiceUnitTests
     public void GetIndexPath_ForMemoryPaths_BehaviorTest(string inputPath)
     {
         // Arrange
-        var config = CreateConfiguration(null, null);
+    var config = CreateConfiguration(string.Empty, string.Empty);
         var service = new PathResolutionService(config);
         
         // Act
@@ -135,7 +135,7 @@ public class PathResolutionServiceUnitTests
     public void IsProtectedPath_ShouldIdentifyMemoryPaths()
     {
         // Arrange
-        var config = CreateConfiguration(null, null);
+    var config = CreateConfiguration(string.Empty, string.Empty);
         var service = new PathResolutionService(config);
         
         // Test with actual paths from the service
@@ -234,7 +234,7 @@ public class PathResolutionServiceUnitTests
     // Helper methods
     private static IConfiguration CreateConfiguration(string currentDirectory, string? customBasePath)
     {
-        var configData = new Dictionary<string, string>();
+    var configData = new Dictionary<string, string?>();
         
         if (customBasePath != null)
         {

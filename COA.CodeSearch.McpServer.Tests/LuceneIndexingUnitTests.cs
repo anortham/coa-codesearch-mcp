@@ -59,19 +59,21 @@ This is a test project for Lucene indexing.");
     public async Task FileIndexing_IndexesCreatedTestFiles()
     {
         await Task.Yield();
-        // Act
-        _output.WriteLine($"Test directory: {_testDirectory}");
-        _output.WriteLine($"Files in directory: {string.Join(", ", Directory.GetFiles(_testDirectory))}");
+    await Task.Yield();
+    // Act
+    _output.WriteLine($"Test directory: {_testDirectory}");
+    _output.WriteLine($"Files in directory: {string.Join(", ", Directory.GetFiles(_testDirectory))}");
         
-        var indexedCount = await _fileIndexingService.IndexDirectoryAsync(_testDirectory, _testDirectory);
-        // Assert
-        _output.WriteLine($"Indexed {indexedCount} files");
-        Assert.True(indexedCount >= 2, $"Should index at least 2 files, but indexed {indexedCount}");
+    var indexedCount = await _fileIndexingService.IndexDirectoryAsync(_testDirectory, _testDirectory);
+    // Assert
+    _output.WriteLine($"Indexed {indexedCount} files");
+    Assert.True(indexedCount >= 2, $"Should index at least 2 files, but indexed {indexedCount}");
     }
 
     [Fact]
     public async Task GetFilesToIndex_FindsCSharpFiles()
     {
+        await Task.Yield();
         // Test the private GetFilesToIndex method indirectly
         var csFiles = Directory.GetFiles(_testDirectory, "*.cs");
         _output.WriteLine($"C# files found by Directory.GetFiles: {csFiles.Length}");

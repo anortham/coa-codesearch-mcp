@@ -240,7 +240,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
     [Fact]
     public async Task MemoryPersistence_AcrossSessions()
     {
-        await Task.Yield();
+    await Task.Yield();
         // Test that memories persist across service restarts
         var memoryId = Guid.NewGuid().ToString();
         
