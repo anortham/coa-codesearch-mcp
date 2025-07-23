@@ -31,6 +31,12 @@ public static class TypeScriptToolRegistrations
         {
             RegisterTypeScriptFindReferences(registry, findRefsTool);
         }
+        
+        var renameTool = serviceProvider.GetService<TypeScriptRenameTool>();
+        if (renameTool != null)
+        {
+            RegisterTypeScriptRename(registry, renameTool);
+        }
     }
     
     private static void RegisterTypeScriptSearch(ToolRegistry registry, TypeScriptSearchTool tool)
@@ -143,11 +149,55 @@ public static class TypeScriptToolRegistrations
         public int? MaxResults { get; set; }
     }
     
+    private static void RegisterTypeScriptRename(ToolRegistry registry, TypeScriptRenameTool tool)
+    {
+        registry.RegisterTool<TypeScriptRenameParams>(
+            name: "typescript_rename_symbol",
+            description: "Rename TypeScript symbols with preview of all affected locations. Shows all occurrences that would be renamed. Note: The MCP server provides rename analysis but doesn't modify files directly.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    newName = new { type = "string", description = "New name for the symbol" },
+                    preview = new { type = "boolean", description = "Preview changes without applying them", @default = true }
+                },
+                required = new[] { "filePath", "line", "column", "newName" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.RenameSymbolAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    parameters.Line ?? throw new InvalidParametersException("line is required"),
+                    parameters.Column ?? throw new InvalidParametersException("column is required"),
+                    ValidateRequired(parameters.NewName, "newName"),
+                    parameters.Preview ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
     private class TypeScriptNavigationParams
     {
         public string? FilePath { get; set; }
         public int? Line { get; set; }
         public int? Column { get; set; }
         public bool? IncludeDeclaration { get; set; }
+    }
+    
+    private class TypeScriptRenameParams
+    {
+        public string? FilePath { get; set; }
+        public int? Line { get; set; }
+        public int? Column { get; set; }
+        public string? NewName { get; set; }
+        public bool? Preview { get; set; }
     }
 }
