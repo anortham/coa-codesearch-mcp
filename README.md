@@ -243,6 +243,7 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `backup_memories_to_sqlite` - Backup for version control
 
 ### TypeScript-specific
+- `search_typescript` - 🔍 Find TypeScript symbols FAST
 - `typescript_go_to_definition` - ⚡ Jump to TypeScript definitions instantly
 - `typescript_find_references` - Find all TypeScript usages with tsserver accuracy
 
@@ -296,11 +297,45 @@ The server creates a `.codesearch` directory in your workspace containing:
 - `index/` - Lucene search indexes
 - `project-memory/` - Shared architectural decisions and team knowledge
 - `local-memory/` - Personal work sessions and notes
-- `backups/` - Automatic backups of memory indexes
-- `memories.db` - SQLite backup for version control
+- `backups/` - SQLite backup storage (manual backups via `backup_memories_to_sqlite` tool)
+- `memories.db` - SQLite backup database (created by `backup_memories_to_sqlite` tool)
 - `logs/` - Debug logs (when enabled)
 
 Add `.codesearch/` to your `.gitignore` to exclude these files from version control.
+
+### Memory Backup System
+
+The memory system uses two storage mechanisms:
+
+**Lucene Indexes** (Primary Storage):
+- Located in `.codesearch/project-memory/` and `.codesearch/local-memory/`
+- High-performance full-text search indexes
+- Not suitable for version control (binary files)
+- Automatically maintained by the memory system
+
+**SQLite Backup** (`.codesearch/memories.db`):
+- Single portable database file created by `backup_memories_to_sqlite`
+- Perfect for version control and team sharing
+- Contains only essential memory data (no index structures)
+- Can be restored on any machine with `restore_memories_from_sqlite`
+
+Key features:
+- **Manual Backups**: Use `backup_memories_to_sqlite` to create/update the SQLite backup
+- **Incremental**: Only backs up memories modified since last backup
+- **Team Sharing**: By default, backs up only project-level memories (architectural decisions, patterns, etc.)
+- **Selective Restore**: Restored memories don't overwrite existing ones
+
+Example backup workflow:
+```bash
+# Create a backup before major changes
+backup_memories_to_sqlite
+
+# Include local memories in backup (work sessions, personal notes)
+backup_memories_to_sqlite --includeLocal true
+
+# Restore from backup on new machine
+restore_memories_from_sqlite
+```
 
 ## 🚀 Quick Start Guide
 

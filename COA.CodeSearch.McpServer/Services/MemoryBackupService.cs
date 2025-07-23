@@ -32,13 +32,13 @@ public class MemoryBackupService : IDisposable
         _luceneService = luceneService;
         _pathResolutionService = pathResolutionService;
         
-        // Get backup database path using PathResolutionService
-        var backupDir = _pathResolutionService.GetBackupPath();
+        // Use the root backup directory for the SQLite database
+        var backupRoot = Path.Combine(_pathResolutionService.GetBasePath(), PathConstants.BackupsDirectoryName);
         
         // Ensure backup directory exists
-        Directory.CreateDirectory(backupDir);
+        Directory.CreateDirectory(backupRoot);
         
-        _backupDbPath = Path.Combine(backupDir, "memories.db");
+        _backupDbPath = Path.Combine(backupRoot, "memories.db");
         
         // Ensure database exists with proper schema
         InitializeDatabase();

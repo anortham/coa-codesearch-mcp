@@ -1251,7 +1251,8 @@ public class FlexibleMemoryTools
                 }
                 
                 // Check for backup file
-                var backupFile = Path.Combine(_pathResolution.GetBackupPath(), "memories.db");
+                var backupRoot = Path.Combine(_pathResolution.GetBasePath(), PathConstants.BackupsDirectoryName);
+                var backupFile = Path.Combine(backupRoot, "memories.db");
                 if (File.Exists(backupFile))
                 {
                     var fileInfo = new FileInfo(backupFile);
