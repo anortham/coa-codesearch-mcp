@@ -2,17 +2,32 @@
 
 Complete documentation for all 51 tools available in the CodeSearch MCP Server.
 
+## 🚀 V2 Tools - AI-Optimized Features
+
+Many tools have V2 versions that provide AI-optimized responses with:
+- **Intelligent Summaries**: Automatic insights, patterns, and actionable recommendations
+- **Token Management**: Auto-switches to summary mode for large results (>5,000 tokens)
+- **Progressive Disclosure**: Request specific details without re-running operations
+- **Pattern Recognition**: Identifies trends, hotspots, and optimization opportunities
+- **Progress Tracking**: Real-time notifications for long-running operations
+
+V2 tools are marked with 🔍 in the documentation below.
+
 ## Table of Contents
 
 - [Search & Navigation (Core Tools)](#search--navigation-core-tools)
   - [go_to_definition](#go_to_definition)
-  - [find_references](#find_references)
+  - [find_references](#find_references) 🔍 V2
   - [search_symbols](#search_symbols)
+  - [search_symbols_v2](#search_symbols_v2) 🔍
   - [get_implementations](#get_implementations)
+  - [get_implementations_v2](#get_implementations_v2) 🔍
 - [Fast Search Tools (Lucene-powered)](#fast-search-tools-lucene-powered)
-  - [index_workspace](#index_workspace)
+  - [index_workspace](#index_workspace) 🏗️ Progress Tracking
   - [fast_text_search](#fast_text_search)
+  - [fast_text_search_v2](#fast_text_search_v2) 🔍
   - [fast_file_search](#fast_file_search)
+  - [fast_file_search_v2](#fast_file_search_v2) 🔍
   - [fast_recent_files](#fast_recent_files)
   - [fast_file_size_analysis](#fast_file_size_analysis)
   - [fast_similar_files](#fast_similar_files)
@@ -20,17 +35,20 @@ Complete documentation for all 51 tools available in the CodeSearch MCP Server.
 - [Code Analysis](#code-analysis)
   - [get_hover_info](#get_hover_info)
   - [get_document_symbols](#get_document_symbols)
-  - [get_diagnostics](#get_diagnostics)
+  - [get_diagnostics](#get_diagnostics) 🔍 V2
   - [get_call_hierarchy](#get_call_hierarchy)
-  - [rename_symbol](#rename_symbol)
-  - [batch_operations](#batch_operations)
+  - [get_call_hierarchy_v2](#get_call_hierarchy_v2) 🔍
+  - [rename_symbol](#rename_symbol) 🔍 V2
+  - [batch_operations](#batch_operations) 🏗️ Progress Tracking
+  - [batch_operations_v2](#batch_operations_v2) 🔍
   - [advanced_symbol_search](#advanced_symbol_search)
-  - [dependency_analysis](#dependency_analysis)
-  - [project_structure_analysis](#project_structure_analysis)
+  - [dependency_analysis](#dependency_analysis) 🔍 V2
+  - [project_structure_analysis](#project_structure_analysis) 🔍 V2
 - [Memory System](#memory-system)
   - [recall_context](#recall_context)
   - [flexible_store_memory](#flexible_store_memory)
   - [flexible_search_memories](#flexible_search_memories)
+  - [flexible_search_memories_v2](#flexible_search_memories_v2) 🔍
   - [flexible_update_memory](#flexible_update_memory)
   - [flexible_get_memory](#flexible_get_memory)
   - [flexible_store_working_memory](#flexible_store_working_memory)
@@ -101,9 +119,9 @@ go_to_definition --filePath "C:/project/UserService.cs" --line 25 --column 15
 - Returns multiple locations for partial classes
 - ~50ms response time for cached workspaces
 
-### find_references
+### find_references 🔍
 
-Find all references to a symbol. Supports both C# and TypeScript.
+Find all references to a symbol. Supports both C# and TypeScript. This is the V2 AI-optimized version with intelligent summaries and insights.
 
 **Parameters:**
 - `filePath` (string, required): The absolute path to the file
@@ -136,10 +154,40 @@ find_references --filePath "C:/project/Models/User.cs" --line 10 --column 14
 }
 ```
 
+**V2 Summary Mode Example:**
+```json
+{
+  "success": true,
+  "mode": "summary",
+  "autoModeSwitch": true,
+  "data": {
+    "totalReferences": 47,
+    "fileCount": 12,
+    "summary": "UserService is heavily referenced across the codebase",
+    "insights": [
+      "Primary usage in Controllers (65% of references)",
+      "Consider interface segregation - only 3 methods actually used"
+    ],
+    "distribution": {
+      "Controllers": 31,
+      "Services": 12,
+      "Tests": 4
+    },
+    "hotspots": [
+      {"file": "UserController.cs", "count": 15, "percentage": 31.9}
+    ],
+    "nextActions": [
+      "Review UserController.cs for potential service injection optimization"
+    ]
+  }
+}
+```
+
 **Tips:**
 - Auto-switches to summary mode if results exceed 5000 tokens
 - Use `responseMode: "summary"` for large codebases
 - Includes semantic understanding (not just text matching)
+- Provides actionable insights and recommendations
 
 ### search_symbols
 
@@ -1606,11 +1654,108 @@ get_version
 - All memory tools
 - All utility tools
 
+## 🔍 V2 Tools - Detailed Documentation
+
+### Overview
+V2 tools are AI-optimized versions that provide intelligent analysis beyond raw data. They automatically adapt their responses based on result size and complexity.
+
+### Available V2 Tools
+
+#### Search & Navigation V2
+- **find_references** - Already using V2 with AI summaries
+- **search_symbols_v2** - Enhanced symbol search with distribution analysis
+- **get_implementations_v2** - Implementation discovery with inheritance insights
+
+#### Fast Search V2
+- **fast_text_search_v2** - Text search with file distribution and pattern analysis
+- **fast_file_search_v2** - File search with directory hotspot detection
+- **flexible_search_memories_v2** - Memory search with trend analysis
+
+#### Code Analysis V2
+- **get_diagnostics** - Already using V2 with priority recommendations
+- **get_call_hierarchy_v2** - Call analysis with circular dependency detection
+- **rename_symbol** - Already using V2 with impact assessment
+- **batch_operations_v2** - Batch execution with operation pattern analysis
+- **dependency_analysis** - Already using V2 with architectural insights
+- **project_structure_analysis** - Already using V2 with complexity metrics
+
+### V2 Response Structure
+
+All V2 tools follow a consistent response pattern:
+
+```json
+{
+  "success": true,
+  "mode": "summary" | "full",
+  "autoModeSwitch": true,  // If auto-switched due to size
+  "data": {
+    // Core results
+    "totalCount": 150,
+    "summary": "High-level description",
+    
+    // AI Analysis
+    "insights": [
+      "Key finding 1",
+      "Optimization opportunity"
+    ],
+    "patterns": {
+      "trend": "description",
+      "anomaly": "unusual finding"
+    },
+    "hotspots": [
+      {"location": "file.cs", "metric": 45, "reason": "High concentration"}
+    ],
+    
+    // Actionable Recommendations
+    "nextActions": [
+      "Specific action with command",
+      "Follow-up analysis suggestion"
+    ],
+    "risks": ["Potential issue"],
+    
+    // Token Management
+    "estimatedTokens": 4500,
+    "detailRequestToken": "abc123"  // For progressive disclosure
+  }
+}
+```
+
+### Progressive Disclosure
+
+Request specific details without re-running operations:
+
+```json
+{
+  "detailRequest": {
+    "detailRequestToken": "abc123",
+    "detailLevel": "hotspots" | "full" | "category"
+  }
+}
+```
+
+### Progress Tracking
+
+Tools with 🏗️ emit progress notifications:
+- **index_workspace** - Reports indexing progress
+- **batch_operations** - Progress for each operation
+
+Progress notification format:
+```json
+{
+  "progressToken": "operation-id",
+  "progress": 50,
+  "total": 100,
+  "message": "Processing file 50/100"
+}
+```
+
 ## Best Practices
 
 1. **Start with context**: Always use `recall_context` at session start
 2. **Index before searching**: Run `index_workspace` for fast searches
-3. **Store decisions**: Use memory system to track important decisions
-4. **Use appropriate tools**: C# tools for C#, TypeScript tools for TS
-5. **Batch when possible**: Use batch_operations for multiple queries
-6. **Preview destructive ops**: Always preview renames before applying
+3. **Use V2 tools**: They provide better insights for AI assistants
+4. **Store decisions**: Use memory system to track important decisions
+5. **Leverage summaries**: Let V2 tools auto-summarize large results
+6. **Follow recommendations**: V2 tools provide actionable next steps
+7. **Batch when possible**: Use batch_operations_v2 for multiple queries
+8. **Preview destructive ops**: Always preview renames before applying
