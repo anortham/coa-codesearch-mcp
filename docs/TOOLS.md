@@ -1,6 +1,6 @@
 # CodeSearch MCP Server - Tool Reference
 
-Complete documentation for all 51 tools available in the CodeSearch MCP Server.
+Complete documentation for all 52 tools available in the CodeSearch MCP Server.
 
 ## 🚀 V2 Tools - AI-Optimized Features
 
@@ -77,6 +77,7 @@ V2 tools are marked with 🔍 in the documentation below.
   - [search_typescript](#search_typescript)
   - [typescript_go_to_definition](#typescript_go_to_definition)
   - [typescript_find_references](#typescript_find_references)
+  - [typescript_rename_symbol](#typescript_rename_symbol)
 - [Utilities](#utilities)
   - [set_logging](#set_logging)
   - [get_version](#get_version)
@@ -1529,6 +1530,67 @@ Find all TypeScript references using tsserver.
 typescript_find_references --filePath "C:/project/models/User.ts" --line 5 --column 10
 ```
 
+### typescript_rename_symbol
+
+Rename TypeScript symbols with preview of all affected locations.
+
+**Parameters:**
+- `filePath` (string, required): Path to source file  
+- `line` (integer, required): Line number (1-based)
+- `column` (integer, required): Column number (1-based)
+- `newName` (string, required): New name for the symbol
+- `preview` (boolean, optional): Preview mode (default: true)
+
+**Example:**
+```
+typescript_rename_symbol --filePath "C:/project/models/User.ts" --line 10 --column 5 --newName "Customer"
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "preview": true,
+  "symbol": {
+    "name": "User",
+    "kind": "interface",
+    "fullName": "User"
+  },
+  "newName": "Customer",
+  "locations": [
+    {
+      "filePath": "C:/project/models/User.ts",
+      "line": 10,
+      "column": 5
+    }
+  ],
+  "fileChanges": [
+    {
+      "filePath": "C:/project/models/User.ts",
+      "changes": [
+        {
+          "line": 10,
+          "column": 5,
+          "oldText": "User",
+          "newText": "Customer"
+        }
+      ]
+    }
+  ],
+  "metadata": {
+    "totalChanges": 15,
+    "filesAffected": 5,
+    "language": "typescript"
+  }
+}
+```
+
+**Tips:**
+- Validates TypeScript identifiers
+- Shows all locations that would be renamed
+- Preview mode doesn't modify files
+- Uses tsserver for accurate rename analysis
+
 ## Utilities
 
 ### set_logging
@@ -1645,6 +1707,7 @@ get_version
 - search_typescript
 - typescript_go_to_definition
 - typescript_find_references
+- typescript_rename_symbol
 
 ### Both C# and TypeScript
 - go_to_definition
