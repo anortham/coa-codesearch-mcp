@@ -256,94 +256,79 @@ public class IndexWorkspaceTool
         
         try
         {
-            // Limit search to first 2 levels to avoid deep recursion in large repos
-            var projectFiles = GetFilesWithDepthLimit(workspacePath, "*.csproj", 2).Take(10).ToList();
-            var packageJsonFiles = GetFilesWithDepthLimit(workspacePath, "package.json", 2).Take(5).ToList();
-            
-            // Detect .NET project types
-            foreach (var projectFile in projectFiles)
-        {
-            try
+            // Check for .csproj files in root and immediate subdirectories only
+            var csprojFiles = Directory.GetFiles(workspacePath, "*.csproj", SearchOption.TopDirectoryOnly);
+            if (!csprojFiles.Any())
             {
-                var content = File.ReadAllText(projectFile);
-                
-                if (content.Contains("Microsoft.NET.Sdk.Web"))
-                {
-                    primaryExtensions.Add(".cs");
+                // Check one level down for common project structures
+                var subdirs = Directory.GetDirectories(workspacePath)
+                    .Where(d => !Path.GetFileName(d).StartsWith("."))
+                    .Take(5); // Limit subdirectories checked
                     
-                    if (content.Contains("Microsoft.AspNetCore.Components.WebAssembly") || 
-                        content.Contains("Blazor"))
-                    {
-                        projectTypes.Add("Blazor WebAssembly");
-                        primaryExtensions.Add(".razor");
-                        tips.Add("Use filePattern: '**/*.{cs,razor}' to search both C# and Blazor component files");
-                    }
-                    else if (content.Contains("Microsoft.AspNetCore.Components"))
-                    {
-                        projectTypes.Add("Blazor Server");
-                        primaryExtensions.Add(".razor");
-                        tips.Add("Use filePattern: '**/*.{cs,razor}' to search both C# and Blazor component files");
-                    }
-                    else
-                    {
-                        projectTypes.Add("ASP.NET Core");
-                        primaryExtensions.Add(".cshtml");
-                        tips.Add("Use filePattern: '**/*.{cs,cshtml}' to search both C# and Razor view files");
-                    }
-                }
-                else if (content.Contains("Microsoft.NET.Sdk"))
+                foreach (var subdir in subdirs)
                 {
-                    projectTypes.Add(".NET");
-                    primaryExtensions.Add(".cs");
-                }
-                
-                // Check for common packages
-                if (content.Contains("PackageReference") && content.Contains("Wpf"))
-                {
-                    projectTypes.Add("WPF");
-                    primaryExtensions.Add(".xaml");
-                    tips.Add("Use filePattern: '**/*.{cs,xaml}' to search both C# and XAML files");
+                    csprojFiles = Directory.GetFiles(subdir, "*.csproj", SearchOption.TopDirectoryOnly);
+                    if (csprojFiles.Any()) break;
                 }
             }
-            catch
+            
+            // Quick .NET detection - just check first project file
+            if (csprojFiles.Any())
             {
-                // Ignore errors reading project files
+                projectTypes.Add(".NET");
+                primaryExtensions.Add(".cs");
+                
+                try
+                {
+                    var content = File.ReadAllText(csprojFiles.First());
+                    if (content.Contains("Microsoft.NET.Sdk.Web"))
+                    {
+                        projectTypes.Add("ASP.NET");
+                        primaryExtensions.Add(".cshtml");
+                    }
+                    if (content.Contains("Microsoft.NET.Sdk.BlazorWebAssembly") || content.Contains("<RazorLangVersion>"))
+                    {
+                        projectTypes.Add("Blazor");
+                        primaryExtensions.Add(".razor");
+                        tips.Add("For Blazor: use extensions .cs,.razor to search both code and components");
+                    }
+                }
+                catch { /* Ignore read errors */ }
             }
-        }
-        
-            // Detect JavaScript/TypeScript projects
-            foreach (var packageJson in packageJsonFiles)
+            
+            // Check for package.json in root only
+            var packageJsonPath = Path.Combine(workspacePath, "package.json");
+            if (File.Exists(packageJsonPath))
             {
                 try
                 {
-                    var content = File.ReadAllText(packageJson);
+                    var content = File.ReadAllText(packageJsonPath);
+                    var deps = content.ToLower();
                     
-                    if (content.Contains("@angular/"))
+                    if (deps.Contains("@angular/"))
                     {
                         projectTypes.Add("Angular");
-                        foreach (var ext in new[] { ".ts", ".html", ".scss" })
-                            primaryExtensions.Add(ext);
-                        tips.Add("Use filePattern: '**/*.{ts,html,scss}' for Angular components");
+                        primaryExtensions.Add(".ts");
+                        primaryExtensions.Add(".html");
                     }
-                    else if (content.Contains("react"))
+                    else if (deps.Contains("\"react\""))
                     {
                         projectTypes.Add("React");
-                        foreach (var ext in new[] { ".ts", ".tsx", ".js", ".jsx" })
-                            primaryExtensions.Add(ext);
-                        tips.Add("Use filePattern: '**/*.{ts,tsx,js,jsx}' for React components");
+                        primaryExtensions.Add(".tsx");
+                        primaryExtensions.Add(".jsx");
                     }
-                    else if (content.Contains("vue"))
+                    else if (deps.Contains("\"vue\""))
                     {
                         projectTypes.Add("Vue");
-                        foreach (var ext in new[] { ".vue", ".ts", ".js" })
-                            primaryExtensions.Add(ext);
-                        tips.Add("Use filePattern: '**/*.{vue,ts,js}' for Vue components");
+                        primaryExtensions.Add(".vue");
+                    }
+                    else
+                    {
+                        projectTypes.Add("Node.js");
+                        primaryExtensions.Add(".js");
                     }
                 }
-                catch
-                {
-                    // Ignore errors
-                }
+                catch { /* Ignore read errors */ }
             }
         }
         catch (Exception ex)
@@ -395,65 +380,6 @@ public class IndexWorkspaceTool
         
         return indexes;
     }
-    
-    private IEnumerable<string> GetFilesWithDepthLimit(string rootPath, string pattern, int maxDepth)
-    {
-        var queue = new Queue<(string path, int depth)>();
-        queue.Enqueue((rootPath, 0));
-        
-        while (queue.Count > 0)
-        {
-            var (currentPath, depth) = queue.Dequeue();
-            
-            if (depth > maxDepth)
-                continue;
-                
-            // Yield matching files in current directory
-            string[] files;
-            try
-            {
-                files = Directory.GetFiles(currentPath, pattern);
-            }
-            catch
-            {
-                continue; // Skip directories we can't access
-            }
-            
-            foreach (var file in files)
-                yield return file;
-                
-            // Add subdirectories to queue if not at max depth
-            if (depth < maxDepth)
-            {
-                string[] subdirs;
-                try
-                {
-                    subdirs = Directory.GetDirectories(currentPath);
-                }
-                catch
-                {
-                    continue; // Skip directories we can't access
-                }
-                
-                foreach (var subdir in subdirs)
-                {
-                    var dirName = Path.GetFileName(subdir);
-                    // Skip common directories that shouldn't contain project files
-                    if (!string.IsNullOrEmpty(dirName) && 
-                        (dirName.StartsWith(".") || 
-                         dirName.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
-                         dirName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
-                         dirName.Equals("obj", StringComparison.OrdinalIgnoreCase)))
-                    {
-                        continue;
-                    }
-                    
-                    queue.Enqueue((subdir, depth + 1));
-                }
-            }
-        }
-    }
-    
     private class WorkspaceMetadata
     {
         public Dictionary<string, WorkspaceIndexInfo> Indexes { get; set; } = new();
