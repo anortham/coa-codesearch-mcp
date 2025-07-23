@@ -318,6 +318,23 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             insights.Add($"Results filtered by pattern: {filePattern}");
         }
 
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (totalHits > 0)
+            {
+                insights.Add($"Found {totalHits} matches for '{query}' in {filesWithMatches} files");
+                if (extensionGroups.Any())
+                {
+                    insights.Add($"Search matched files of type: {string.Join(", ", extensionGroups.Select(g => g.Key))}");
+                }
+            }
+            else
+            {
+                insights.Add($"No matches found for '{query}'");
+            }
+        }
+
         return insights;
     }
 
@@ -411,6 +428,31 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 tokens = EstimateFullResponseTokens(results),
                 priority = "available"
             });
+        }
+
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (totalHits > 0)
+            {
+                actions.Add(new
+                {
+                    id = "refine_search",
+                    cmd = new { query = query + "*", searchType = "wildcard" },
+                    tokens = 2000,
+                    priority = "recommended"
+                });
+            }
+            else
+            {
+                actions.Add(new
+                {
+                    id = "try_broader_search",
+                    cmd = new { query = "*" + query + "*", searchType = "wildcard" },
+                    tokens = 3000,
+                    priority = "recommended"
+                });
+            }
         }
 
         return actions;

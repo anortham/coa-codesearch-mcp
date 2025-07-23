@@ -42,10 +42,7 @@ public class RenameSymbolV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        // Print it
-        Console.WriteLine("=== RENAME PREVIEW RESULT ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -87,7 +84,7 @@ public class RenameSymbolV2Test : TestBase
             
         if (applyAction.ValueKind != JsonValueKind.Undefined)
         {
-            Console.WriteLine("Found apply action in actions array");
+            // Verify apply action exists
             applyAction.GetProperty("priority").GetString().Should().NotBeEmpty();
         }
     }

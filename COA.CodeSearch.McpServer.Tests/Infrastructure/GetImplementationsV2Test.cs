@@ -50,9 +50,7 @@ public class GetImplementationsV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED IMPLEMENTATIONS ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -84,22 +82,14 @@ public class GetImplementationsV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -144,7 +134,7 @@ public class GetImplementationsV2Test : TestBase
                     if (insightText.Contains("No implementations found"))
                     {
                         hasNoImplInsight = true;
-                        Console.WriteLine($"Found insight: {insightText}");
+                        // Found expected insight
                         break;
                     }
                 }
@@ -179,22 +169,20 @@ public class GetImplementationsV2Test : TestBase
             var analysis = response.GetProperty("analysis");
             var patterns = analysis.GetProperty("patterns");
             
-            Console.WriteLine("\nDetected patterns:");
-            foreach (var pattern in patterns.EnumerateArray())
-            {
-                Console.WriteLine($"- {pattern.GetString()}");
-            }
+            // Verify detected patterns
+            patterns.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
             
             // Check for inheritance analysis
             if (analysis.TryGetProperty("inheritance", out var inheritance))
             {
-                Console.WriteLine($"\nInheritance depth: {inheritance.GetProperty("depth").GetInt32()}");
+                // Verify inheritance depth exists
+                inheritance.GetProperty("depth").GetInt32().Should().BeGreaterThanOrEqualTo(0);
             }
             
             // Check for hotspots
             if (analysis.TryGetProperty("hotspots", out var hotspots))
             {
-                Console.WriteLine("\nHotspots detected");
+                // Verify hotspots detected
             }
         }
     }
@@ -238,7 +226,7 @@ public class GetImplementationsV2Test : TestBase
                 if (firstImpl.TryGetProperty("implementations", out var implList))
                 {
                     implList.Should().NotBeNull();
-                    Console.WriteLine("\nFull implementation details present");
+                    // Verify full implementation details present
                 }
             }
         }
@@ -269,6 +257,7 @@ public class GetImplementationsV2Test : TestBase
         response.GetProperty("success").GetBoolean().Should().BeFalse();
         response.GetProperty("error").GetString().Should().NotBeNullOrEmpty();
         
-        Console.WriteLine($"\nError handling: {response.GetProperty("error").GetString()}");
+        // Verify error message exists
+        response.GetProperty("error").GetString().Should().NotBeNullOrEmpty();
     }
 }

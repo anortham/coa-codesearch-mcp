@@ -24,6 +24,8 @@ public class FlexibleMemorySearchV2Test : TestBase
             ServiceProvider.GetRequiredService<ILogger<FlexibleMemorySearchToolV2>>(),
             _memoryService,
             ServiceProvider.GetRequiredService<IConfiguration>(),
+            ServiceProvider.GetRequiredService<IQueryExpansionService>(),
+            ServiceProvider.GetRequiredService<IContextAwarenessService>(),
             ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
@@ -50,9 +52,7 @@ public class FlexibleMemorySearchV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
 
-        Console.WriteLine("=== AI-OPTIMIZED MEMORY SEARCH ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
 
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -83,22 +83,14 @@ public class FlexibleMemorySearchV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
 
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
 
         // Check meta
         var meta = response.GetProperty("meta");
@@ -164,7 +156,7 @@ public class FlexibleMemorySearchV2Test : TestBase
             if (patternText.Contains("technical debt"))
             {
                 foundTechDebtPattern = true;
-                Console.WriteLine($"Found pattern: {patternText}");
+                // Found expected pattern
                 break;
             }
         }
@@ -245,7 +237,9 @@ public class FlexibleMemorySearchV2Test : TestBase
             firstMemory.GetProperty("type").GetString().Should().NotBeNullOrEmpty();
             firstMemory.GetProperty("content").GetString().Should().NotBeNullOrEmpty();
             
-            Console.WriteLine($"\nFirst memory: {firstMemory.GetProperty("type").GetString()} - {firstMemory.GetProperty("content").GetString()}");
+            // Verify first memory structure
+            firstMemory.GetProperty("type").GetString().Should().NotBeNullOrEmpty();
+            firstMemory.GetProperty("content").GetString().Should().NotBeNullOrEmpty();
         }
     }
 

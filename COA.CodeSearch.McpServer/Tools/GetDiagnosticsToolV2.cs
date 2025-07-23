@@ -344,6 +344,31 @@ public class GetDiagnosticsToolV2 : ClaudeOptimizedToolBase
                 priority = "available"
             });
         }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (data.Diagnostics.Count > 0)
+            {
+                actions.Add(new 
+                { 
+                    id = "analyze_issues", 
+                    cmd = new { detailLevel = "summary" }, 
+                    tokens = 1500,
+                    priority = "available"
+                });
+            }
+            else
+            {
+                actions.Add(new 
+                { 
+                    id = "code_health_check", 
+                    cmd = new { includeInfo = true }, 
+                    tokens = 1000,
+                    priority = "available"
+                });
+            }
+        }
 
         return new
         {
@@ -442,6 +467,19 @@ public class GetDiagnosticsToolV2 : ClaudeOptimizedToolBase
         if (nullabilityIssues > 20)
         {
             insights.Add($"{nullabilityIssues} nullability warnings - enable nullable reference types");
+        }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (data.Diagnostics.Count == 0)
+            {
+                insights.Add("No diagnostics found - code appears clean");
+            }
+            else
+            {
+                insights.Add($"Found {data.Diagnostics.Count} diagnostic(s) in {data.GroupedByFile.Count} file(s)");
+            }
         }
         
         return insights;

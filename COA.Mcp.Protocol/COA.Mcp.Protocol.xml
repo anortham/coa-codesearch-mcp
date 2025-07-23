@@ -161,6 +161,114 @@
             </summary>
             <value>Can be an object, array, or null if no parameters are needed.</value>
         </member>
+        <member name="T:COA.Mcp.Protocol.JsonRpcErrorCodes">
+            <summary>
+            Defines standard JSON-RPC 2.0 error codes and MCP-specific error codes.
+            This replaces magic numbers with named constants for better code readability and maintenance.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ParseError">
+            <summary>
+            Invalid JSON was received by the server.
+            An error occurred on the server while parsing the JSON text.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.InvalidRequest">
+            <summary>
+            The JSON sent is not a valid Request object.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.MethodNotFound">
+            <summary>
+            The method does not exist / is not available.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.InvalidParams">
+            <summary>
+            Invalid method parameter(s).
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.InternalError">
+            <summary>
+            Internal JSON-RPC error.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ServerError">
+            <summary>
+            Generic server error. Reserved for implementation-defined server-errors.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ResourceNotFound">
+            <summary>
+            The requested resource could not be found.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ResourceAccessDenied">
+            <summary>
+            Access to the requested resource was denied.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.OperationTimeout">
+            <summary>
+            The requested operation timed out.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ServiceUnavailable">
+            <summary>
+            The server is temporarily unavailable.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.OperationCancelled">
+            <summary>
+            The operation was cancelled by the client or server.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ToolNotFound">
+            <summary>
+            A tool with the requested name was not found.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.ToolExecutionError">
+            <summary>
+            The tool failed to execute due to invalid arguments or runtime error.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.WorkspaceNotFound">
+            <summary>
+            The requested workspace could not be accessed or does not exist.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.IndexNotAvailable">
+            <summary>
+            The workspace index is not available or corrupted.
+            </summary>
+        </member>
+        <member name="F:COA.Mcp.Protocol.JsonRpcErrorCodes.MemoryOperationFailed">
+            <summary>
+            The requested memory operation failed.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.JsonRpcErrorCodes.IsServerError(System.Int32)">
+            <summary>
+            Determines if the given error code is in the server error range (-32000 to -32099).
+            </summary>
+            <param name="errorCode">The error code to check.</param>
+            <returns>True if the error code is a server error, false otherwise.</returns>
+        </member>
+        <member name="M:COA.Mcp.Protocol.JsonRpcErrorCodes.IsMcpError(System.Int32)">
+            <summary>
+            Determines if the given error code is an MCP-specific error (-32100 to -32199).
+            </summary>
+            <param name="errorCode">The error code to check.</param>
+            <returns>True if the error code is MCP-specific, false otherwise.</returns>
+        </member>
+        <member name="M:COA.Mcp.Protocol.JsonRpcErrorCodes.GetStandardErrorDescription(System.Int32)">
+            <summary>
+            Gets a human-readable description for standard JSON-RPC error codes.
+            </summary>
+            <param name="errorCode">The error code.</param>
+            <returns>A description of the error, or null if the code is not recognized.</returns>
+        </member>
         <member name="T:COA.Mcp.Protocol.ServerCapabilities">
             <summary>
             Defines the capabilities supported by an MCP server.
@@ -453,6 +561,225 @@
             <summary>
             Gets or sets the list of available prompts.
             </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.ProgressNotification">
+            <summary>
+            Notification sent to inform clients about the progress of long-running operations.
+            This extends JsonRpcNotification and provides structured progress information for
+            operations like workspace indexing, batch operations, and large file analysis.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ProgressNotification.ProgressToken">
+            <summary>
+            Gets or sets the progress token that identifies this specific operation.
+            This token is typically provided when starting the operation and should be
+            used consistently across all progress updates for that operation.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ProgressNotification.Progress">
+            <summary>
+            Gets or sets the current progress value.
+            This represents the number of completed items/steps in the operation.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ProgressNotification.Total">
+            <summary>
+            Gets or sets the total number of items/steps for this operation.
+            When null, indicates that the total is unknown (indeterminate progress).
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ProgressNotification.Message">
+            <summary>
+            Gets or sets an optional descriptive message about the current progress step.
+            </summary>
+            <example>
+            "Indexing file: UserService.cs"
+            "Processing batch operation 5 of 12"
+            "Analyzing project structure..."
+            </example>
+        </member>
+        <member name="M:COA.Mcp.Protocol.ProgressNotification.#ctor">
+            <summary>
+            Initializes a new instance of the ProgressNotification class.
+            Sets the method to "notifications/progress" as per MCP protocol.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.ProgressNotification.#ctor(System.String,System.Int32,System.Nullable{System.Int32},System.String)">
+            <summary>
+            Initializes a new instance of the ProgressNotification class with the specified parameters.
+            </summary>
+            <param name="progressToken">The progress token that identifies this operation.</param>
+            <param name="progress">The current progress value.</param>
+            <param name="total">The total number of items/steps (optional).</param>
+            <param name="message">An optional descriptive message.</param>
+        </member>
+        <member name="T:COA.Mcp.Protocol.TypedJsonRpcRequest`1">
+            <summary>
+            Generic base class for strongly-typed JSON-RPC requests.
+            This eliminates the need for object parameters and provides compile-time type safety.
+            </summary>
+            <typeparam name="TParams">The type of the request parameters.</typeparam>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcRequest`1.Id">
+            <summary>
+            Gets or sets the request identifier. Used to correlate requests with responses.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcRequest`1.Method">
+            <summary>
+            Gets or sets the name of the method to be invoked.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcRequest`1.Params">
+            <summary>
+            Gets or sets the strongly-typed parameters for the method call.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcRequest`1.#ctor">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcRequest class.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcRequest`1.#ctor(System.Object,System.String,`0)">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcRequest class with the specified parameters.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="method">The method name.</param>
+            <param name="parameters">The strongly-typed parameters.</param>
+        </member>
+        <member name="T:COA.Mcp.Protocol.TypedJsonRpcResponse`1">
+            <summary>
+            Generic base class for strongly-typed JSON-RPC responses.
+            This provides compile-time type safety for response data.
+            </summary>
+            <typeparam name="TResult">The type of the response result.</typeparam>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcResponse`1.Id">
+            <summary>
+            Gets or sets the request identifier that this response correlates to.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcResponse`1.Result">
+            <summary>
+            Gets or sets the strongly-typed result of the method call.
+            This property is mutually exclusive with Error.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcResponse`1.Error">
+            <summary>
+            Gets or sets the error information if the method call failed.
+            This property is mutually exclusive with Result.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcResponse`1.IsError">
+            <summary>
+            Gets a value indicating whether this response represents an error.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcResponse`1.#ctor">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcResponse class.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcResponse`1.#ctor(System.Object,`0)">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcResponse class with a successful result.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="result">The result data.</param>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcResponse`1.#ctor(System.Object,COA.Mcp.Protocol.JsonRpcError)">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcResponse class with an error.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="error">The error information.</param>
+        </member>
+        <member name="T:COA.Mcp.Protocol.TypedJsonRpcNotification`1">
+            <summary>
+            Generic base class for strongly-typed JSON-RPC notifications.
+            Notifications do not expect a response from the receiver.
+            </summary>
+            <typeparam name="TParams">The type of the notification parameters.</typeparam>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcNotification`1.Method">
+            <summary>
+            Gets or sets the name of the method to be invoked.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedJsonRpcNotification`1.Params">
+            <summary>
+            Gets or sets the strongly-typed parameters for the method call.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcNotification`1.#ctor">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcNotification class.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedJsonRpcNotification`1.#ctor(System.String,`0)">
+            <summary>
+            Initializes a new instance of the TypedJsonRpcNotification class with the specified parameters.
+            </summary>
+            <param name="method">The method name.</param>
+            <param name="parameters">The strongly-typed parameters.</param>
+        </member>
+        <member name="T:COA.Mcp.Protocol.TypedToolRequest`1">
+            <summary>
+            Generic base class for MCP tool requests with strongly-typed parameters.
+            This provides a foundation for building type-safe tool implementations.
+            </summary>
+            <typeparam name="TParams">The type of the tool parameters.</typeparam>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedToolRequest`1.ToolName">
+            <summary>
+            Gets the name of the tool being invoked.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedToolRequest`1.#ctor">
+            <summary>
+            Initializes a new instance of the TypedToolRequest class.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedToolRequest`1.#ctor(System.Object,`0)">
+            <summary>
+            Initializes a new instance of the TypedToolRequest class with the specified parameters.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="parameters">The strongly-typed tool parameters.</param>
+        </member>
+        <member name="T:COA.Mcp.Protocol.TypedToolResponse`1">
+            <summary>
+            Generic base class for MCP tool responses with strongly-typed results.
+            This provides compile-time type safety for tool result data.
+            </summary>
+            <typeparam name="TResult">The type of the tool result.</typeparam>
+        </member>
+        <member name="P:COA.Mcp.Protocol.TypedToolResponse`1.ToolResult">
+            <summary>
+            Gets or sets the strongly-typed tool result data.
+            This is a convenience property that wraps the Result.Content.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedToolResponse`1.#ctor">
+            <summary>
+            Initializes a new instance of the TypedToolResponse class.
+            </summary>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedToolResponse`1.#ctor(System.Object,`0)">
+            <summary>
+            Initializes a new instance of the TypedToolResponse class with a successful result.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="toolResult">The strongly-typed tool result.</param>
+        </member>
+        <member name="M:COA.Mcp.Protocol.TypedToolResponse`1.#ctor(System.Object,COA.Mcp.Protocol.JsonRpcError)">
+            <summary>
+            Initializes a new instance of the TypedToolResponse class with an error.
+            </summary>
+            <param name="id">The request identifier.</param>
+            <param name="error">The error information.</param>
         </member>
     </members>
 </doc>

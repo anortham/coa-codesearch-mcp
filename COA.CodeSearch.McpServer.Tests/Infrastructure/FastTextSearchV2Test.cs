@@ -61,9 +61,7 @@ public class FastTextSearchV2Test : LuceneTestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED TEXT SEARCH ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -100,22 +98,14 @@ public class FastTextSearchV2Test : LuceneTestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -146,7 +136,7 @@ public class FastTextSearchV2Test : LuceneTestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== FILTERED BY EXTENSION ===");
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -165,10 +155,9 @@ public class FastTextSearchV2Test : LuceneTestBase
         var distribution = response.GetProperty("distribution");
         if (distribution.TryGetProperty("byExtension", out var byExt))
         {
-            Console.WriteLine("\nExtension distribution:");
+            // Verify extension distribution
             foreach (var ext in byExt.EnumerateObject())
             {
-                Console.WriteLine($"- {ext.Name}: {ext.Value.GetProperty("count").GetInt32()} matches");
                 // Should only be .cs files
                 ext.Name.Should().Be(".cs");
             }
@@ -204,20 +193,13 @@ public class FastTextSearchV2Test : LuceneTestBase
         
         // Check actions include context-related suggestions
         var actions = response.GetProperty("actions");
-        Console.WriteLine("\nContext actions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            Console.WriteLine($"- {id}");
-        }
+        // Verify context actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check insights mention context
         var insights = response.GetProperty("insights");
-        Console.WriteLine("\nContext insights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify context insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -256,11 +238,8 @@ public class FastTextSearchV2Test : LuceneTestBase
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThan(0);
         
-        Console.WriteLine("\nNo results insights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify no results insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // First insight should mention no matches found
         insights[0].GetString().Should().Contain("No matches found");

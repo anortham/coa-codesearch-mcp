@@ -80,6 +80,10 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         
+        // Memory intelligence services
+        services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
+        services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
+        
         // Add tools required by BatchOperationsTool
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();

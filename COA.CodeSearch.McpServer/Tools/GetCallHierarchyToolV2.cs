@@ -350,6 +350,12 @@ public class GetCallHierarchyToolV2 : ClaudeOptimizedToolBase
         {
             insights.Add($"Recursive patterns in: {string.Join(", ", analysis.RecursivePatterns.Take(3))}");
         }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            insights.Add($"Call hierarchy analysis complete for {symbol.Name} - no significant patterns detected");
+        }
 
         return insights;
     }
@@ -429,6 +435,18 @@ public class GetCallHierarchyToolV2 : ClaudeOptimizedToolBase
                 cmd = new { pattern = $"*{GetMethodPattern(symbol)}*", findUnused = true },
                 tokens = 1500,
                 priority = "normal"
+            });
+        }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            actions.Add(new
+            {
+                id = "expand_analysis",
+                cmd = new { direction = "both", maxDepth = 3 },
+                tokens = 2000,
+                priority = "available"
             });
         }
 

@@ -189,6 +189,11 @@ public static class FlexibleMemoryToolRegistrations
                     includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false },
                     boostRecent = new { type = "boolean", description = "Boost recently created memories", @default = false },
                     boostFrequent = new { type = "boolean", description = "Boost frequently accessed memories", @default = false },
+                    // New intelligent features
+                    enableQueryExpansion = new { type = "boolean", description = "Enable automatic query expansion with synonyms and related terms", @default = true },
+                    enableContextAwareness = new { type = "boolean", description = "Enable context-aware memory boosting based on current work", @default = true },
+                    currentFile = new { type = "string", description = "Path to current file being worked on (for context awareness)" },
+                    recentFiles = new { type = "array", items = new { type = "string" }, description = "Recently accessed files (for context awareness)" },
                     mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
                     detailRequest = new 
                     { 
@@ -216,6 +221,11 @@ public static class FlexibleMemoryToolRegistrations
                     parameters?.IncludeArchived ?? false,
                     parameters?.BoostRecent ?? false,
                     parameters?.BoostFrequent ?? false,
+                    // New intelligent features
+                    parameters?.EnableQueryExpansion ?? true,
+                    parameters?.EnableContextAwareness ?? true,
+                    parameters?.CurrentFile,
+                    parameters?.RecentFiles,
                     Enum.TryParse<ResponseMode>(parameters?.Mode, true, out var mode) ? mode : ResponseMode.Summary,
                     parameters?.DetailRequest,
                     ct);
@@ -737,6 +747,11 @@ public class SearchMemoriesV2Params
     public bool? IncludeArchived { get; set; }
     public bool? BoostRecent { get; set; }
     public bool? BoostFrequent { get; set; }
+    // New intelligent features
+    public bool? EnableQueryExpansion { get; set; } = true;
+    public bool? EnableContextAwareness { get; set; } = true;
+    public string? CurrentFile { get; set; }
+    public string[]? RecentFiles { get; set; }
     public string? Mode { get; set; } = "summary";
     public DetailRequest? DetailRequest { get; set; }
 }

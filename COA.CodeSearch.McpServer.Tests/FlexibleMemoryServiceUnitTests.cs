@@ -388,8 +388,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         var oldDate = DateTime.UtcNow.AddDays(-35);
         var recentDate = DateTime.UtcNow.AddDays(-5);
         
-        Console.WriteLine($"Old date: {oldDate} (Ticks: {oldDate.Ticks})");
-        Console.WriteLine($"Recent date: {recentDate} (Ticks: {recentDate.Ticks})");
+        // Test setup with old and recent dates
         
         // Test Int64Field approach (what we're using)
         var doc1 = new Lucene.Net.Documents.Document();
@@ -409,7 +408,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
         
         // Test 1: Find old documents (should find doc with oldDate)
         var cutoffDate = DateTime.UtcNow.AddDays(-30);
-        Console.WriteLine($"Cutoff date: {cutoffDate} (Ticks: {cutoffDate.Ticks})");
+        // Console.WriteLine($"Cutoff date: {cutoffDate} (Ticks: {cutoffDate.Ticks})");
         
         // Test NumericRangeQuery with default precision step
         var queryOldDefault = Lucene.Net.Search.NumericRangeQuery.NewInt64Range(
@@ -427,15 +426,15 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
             true, true);
         var resultsOldStep8 = searcher.Search(queryOldStep8, 10);
         
-        Console.WriteLine($"Default precision NumericRangeQuery results: {resultsOldDefault.TotalHits} documents");
-        Console.WriteLine($"Precision step 8 NumericRangeQuery results: {resultsOldStep8.TotalHits} documents");
+        // Console.WriteLine($"Default precision NumericRangeQuery results: {resultsOldDefault.TotalHits} documents");
+        // Console.WriteLine($"Precision step 8 NumericRangeQuery results: {resultsOldStep8.TotalHits} documents");
         
         if (resultsOldStep8.TotalHits > 0)
         {
             foreach (var scoreDoc in resultsOldStep8.ScoreDocs)
             {
                 var doc = searcher.Doc(scoreDoc.Doc);
-                Console.WriteLine($"  Found: {doc.Get("id")}");
+                // Console.WriteLine($"  Found: {doc.Get("id")}");
             }
         }
         
@@ -447,13 +446,13 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
             true, true);
         var resultsRecentStep8 = searcher.Search(queryRecentStep8, 10);
         
-        Console.WriteLine($"Recent precision step 8 results: {resultsRecentStep8.TotalHits} documents");
+        // Console.WriteLine($"Recent precision step 8 results: {resultsRecentStep8.TotalHits} documents");
         if (resultsRecentStep8.TotalHits > 0)
         {
             foreach (var scoreDoc in resultsRecentStep8.ScoreDocs)
             {
                 var doc = searcher.Doc(scoreDoc.Doc);
-                Console.WriteLine($"  Found: {doc.Get("id")}");
+                // Console.WriteLine($"  Found: {doc.Get("id")}");
             }
         }
         
@@ -465,16 +464,16 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
             true, true);
         var resultsAll = searcher.Search(queryAll, 10);
         
-        Console.WriteLine($"All documents with step 8: {resultsAll.TotalHits} documents");
+        // Console.WriteLine($"All documents with step 8: {resultsAll.TotalHits} documents");
         
         // Show what we actually found
-        Console.WriteLine("All documents in index:");
+        // Console.WriteLine("All documents in index:");
         foreach (var scoreDoc in resultsAll.ScoreDocs)
         {
             var doc = searcher.Doc(scoreDoc.Doc);
             var ticks = long.Parse(doc.Get("created"));
             var date = new DateTime(ticks);
-            Console.WriteLine($"  {doc.Get("id")}: {date} (ticks: {ticks})");
+            // Console.WriteLine($"  {doc.Get("id")}: {date} (ticks: {ticks})");
         }
         
         // Test expectations - if NumericRangeQuery is broken, these will fail
@@ -552,7 +551,7 @@ public class DateRangeProductionTest
 {
     public static void RunProductionTest()
     {
-        Console.WriteLine("=== Production Configuration Test ===");
+        // Console.WriteLine("=== Production Configuration Test ===");
         
         var directory = new Lucene.Net.Store.RAMDirectory();
         var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48);
@@ -573,8 +572,8 @@ public class DateRangeProductionTest
             var oldDate = DateTime.UtcNow.AddDays(-35);
             var recentDate = DateTime.UtcNow.AddDays(-5);
             
-            Console.WriteLine($"Old date: {oldDate} (Ticks: {oldDate.Ticks})");
-            Console.WriteLine($"Recent date: {recentDate} (Ticks: {recentDate.Ticks})");
+            // Console.WriteLine($"Old date: {oldDate} (Ticks: {oldDate.Ticks})");
+            // Console.WriteLine($"Recent date: {recentDate} (Ticks: {recentDate.Ticks})");
             
             // Document 1: Old memory
             var doc1 = new Lucene.Net.Documents.Document();
@@ -610,50 +609,50 @@ public class DateRangeProductionTest
                 
                 // Test 1: Archive query (find old memories) - this is what's failing
                 var cutoffDate = DateTime.UtcNow.AddDays(-30);
-                Console.WriteLine($"\n=== Archive Query Test ===");
-                Console.WriteLine($"Cutoff date: {cutoffDate} (Ticks: {cutoffDate.Ticks})");
+                // Console.WriteLine($"\n=== Archive Query Test ===");
+                // Console.WriteLine($"Cutoff date: {cutoffDate} (Ticks: {cutoffDate.Ticks})");
                 
                 // This replicates the exact query from ArchiveMemoriesAsync
                 var archiveQuery = Lucene.Net.Search.NumericRangeQuery.NewInt64Range("created", 8,
                     DateTime.MinValue.Ticks, cutoffDate.Ticks, true, true);
                 
                 var archiveResults = searcher.Search(archiveQuery, 100);
-                Console.WriteLine($"Archive query results: {archiveResults.TotalHits} documents");
+                // Console.WriteLine($"Archive query results: {archiveResults.TotalHits} documents");
                 
                 foreach (var scoreDoc in archiveResults.ScoreDocs)
                 {
                     var doc = searcher.Doc(scoreDoc.Doc);
                     var createdTicks = long.Parse(doc.Get("created"));
                     var createdDate = new DateTime(createdTicks);
-                    Console.WriteLine($"  Found: {doc.Get("id")} created {createdDate}");
+                    // Console.WriteLine($"  Found: {doc.Get("id")} created {createdDate}");
                 }
                 
                 // Test 2: Date range search (this is also affected)
-                Console.WriteLine($"\n=== Date Range Search Test ===");
+                // Console.WriteLine($"\n=== Date Range Search Test ===");
                 var searchFromDate = DateTime.UtcNow.AddDays(-40);
                 var searchToDate = DateTime.UtcNow.AddDays(-20);
                 
-                Console.WriteLine($"Search range: {searchFromDate} to {searchToDate}");
+                // Console.WriteLine($"Search range: {searchFromDate} to {searchToDate}");
                 
                 var rangeQuery = Lucene.Net.Search.NumericRangeQuery.NewInt64Range("created", 8,
                     searchFromDate.Ticks, searchToDate.Ticks, true, true);
                 
                 var rangeResults = searcher.Search(rangeQuery, 100);
-                Console.WriteLine($"Range query results: {rangeResults.TotalHits} documents");
+                // Console.WriteLine($"Range query results: {rangeResults.TotalHits} documents");
                 
                 foreach (var scoreDoc in rangeResults.ScoreDocs)
                 {
                     var doc = searcher.Doc(scoreDoc.Doc);
                     var createdTicks = long.Parse(doc.Get("created"));
                     var createdDate = new DateTime(createdTicks);
-                    Console.WriteLine($"  Found: {doc.Get("id")} created {createdDate}");
+                    // Console.WriteLine($"  Found: {doc.Get("id")} created {createdDate}");
                 }
                 
                 // Test 3: All documents query (for comparison)
-                Console.WriteLine($"\n=== All Documents Test ===");
+                // Console.WriteLine($"\n=== All Documents Test ===");
                 var allQuery = new Lucene.Net.Search.MatchAllDocsQuery();
                 var allResults = searcher.Search(allQuery, 100);
-                Console.WriteLine($"All documents: {allResults.TotalHits} documents");
+                // Console.WriteLine($"All documents: {allResults.TotalHits} documents");
                 
                 foreach (var scoreDoc in allResults.ScoreDocs)
                 {
@@ -661,7 +660,7 @@ public class DateRangeProductionTest
                     var createdTicks = long.Parse(doc.Get("created"));
                     var createdDate = new DateTime(createdTicks);
                     var age = DateTime.UtcNow - createdDate;
-                    Console.WriteLine($"  {doc.Get("id")}: {createdDate} (Age: {age.TotalDays:F1} days)");
+                    // Console.WriteLine($"  {doc.Get("id")}: {createdDate} (Age: {age.TotalDays:F1} days)");
                 }
             }
         }
@@ -669,7 +668,7 @@ public class DateRangeProductionTest
         analyzer.Dispose();
         directory.Dispose();
         
-        Console.WriteLine("\n=== Test Complete ===");
+        // Console.WriteLine("\n=== Test Complete ===");
     }
 }
 
@@ -680,11 +679,11 @@ public static class AnalyzeSqliteMemories
 {
         public static void AnalyzeBackup(string sqlitePath)
         {
-            Console.WriteLine("=== SQLite Memory Analysis ===");
+            // Console.WriteLine("=== SQLite Memory Analysis ===");
             
             if (!File.Exists(sqlitePath))
             {
-                Console.WriteLine($"SQLite file not found: {sqlitePath}");
+                // Console.WriteLine($"SQLite file not found: {sqlitePath}");
                 return;
             }
 
@@ -694,7 +693,7 @@ public static class AnalyzeSqliteMemories
             connection.Open();
 
             // Get table schema first
-            Console.WriteLine("\n=== Database Schema ===");
+            // Console.WriteLine("\n=== Database Schema ===");
             var schemaCommand = connection.CreateCommand();
             schemaCommand.CommandText = @"
                 SELECT name, sql FROM sqlite_master 
@@ -706,13 +705,13 @@ public static class AnalyzeSqliteMemories
             {
                 var tableName = schemaReader.GetString(0);
                 var createSql = schemaReader.GetString(1);
-                Console.WriteLine($"Table: {tableName}");
-                Console.WriteLine($"  {createSql}");
-                Console.WriteLine();
+                // Console.WriteLine($"Table: {tableName}");
+                // Console.WriteLine($"  {createSql}");
+                // Console.WriteLine();
             }
 
             // Analyze memory data
-            Console.WriteLine("\n=== Memory Data Analysis ===");
+            // Console.WriteLine("\n=== Memory Data Analysis ===");
             
             var dataCommand = connection.CreateCommand();
             dataCommand.CommandText = @"
@@ -732,8 +731,8 @@ public static class AnalyzeSqliteMemories
             using var dataReader = dataCommand.ExecuteReader();
             int count = 0;
             
-            Console.WriteLine("ID | Type | Created | Modified | TimestampTicks | IsShared | Content Preview");
-            Console.WriteLine("---|------|---------|----------|----------------|----------|----------------");
+            // Console.WriteLine("ID | Type | Created | Modified | TimestampTicks | IsShared | Content Preview");
+            // Console.WriteLine("---|------|---------|----------|----------------|----------|----------------");
             
             while (dataReader.Read())
             {
@@ -764,7 +763,7 @@ public static class AnalyzeSqliteMemories
 
                 var contentPreview = content.Length > 30 ? content.Substring(0, 30) + "..." : content;
                 
-                Console.WriteLine($"{id[..8]} | {type} | {createdDate:yyyy-MM-dd} | {modifiedDate:yyyy-MM-dd} | {timestampTicks} | {isShared} | {contentPreview}");
+                // Console.WriteLine($"{id[..8]} | {type} | {createdDate:yyyy-MM-dd} | {modifiedDate:yyyy-MM-dd} | {timestampTicks} | {isShared} | {contentPreview}");
                 
                 // Check for date consistency issues
                 if (createdDate != DateTime.MinValue)
@@ -772,23 +771,23 @@ public static class AnalyzeSqliteMemories
                     var expectedTicks = createdDate.Ticks;
                     if (Math.Abs(expectedTicks - timestampTicks) > TimeSpan.TicksPerSecond)
                     {
-                        Console.WriteLine($"  ⚠️  DATE INCONSISTENCY: Created={expectedTicks} vs TimestampTicks={timestampTicks}");
+                        // Console.WriteLine($"  ⚠️  DATE INCONSISTENCY: Created={expectedTicks} vs TimestampTicks={timestampTicks}");
                     }
                 }
                 
                 // Show extended fields if present
                 if (!string.IsNullOrEmpty(fields))
                 {
-                    Console.WriteLine($"  Fields: {fields}");
+                    // Console.WriteLine($"  Fields: {fields}");
                 }
                 
-                Console.WriteLine();
+                // Console.WriteLine();
             }
             
-            Console.WriteLine($"\nTotal memories found: {count}");
+            // Console.WriteLine($"\nTotal memories found: {count}");
             
             // Check for date range distribution
-            Console.WriteLine("\n=== Date Range Analysis ===");
+            // Console.WriteLine("\n=== Date Range Analysis ===");
             var rangeCommand = connection.CreateCommand();
             rangeCommand.CommandText = @"
                 SELECT 
@@ -808,19 +807,19 @@ public static class AnalyzeSqliteMemories
                 var maxTicks = rangeReader.GetInt64(3);
                 var totalCount = rangeReader.GetInt32(4);
                 
-                Console.WriteLine($"Date range: {earliestCreated} to {latestCreated}");
-                Console.WriteLine($"Ticks range: {minTicks} to {maxTicks}");
-                Console.WriteLine($"Total memories: {totalCount}");
+                // Console.WriteLine($"Date range: {earliestCreated} to {latestCreated}");
+                // Console.WriteLine($"Ticks range: {minTicks} to {maxTicks}");
+                // Console.WriteLine($"Total memories: {totalCount}");
                 
                 // Convert ticks back to dates for verification
                 if (minTicks > 0)
                 {
                     var minTicksDate = new DateTime(minTicks);
                     var maxTicksDate = new DateTime(maxTicks);
-                    Console.WriteLine($"Ticks as dates: {minTicksDate} to {maxTicksDate}");
+                    // Console.WriteLine($"Ticks as dates: {minTicksDate} to {maxTicksDate}");
                 }
             }
             
-            Console.WriteLine("\n=== Analysis Complete ===");
+            // Console.WriteLine("\n=== Analysis Complete ===");
         }
 }

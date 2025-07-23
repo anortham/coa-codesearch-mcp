@@ -43,10 +43,7 @@ public class SimpleV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        // Print it
-        Console.WriteLine("=== RESULT ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check basics
         var response = JsonDocument.Parse(json).RootElement;

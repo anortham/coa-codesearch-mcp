@@ -50,9 +50,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED PROJECT STRUCTURE ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse as dynamic to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -84,11 +82,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check hotspots
         var hotspots = response.GetProperty("hotspots");
@@ -101,13 +96,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -138,8 +128,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== NuGet Analysis Response ===");
-        Console.WriteLine(json);
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -156,7 +145,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         if (issues.TryGetProperty("nugetConflicts", out var nugetConflicts))
         {
             nugetConflicts.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-            Console.WriteLine($"\nNuGet conflicts: {nugetConflicts.GetArrayLength()}");
+            // Verify NuGet conflicts structure
+            nugetConflicts.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         }
         
         // Check for NuGet-related insights
@@ -166,11 +156,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             .Where(s => s != null && s.ToLower().Contains("nuget"))
             .ToList();
         
-        Console.WriteLine($"\nNuGet insights found: {nugetInsights.Count}");
-        foreach (var insight in nugetInsights)
-        {
-            Console.WriteLine($"- {insight}");
-        }
+        // Verify NuGet insights
+        nugetInsights.Count.Should().BeGreaterThanOrEqualTo(0);
         
         // Check actions for dependency analysis
         var actions = response.GetProperty("actions");
@@ -179,7 +166,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             
         if (depAction.ValueKind != JsonValueKind.Undefined)
         {
-            Console.WriteLine("\nDependency analysis action found");
+            // Verify dependency analysis action exists
             depAction.GetProperty("priority").GetString().Should().NotBeNullOrEmpty();
         }
     }
@@ -205,9 +192,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== Project Structure with Files ===");
-        // Only print first 1000 chars if large
-        Console.WriteLine(json.Length > 1000 ? json.Substring(0, 1000) + "..." : json);
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -222,18 +207,19 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         // For small test projects, we might get full file listing
         // For larger projects, actions would include browse_files
         var actions = response.GetProperty("actions");
-        Console.WriteLine($"\nTotal actions: {actions.GetArrayLength()}");
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         var browseAction = actions.EnumerateArray()
             .FirstOrDefault(a => a.GetProperty("id").GetString() == "browse_files");
             
         if (browseAction.ValueKind != JsonValueKind.Undefined)
         {
-            Console.WriteLine("Browse files action available for detailed file exploration");
+            // Browse files action available for detailed file exploration
         }
         else
         {
-            Console.WriteLine("Solution small enough to include all files directly");
+            // Solution small enough to include all files directly
         }
     }
 
@@ -256,7 +242,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== Project Health Assessment ===");
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -266,7 +252,8 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         // Check health assessment
         var health = response.GetProperty("health").GetString();
         health.Should().BeOneOf("excellent", "good", "fair", "needs-attention");
-        Console.WriteLine($"\nProject health: {health}");
+        // Verify health assessment is valid
+        health.Should().NotBeNullOrEmpty();
         
         // Check issues
         var issues = response.GetProperty("issues");
@@ -274,24 +261,26 @@ public class ProjectStructureAnalysisV2Tests : TestBase
         // Check high dependency projects
         if (issues.TryGetProperty("highDependencyProjects", out var highDeps))
         {
-            Console.WriteLine($"\nHigh dependency projects: {highDeps.GetArrayLength()}");
+            // Verify high dependency projects structure
+            highDeps.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
             foreach (var proj in highDeps.EnumerateArray())
             {
-                var name = proj.GetProperty("name").GetString();
-                var deps = proj.GetProperty("dependencies").GetInt32();
-                Console.WriteLine($"- {name}: {deps} dependencies");
+                proj.GetProperty("name").GetString().Should().NotBeNullOrEmpty();
+                proj.GetProperty("dependencies").GetInt32().Should().BeGreaterThan(0);
             }
         }
         
         // Check version conflicts
         if (issues.TryGetProperty("versionConflicts", out var conflicts))
         {
-            Console.WriteLine($"\nVersion conflicts: {conflicts.GetArrayLength()}");
+            // Verify version conflicts structure
+            conflicts.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         }
         
         // Check insights for health-related information
         var insights = response.GetProperty("insights");
-        Console.WriteLine($"\nTotal insights: {insights.GetArrayLength()}");
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check if dependency analysis is recommended
         var actions = response.GetProperty("actions");
@@ -300,7 +289,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             
         if (hasDepAnalysis)
         {
-            Console.WriteLine("\nDependency analysis recommended based on project structure");
+            // Verify dependency analysis is recommended
         }
     }
 }

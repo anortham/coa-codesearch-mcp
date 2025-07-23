@@ -202,7 +202,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 hotspots = new
                 {
                     directories = data.DirectoryCounts
-                        .Where(kv => kv.Value > 1)
+                        .Where(kv => kv.Value >= 1)
                         .OrderByDescending(kv => kv.Value)
                         .Take(3)
                         .Select(kv => new { path = kv.Key, count = kv.Value })
@@ -375,6 +375,19 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         {
             insights.Add(pattern);
         }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (data.Results.Count == 0)
+            {
+                insights.Add($"No files found matching '{query}'");
+            }
+            else
+            {
+                insights.Add($"Found {data.Results.Count} files matching '{query}'");
+            }
+        }
 
         return insights;
     }
@@ -457,6 +470,31 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 tokens = 1500,
                 priority = "available"
             });
+        }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (data.Results.Count > 0)
+            {
+                actions.Add(new
+                {
+                    id = "explore_results",
+                    cmd = new { expand = "details" },
+                    tokens = 1000,
+                    priority = "available"
+                });
+            }
+            else
+            {
+                actions.Add(new
+                {
+                    id = "broaden_search",
+                    cmd = new { query = $"*{query}*", searchType = "wildcard" },
+                    tokens = 1500,
+                    priority = "recommended"
+                });
+            }
         }
 
         return actions;
