@@ -5,20 +5,19 @@ using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
-using COA.CodeSearch.McpServer.Tools.Registration;
 using Microsoft.Build.Locator;
 using System.Runtime.CompilerServices;
-using System.Reflection;
 
 namespace COA.CodeSearch.McpServer.Tests;
 
-public abstract class TestBase : IDisposable
+public abstract class LuceneTestBase : IDisposable
 {
     protected readonly IServiceProvider ServiceProvider;
     protected readonly CodeAnalysisService WorkspaceService;
-    protected readonly ILogger<TestBase> Logger;
+    protected readonly ILogger<LuceneTestBase> Logger;
+    private readonly string _tempDirectory;
     
-    static TestBase()
+    static LuceneTestBase()
     {
         // Register MSBuild once for all tests
         if (!MSBuildLocator.IsRegistered)
@@ -27,8 +26,12 @@ public abstract class TestBase : IDisposable
         }
     }
     
-    protected TestBase()
+    protected LuceneTestBase()
     {
+        // Create a unique temp directory for this test
+        _tempDirectory = Path.Combine(Path.GetTempPath(), "COA_Tests", Guid.NewGuid().ToString());
+        Directory.CreateDirectory(_tempDirectory);
+        
         var services = new ServiceCollection();
         
         // Add logging
@@ -38,7 +41,7 @@ public abstract class TestBase : IDisposable
             builder.SetMinimumLevel(LogLevel.Debug);
         });
         
-        // Add configuration
+        // Add configuration with test-specific paths
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -49,7 +52,10 @@ public abstract class TestBase : IDisposable
                 ["ResponseLimits:SafetyMargin"] = "0.8",
                 ["ResponseLimits:DefaultMaxResults"] = "50",
                 ["ResponseLimits:EnableTruncation"] = "true",
-                ["ResponseLimits:EnablePagination"] = "true"
+                ["ResponseLimits:EnablePagination"] = "true",
+                ["FileWatcher:Enabled"] = "false", // Disable file watcher for tests
+                ["WorkspaceAutoIndex:Enabled"] = "false", // Disable auto-indexing for tests
+                ["Paths:BasePath"] = _tempDirectory // Use temp directory for test data
             })
             .Build();
         
@@ -63,40 +69,28 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IResultTruncator, ResultTruncator>();
         services.AddMemoryCache(); // Required for DetailRequestCache
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
-        services.AddHttpClient(); // For TypeScript installer
         
-        // Add core services
+        // Add path resolution service
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
-        services.AddSingleton<CodeAnalysisService>();
-        services.AddSingleton<ToolRegistry>();
         
-        // Lucene services
-        services.AddSingleton<LuceneIndexService>();
-        services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
-        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
+        // Add Lucene services
+        services.AddSingleton<ILuceneIndexService, LuceneIndexService>();
         services.AddSingleton<FileIndexingService>();
+        services.AddSingleton<IndexWorkspaceTool>();
+        services.AddSingleton<FileWatcherService>();
+        services.AddSingleton<WorkspaceAutoIndexService>();
+        services.AddSingleton<LuceneLifecycleService>();
         
-        // Memory services
-        services.AddSingleton<FlexibleMemoryService>();
-        services.AddSingleton<FlexibleMemoryTools>();
+        // Add TypeScript services (required for some tests)
+        services.AddSingleton<TypeScriptInitializationService>();
+        services.AddSingleton<TypeScriptAnalysisService>();
         
-        // Add tools required by BatchOperationsTool
-        services.AddSingleton<GoToDefinitionTool>();
-        services.AddSingleton<FindReferencesTool>();
-        services.AddSingleton<SearchSymbolsTool>();
-        services.AddSingleton<GetDiagnosticsTool>();
-        services.AddSingleton<GetHoverInfoTool>();
-        services.AddSingleton<GetImplementationsTool>();
-        services.AddSingleton<GetDocumentSymbolsTool>();
-        services.AddSingleton<GetCallHierarchyTool>();
-        services.AddSingleton<FastTextSearchTool>();
-        services.AddSingleton<DependencyAnalysisTool>();
-        services.AddSingleton<BatchOperationsTool>();
-        services.AddSingleton<IBatchOperationsTool>(provider => provider.GetRequiredService<BatchOperationsTool>());
+        // Add code analysis services
+        services.AddSingleton<CodeAnalysisService>();
         
         ServiceProvider = services.BuildServiceProvider();
         WorkspaceService = ServiceProvider.GetRequiredService<CodeAnalysisService>();
-        Logger = ServiceProvider.GetRequiredService<ILogger<TestBase>>();
+        Logger = ServiceProvider.GetRequiredService<ILogger<LuceneTestBase>>();
         
         // Preload the test workspace
         var testProjectPath = GetTestProjectPath();
@@ -145,68 +139,33 @@ public abstract class TestBase : IDisposable
         return codePath;
     }
     
-    protected async Task<string> CreateTestProjectAsync(string projectName, string code)
-    {
-        var testDataPath = GetTestDataPath();
-        var projectPath = Path.Combine(testDataPath, projectName);
-        
-        // Clean up if exists
-        if (Directory.Exists(projectPath))
-        {
-            Directory.Delete(projectPath, true);
-        }
-        
-        Directory.CreateDirectory(projectPath);
-        
-        // Create project file
-        var csprojContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-  </PropertyGroup>
-</Project>";
-        
-        var csprojPath = Path.Combine(projectPath, $"{projectName}.csproj");
-        await File.WriteAllTextAsync(csprojPath, csprojContent);
-        
-        // Create code file
-        var codePath = Path.Combine(projectPath, "Program.cs");
-        await File.WriteAllTextAsync(codePath, code);
-        
-        // Create a simple global.json to ensure consistent SDK
-        var globalJsonContent = @"{
-  ""sdk"": {
-    ""version"": ""8.0.100"",
-    ""rollForward"": ""latestFeature""
-  }
-}";
-        await File.WriteAllTextAsync(Path.Combine(projectPath, "global.json"), globalJsonContent);
-        
-        return csprojPath;
-    }
-    
     public void Dispose()
     {
-        WorkspaceService?.Dispose();
-        
-        if (ServiceProvider is IDisposable disposable)
+        Dispose(true);
+        GC.SuppressFinalize(this);
+    }
+    
+    protected virtual void Dispose(bool disposing)
+    {
+        if (disposing)
         {
-            disposable.Dispose();
-        }
-        
-        // Clean up test data
-        var testDataPath = GetTestDataPath();
-        if (Directory.Exists(testDataPath))
-        {
-            try
+            // Clean up temp directory
+            if (Directory.Exists(_tempDirectory))
             {
-                Directory.Delete(testDataPath, true);
+                try
+                {
+                    Directory.Delete(_tempDirectory, true);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogWarning("Failed to delete temp directory: {Error}", ex.Message);
+                }
             }
-            catch
+            
+            // Dispose service provider
+            if (ServiceProvider is IDisposable disposable)
             {
-                // Ignore cleanup errors
+                disposable.Dispose();
             }
         }
     }

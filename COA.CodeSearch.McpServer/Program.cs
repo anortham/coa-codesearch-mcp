@@ -88,6 +88,7 @@ var host = Host.CreateDefaultBuilder(args)
         // Flexible Memory System
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
+        services.AddSingleton<FlexibleMemorySearchToolV2>();
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
         
@@ -110,23 +111,30 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FindReferencesTool>();
         services.AddSingleton<FindReferencesToolV2>();
         services.AddSingleton<SearchSymbolsTool>();
+        services.AddSingleton<SearchSymbolsToolV2>();
         services.AddSingleton<GetDiagnosticsTool>();
         services.AddSingleton<GetDiagnosticsToolV2>();
         services.AddSingleton<TypeScriptHoverInfoTool>();
         services.AddSingleton<GetHoverInfoTool>();
         services.AddSingleton<GetImplementationsTool>();
+        services.AddSingleton<GetImplementationsToolV2>();
         services.AddSingleton<GetDocumentSymbolsTool>();
         services.AddSingleton<GetCallHierarchyTool>();
+        services.AddSingleton<GetCallHierarchyToolV2>();
         services.AddSingleton<RenameSymbolTool>();
         services.AddSingleton<RenameSymbolToolV2>();
         services.AddSingleton<BatchOperationsTool>();
+        services.AddSingleton<IBatchOperationsTool>(provider => provider.GetRequiredService<BatchOperationsTool>());
+        services.AddSingleton<BatchOperationsToolV2>();
         services.AddSingleton<AdvancedSymbolSearchTool>();
         services.AddSingleton<DependencyAnalysisTool>();
         services.AddSingleton<DependencyAnalysisToolV2>();
         services.AddSingleton<ProjectStructureAnalysisTool>();
         services.AddSingleton<ProjectStructureAnalysisToolV2>();
         services.AddSingleton<FastTextSearchTool>();
+        services.AddSingleton<FastTextSearchToolV2>();
         services.AddSingleton<FastFileSearchTool>();
+        services.AddSingleton<FastFileSearchToolV2>();
         services.AddSingleton<FastRecentFilesTool>();
         services.AddSingleton<FastFileSizeAnalysisTool>();
         services.AddSingleton<FastSimilarFilesTool>();

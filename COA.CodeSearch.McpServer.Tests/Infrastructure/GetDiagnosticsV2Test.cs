@@ -13,7 +13,7 @@ namespace COA.CodeSearch.McpServer.Tests.Infrastructure;
 public class GetDiagnosticsV2Test : TestBase
 {
     [Fact]
-    public async Task Should_Return_Summary_Of_Diagnostics_With_Insights()
+    public async Task Should_Return_AI_Optimized_Diagnostics_Response()
     {
         // Arrange
         var tool = new GetDiagnosticsToolV2(
@@ -40,72 +40,68 @@ public class GetDiagnosticsV2Test : TestBase
         });
         
         // Print it
-        Console.WriteLine("=== DIAGNOSTICS SUMMARY RESULT ===");
+        Console.WriteLine("=== AI-OPTIMIZED DIAGNOSTICS RESULT ===");
         Console.WriteLine(json);
         Console.WriteLine("=== END ===");
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Basic assertions
+        // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        response.GetProperty("operation").GetString().Should().Be("get_diagnostics");
         
-        // Check data structure
-        var data = response.GetProperty("data");
-        data.Should().NotBeNull();
+        // Check scope
+        var scope = response.GetProperty("scope");
+        scope.GetProperty("path").GetString().Should().Be(testCodePath);
+        scope.GetProperty("type").GetString().Should().Be("file");
         
-        // Check overview
-        var overview = data.GetProperty("overview");
-        overview.Should().NotBeNull();
+        // Check summary
+        var summary = response.GetProperty("summary");
+        summary.GetProperty("total").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("files").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("priority").GetString().Should().NotBeNullOrEmpty();
         
-        // Check for insights
-        if (overview.TryGetProperty("keyInsights", out var insights))
+        // Check severity breakdown
+        var severity = summary.GetProperty("severity");
+        severity.EnumerateObject().Should().NotBeNull();
+        
+        // Check insights
+        var insights = response.GetProperty("insights");
+        insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nInsights:");
+        foreach (var insight in insights.EnumerateArray())
         {
-            insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-            
-            // If we have insights, print them
-            if (insights.GetArrayLength() > 0)
-            {
-                Console.WriteLine("\nKey Insights:");
-                foreach (var insight in insights.EnumerateArray())
-                {
-                    Console.WriteLine($"- {insight.GetString()}");
-                }
-            }
+            Console.WriteLine($"- {insight.GetString()}");
         }
         
-        // Check categories (severity breakdown)
-        if (data.TryGetProperty("byCategory", out var categories))
-        {
-            // We should have some categories
-            categories.EnumerateObject().Should().HaveCountGreaterThanOrEqualTo(0);
-            
-            Console.WriteLine("\nCategories:");
-            foreach (var category in categories.EnumerateObject())
-            {
-                var occurrences = category.Value.GetProperty("occurrences").GetInt32();
-                Console.WriteLine($"- {category.Name}: {occurrences} occurrences");
-            }
-        }
+        // Check top issues
+        var topIssues = response.GetProperty("topIssues");
+        topIssues.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Check next actions
-        var nextActions = response.GetProperty("nextActions");
-        nextActions.Should().NotBeNull();
+        // Check hotspots
+        var hotspots = response.GetProperty("hotspots");
+        hotspots.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Should have recommended actions
-        var recommended = nextActions.GetProperty("recommended").EnumerateArray();
-        Console.WriteLine("\nRecommended Actions:");
-        foreach (var action in recommended)
+        // Check actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nActions:");
+        foreach (var action in actions.EnumerateArray())
         {
-            var desc = action.GetProperty("description").GetString();
+            var id = action.GetProperty("id").GetString();
             var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {desc}");
+            Console.WriteLine($"- [{priority}] {id}");
         }
+        
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("summary");
+        meta.GetProperty("cached").GetString().Should().StartWith("diag_");
     }
     
     [Fact]
-    public async Task Should_Auto_Switch_To_Summary_For_Large_Results()
+    public async Task Should_Return_Full_Mode_For_Small_Results()
     {
         // Arrange
         var tool = new GetDiagnosticsToolV2(
@@ -116,11 +112,11 @@ public class GetDiagnosticsV2Test : TestBase
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
             ServiceProvider.GetRequiredService<IDetailRequestCache>());
             
-        var testProjectPath = GetTestProjectPath();
+        var testCodePath = GetTestCodePath();
         
-        // Act - request full mode but should auto-switch to summary for test project
+        // Act - request full mode for single file (should stay full)
         var result = await tool.ExecuteAsync(
-            testProjectPath,
+            testCodePath,
             severities: null,
             mode: ResponseMode.Full);
             
@@ -132,18 +128,34 @@ public class GetDiagnosticsV2Test : TestBase
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Should be in summary mode
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        // Check AI-optimized response
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("get_diagnostics");
         
-        // Check if auto-mode switch is indicated
-        if (response.TryGetProperty("autoModeSwitch", out var autoSwitch))
+        // Check meta for mode
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().BeOneOf("full", "summary");
+        
+        // Should have actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        
+        // If we have errors, should have fix_errors action with critical priority
+        var summary = response.GetProperty("summary");
+        var severity = summary.GetProperty("severity");
+        if (severity.TryGetProperty("error", out var errorCount) && errorCount.GetInt32() > 0)
         {
-            Console.WriteLine($"Auto-mode switch: {autoSwitch.GetBoolean()}");
+            var hasFixErrorsAction = false;
+            foreach (var action in actions.EnumerateArray())
+            {
+                if (action.GetProperty("id").GetString() == "fix_errors")
+                {
+                    hasFixErrorsAction = true;
+                    action.GetProperty("priority").GetString().Should().Be("critical");
+                    break;
+                }
+            }
+            hasFixErrorsAction.Should().BeTrue("Should have fix_errors action when errors exist");
         }
-        
-        // Should have recommended actions
-        var nextActions = response.GetProperty("nextActions");
-        var recommended = nextActions.GetProperty("recommended").EnumerateArray();
-        recommended.Should().NotBeEmpty("Should have recommended actions in summary mode");
     }
 }

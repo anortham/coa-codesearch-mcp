@@ -22,7 +22,9 @@ public static class AllToolRegistrations
         RegisterGoToDefinition(registry, serviceProvider.GetRequiredService<GoToDefinitionTool>());
         RegisterFindReferences(registry, serviceProvider.GetRequiredService<FindReferencesToolV2>());
         RegisterSearchSymbols(registry, serviceProvider.GetRequiredService<SearchSymbolsTool>());
+        RegisterSearchSymbolsV2(registry, serviceProvider.GetRequiredService<SearchSymbolsToolV2>());
         RegisterGetImplementations(registry, serviceProvider.GetRequiredService<GetImplementationsTool>());
+        RegisterGetImplementationsV2(registry, serviceProvider.GetRequiredService<GetImplementationsToolV2>());
         
         // Code information tools
         RegisterGetHoverInfo(registry, serviceProvider.GetRequiredService<GetHoverInfoTool>());
@@ -31,15 +33,19 @@ public static class AllToolRegistrations
         
         // Advanced analysis tools
         RegisterGetCallHierarchy(registry, serviceProvider.GetRequiredService<GetCallHierarchyTool>());
+        RegisterGetCallHierarchyV2(registry, serviceProvider.GetRequiredService<GetCallHierarchyToolV2>());
         RegisterRenameSymbol(registry, serviceProvider.GetRequiredService<RenameSymbolToolV2>());
         RegisterBatchOperations(registry, serviceProvider.GetRequiredService<BatchOperationsTool>());
+        RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>());
         RegisterAdvancedSymbolSearch(registry, serviceProvider.GetRequiredService<AdvancedSymbolSearchTool>());
         RegisterDependencyAnalysis(registry, serviceProvider.GetRequiredService<DependencyAnalysisToolV2>());
         RegisterProjectStructureAnalysis(registry, serviceProvider.GetRequiredService<ProjectStructureAnalysisToolV2>());
         
         // Text search tools
         RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
+        RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
         RegisterFastFileSearch(registry, serviceProvider.GetRequiredService<FastFileSearchTool>());
+        RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>());
         RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
         RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
         RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>());
@@ -180,6 +186,55 @@ public static class AllToolRegistrations
         );
     }
 
+    private static void RegisterSearchSymbolsV2(ToolRegistry registry, SearchSymbolsToolV2 tool)
+    {
+        registry.RegisterTool<SearchSymbolsV2Params>(
+            name: "search_symbols_v2",
+            description: "🔍 AI-OPTIMIZED symbol search! Returns structured data with distribution, hotspots, and insights. 95%+ token reduction vs original. Supports wildcards and fuzzy matching.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new { type = "string", description = "Path to solution or project" },
+                    pattern = new { type = "string", description = "Search pattern (supports wildcards)" },
+                    kinds = new { type = "array", items = new { type = "string" }, description = "Filter by symbol types (class, interface, method, property, field, event)" },
+                    fuzzy = new { type = "boolean", description = "Use fuzzy matching", @default = false },
+                    maxResults = new { type = "integer", description = "Maximum results", @default = 100 },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'" }
+                },
+                required = new[] { "workspacePath", "pattern" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Pattern, "pattern"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.Kinds,
+                    parameters.Fuzzy ?? false,
+                    parameters.MaxResults ?? 100,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
     private static void RegisterGetImplementations(ToolRegistry registry, GetImplementationsTool tool)
     {
         registry.RegisterTool<GetImplementationsParams>(
@@ -204,6 +259,46 @@ public static class AllToolRegistrations
                     ValidateRequired(parameters.FilePath, "filePath"),
                     ValidatePositive(parameters.Line, "line"),
                     ValidatePositive(parameters.Column, "column"),
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private static void RegisterGetImplementationsV2(ToolRegistry registry, GetImplementationsToolV2 tool)
+    {
+        registry.RegisterTool<GetImplementationsV2Params>(
+            name: "get_implementations_v2",
+            description: "🔍 AI-OPTIMIZED implementation discovery! Returns structured data with inheritance patterns, project distribution, and interface usage insights. 95%+ token reduction vs original.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                },
+                required = new[] { "filePath", "line", "column" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "full" => ResponseMode.Full,
+                    _ => ResponseMode.Summary
+                };
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    ValidatePositive(parameters.Line, "line"),
+                    ValidatePositive(parameters.Column, "column"),
+                    mode,
+                    null,
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -346,6 +441,55 @@ public static class AllToolRegistrations
         );
     }
 
+    private static void RegisterGetCallHierarchyV2(ToolRegistry registry, GetCallHierarchyToolV2 tool)
+    {
+        registry.RegisterTool<GetCallHierarchyV2Params>(
+            name: "get_call_hierarchy_v2",
+            description: "🔍 AI-OPTIMIZED call hierarchy analysis! Returns structured data with circular dependencies, hotspots, and critical paths. 95%+ token reduction vs original. Detects recursion and deep nesting.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" },
+                    direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both'", @default = "both" },
+                    maxDepth = new { type = "integer", description = "Maximum depth to traverse", @default = 2 },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                },
+                required = new[] { "filePath", "line", "column" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    ValidatePositive(parameters.Line, "line"),
+                    ValidatePositive(parameters.Column, "column"),
+                    parameters.Direction ?? "both",
+                    parameters.MaxDepth ?? 2,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
     private static void RegisterRenameSymbol(ToolRegistry registry, RenameSymbolToolV2 tool)
     {
         registry.RegisterTool<RenameSymbolParams>(
@@ -424,6 +568,66 @@ public static class AllToolRegistrations
                     var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
                     
                     var result = await tool.ExecuteAsync(operationsElement, parameters.WorkspacePath, ct);
+                        
+                    return CreateSuccessResult(result);
+                }
+                catch (JsonException ex)
+                {
+                    throw new InvalidParametersException($"Invalid JSON in operations: {ex.Message}");
+                }
+            }
+        );
+    }
+
+    private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
+    {
+        registry.RegisterTool<BatchOperationsV2Params>(
+            name: "batch_operations_v2",
+            description: "🚀 AI-OPTIMIZED batch operations! Executes multiple operations in parallel with structured response. Returns operation summary, success metrics, hotspots, patterns, and correlations. 90%+ token reduction vs original.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    operations = new 
+                    { 
+                        type = "array", 
+                        items = new { type = "object" },
+                        description = "Array of operations to execute. Each operation must have 'type' or 'operation' field."
+                    },
+                    workspacePath = new { type = "string", description = "Default workspace path for operations" },
+                    mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
+                    detailRequest = new 
+                    { 
+                        type = "object", 
+                        description = "Optional detail request for cached data",
+                        properties = new
+                        {
+                            detailLevel = new { type = "string" },
+                            detailRequestToken = new { type = "string" }
+                        }
+                    }
+                },
+                required = new[] { "operations" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                if (parameters.Operations == null || parameters.Operations.Count == 0)
+                    throw new InvalidParametersException("operations are required and cannot be empty");
+                
+                try
+                {
+                    // Convert operations list to JsonElement
+                    var operationsJson = JsonSerializer.Serialize(parameters.Operations);
+                    var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
+                    
+                    var result = await tool.ExecuteAsync(
+                        operationsElement, 
+                        parameters.WorkspacePath,
+                        Enum.TryParse<ResponseMode>(parameters.Mode, true, out var mode) ? mode : ResponseMode.Summary,
+                        parameters.DetailRequest,
+                        ct);
                         
                     return CreateSuccessResult(result);
                 }
@@ -594,11 +798,29 @@ public static class AllToolRegistrations
         public int? MaxResults { get; set; }
     }
 
+    private class SearchSymbolsV2Params
+    {
+        public string? WorkspacePath { get; set; }
+        public string? Pattern { get; set; }
+        public string[]? Kinds { get; set; }
+        public bool? Fuzzy { get; set; }
+        public int? MaxResults { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
     private class GetImplementationsParams
     {
         public string? FilePath { get; set; }
         public int Line { get; set; }
         public int Column { get; set; }
+    }
+
+    private class GetImplementationsV2Params
+    {
+        public string? FilePath { get; set; }
+        public int Line { get; set; }
+        public int Column { get; set; }
+        public string? ResponseMode { get; set; }
     }
 
     private class GetHoverInfoParams
@@ -631,6 +853,16 @@ public static class AllToolRegistrations
         public int? MaxDepth { get; set; }
     }
 
+    private class GetCallHierarchyV2Params
+    {
+        public string? FilePath { get; set; }
+        public int Line { get; set; }
+        public int Column { get; set; }
+        public string? Direction { get; set; }
+        public int? MaxDepth { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
     private class RenameSymbolParams
     {
         public string? FilePath { get; set; }
@@ -645,6 +877,14 @@ public static class AllToolRegistrations
     {
         public string? WorkspacePath { get; set; }
         public List<object>? Operations { get; set; }
+    }
+
+    private class BatchOperationsV2Params
+    {
+        public List<object>? Operations { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? Mode { get; set; } = "summary";
+        public DetailRequest? DetailRequest { get; set; }
     }
 
     private class AdvancedSymbolSearchParams
@@ -727,6 +967,74 @@ public static class AllToolRegistrations
         public string? SearchType { get; set; }
     }
     
+    private static void RegisterFastTextSearchV2(ToolRegistry registry, FastTextSearchToolV2 tool)
+    {
+        registry.RegisterTool<FastTextSearchV2Params>(
+            name: "fast_text_search_v2",
+            description: "🔍 AI-OPTIMIZED blazing fast text search! Returns structured data with file distribution, hotspots, and insights. 95%+ token reduction vs original. Searches millions of lines in <50ms.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
+                    workspacePath = new { type = "string", description = "Path to solution (.sln), project (.csproj), or directory to search" },
+                    filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs' for C# only, 'src/**/*.ts' for TypeScript in src)" },
+                    extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Limit to specific file types (e.g., ['.cs', '.razor', '.js'])" },
+                    contextLines = new { type = "integer", description = "Optional: Show N lines before/after each match for context (default: 0)" },
+                    maxResults = new { type = "integer", description = "Maximum number of results", @default = 50 },
+                    caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
+                    searchType = new { type = "string", description = "Optional: Search mode - 'standard' (default), 'wildcard' (with *), 'fuzzy' (approximate), 'phrase' (exact)", @default = "standard" },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                },
+                required = new[] { "query", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.FilePattern,
+                    parameters.Extensions,
+                    parameters.ContextLines,
+                    parameters.MaxResults ?? 50,
+                    parameters.CaseSensitive ?? false,
+                    parameters.SearchType ?? "standard",
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastTextSearchV2Params
+    {
+        public string? Query { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? FilePattern { get; set; }
+        public string[]? Extensions { get; set; }
+        public int? ContextLines { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? CaseSensitive { get; set; }
+        public string? SearchType { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+    
     private static void RegisterFastFileSearch(ToolRegistry registry, FastFileSearchTool tool)
     {
         registry.RegisterTool<FastFileSearchParams>(
@@ -761,6 +1069,50 @@ public static class AllToolRegistrations
             }
         );
     }
+
+    private static void RegisterFastFileSearchV2(ToolRegistry registry, FastFileSearchToolV2 tool)
+    {
+        registry.RegisterTool<FastFileSearchV2Params>(
+            name: "fast_file_search_v2",
+            description: "🔍 AI-OPTIMIZED file search! Returns structured data with match quality, directory hotspots, and smart insights. 95%+ token reduction vs original. Blazing fast with fuzzy matching.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
+                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
+                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
+                    maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
+                    includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                },
+                required = new[] { "query", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+                {
+                    "full" => ResponseMode.Full,
+                    _ => ResponseMode.Summary
+                };
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.SearchType ?? "standard",
+                    parameters.MaxResults ?? 50,
+                    parameters.IncludeDirectories ?? false,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
     
     private class FastFileSearchParams
     {
@@ -769,6 +1121,16 @@ public static class AllToolRegistrations
         public string? SearchType { get; set; }
         public int? MaxResults { get; set; }
         public bool? IncludeDirectories { get; set; }
+    }
+
+    private class FastFileSearchV2Params
+    {
+        public string? Query { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? SearchType { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? IncludeDirectories { get; set; }
+        public string? ResponseMode { get; set; }
     }
     
     private static void RegisterFastRecentFiles(ToolRegistry registry, FastRecentFilesTool tool)

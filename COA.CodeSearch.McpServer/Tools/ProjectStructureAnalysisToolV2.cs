@@ -97,13 +97,8 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
                 structureData.SolutionMetrics = CalculateSolutionMetrics(structureData.Projects);
             }
 
-            // Create Claude-optimized response
-            var response = await CreateClaudeResponseAsync(
-                structureData,
-                mode,
-                data => CreateSummaryData(data),
-                cancellationToken);
-
+            // Create AI-optimized response
+            var response = CreateAiOptimizedResponse(structureData, mode, cancellationToken);
             return response;
         }
         catch (Exception ex)
@@ -238,6 +233,294 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
                 GetFullContextCommand = new { detailLevel = "projects", maxProjects = 10 }
             }
         };
+    }
+
+    private object CreateAiOptimizedResponse(ProjectStructureData data, ResponseMode mode, CancellationToken cancellationToken)
+    {
+        // Calculate key metrics
+        var metrics = data.SolutionMetrics;
+        var totalProjects = data.Projects.Count;
+        var totalLines = metrics?.TotalLines ?? 0;
+        var totalFiles = metrics?.TotalFiles ?? 0;
+        
+        // Project type breakdown
+        var projectTypes = data.Projects
+            .GroupBy(p => p.OutputType)
+            .ToDictionary(g => g.Key.ToLowerInvariant(), g => g.Count());
+        
+        // Framework breakdown
+        var frameworks = data.Projects
+            .Where(p => !string.IsNullOrEmpty(p.TargetFramework))
+            .GroupBy(p => p.TargetFramework)
+            .ToDictionary(g => g.Key, g => g.Count());
+        
+        // Language breakdown
+        var languages = data.Projects
+            .GroupBy(p => p.Language)
+            .ToDictionary(g => g.Key.ToLowerInvariant(), g => g.Count());
+        
+        // Hotspots (largest projects)
+        var hotspots = data.Projects
+            .Where(p => p.Metrics != null)
+            .OrderByDescending(p => p.Metrics!.TotalLines)
+            .Take(5)
+            .Select(p => new { 
+                project = p.Name, 
+                lines = p.Metrics!.TotalLines,
+                classes = p.Metrics.TotalClasses,
+                methods = p.Metrics.TotalMethods
+            })
+            .ToList();
+        
+        // Dependency analysis
+        var projectsWithManyRefs = data.Projects
+            .Where(p => (p.ProjectReferences?.Count ?? 0) > 10)
+            .Select(p => new { name = p.Name, dependencies = p.ProjectReferences?.Count ?? 0 })
+            .ToList();
+        
+        // NuGet analysis
+        var nugetIssues = new List<object>();
+        if (data.IncludeNuGetPackages)
+        {
+            var versionConflicts = data.Projects
+                .SelectMany(p => p.NuGetPackages ?? new List<NuGetPackage>())
+                .GroupBy(pkg => pkg.Name)
+                .Where(g => g.Select(p => p.Version).Distinct().Count() > 1)
+                .Select(g => new { 
+                    package = g.Key, 
+                    versions = g.Select(p => p.Version).Distinct().Count() 
+                })
+                .Take(5)
+                .ToList();
+            
+            if (versionConflicts.Any())
+            {
+                nugetIssues.AddRange(versionConflicts);
+            }
+        }
+        
+        // Generate insights
+        var insights = GenerateProjectStructureInsights(data, totalLines, projectsWithManyRefs.Count);
+        
+        // Assess health
+        var health = AssessProjectStructureHealth(data, totalLines, projectsWithManyRefs.Count);
+        
+        // Generate actions
+        var actions = new List<object>();
+        
+        if (hotspots.Any(h => h.lines > 10000))
+        {
+            actions.Add(new 
+            { 
+                id = "refactor_large", 
+                cmd = new { detailLevel = "hotspots", threshold = 10000 }, 
+                tokens = 2500,
+                priority = "high"
+            });
+        }
+        
+        if (projectsWithManyRefs.Count > 0)
+        {
+            actions.Add(new 
+            { 
+                id = "analyze_dependencies", 
+                cmd = new { detailLevel = "dependencies", minRefs = 10 }, 
+                tokens = 2000,
+                priority = "recommended"
+            });
+        }
+        
+        if (nugetIssues.Any())
+        {
+            actions.Add(new 
+            { 
+                id = "fix_nuget_conflicts", 
+                cmd = new { detailLevel = "nuget", showConflicts = true }, 
+                tokens = 1500,
+                priority = "normal"
+            });
+        }
+        
+        if (mode == ResponseMode.Summary && totalProjects < 50)
+        {
+            actions.Add(new 
+            { 
+                id = "full_details", 
+                cmd = new { responseMode = "full", includeFiles = true }, 
+                tokens = EstimateFullResponseTokens(data),
+                priority = "available"
+            });
+        }
+
+        return new
+        {
+            success = true,
+            operation = "project_structure_analysis",
+            workspace = new
+            {
+                path = data.WorkspacePath,
+                type = data.WorkspacePath.EndsWith(".sln") ? "solution" :
+                       data.WorkspacePath.EndsWith(".csproj") ? "project" : "directory"
+            },
+            overview = new
+            {
+                projects = totalProjects,
+                files = totalFiles,
+                lines = totalLines,
+                classes = metrics?.TotalClasses ?? 0,
+                methods = metrics?.TotalMethods ?? 0
+            },
+            breakdown = new
+            {
+                types = projectTypes,
+                languages = languages,
+                frameworks = frameworks
+            },
+            health = health,
+            hotspots = hotspots,
+            issues = new
+            {
+                highDependencyProjects = projectsWithManyRefs,
+                nugetConflicts = nugetIssues,
+                versionConflicts = nugetIssues
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                includeMetrics = data.IncludeMetrics,
+                includeFiles = data.IncludeFiles,
+                includeNuGet = data.IncludeNuGetPackages,
+                tokens = SizeEstimator.EstimateTokens(new { projects = data.Projects.Take(5) }),
+                cached = $"struct_{Guid.NewGuid().ToString("N")[..8]}"
+            }
+        };
+    }
+
+    private string AssessProjectStructureHealth(ProjectStructureData data, int totalLines, int projectsWithManyRefs)
+    {
+        var score = 100;
+        
+        // Size issues
+        if (totalLines > 500000)
+        {
+            score -= 20;
+        }
+        else if (totalLines > 100000)
+        {
+            score -= 10;
+        }
+        
+        // Complexity issues
+        if (data.Projects.Count > 50)
+        {
+            score -= 15;
+        }
+        else if (data.Projects.Count > 20)
+        {
+            score -= 5;
+        }
+        
+        // Dependency issues
+        if (projectsWithManyRefs > 5)
+        {
+            score -= 20;
+        }
+        else if (projectsWithManyRefs > 2)
+        {
+            score -= 10;
+        }
+        
+        // Large project issues
+        var largeProjects = data.Projects.Count(p => p.Metrics?.TotalLines > 20000);
+        if (largeProjects > 3)
+        {
+            score -= 15;
+        }
+        else if (largeProjects > 1)
+        {
+            score -= 5;
+        }
+        
+        if (score >= 85) return "excellent";
+        if (score >= 70) return "good";
+        if (score >= 50) return "fair";
+        return "needs-attention";
+    }
+
+    private List<string> GenerateProjectStructureInsights(ProjectStructureData data, int totalLines, int projectsWithManyRefs)
+    {
+        var insights = new List<string>();
+        
+        // Size insights
+        if (data.Projects.Count > 20)
+        {
+            insights.Add($"Large solution with {data.Projects.Count} projects - consider solution filtering");
+        }
+        
+        if (totalLines > 100000)
+        {
+            insights.Add($"Large codebase ({totalLines:N0} lines) - ensure build performance is optimized");
+        }
+        
+        // Language insights
+        var languages = data.Projects.Select(p => p.Language).Distinct().ToList();
+        if (languages.Count > 1)
+        {
+            insights.Add($"Multi-language solution: {string.Join(", ", languages)}");
+        }
+        
+        // Framework insights
+        var frameworks = data.Projects
+            .Where(p => !string.IsNullOrEmpty(p.TargetFramework))
+            .Select(p => p.TargetFramework)
+            .Distinct()
+            .Count();
+        
+        if (frameworks > 2)
+        {
+            insights.Add($"Multiple target frameworks ({frameworks}) - consider consolidation");
+        }
+        
+        // Complexity insights
+        if (data.SolutionMetrics != null && data.SolutionMetrics.TotalClasses > 0)
+        {
+            var avgMethodsPerClass = (double)data.SolutionMetrics.TotalMethods / data.SolutionMetrics.TotalClasses;
+            if (avgMethodsPerClass > 15)
+            {
+                insights.Add($"High avg methods/class ({avgMethodsPerClass:F1}) - review for SRP violations");
+            }
+        }
+        
+        // Dependency insights
+        if (projectsWithManyRefs > 0)
+        {
+            insights.Add($"{projectsWithManyRefs} project(s) with >10 dependencies - check for circular references");
+        }
+        
+        // NuGet insights
+        if (data.IncludeNuGetPackages)
+        {
+            var allPackages = data.Projects
+                .SelectMany(p => p.NuGetPackages ?? new List<NuGetPackage>())
+                .GroupBy(pkg => pkg.Name)
+                .Where(g => g.Select(p => p.Version).Distinct().Count() > 1)
+                .Count();
+                
+            if (allPackages > 0)
+            {
+                insights.Add($"{allPackages} packages with version conflicts - consolidate versions");
+            }
+        }
+        
+        return insights;
+    }
+
+    private int EstimateFullResponseTokens(ProjectStructureData data)
+    {
+        // Estimate ~200 tokens per project with full details
+        return Math.Min(25000, data.Projects.Count * 200);
     }
 
     private async Task<ProjectAnalysis> AnalyzeProject(Project project, bool includeFiles, bool includeNuGetPackages, bool includeMetrics, CancellationToken cancellationToken)

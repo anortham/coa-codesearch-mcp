@@ -1,0 +1,366 @@
+using System.Text.Json;
+using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Infrastructure;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tools;
+using FluentAssertions;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+
+using COA.CodeSearch.McpServer.Tests.Helpers;
+using Lucene.Net.Documents;
+using Lucene.Net.Index;
+using Moq;
+
+namespace COA.CodeSearch.McpServer.Tests.Infrastructure;
+
+public class FastFileSearchV2Test : TestBase
+{
+    private readonly FastFileSearchToolV2 _tool;
+    private readonly InMemoryTestIndexService _indexService;
+    private readonly string _testWorkspacePath = "C:\\test\\project";
+
+    public FastFileSearchV2Test()
+    {
+        // Use in-memory index service for testing
+        _indexService = new InMemoryTestIndexService();
+        
+        _tool = new FastFileSearchToolV2(
+            ServiceProvider.GetRequiredService<ILogger<FastFileSearchToolV2>>(),
+            _indexService,
+            ServiceProvider.GetRequiredService<IConfiguration>(),
+            ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
+            ServiceProvider.GetRequiredService<IResultTruncator>(),
+            ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
+            ServiceProvider.GetRequiredService<IDetailRequestCache>());
+    }
+
+    private async Task AddTestDocumentsToIndex()
+    {
+        var writer = await _indexService.GetIndexWriterAsync(_testWorkspacePath);
+        
+        // Add test files to the index
+        var testFiles = new[]
+        {
+            ("TestService.cs", "C:\\test\\project\\Services\\TestService.cs", "Services\\TestService.cs", ".cs", 1024L),
+            ("TestController.cs", "C:\\test\\project\\Controllers\\TestController.cs", "Controllers\\TestController.cs", ".cs", 2048L),
+            ("UserTest.cs", "C:\\test\\project\\Tests\\UserTest.cs", "Tests\\UserTest.cs", ".cs", 512L),
+            ("Program.cs", "C:\\test\\project\\Program.cs", "Program.cs", ".cs", 256L),
+            ("appsettings.json", "C:\\test\\project\\appsettings.json", "appsettings.json", ".json", 128L)
+        };
+        
+        foreach (var (filename, path, relativePath, extension, size) in testFiles)
+        {
+            var doc = new Document
+            {
+                new StringField("path", path, Field.Store.YES),
+                new StringField("filename", filename, Field.Store.YES),
+                new TextField("filename_text", filename.ToLower(), Field.Store.NO),
+                new StringField("relativePath", relativePath, Field.Store.YES),
+                new StringField("extension", extension, Field.Store.YES),
+                new NumericDocValuesField("size", size),
+                new StoredField("size", size.ToString()),
+                new NumericDocValuesField("lastModified", DateTime.UtcNow.Ticks),
+                new StoredField("lastModified", DateTime.UtcNow.Ticks.ToString()),
+                new StringField("language", extension == ".cs" ? "C#" : "JSON", Field.Store.YES)
+            };
+            writer.AddDocument(doc);
+        }
+        
+        writer.Commit();
+    }
+
+    [Fact]
+    public async Task Should_Return_AI_Optimized_File_Search()
+    {
+        // Arrange - add test documents to the index
+        await AddTestDocumentsToIndex();
+        
+        // Act - search for test files
+        var result = await _tool.ExecuteAsync(
+            query: "test",
+            workspacePath: _testWorkspacePath,
+            searchType: "standard",
+            maxResults: 50,
+            mode: ResponseMode.Summary);
+        
+        // Assert
+        result.Should().NotBeNull();
+        
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        Console.WriteLine("=== AI-OPTIMIZED FILE SEARCH ===");
+        Console.WriteLine(json);
+        Console.WriteLine("=== END ===");
+        
+        // Parse to check structure
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        // Check AI-optimized response structure
+        if (!response.GetProperty("success").GetBoolean())
+        {
+            if (response.TryGetProperty("error", out var error))
+            {
+                Console.WriteLine($"ERROR: {error.GetString()}");
+            }
+        }
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("fast_file_search");
+        
+        // Check query
+        var query = response.GetProperty("query");
+        query.GetProperty("text").GetString().Should().Be("test");
+        query.GetProperty("type").GetString().Should().Be("standard");
+        query.GetProperty("workspace").GetString().Should().NotBeNullOrEmpty();
+        
+        // Check summary
+        var summary = response.GetProperty("summary");
+        summary.GetProperty("totalFound").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("searchTime").GetString().Should().NotBeNullOrEmpty();
+        summary.GetProperty("performance").GetString().Should().NotBeNullOrEmpty();
+        
+        // Check distribution if results exist
+        if (summary.GetProperty("totalFound").GetInt32() > 0)
+        {
+            var distribution = summary.GetProperty("distribution");
+            distribution.GetProperty("byExtension").Should().NotBeNull();
+        }
+        
+        // Check analysis
+        var analysis = response.GetProperty("analysis");
+        analysis.GetProperty("patterns").Should().NotBeNull();
+        analysis.GetProperty("matchQuality").Should().NotBeNull();
+        
+        // Check insights
+        var insights = response.GetProperty("insights");
+        insights.GetArrayLength().Should().BeGreaterThan(0);
+        Console.WriteLine("\nInsights:");
+        foreach (var insight in insights.EnumerateArray())
+        {
+            Console.WriteLine($"- {insight.GetString()}");
+        }
+        
+        // Check actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThan(0);
+        Console.WriteLine("\nActions:");
+        foreach (var action in actions.EnumerateArray())
+        {
+            var id = action.GetProperty("id").GetString();
+            var priority = action.GetProperty("priority").GetString();
+            Console.WriteLine($"- [{priority}] {id}");
+        }
+        
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("summary");
+        meta.GetProperty("tokens").GetInt32().Should().BeGreaterThan(0);
+        
+        // Check performance claim
+        var searchTime = summary.GetProperty("searchTime").GetString();
+        Console.WriteLine($"\nSearch performance: {searchTime} - {summary.GetProperty("performance").GetString()}");
+    }
+
+    [Fact]
+    public async Task Should_Handle_Fuzzy_Search()
+    {
+        // Arrange - add test documents to the index
+        await AddTestDocumentsToIndex();
+        
+        // Act - fuzzy search with typo
+        var result = await _tool.ExecuteAsync(
+            query: "tst",  // Typo for "test"
+            workspacePath: _testWorkspacePath,
+            searchType: "fuzzy");
+        
+        // Assert
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        if (response.GetProperty("success").GetBoolean())
+        {
+            var query = response.GetProperty("query");
+            query.GetProperty("type").GetString().Should().Be("fuzzy");
+            
+            var summary = response.GetProperty("summary");
+            var totalFound = summary.GetProperty("totalFound").GetInt32();
+            
+            if (totalFound > 0)
+            {
+                Console.WriteLine($"Fuzzy search found {totalFound} matches for 'tst'");
+                
+                // Check match quality shows fuzzy matches
+                var analysis = response.GetProperty("analysis");
+                var matchQuality = analysis.GetProperty("matchQuality");
+                if (matchQuality.TryGetProperty("fuzzyMatches", out var fuzzyMatches))
+                {
+                    Console.WriteLine($"Fuzzy matches: {fuzzyMatches.GetInt32()}");
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Should_Detect_File_Patterns()
+    {
+        // Arrange - add test documents to the index
+        await AddTestDocumentsToIndex();
+        
+        // Act - search for common pattern
+        var result = await _tool.ExecuteAsync(
+            query: "*.cs",
+            workspacePath: _testWorkspacePath,
+            searchType: "wildcard");
+        
+        // Assert
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        if (response.GetProperty("success").GetBoolean())
+        {
+            var analysis = response.GetProperty("analysis");
+            var patterns = analysis.GetProperty("patterns");
+            
+            Console.WriteLine("\nDetected patterns:");
+            foreach (var pattern in patterns.EnumerateArray())
+            {
+                Console.WriteLine($"- {pattern.GetString()}");
+            }
+            
+            // Check for hotspots
+            if (analysis.TryGetProperty("hotspots", out var hotspots))
+            {
+                if (hotspots.TryGetProperty("directories", out var directories))
+                {
+                    Console.WriteLine("\nDirectory hotspots:");
+                    foreach (var dir in directories.EnumerateArray())
+                    {
+                        Console.WriteLine($"- {dir.GetProperty("path").GetString()}: {dir.GetProperty("count").GetInt32()} files");
+                    }
+                }
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Should_Support_Full_Mode()
+    {
+        // Arrange - add test documents to the index
+        await AddTestDocumentsToIndex();
+        
+        // Act
+        var result = await _tool.ExecuteAsync(
+            query: "test",
+            workspacePath: _testWorkspacePath,
+            maxResults: 10,
+            mode: ResponseMode.Full);
+        
+        // Assert
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        // Check meta mode
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("full");
+        
+        // In full mode, results should have complete details
+        if (response.TryGetProperty("results", out var results))
+        {
+            results.Should().NotBeNull();
+            
+            if (results.GetArrayLength() > 0)
+            {
+                var firstResult = results[0];
+                firstResult.GetProperty("path").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("filename").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("relativePath").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("extension").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("size").GetInt64().Should().BeGreaterThanOrEqualTo(0);
+                firstResult.GetProperty("sizeFormatted").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("lastModified").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("score").GetDouble().Should().BeGreaterThan(0);
+                
+                Console.WriteLine($"\nFirst result: {firstResult.GetProperty("filename").GetString()} ({firstResult.GetProperty("sizeFormatted").GetString()})");
+            }
+        }
+    }
+
+    [Fact]
+    public async Task Should_Handle_No_Results()
+    {
+        // Arrange - add test documents to the index
+        await AddTestDocumentsToIndex();
+        
+        // Act - search for non-existent file
+        var result = await _tool.ExecuteAsync(
+            query: "nonexistentfile12345",
+            workspacePath: _testWorkspacePath,
+            searchType: "exact");
+        
+        // Assert
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        
+        var summary = response.GetProperty("summary");
+        summary.GetProperty("totalFound").GetInt32().Should().Be(0);
+        
+        // Should have insights about no results
+        var insights = response.GetProperty("insights");
+        var hasNoResultsInsight = false;
+        foreach (var insight in insights.EnumerateArray())
+        {
+            var insightText = insight.GetString() ?? "";
+            if (insightText.Contains("No files matching"))
+            {
+                hasNoResultsInsight = true;
+                Console.WriteLine($"Found insight: {insightText}");
+                break;
+            }
+        }
+        hasNoResultsInsight.Should().BeTrue("Should have insight about no results");
+        
+        // Should suggest alternative searches
+        var actions = response.GetProperty("actions");
+        var hasSuggestions = false;
+        foreach (var action in actions.EnumerateArray())
+        {
+            var id = action.GetProperty("id").GetString() ?? "";
+            if (id.Contains("fuzzy") || id.Contains("wildcard"))
+            {
+                hasSuggestions = true;
+                Console.WriteLine($"Suggested action: {id}");
+                break;
+            }
+        }
+        hasSuggestions.Should().BeTrue("Should suggest alternative search types");
+    }
+}

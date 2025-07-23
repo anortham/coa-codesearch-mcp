@@ -84,13 +84,8 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
             
             Logger.LogInformation("Dependency analysis completed in {ElapsedMs}ms", stopwatch.ElapsedMilliseconds);
 
-            // Create Claude-optimized response
-            var response = await CreateClaudeResponseAsync(
-                dependencyData,
-                mode,
-                data => CreateSummaryData(data, targetSymbol, direction),
-                cancellationToken);
-
+            // Create AI-optimized response
+            var response = CreateAiOptimizedResponse(dependencyData, targetSymbol, direction, mode, cancellationToken);
             return response;
         }
         catch (Exception ex)
@@ -453,6 +448,229 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
                 GetFullContextCommand = new { detailLevel = "graph", depth = 2 }
             }
         };
+    }
+
+    private object CreateAiOptimizedResponse(DependencyData data, ISymbol targetSymbol, string direction, ResponseMode mode, CancellationToken cancellationToken)
+    {
+        // Calculate coupling metrics
+        var afferentCoupling = data.Metrics.IncomingCount;
+        var efferentCoupling = data.Metrics.OutgoingCount;
+        var instability = (afferentCoupling + efferentCoupling) > 0 
+            ? (double)efferentCoupling / (afferentCoupling + efferentCoupling) 
+            : 0;
+
+        // Analyze circular dependencies
+        var circularPaths = data.CircularDependencies
+            .Take(5)
+            .Select(cd => new { 
+                path = string.Join(" → ", cd.Path.Take(5)), 
+                length = cd.Path.Count 
+            })
+            .ToList();
+
+        // Get hotspots (most connected symbols)
+        var hotspots = IdentifyDependencyHotspots(data.Graph)
+            .Take(5)
+            .Select(h => new { 
+                file = h.File, 
+                connections = h.Occurrences,
+                complexity = h.Complexity 
+            })
+            .ToList();
+
+        // Project distribution
+        var projectDist = data.Graph.GetProjectDistribution();
+        
+        // Generate insights
+        var insights = GenerateDependencyInsights(data, targetSymbol, instability);
+        
+        // Assess health
+        var health = AssessDependencyHealth(data, instability);
+        
+        // Generate actions
+        var actions = new List<object>();
+        
+        if (data.CircularDependencies.Any())
+        {
+            actions.Add(new 
+            { 
+                id = "fix_circular", 
+                cmd = new { detailLevel = "circular", maxPaths = 10 }, 
+                tokens = Math.Min(2500, data.CircularDependencies.Count * 250),
+                priority = "critical"
+            });
+        }
+        
+        if (afferentCoupling > 20)
+        {
+            actions.Add(new 
+            { 
+                id = "analyze_coupling", 
+                cmd = new { detailLevel = "coupling", focusOn = "incoming" }, 
+                tokens = 2000,
+                priority = "high"
+            });
+        }
+
+        if (hotspots.Any(h => h.connections > 15))
+        {
+            actions.Add(new 
+            { 
+                id = "review_hotspots", 
+                cmd = new { detailLevel = "hotspots", threshold = 10 }, 
+                tokens = 2500,
+                priority = "recommended"
+            });
+        }
+
+        if (mode == ResponseMode.Summary && data.Metrics.TotalDependencies < 500)
+        {
+            actions.Add(new 
+            { 
+                id = "full_graph", 
+                cmd = new { responseMode = "full" }, 
+                tokens = EstimateFullResponseTokens(data),
+                priority = "available"
+            });
+        }
+
+        return new
+        {
+            success = true,
+            operation = "dependency_analysis",
+            target = new
+            {
+                symbol = targetSymbol.Name,
+                type = targetSymbol.Kind.ToString().ToLowerInvariant(),
+                namespace_ = targetSymbol.ContainingNamespace?.ToString() ?? "global"
+            },
+            analysis = new
+            {
+                direction = direction.ToLowerInvariant(),
+                depth = data.Depth,
+                scope = new
+                {
+                    includeTests = data.IncludeTests,
+                    includeExternal = data.IncludeExternalDependencies
+                }
+            },
+            metrics = new
+            {
+                incoming = afferentCoupling,
+                outgoing = efferentCoupling,
+                total = data.Metrics.TotalDependencies,
+                instability = Math.Round(instability, 2),
+                files = data.Metrics.UniqueFiles,
+                projects = projectDist.Count
+            },
+            health = health,
+            circular = new
+            {
+                found = data.CircularDependencies.Count > 0,
+                count = data.CircularDependencies.Count,
+                paths = circularPaths
+            },
+            hotspots = hotspots,
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                tokens = SizeEstimator.EstimateTokens(new { dependencies = data.Metrics.TotalDependencies }),
+                cached = $"dep_{Guid.NewGuid().ToString("N")[..8]}"
+            }
+        };
+    }
+
+    private string AssessDependencyHealth(DependencyData data, double instability)
+    {
+        var score = 100;
+        var issues = new List<string>();
+        
+        // Circular dependencies are critical
+        if (data.CircularDependencies.Any())
+        {
+            score -= Math.Min(50, data.CircularDependencies.Count * 10);
+            issues.Add("circular dependencies");
+        }
+        
+        // High coupling
+        if (data.Metrics.IncomingCount > 30)
+        {
+            score -= 20;
+            issues.Add("high afferent coupling");
+        }
+        
+        if (data.Metrics.OutgoingCount > 40)
+        {
+            score -= 15;
+            issues.Add("high efferent coupling");
+        }
+        
+        // Instability extremes
+        if (instability > 0.9 && data.Metrics.IncomingCount < 3)
+        {
+            score -= 10;
+            issues.Add("unstable with low reuse");
+        }
+        
+        if (score >= 80) return "healthy";
+        if (score >= 60) return "moderate";
+        if (score >= 40) return "poor";
+        return "critical";
+    }
+
+    private List<string> GenerateDependencyInsights(DependencyData data, ISymbol targetSymbol, double instability)
+    {
+        var insights = new List<string>();
+        
+        // Circular dependency insights
+        if (data.CircularDependencies.Any())
+        {
+            insights.Add($"⚠️ {data.CircularDependencies.Count} circular dependency path(s) detected - requires refactoring");
+        }
+        
+        // Coupling insights
+        if (data.Metrics.IncomingCount > 20)
+        {
+            insights.Add($"High coupling: {data.Metrics.IncomingCount} components depend on this - changes have wide impact");
+        }
+        
+        if (data.Metrics.OutgoingCount > 30)
+        {
+            insights.Add($"Complex dependencies: depends on {data.Metrics.OutgoingCount} components - consider simplifying");
+        }
+        
+        // Stability insights
+        if (instability > 0.8 && data.Metrics.IncomingCount < 3)
+        {
+            insights.Add("Unstable component with low reuse - candidate for consolidation");
+        }
+        else if (instability < 0.2 && data.Metrics.OutgoingCount > 10)
+        {
+            insights.Add("Stable component with many dependencies - potential abstraction leak");
+        }
+        
+        // Architecture insights
+        var projectDist = data.Graph.GetProjectDistribution();
+        if (projectDist.Count > 3)
+        {
+            insights.Add($"Cross-cutting concern: spans {projectDist.Count} projects");
+        }
+        
+        // Type-specific insights
+        if (targetSymbol.Kind == SymbolKind.NamedType && targetSymbol.IsAbstract)
+        {
+            insights.Add("Abstract type - stability is important for derived types");
+        }
+        
+        return insights;
+    }
+
+    private int EstimateFullResponseTokens(DependencyData data)
+    {
+        // Estimate ~50 tokens per dependency edge
+        return Math.Min(25000, data.Metrics.TotalDependencies * 50);
     }
 
     private (string level, string insight) AnalyzeCoupling(DependencyData data)

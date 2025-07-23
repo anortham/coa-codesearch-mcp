@@ -14,7 +14,7 @@ namespace COA.CodeSearch.McpServer.Tests.Infrastructure;
 public class DependencyAnalysisV2Test : TestBase
 {
     [Fact]
-    public async Task Should_Return_Summary_With_Dependency_Insights()
+    public async Task Should_Return_AI_Optimized_Dependency_Analysis()
     {
         // Arrange
         var tool = new DependencyAnalysisToolV2(
@@ -46,58 +46,70 @@ public class DependencyAnalysisV2Test : TestBase
         });
         
         // Print it
-        Console.WriteLine("=== DEPENDENCY ANALYSIS RESULT ===");
+        Console.WriteLine("=== AI-OPTIMIZED DEPENDENCY ANALYSIS ===");
         Console.WriteLine(json);
         Console.WriteLine("=== END ===");
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Basic assertions
+        // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        response.GetProperty("operation").GetString().Should().Be("dependency_analysis");
         
-        // Check data structure
-        var data = response.GetProperty("data");
-        data.Should().NotBeNull();
+        // Check target
+        var target = response.GetProperty("target");
+        target.GetProperty("symbol").GetString().Should().Be("TestClass");
+        target.GetProperty("type").GetString().Should().NotBeNullOrEmpty();
         
-        // Check overview
-        var overview = data.GetProperty("overview");
-        overview.Should().NotBeNull();
+        // Check analysis settings
+        var analysis = response.GetProperty("analysis");
+        analysis.GetProperty("direction").GetString().Should().Be("both");
+        analysis.GetProperty("depth").GetInt32().Should().Be(2);
         
-        // Check for insights
-        if (overview.TryGetProperty("keyInsights", out var insights))
+        // Check metrics
+        var metrics = response.GetProperty("metrics");
+        metrics.GetProperty("incoming").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        metrics.GetProperty("outgoing").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        metrics.GetProperty("instability").GetDouble().Should().BeInRange(0, 1);
+        
+        // Check health assessment
+        response.GetProperty("health").GetString().Should().BeOneOf("healthy", "moderate", "poor", "critical");
+        
+        // Check circular dependencies
+        var circular = response.GetProperty("circular");
+        // Just verify we can read it as boolean - it's either true or false
+        var found = circular.GetProperty("found").GetBoolean();
+        circular.GetProperty("count").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        
+        // Check insights
+        var insights = response.GetProperty("insights");
+        insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nInsights:");
+        foreach (var insight in insights.EnumerateArray())
         {
-            Console.WriteLine("\nKey Insights:");
-            foreach (var insight in insights.EnumerateArray())
-            {
-                Console.WriteLine($"- {insight.GetString()}");
-            }
+            Console.WriteLine($"- {insight.GetString()}");
         }
         
         // Check hotspots
-        if (data.TryGetProperty("hotspots", out var hotspots))
-        {
-            Console.WriteLine("\nHotspots:");
-            foreach (var hotspot in hotspots.EnumerateArray())
-            {
-                var file = hotspot.GetProperty("file").GetString();
-                var occurrences = hotspot.GetProperty("occurrences").GetInt32();
-                Console.WriteLine($"- {file}: {occurrences} connections");
-            }
-        }
+        var hotspots = response.GetProperty("hotspots");
+        hotspots.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Check next actions
-        var nextActions = response.GetProperty("nextActions");
-        var recommended = nextActions.GetProperty("recommended").EnumerateArray();
-        
-        Console.WriteLine("\nRecommended Actions:");
-        foreach (var action in recommended)
+        // Check actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nActions:");
+        foreach (var action in actions.EnumerateArray())
         {
-            var desc = action.GetProperty("description").GetString();
+            var id = action.GetProperty("id").GetString();
             var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {desc}");
+            Console.WriteLine($"- [{priority}] {id}");
         }
+        
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("summary");
+        meta.GetProperty("cached").GetString().Should().StartWith("dep_");
     }
     
     [Fact]
@@ -133,36 +145,31 @@ public class DependencyAnalysisV2Test : TestBase
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Should succeed
+        // Check AI-optimized response
         response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("dependency_analysis");
         
-        // Check context for impact analysis
-        if (response.TryGetProperty("context", out var context))
+        // Check analysis direction
+        var analysis = response.GetProperty("analysis");
+        analysis.GetProperty("direction").GetString().Should().Be("outgoing");
+        analysis.GetProperty("depth").GetInt32().Should().Be(1);
+        
+        // Check metrics - should have 0 incoming when analyzing only outgoing
+        var metrics = response.GetProperty("metrics");
+        metrics.GetProperty("incoming").GetInt32().Should().Be(0);
+        metrics.GetProperty("outgoing").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        
+        // Check health and insights
+        Console.WriteLine("\nOutgoing Dependencies Analysis:");
+        Console.WriteLine($"Health: {response.GetProperty("health").GetString()}");
+        Console.WriteLine($"Outgoing count: {metrics.GetProperty("outgoing").GetInt32()}");
+        Console.WriteLine($"Instability: {metrics.GetProperty("instability").GetDouble()}");
+        
+        // If there are circular dependencies, they should be reported
+        var circular = response.GetProperty("circular");
+        if (circular.GetProperty("found").GetBoolean())
         {
-            Console.WriteLine("\nDependency Analysis Context:");
-            
-            if (context.TryGetProperty("impact", out var impact))
-            {
-                Console.WriteLine($"Impact: {impact.GetString()}");
-            }
-            
-            if (context.TryGetProperty("riskFactors", out var riskFactors))
-            {
-                Console.WriteLine("Risk Factors:");
-                foreach (var risk in riskFactors.EnumerateArray())
-                {
-                    Console.WriteLine($"- {risk.GetString()}");
-                }
-            }
-            
-            if (context.TryGetProperty("suggestions", out var suggestions))
-            {
-                Console.WriteLine("Suggestions:");
-                foreach (var suggestion in suggestions.EnumerateArray())
-                {
-                    Console.WriteLine($"- {suggestion.GetString()}");
-                }
-            }
+            Console.WriteLine($"\nCircular dependencies found: {circular.GetProperty("count").GetInt32()}");
         }
     }
 }

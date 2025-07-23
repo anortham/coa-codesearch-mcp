@@ -26,7 +26,7 @@ public class FindReferencesV2Tests : TestBase
     }
 
     [Fact]
-    public async Task Should_Return_Summary_Mode_With_Insights()
+    public async Task Should_Return_AI_Optimized_Response()
     {
         // Arrange
         var testCodePath = GetTestCodePath();
@@ -48,53 +48,53 @@ public class FindReferencesV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("Claude-optimized response:\n{Json}", json);
+        Logger.LogInformation("AI-optimized response:\n{Json}", json);
         
         // Parse as dynamic to check structure
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Check response structure
+        // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        response.GetProperty("operation").GetString().Should().Be("find_references");
         
-        // Check data structure
-        var data = response.GetProperty("data");
-        data.Should().NotBeNull();
+        // Check symbol info
+        var symbol = response.GetProperty("symbol");
+        symbol.GetProperty("name").GetString().Should().NotBeNullOrEmpty();
+        symbol.GetProperty("type").GetString().Should().NotBeNullOrEmpty();
         
-        // Check overview
-        var overview = data.GetProperty("overview");
-        overview.GetProperty("totalItems").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        // Check summary structure
+        var summary = response.GetProperty("summary");
+        summary.GetProperty("total").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("usages").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("files").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        summary.GetProperty("impact").GetString().Should().NotBeNullOrEmpty();
         
-        // For small test projects, keyInsights might be empty
-        if (overview.TryGetProperty("keyInsights", out var insights))
-        {
-            insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        }
+        // Check insights array
+        var insights = response.GetProperty("insights");
+        insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Check for progressive disclosure metadata
-        var metadata = response.GetProperty("metadata");
-        metadata.GetProperty("detailRequestToken").GetString().Should().NotBeNullOrEmpty();
+        // Check hotspots
+        var hotspots = response.GetProperty("hotspots");
+        hotspots.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Check next actions - may be empty for small projects
-        var nextActions = response.GetProperty("nextActions");
-        if (nextActions.TryGetProperty("recommended", out var recommended))
-        {
-            recommended.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        }
+        // Check actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         
-        // Check context analysis - should always have impact
-        var context = response.GetProperty("context");
-        context.GetProperty("impact").GetString().Should().NotBeNullOrEmpty();
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("summary");
+        meta.GetProperty("cached").GetString().Should().StartWith("refs_");
     }
 
     [Fact]
-    public async Task Should_Auto_Switch_To_Summary_For_Large_Results()
+    public async Task Should_Return_Full_Mode_For_Small_Results()
     {
-        // This test would need a symbol with many references
+        // This test would need a symbol with many references to test auto-switch
         // For now, we'll test with TestClass which has limited references
         var testCodePath = GetTestCodePath();
         
-        // Act - Request full mode but should auto-switch if large
+        // Act - Request full mode - should stay full for small results
         var result = await _tool.ExecuteAsync(
             testCodePath,
             line: 9,
@@ -109,28 +109,25 @@ public class FindReferencesV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("Auto-switch test response:\n{Json}", json);
+        Logger.LogInformation("Full mode test response:\n{Json}", json);
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Check if we have a success property first
-        if (!response.TryGetProperty("success", out var successProperty))
-        {
-            Logger.LogError("Response does not contain 'success' property: {Json}", json);
-            return; // Skip test if response is invalid
-        }
+        // Check AI-optimized response structure
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("find_references");
         
-        successProperty.GetBoolean().Should().BeTrue();
+        // Check meta to verify mode
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("mode").GetString().Should().Be("full");
         
-        // For small result sets, it should stay in full mode
-        // In a real scenario with ICmsService, it would auto-switch
-        response.GetProperty("mode").GetString().Should().BeOneOf("full", "summary");
+        // For full mode, we should have reference types breakdown
+        var refTypes = response.GetProperty("refTypes");
+        refTypes.EnumerateObject().Should().NotBeNull();
         
-        if (response.TryGetProperty("autoModeSwitch", out var autoSwitchProperty) && 
-            autoSwitchProperty.ValueKind == JsonValueKind.True)
-        {
-            Logger.LogInformation("Auto-switched to summary mode!");
-            response.GetProperty("mode").GetString().Should().Be("summary");
-        }
+        // Check that we still have the core structure
+        response.GetProperty("symbol").Should().NotBeNull();
+        response.GetProperty("summary").Should().NotBeNull();
+        response.GetProperty("insights").Should().NotBeNull();
     }
 }
