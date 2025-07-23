@@ -103,7 +103,21 @@ Add to your Claude Desktop configuration:
 
 ### Claude Code
 
-#### Method 1: Using Local Build (Development)
+#### Method 1: Using Claude MCP Add Command (Easiest)
+1. Build the project in Release mode:
+   ```bash
+   cd "C:\source\COA Roslyn MCP"
+   dotnet build -c Release
+   ```
+
+2. Use Claude Code's built-in command:
+   ```bash
+   claude mcp add "C:\source\COA Roslyn MCP\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
+   ```
+
+3. Claude Code will automatically restart with the server loaded
+
+#### Method 2: Manual Configuration
 1. Build the project in Release mode:
    ```bash
    cd "C:\source\COA Roslyn MCP"
@@ -126,7 +140,7 @@ Add to your Claude Desktop configuration:
 
 3. Restart Claude Code to load the MCP server
 
-#### Method 2: Using Published Build (Recommended)
+#### Method 3: Using Published Build (Production)
 1. Create a published build:
    ```bash
    cd "C:\source\COA Roslyn MCP"
@@ -150,7 +164,14 @@ Add to your Claude Desktop configuration:
 **Note**: Replace `C:\source\COA Roslyn MCP` with your actual project path.
 
 #### For GitHub Clones
-If you cloned from GitHub, update the paths accordingly:
+If you cloned from GitHub:
+
+**Using claude mcp add:**
+```bash
+claude mcp add "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
+```
+
+**Or manually edit settings.json:**
 ```json
 {
   "mcpServers": {
