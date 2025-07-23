@@ -102,6 +102,7 @@ var host = Host.CreateDefaultBuilder(args)
         // TypeScript Analysis
         services.AddSingleton<TypeScriptInstaller>();
         services.AddSingleton<TypeScriptAnalysisService>();
+        services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
         services.AddSingleton<TypeScriptTextAnalysisService>();
         
         // Initialize TypeScript on startup
@@ -153,6 +154,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TypeScriptGoToDefinitionTool>();
         services.AddSingleton<TypeScriptFindReferencesTool>();
         services.AddSingleton<TypeScriptSearchTool>();
+        services.AddSingleton<TypeScriptRenameTool>();
         
         // Register the MCP server as a hosted service and notification service
         services.AddSingleton<McpServer>();

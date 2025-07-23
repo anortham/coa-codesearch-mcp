@@ -9,11 +9,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class TypeScriptGoToDefinitionTool
 {
     private readonly ILogger<TypeScriptGoToDefinitionTool> _logger;
-    private readonly TypeScriptAnalysisService _tsService;
+    private readonly ITypeScriptAnalysisService _tsService;
 
     public TypeScriptGoToDefinitionTool(
         ILogger<TypeScriptGoToDefinitionTool> logger,
-        TypeScriptAnalysisService tsService)
+        ITypeScriptAnalysisService tsService)
     {
         _logger = logger;
         _tsService = tsService;

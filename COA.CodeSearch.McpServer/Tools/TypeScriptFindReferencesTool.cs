@@ -9,11 +9,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class TypeScriptFindReferencesTool
 {
     private readonly ILogger<TypeScriptFindReferencesTool> _logger;
-    private readonly TypeScriptAnalysisService _tsService;
+    private readonly ITypeScriptAnalysisService _tsService;
 
     public TypeScriptFindReferencesTool(
         ILogger<TypeScriptFindReferencesTool> logger,
-        TypeScriptAnalysisService tsService)
+        ITypeScriptAnalysisService tsService)
     {
         _logger = logger;
         _tsService = tsService;

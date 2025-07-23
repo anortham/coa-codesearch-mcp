@@ -190,7 +190,7 @@ claude mcp add "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Relea
 npx @modelcontextprotocol/inspector dotnet run --project COA.CodeSearch.McpServer -- stdio
 ```
 
-## 🛠️ Available Tools (51 Total)
+## 🛠️ Available Tools (52 Total)
 
 The server provides both standard tools and **AI-optimized V2 versions**. V2 tools feature intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
 
@@ -246,6 +246,7 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `search_typescript` - 🔍 Find TypeScript symbols FAST
 - `typescript_go_to_definition` - ⚡ Jump to TypeScript definitions instantly
 - `typescript_find_references` - Find all TypeScript usages with tsserver accuracy
+- `typescript_rename_symbol` - 🔧 Rename TypeScript symbols across the entire codebase
 
 ### Utilities
 - `batch_operations` - Run multiple operations in parallel

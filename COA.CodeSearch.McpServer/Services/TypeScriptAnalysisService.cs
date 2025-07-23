@@ -28,7 +28,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// 
 /// Use SendNotificationAsync for notifications and SendRequestAsync for requests.
 /// </remarks>
-public class TypeScriptAnalysisService : IDisposable
+public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
 {
     private readonly ILogger<TypeScriptAnalysisService> _logger;
     private readonly IConfiguration _configuration;
@@ -1089,6 +1089,105 @@ public class TypeScriptAnalysisService : IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to get quick info for {File}:{Line}:{Offset}", filePath, line, offset);
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Get rename information for a symbol at a given position
+    /// </summary>
+    public async Task<object?> GetRenameInfoAsync(
+        string filePath,
+        int line,
+        int column,
+        CancellationToken cancellationToken = default)
+    {
+        // Ensure the file path is absolute
+        if (!Path.IsPathRooted(filePath))
+        {
+            _logger.LogWarning("GetRenameInfoAsync received relative path: {FilePath}. Converting to absolute.", filePath);
+            filePath = Path.GetFullPath(filePath);
+        }
+        
+        // Convert column to offset for tsserver
+        var offset = await ConvertColumnToOffsetAsync(filePath, line, column);
+        
+        // Normalize the file path for TypeScript (forward slashes)
+        var normalizedPath = NormalizePathForTypeScript(filePath);
+        
+        // First ensure the file is opened and synchronized in tsserver
+        var fileOpened = await EnsureFileOpenAsync(filePath, cancellationToken);
+        if (!fileOpened)
+        {
+            _logger.LogError("Failed to open file {File} in TypeScript server", filePath);
+            return null;
+        }
+        
+        var request = new
+        {
+            seq = Interlocked.Increment(ref _requestSequence),
+            type = "request",
+            command = "rename",
+            arguments = new
+            {
+                file = normalizedPath,
+                line = line,
+                offset = offset,
+                findInComments = false,
+                findInStrings = false
+            }
+        };
+        
+        try
+        {
+            var response = await SendRequestAsync(request, cancellationToken);
+            if (response?.RootElement.TryGetProperty("body", out var body) == true)
+            {
+                return new
+                {
+                    info = body.TryGetProperty("info", out var info) ? new
+                    {
+                        canRename = info.TryGetProperty("canRename", out var canRename) && canRename.GetBoolean(),
+                        displayName = info.TryGetProperty("displayName", out var displayName) 
+                            ? displayName.GetString() ?? "" 
+                            : "",
+                        fullDisplayName = info.TryGetProperty("fullDisplayName", out var fullDisplayName) 
+                            ? fullDisplayName.GetString() ?? "" 
+                            : "",
+                        kind = info.TryGetProperty("kind", out var kind) 
+                            ? kind.GetString() ?? "" 
+                            : "",
+                        kindModifiers = info.TryGetProperty("kindModifiers", out var kindModifiers) 
+                            ? kindModifiers.GetString() ?? "" 
+                            : "",
+                        localizedErrorMessage = info.TryGetProperty("localizedErrorMessage", out var localizedErrorMessage) 
+                            ? localizedErrorMessage.GetString() 
+                            : null
+                    } : null,
+                    locs = body.TryGetProperty("locs", out var locs) && locs.ValueKind == JsonValueKind.Array
+                        ? locs.EnumerateArray().Select(loc => new
+                        {
+                            file = loc.GetProperty("file").GetString() ?? "",
+                            locs = loc.TryGetProperty("locs", out var innerLocs) && innerLocs.ValueKind == JsonValueKind.Array
+                                ? innerLocs.EnumerateArray().Select(innerLoc => new TypeScriptLocation
+                                {
+                                    File = loc.GetProperty("file").GetString() ?? "",
+                                    Line = innerLoc.GetProperty("start").GetProperty("line").GetInt32(),
+                                    Offset = innerLoc.GetProperty("start").GetProperty("offset").GetInt32(),
+                                    LineText = innerLoc.TryGetProperty("prefixText", out var prefix) && innerLoc.TryGetProperty("suffixText", out var suffix)
+                                        ? $"{prefix.GetString()}{(info.ValueKind != JsonValueKind.Undefined && info.TryGetProperty("displayName", out var displayName) ? displayName.GetString() : "")}{suffix.GetString()}"
+                                        : ""
+                                }).ToList()
+                                : new List<TypeScriptLocation>()
+                        }).ToList()
+                        : null
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get rename info for {File}:{Line}:{Offset}", filePath, line, offset);
         }
         
         return null;

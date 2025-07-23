@@ -842,7 +842,7 @@ When working with full-stack applications (e.g., ASP.NET backend + TypeScript/Re
 
 #### Language-Specific Tools
 - **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`, `get_document_symbols`
-- **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references` (Note: TypeScript rename not yet implemented)
+- **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references`, `typescript_rename_symbol`
 - **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`
 - **All Languages**: `fast_text_search`, `fast_file_search`, and other Lucene-based tools
 
@@ -901,11 +901,10 @@ When renaming a model that spans backend and frontend:
    mcp__codesearch__rename_symbol --file Models/User.cs --newName Customer
    ```
 
-3. **Manually Update Frontend** (TypeScript rename not yet implemented):
-   - TypeScript interfaces
-   - API service calls
-   - Component props
-   - Note: Must be done manually as `rename_symbol` only works for C#
+3. **Rename Frontend** (TypeScript):
+   ```bash
+   mcp__codesearch__typescript_rename_symbol --file models/User.ts --newName Customer
+   ```
 
 4. **Verify Consistency**:
    ```bash

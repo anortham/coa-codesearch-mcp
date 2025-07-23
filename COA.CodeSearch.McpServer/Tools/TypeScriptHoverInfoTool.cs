@@ -7,11 +7,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class TypeScriptHoverInfoTool
 {
     private readonly ILogger<TypeScriptHoverInfoTool> _logger;
-    private readonly TypeScriptAnalysisService _tsService;
+    private readonly ITypeScriptAnalysisService _tsService;
 
     public TypeScriptHoverInfoTool(
         ILogger<TypeScriptHoverInfoTool> logger,
-        TypeScriptAnalysisService tsService)
+        ITypeScriptAnalysisService tsService)
     {
         _logger = logger;
         _tsService = tsService;
