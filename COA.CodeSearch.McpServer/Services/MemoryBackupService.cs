@@ -236,7 +236,7 @@ public class MemoryBackupService : IDisposable
         // Combine with scope filter
         var boolQuery = new BooleanQuery();
         boolQuery.Add(timeQuery, Occur.MUST);
-        boolQuery.Add(new TermQuery(new Term("scope", scope)), Occur.MUST);
+        boolQuery.Add(new TermQuery(new Term("type", scope)), Occur.MUST);
         
         var query = boolQuery;
         _logger.LogInformation("BackupScopeAsync: Filtering for scope '{Scope}'", scope);
@@ -263,7 +263,7 @@ public class MemoryBackupService : IDisposable
             foreach (var hit in debugHits.Take(20)) // Check first 20 docs
             {
                 var doc = searcher.Doc(hit.Doc);
-                var docScope = doc.Get("scope");
+                var docScope = doc.Get("type");
                 var docContent = doc.Get("content");
                 if (!string.IsNullOrEmpty(docScope))
                 {
