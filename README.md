@@ -24,23 +24,23 @@ A high-performance Model Context Protocol (MCP) server that provides blazing-fas
 - Node.js (for TypeScript support - automatically installed if not present)
 - Visual Studio 2022 or Build Tools for Visual Studio (for MSBuild)
 
-## 🔨 Building from Source
-
-The project uses project references for all internal dependencies. To build:
+## 🚀 Quick Start - Building from Source
 
 ```bash
-# Clone the repository
+# 1. Clone and build
 git clone https://github.com/anortham/coa-codesearch-mcp.git
 cd coa-codesearch-mcp
+dotnet build -c Release
 
-# Build the solution
-dotnet build
+# 2. Add to Claude Code
+# Windows
+claude mcp add codesearch "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe"
 
-# Or build specific projects
-dotnet build COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj
+# macOS/Linux
+claude mcp add codesearch ~/Source/coa-codesearch-mcp/COA.CodeSearch.McpServer/bin/Release/net9.0/COA.CodeSearch.McpServer
+
+# That's it! Claude Code will restart with the server loaded.
 ```
-
-All internal dependencies (like COA.Mcp.Protocol) use project references, not NuGet packages.
 
 ## 🌍 Cross-Platform Support
 
@@ -54,56 +54,7 @@ The CodeSearch MCP Server is fully cross-platform and runs on:
 - **Path Separators**: The server automatically handles path separator differences between platforms.
 - **MSBuild/SDK**: On Linux/macOS, ensure you have the .NET SDK installed (Visual Studio not required).
 
-## 🏗️ Building from Source
-
-```bash
-# Clone the repository
-git clone https://github.com/anortham/coa-codesearch-mcp.git
-cd coa-codesearch-mcp
-
-# Restore dependencies
-dotnet restore
-
-# Build in debug mode
-dotnet build
-
-# Build in release mode for better performance
-dotnet build -c Release
-
-# Create a published executable
-dotnet publish -c Release -r win-x64  # For Windows
-dotnet publish -c Release -r linux-x64  # For Linux
-dotnet publish -c Release -r osx-x64    # For macOS
-```
-
-## 🏃 Running from Local Build
-
-### Method 1: Using dotnet run (Development)
-```bash
-# From the repository root
-dotnet run --project COA.CodeSearch.McpServer -- stdio
-
-# Or from the project directory
-cd COA.CodeSearch.McpServer
-dotnet run -- stdio
-```
-
-### Method 2: Using the built executable (Faster startup)
-```bash
-# Windows
-./COA.CodeSearch.McpServer/bin/Debug/net9.0/COA.CodeSearch.McpServer.exe stdio
-
-# Linux/macOS
-./COA.CodeSearch.McpServer/bin/Debug/net9.0/COA.CodeSearch.McpServer stdio
-```
-
-### Method 3: Using the published executable (Production)
-```bash
-# After running dotnet publish
-./COA.CodeSearch.McpServer/bin/Release/net9.0/win-x64/publish/COA.CodeSearch.McpServer.exe stdio
-```
-
-## 🔧 Integration with AI Assistants
+## 🔧 Integration Details
 
 ### Claude Desktop
 Add to your Claude Desktop configuration:
@@ -119,30 +70,19 @@ Add to your Claude Desktop configuration:
 }
 ```
 
-### Claude Code
+### Claude Code - Alternative Methods
 
-#### Method 1: Using Claude MCP Add Command (Easiest)
-1. Build the project in Release mode:
+#### Manual Configuration
+If you prefer to manually configure or the `claude mcp add` command isn't available:
+
+1. Build the project:
    ```bash
-   cd "C:\path\to\coa-codesearch-mcp"
-   dotnet build -c Release
-   ```
-
-2. Use Claude Code's built-in command:
-   ```bash
-   claude mcp add "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
-   ```
-
-3. Claude Code will automatically restart with the server loaded
-
-#### Method 2: Manual Configuration
-1. Build the project in Release mode:
-   ```bash
-   cd "C:\path\to\coa-codesearch-mcp"
    dotnet build -c Release
    ```
 
 2. Add to your Claude Code settings.json:
+   
+   **Windows:**
    ```json
    {
      "mcpServers": {
@@ -155,23 +95,14 @@ Add to your Claude Desktop configuration:
      }
    }
    ```
-
-3. Restart Claude Code to load the MCP server
-
-#### Method 3: Using Published Build (Production)
-1. Create a published build:
-   ```bash
-   cd "C:\path\to\coa-codesearch-mcp"
-   dotnet publish -c Release -r win-x64 --self-contained
-   ```
-
-2. Add to your Claude Code settings.json:
+   
+   **macOS/Linux:**
    ```json
    {
      "mcpServers": {
        "codesearch": {
          "type": "stdio",
-         "command": "C:\\path\\to\\coa-codesearch-mcp\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\win-x64\\publish\\COA.CodeSearch.McpServer.exe",
+         "command": "/home/user/coa-codesearch-mcp/COA.CodeSearch.McpServer/bin/Release/net9.0/COA.CodeSearch.McpServer",
          "args": [],
          "env": {}
        }
@@ -179,34 +110,21 @@ Add to your Claude Desktop configuration:
    }
    ```
 
-**Note**: Replace `C:\path\to\coa-codesearch-mcp` with your actual project path.
+3. Restart Claude Code
 
-#### For GitHub Clones
-If you cloned from GitHub:
-
-**Using claude mcp add:**
+#### Published Build (Optimized)
+For the best performance:
 ```bash
-claude mcp add "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
+# Create optimized build
+dotnet publish -c Release -r win-x64 --self-contained   # Windows
+dotnet publish -c Release -r osx-x64 --self-contained    # macOS Intel
+dotnet publish -c Release -r osx-arm64 --self-contained  # macOS Apple Silicon
+dotnet publish -c Release -r linux-x64 --self-contained  # Linux
+
+# Use the published executable in claude mcp add
+claude mcp add codesearch ~/Source/coa-codesearch-mcp/COA.CodeSearch.McpServer/bin/Release/net9.0/osx-x64/publish/COA.CodeSearch.McpServer
 ```
 
-**Or manually edit settings.json:**
-```json
-{
-  "mcpServers": {
-    "codesearch": {
-      "type": "stdio",
-      "command": "C:\\path\\to\\coa-codesearch-mcp\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\COA.CodeSearch.McpServer.exe",
-      "args": [],
-      "env": {}
-    }
-  }
-}
-```
-
-### Testing with MCP Inspector
-```bash
-npx @modelcontextprotocol/inspector dotnet run --project COA.CodeSearch.McpServer -- stdio
-```
 
 ## 🛠️ Available Tools (52 Total)
 
@@ -363,8 +281,7 @@ restore_memories_from_sqlite
    # Build the server
    dotnet build -c Release
    
-   # Run with a test project
-   dotnet run --project COA.CodeSearch.McpServer -- stdio
+   # Add to Claude Code (see Quick Start section above)
    ```
 
 2. **Basic Usage**
