@@ -234,15 +234,14 @@ The server creates a `.codesearch` directory in your workspace containing:
 - `index/` - Lucene search indexes
 - `project-memory/` - Shared architectural decisions and team knowledge
 - `local-memory/` - Personal work sessions and notes
-- `backups/` - SQLite backup storage (manual backups via `backup_memories_to_sqlite` tool)
-- `memories.db` - SQLite backup database (created by `backup_memories_to_sqlite` tool)
+- `backups/memories.db` - SQLite backup database (created by `backup_memories_to_sqlite` tool)
 - `logs/` - Debug logs (when enabled)
 
-Add `.codesearch/` to your `.gitignore` to exclude these files from version control.
+Add `.codesearch/` to your `.gitignore` to exclude these files from version control, except for `.codesearch/backups/memories.db` which should be committed for team sharing.
 
 ### Memory Backup System
 
-The memory system uses two storage mechanisms:
+The memory system uses two storage mechanisms with a clear separation between shared team knowledge and private developer memories:
 
 **Lucene Indexes** (Primary Storage):
 - Located in `.codesearch/project-memory/` and `.codesearch/local-memory/`
@@ -250,29 +249,74 @@ The memory system uses two storage mechanisms:
 - Not suitable for version control (binary files)
 - Automatically maintained by the memory system
 
-**SQLite Backup** (`.codesearch/memories.db`):
+**SQLite Backup** (`.codesearch/backups/memories.db`):
 - Single portable database file created by `backup_memories_to_sqlite`
 - Perfect for version control and team sharing
 - Contains only essential memory data (no index structures)
 - Can be restored on any machine with `restore_memories_from_sqlite`
 
-Key features:
-- **Manual Backups**: Use `backup_memories_to_sqlite` to create/update the SQLite backup
-- **Incremental**: Only backs up memories modified since last backup
-- **Team Sharing**: By default, backs up only project-level memories (architectural decisions, patterns, etc.)
-- **Selective Restore**: Restored memories don't overwrite existing ones
+#### Two Memory Workspaces
 
-Example backup workflow:
+1. **Project Memory** (`project-memory/`)
+   - **Shared with team** via version control
+   - Contains memories where `IsShared = true`
+   - Default types: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight
+   
+2. **Local Memory** (`local-memory/`)
+   - **Private to developer**
+   - Contains memories where `IsShared = false`
+   - Includes: WorkSession, LocalInsight, WorkingMemory, personal notes
+
+#### What Gets Backed Up by Default
+
+When you run `backup_memories_to_sqlite` without parameters:
+- ✅ **Backs up**: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight
+- ❌ **Excludes**: WorkSession, LocalInsight, WorkingMemory, any custom types with `IsShared = false`
+
+#### How Memory Storage is Determined
+
+```csharp
+// FlexibleMemoryService determines storage location:
+var workspacePath = memory.IsShared ? _projectMemoryWorkspace : _localMemoryWorkspace;
+```
+
+Examples:
+- `flexible_store_memory --type "ArchitecturalDecision" --isShared true` → project-memory/
+- `flexible_store_memory --type "PersonalNote" --isShared false` → local-memory/
+- `flexible_store_working_memory` → Always local-memory/ (IsShared = false)
+
+#### Backup Command Examples
+
 ```bash
-# Create a backup before major changes
+# Default: Backs up only shared project memories
 backup_memories_to_sqlite
 
-# Include local memories in backup (work sessions, personal notes)
+# Include both project AND local memories
 backup_memories_to_sqlite --includeLocal true
 
-# Restore from backup on new machine
+# Backup specific memory types
+backup_memories_to_sqlite --scopes ["TechnicalDebt", "Question"]
+
+# Full backup including all local developer memories
+backup_memories_to_sqlite --scopes ["ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "WorkSession", "LocalInsight"] --includeLocal true
+
+# Restore from backup (same options apply)
 restore_memories_from_sqlite
+restore_memories_from_sqlite --includeLocal true
 ```
+
+#### Version Control Strategy
+
+**Recommended workflow:**
+1. Run `backup_memories_to_sqlite` (project memories only)
+2. Commit `.codesearch/backups/memories.db` to version control
+3. Team members pull and run `restore_memories_from_sqlite`
+4. Everyone has the same shared architectural knowledge
+
+**Privacy preserved:**
+- Local memories stay on developer's machine
+- Working memories expire automatically
+- Personal insights never leave your workspace unless explicitly backed up with `--includeLocal true`
 
 ## 🚀 Quick Start Guide
 
