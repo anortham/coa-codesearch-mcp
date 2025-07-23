@@ -9,11 +9,13 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Main MCP server that handles JSON-RPC communication via STDIO
 /// </summary>
-public class McpServer : BackgroundService
+public class McpServer : BackgroundService, INotificationService
 {
     private readonly ILogger<McpServer> _logger;
     private readonly ToolRegistry _toolRegistry;
     private readonly JsonSerializerOptions _jsonOptions;
+    private StreamWriter? _writer;
+    private readonly SemaphoreSlim _writerLock = new(1, 1);
 
     public McpServer(
         ILogger<McpServer> logger,
@@ -35,7 +37,7 @@ public class McpServer : BackgroundService
         _logger.LogInformation("COA CodeSearch MCP Server starting...");
 
         using var reader = new StreamReader(Console.OpenStandardInput());
-        using var writer = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
+        _writer = new StreamWriter(Console.OpenStandardOutput()) { AutoFlush = true };
 
         while (!stoppingToken.IsCancellationRequested)
         {
@@ -66,12 +68,12 @@ public class McpServer : BackgroundService
                         Id = null!, // JSON-RPC 2.0 spec requires null id for parse errors
                         Error = new JsonRpcError
                         {
-                            Code = -32700,
+                            Code = JsonRpcErrorCodes.ParseError,
                             Message = "Parse error",
                             Data = "Invalid JSON was received by the server"
                         }
                     };
-                    await writer.WriteLineAsync(JsonSerializer.Serialize(errorResponse, _jsonOptions));
+                    await _writer.WriteLineAsync(JsonSerializer.Serialize(errorResponse, _jsonOptions));
                     continue;
                 }
 
@@ -81,7 +83,7 @@ public class McpServer : BackgroundService
                 if (response != null)
                 {
                     var responseJson = JsonSerializer.Serialize(response, _jsonOptions);
-                    await writer.WriteLineAsync(responseJson);
+                    await _writer.WriteLineAsync(responseJson);
                 }
             }
             catch (OperationCanceledException)
@@ -206,22 +208,64 @@ public class McpServer : BackgroundService
         {
             InvalidParametersException => new JsonRpcError
             {
-                Code = -32602,
+                Code = JsonRpcErrorCodes.InvalidParams,
                 Message = "Invalid parameters",
                 Data = ex.Message
             },
             NotSupportedException => new JsonRpcError
             {
-                Code = -32601,
+                Code = JsonRpcErrorCodes.MethodNotFound,
                 Message = "Method not found",
                 Data = ex.Message
             },
             _ => new JsonRpcError
             {
-                Code = -32603,
+                Code = JsonRpcErrorCodes.InternalError,
                 Message = "Internal error",
                 Data = ex.Message
             }
         };
+    }
+
+    #region INotificationService Implementation
+
+    public async Task SendNotificationAsync(JsonRpcNotification notification, CancellationToken cancellationToken = default)
+    {
+        if (_writer == null)
+        {
+            _logger.LogWarning("Cannot send notification - writer not initialized");
+            return;
+        }
+
+        await _writerLock.WaitAsync(cancellationToken);
+        try
+        {
+            var json = JsonSerializer.Serialize(notification, _jsonOptions);
+            await _writer.WriteLineAsync(json);
+            await _writer.FlushAsync();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to send notification");
+        }
+        finally
+        {
+            _writerLock.Release();
+        }
+    }
+
+    public async Task SendProgressAsync(string progressToken, int progress, int? total = null, string? message = null, CancellationToken cancellationToken = default)
+    {
+        var notification = new ProgressNotification(progressToken, progress, total, message);
+        await SendNotificationAsync(notification, cancellationToken);
+    }
+
+    #endregion
+
+    public override void Dispose()
+    {
+        _writer?.Dispose();
+        _writerLock?.Dispose();
+        base.Dispose();
     }
 }
