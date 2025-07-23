@@ -52,13 +52,8 @@ public class GetDiagnosticsToolV2 : ClaudeOptimizedToolBase
                 return CreateErrorResponse<object>(diagnosticData.Error ?? "Failed to collect diagnostics");
             }
 
-            // Create Claude-optimized response
-            var response = await CreateClaudeResponseAsync(
-                diagnosticData,
-                mode,
-                data => CreateSummaryData(data),
-                cancellationToken);
-
+            // Create AI-optimized response
+            var response = CreateAiOptimizedResponse(diagnosticData, mode, cancellationToken);
             return response;
         }
         catch (Exception ex)
@@ -274,6 +269,188 @@ public class GetDiagnosticsToolV2 : ClaudeOptimizedToolBase
                 GetFullContextCommand = new { detailLevel = "errors", maxItems = 20 }
             }
         };
+    }
+
+    private object CreateAiOptimizedResponse(DiagnosticsData data, ResponseMode mode, CancellationToken cancellationToken)
+    {
+        // Calculate severity breakdown
+        var severityCounts = data.GroupedBySeverity
+            .ToDictionary(kvp => kvp.Key.ToLowerInvariant(), kvp => kvp.Value.Count);
+        
+        // Identify most common issues
+        var topIssues = data.Diagnostics
+            .GroupBy(d => d.Id)
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .Select(g => new { id = g.Key, count = g.Count(), example = g.First().Message })
+            .ToList();
+
+        // Get hotspots
+        var hotspots = data.GroupedByFile
+            .OrderByDescending(kvp => kvp.Value.Count)
+            .Take(5)
+            .Select(kvp => new { file = kvp.Key, issues = kvp.Value.Count })
+            .ToList();
+
+        // Generate insights
+        var insights = GenerateDiagnosticInsights(data);
+        
+        // Priority assessment
+        var priority = AssessDiagnosticPriority(data);
+        
+        // Generate actions
+        var actions = new List<object>();
+        
+        if (severityCounts.ContainsKey("error") && severityCounts["error"] > 0)
+        {
+            actions.Add(new 
+            { 
+                id = "fix_errors", 
+                cmd = new { detailLevel = "errors", maxItems = 20 }, 
+                tokens = Math.Min(3000, severityCounts["error"] * 150),
+                priority = "critical"
+            });
+        }
+        
+        if (hotspots.Any())
+        {
+            actions.Add(new 
+            { 
+                id = "review_hotspots", 
+                cmd = new { detailLevel = "hotspots", maxFiles = 5 }, 
+                tokens = Math.Min(2500, hotspots.Count * 500),
+                priority = severityCounts.ContainsKey("error") ? "high" : "recommended"
+            });
+        }
+
+        if (topIssues.Any(i => i.count > 5))
+        {
+            actions.Add(new 
+            { 
+                id = "fix_recurring", 
+                cmd = new { detailLevel = "recurring", threshold = 5 }, 
+                tokens = 2000,
+                priority = "normal"
+            });
+        }
+
+        if (mode == ResponseMode.Summary && data.Diagnostics.Count < 200)
+        {
+            actions.Add(new 
+            { 
+                id = "full_details", 
+                cmd = new { responseMode = "full" }, 
+                tokens = EstimateFullResponseTokens(data),
+                priority = "available"
+            });
+        }
+
+        return new
+        {
+            success = true,
+            operation = "get_diagnostics",
+            scope = new
+            {
+                path = data.Path,
+                type = data.Path.EndsWith(".sln") ? "solution" :
+                       data.Path.EndsWith(".csproj") ? "project" : "file",
+                projects = data.ProjectDiagnostics.Count
+            },
+            summary = new
+            {
+                total = data.Diagnostics.Count,
+                files = data.GroupedByFile.Count,
+                severity = severityCounts,
+                priority = priority
+            },
+            topIssues = topIssues,
+            hotspots = hotspots,
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                tokens = SizeEstimator.EstimateTokens(new { diagnostics = data.Diagnostics.Take(10) }),
+                cached = $"diag_{Guid.NewGuid().ToString("N")[..8]}"
+            }
+        };
+    }
+
+    private string AssessDiagnosticPriority(DiagnosticsData data)
+    {
+        var errorCount = data.GroupedBySeverity.ContainsKey("Error") ? 
+            data.GroupedBySeverity["Error"].Count : 0;
+        
+        if (errorCount > 20) return "critical";
+        if (errorCount > 5) return "high";
+        if (errorCount > 0) return "medium";
+        
+        var warningCount = data.GroupedBySeverity.ContainsKey("Warning") ? 
+            data.GroupedBySeverity["Warning"].Count : 0;
+        
+        if (warningCount > 50) return "medium";
+        if (warningCount > 20) return "low";
+        
+        return "minimal";
+    }
+
+    private List<string> GenerateDiagnosticInsights(DiagnosticsData data)
+    {
+        var insights = new List<string>();
+        
+        // Severity insights
+        var errorCount = data.GroupedBySeverity.ContainsKey("Error") ? 
+            data.GroupedBySeverity["Error"].Count : 0;
+        var warningCount = data.GroupedBySeverity.ContainsKey("Warning") ? 
+            data.GroupedBySeverity["Warning"].Count : 0;
+        
+        if (errorCount > 0)
+        {
+            insights.Add($"{errorCount} build error(s) - must fix before deployment");
+        }
+        
+        if (warningCount > 50)
+        {
+            insights.Add($"High warning count ({warningCount}) - consider cleanup");
+        }
+        
+        // Common issue patterns
+        var commonIssues = data.Diagnostics
+            .GroupBy(d => d.Id)
+            .Where(g => g.Count() > 5)
+            .OrderByDescending(g => g.Count())
+            .Take(3);
+        
+        if (commonIssues.Any())
+        {
+            var issueList = string.Join(", ", commonIssues.Select(g => $"{g.Key} ({g.Count()}x)"));
+            insights.Add($"Recurring: {issueList}");
+        }
+        
+        // File concentration
+        var filesWithManyIssues = data.GroupedByFile
+            .Where(kvp => kvp.Value.Count > 10)
+            .Count();
+        
+        if (filesWithManyIssues > 0)
+        {
+            insights.Add($"{filesWithManyIssues} file(s) with 10+ issues - focus areas");
+        }
+        
+        // Category insights
+        var nullabilityIssues = data.Diagnostics.Count(d => d.Id.StartsWith("CS8"));
+        if (nullabilityIssues > 20)
+        {
+            insights.Add($"{nullabilityIssues} nullability warnings - enable nullable reference types");
+        }
+        
+        return insights;
+    }
+
+    private int EstimateFullResponseTokens(DiagnosticsData data)
+    {
+        // Estimate ~100 tokens per diagnostic with full details
+        return Math.Min(25000, data.Diagnostics.Count * 100);
     }
 
     private async Task AddProjectDiagnosticsAsync(

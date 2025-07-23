@@ -28,7 +28,7 @@ public class ProjectStructureAnalysisV2Tests : TestBase
     }
 
     [Fact]
-    public async Task Should_Return_Summary_Mode_With_Solution_Insights()
+    public async Task Should_Return_AI_Optimized_Project_Structure()
     {
         // Arrange
         var projectPath = GetTestProjectPath();
@@ -50,76 +50,71 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("Claude-optimized project structure response:\n{Json}", json);
+        Console.WriteLine("=== AI-OPTIMIZED PROJECT STRUCTURE ===");
+        Console.WriteLine(json);
+        Console.WriteLine("=== END ===");
         
         // Parse as dynamic to check structure
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Log error if not successful
-        if (response.TryGetProperty("success", out var success) && !success.GetBoolean())
-        {
-            if (response.TryGetProperty("error", out var error))
-            {
-                Logger.LogError("Test failed with error: {Error}", error.GetString());
-            }
-        }
-        
-        // Check response structure
+        // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("mode").GetString().Should().Be("summary");
+        response.GetProperty("operation").GetString().Should().Be("project_structure_analysis");
         
-        // Check data structure
-        var data = response.GetProperty("data");
-        data.Should().NotBeNull();
+        // Check workspace
+        var workspace = response.GetProperty("workspace");
+        workspace.GetProperty("path").GetString().Should().Be(projectPath);
+        workspace.GetProperty("type").GetString().Should().NotBeNullOrEmpty();
         
         // Check overview
-        var overview = data.GetProperty("overview");
-        overview.GetProperty("totalItems").GetInt32().Should().BeGreaterThan(0);
+        var overview = response.GetProperty("overview");
+        overview.GetProperty("projects").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        overview.GetProperty("files").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        overview.GetProperty("lines").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         
-        // For small test projects, keyInsights might be empty
-        if (overview.TryGetProperty("keyInsights", out var keyInsights))
+        // Check breakdown
+        var breakdown = response.GetProperty("breakdown");
+        breakdown.GetProperty("types").Should().NotBeNull();
+        breakdown.GetProperty("languages").Should().NotBeNull();
+        breakdown.GetProperty("frameworks").Should().NotBeNull();
+        
+        // Check health
+        response.GetProperty("health").GetString().Should().BeOneOf("excellent", "good", "fair", "needs-attention");
+        
+        // Check insights
+        var insights = response.GetProperty("insights");
+        insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nInsights:");
+        foreach (var insight in insights.EnumerateArray())
         {
-            keyInsights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+            Console.WriteLine($"- {insight.GetString()}");
         }
         
-        // Check for solution-level insights
-        var insights = new List<string>();
-        if (overview.TryGetProperty("keyInsights", out var insightsProperty))
+        // Check hotspots
+        var hotspots = response.GetProperty("hotspots");
+        hotspots.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        
+        // Check issues
+        var issues = response.GetProperty("issues");
+        issues.Should().NotBeNull();
+        
+        // Check actions
+        var actions = response.GetProperty("actions");
+        actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+        Console.WriteLine("\nActions:");
+        foreach (var action in actions.EnumerateArray())
         {
-            insights = insightsProperty.EnumerateArray()
-                .Select(i => i.GetString())
-                .Where(s => s != null)
-                .Select(s => s!)
-                .ToList();
+            var id = action.GetProperty("id").GetString();
+            var priority = action.GetProperty("priority").GetString();
+            Console.WriteLine($"- [{priority}] {id}");
         }
         
-        Logger.LogInformation("Solution insights: {Insights}", string.Join(", ", insights));
-        
-        // Check categories (by output type) - may be empty for small projects
-        var categories = data.GetProperty("byCategory");
-        // Don't require categories for small projects
-        
-        // Check hotspots (largest projects) - may be empty for small projects
-        if (data.TryGetProperty("hotspots", out var hotspots))
-        {
-            hotspots.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        }
-        
-        // Check next actions - may be empty for small projects
-        var nextActions = response.GetProperty("nextActions");
-        if (nextActions.TryGetProperty("recommended", out var recommendedProperty))
-        {
-            var recommended = recommendedProperty.EnumerateArray().ToList();
-            // For small projects, might not have recommendations
-            
-            // Should recommend viewing largest projects if there are recommendations
-            if (recommended.Any())
-            {
-                var viewLargestAction = recommended.FirstOrDefault(a => 
-                    a.GetProperty("action").GetString() == "view_largest_projects");
-                // Don't require this specific action for small projects
-            }
-        }
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("includeMetrics").GetBoolean().Should().BeTrue();
+        meta.GetProperty("includeFiles").GetBoolean().Should().BeFalse();
+        meta.GetProperty("includeNuGet").GetBoolean().Should().BeFalse();
+        meta.GetProperty("cached").GetString().Should().StartWith("struct_");
     }
 
     [Fact]
@@ -143,62 +138,59 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("NuGet analysis response:\n{Json}", json);
+        Console.WriteLine("=== NuGet Analysis Response ===");
+        Console.WriteLine(json);
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Check if we have a success property
-        if (!response.TryGetProperty("success", out var successProperty))
-        {
-            Logger.LogError("Response does not contain 'success' property: {Json}", json);
-            return; // Skip test if response is invalid
-        }
+        // Check AI-optimized response
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("project_structure_analysis");
         
-        successProperty.GetBoolean().Should().BeTrue();
+        // Check meta to confirm NuGet was requested
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("includeNuGet").GetBoolean().Should().BeTrue();
+        
+        // Check issues for NuGet conflicts
+        var issues = response.GetProperty("issues");
+        if (issues.TryGetProperty("nugetConflicts", out var nugetConflicts))
+        {
+            nugetConflicts.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
+            Console.WriteLine($"\nNuGet conflicts: {nugetConflicts.GetArrayLength()}");
+        }
         
         // Check for NuGet-related insights
-        var insights = new List<string>();
-        var data = response.GetProperty("data");
-        var overview = data.GetProperty("overview");
-        if (overview.TryGetProperty("keyInsights", out var keyInsightsProperty))
+        var insights = response.GetProperty("insights");
+        var nugetInsights = insights.EnumerateArray()
+            .Select(i => i.GetString())
+            .Where(s => s != null && s.ToLower().Contains("nuget"))
+            .ToList();
+        
+        Console.WriteLine($"\nNuGet insights found: {nugetInsights.Count}");
+        foreach (var insight in nugetInsights)
         {
-            insights = keyInsightsProperty.EnumerateArray()
-                .Select(i => i.GetString())
-                .Where(s => s != null)
-                .Select(s => s!)
-                .ToList();
+            Console.WriteLine($"- {insight}");
         }
         
-        // Should have insights about NuGet packages if version conflicts exist
-        Logger.LogInformation("NuGet insights: {Insights}", string.Join(", ", insights));
-        
-        // Check next actions includes NuGet analysis - may not exist for small projects
-        var nextActions = response.GetProperty("nextActions");
-        if (nextActions.TryGetProperty("recommended", out var recommendedActions))
-        {
-            var actions = recommendedActions.EnumerateArray();
+        // Check actions for dependency analysis
+        var actions = response.GetProperty("actions");
+        var depAction = actions.EnumerateArray()
+            .FirstOrDefault(a => a.GetProperty("id").GetString() == "analyze_dependencies");
             
-            var nugetAction = actions.FirstOrDefault(a => 
-                a.GetProperty("action").GetString() == "analyze_dependencies");
-                
-            if (nugetAction.ValueKind != JsonValueKind.Undefined)
-            {
-                Logger.LogInformation("NuGet analysis action found in recommendations");
-            }
-            else
-            {
-                Logger.LogInformation("No specific NuGet analysis recommended for this small project");
-            }
+        if (depAction.ValueKind != JsonValueKind.Undefined)
+        {
+            Console.WriteLine("\nDependency analysis action found");
+            depAction.GetProperty("priority").GetString().Should().NotBeNullOrEmpty();
         }
     }
 
     [Fact]
-    public async Task Should_Auto_Switch_For_Large_Solutions_With_Files()
+    public async Task Should_Handle_File_Inclusion_Efficiently()
     {
         // Arrange
         var projectPath = GetTestProjectPath();
         
-        // Act - Request full mode with files (should trigger auto-switch)
+        // Act - Request with files included
         var result = await _tool.ExecuteAsync(
             projectPath,
             includeMetrics: true,
@@ -213,48 +205,42 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("Project structure response:\n{Json}", json);
+        Console.WriteLine("=== Project Structure with Files ===");
+        // Only print first 1000 chars if large
+        Console.WriteLine(json.Length > 1000 ? json.Substring(0, 1000) + "..." : json);
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Check if we have a success property
-        if (!response.TryGetProperty("success", out var successProperty))
-        {
-            Logger.LogError("Response does not contain 'success' property: {Json}", json);
-            throw new InvalidOperationException("Response missing 'success' property");
-        }
+        // Check AI-optimized response
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("operation").GetString().Should().Be("project_structure_analysis");
         
-        successProperty.GetBoolean().Should().BeTrue();
+        // Check meta
+        var meta = response.GetProperty("meta");
+        meta.GetProperty("includeFiles").GetBoolean().Should().BeTrue();
         
-        // Check if auto-switch occurred (depends on solution size)
-        if (response.TryGetProperty("autoModeSwitch", out var autoSwitch) && 
-            autoSwitch.GetBoolean())
-        {
-            Logger.LogInformation("Auto-switched to summary mode for large file listing!");
-            response.GetProperty("mode").GetString().Should().Be("summary");
+        // For small test projects, we might get full file listing
+        // For larger projects, actions would include browse_files
+        var actions = response.GetProperty("actions");
+        Console.WriteLine($"\nTotal actions: {actions.GetArrayLength()}");
+        
+        var browseAction = actions.EnumerateArray()
+            .FirstOrDefault(a => a.GetProperty("id").GetString() == "browse_files");
             
-            // Should have file browsing action
-            var nextActionsProperty = response.GetProperty("nextActions");
-            if (nextActionsProperty.TryGetProperty("recommended", out var recommendedProperty))
-            {
-                var fileAction = recommendedProperty.EnumerateArray()
-                    .FirstOrDefault(a => a.GetProperty("action").GetString() == "browse_project_files");
-                    
-                fileAction.ValueKind.Should().NotBe(JsonValueKind.Undefined);
-            }
+        if (browseAction.ValueKind != JsonValueKind.Undefined)
+        {
+            Console.WriteLine("Browse files action available for detailed file exploration");
         }
         else
         {
-            Logger.LogInformation("Solution small enough to return full file listing");
-            response.GetProperty("mode").GetString().Should().Be("full");
+            Console.WriteLine("Solution small enough to include all files directly");
         }
     }
 
     [Fact]
-    public async Task Should_Detect_Circular_References()
+    public async Task Should_Assess_Project_Health_And_Issues()
     {
-        // This test would need a solution with circular references
-        // For now, we'll test the context analysis
+        // Test health assessment and issue detection
         var projectPath = GetTestProjectPath();
         
         var result = await _tool.ExecuteAsync(
@@ -270,41 +256,51 @@ public class ProjectStructureAnalysisV2Tests : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Logger.LogInformation("Circular references analysis response:\n{Json}", json);
+        Console.WriteLine("=== Project Health Assessment ===");
         
         var response = JsonDocument.Parse(json).RootElement;
         
-        // Check if we have a success property first
-        if (!response.TryGetProperty("success", out var successProperty))
+        // Check AI-optimized response
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        
+        // Check health assessment
+        var health = response.GetProperty("health").GetString();
+        health.Should().BeOneOf("excellent", "good", "fair", "needs-attention");
+        Console.WriteLine($"\nProject health: {health}");
+        
+        // Check issues
+        var issues = response.GetProperty("issues");
+        
+        // Check high dependency projects
+        if (issues.TryGetProperty("highDependencyProjects", out var highDeps))
         {
-            Logger.LogError("Response does not contain 'success' property: {Json}", json);
-            return; // Skip test if response is invalid
+            Console.WriteLine($"\nHigh dependency projects: {highDeps.GetArrayLength()}");
+            foreach (var proj in highDeps.EnumerateArray())
+            {
+                var name = proj.GetProperty("name").GetString();
+                var deps = proj.GetProperty("dependencies").GetInt32();
+                Console.WriteLine($"- {name}: {deps} dependencies");
+            }
         }
         
-        successProperty.GetBoolean().Should().BeTrue();
-        
-        // Check context analysis
-        var context = response.GetProperty("context");
-        context.GetProperty("impact").GetString().Should().NotBeNullOrEmpty();
-        
-        // Check for risk factors
-        if (context.TryGetProperty("riskFactors", out var riskFactors))
+        // Check version conflicts
+        if (issues.TryGetProperty("versionConflicts", out var conflicts))
         {
-            var risks = riskFactors.EnumerateArray()
-                .Select(r => r.GetString())
-                .ToList();
-                
-            Logger.LogInformation("Risk factors identified: {Risks}", string.Join(", ", risks));
+            Console.WriteLine($"\nVersion conflicts: {conflicts.GetArrayLength()}");
         }
         
-        // Check for suggestions
-        if (context.TryGetProperty("suggestions", out var suggestions))
+        // Check insights for health-related information
+        var insights = response.GetProperty("insights");
+        Console.WriteLine($"\nTotal insights: {insights.GetArrayLength()}");
+        
+        // Check if dependency analysis is recommended
+        var actions = response.GetProperty("actions");
+        var hasDepAnalysis = actions.EnumerateArray()
+            .Any(a => a.GetProperty("id").GetString() == "analyze_dependencies");
+            
+        if (hasDepAnalysis)
         {
-            var suggestionList = suggestions.EnumerateArray()
-                .Select(s => s.GetString())
-                .ToList();
-                
-            Logger.LogInformation("Suggestions: {Suggestions}", string.Join(", ", suggestionList));
+            Console.WriteLine("\nDependency analysis recommended based on project structure");
         }
     }
 }

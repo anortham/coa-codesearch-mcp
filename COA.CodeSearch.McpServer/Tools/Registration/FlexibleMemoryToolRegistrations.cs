@@ -19,10 +19,12 @@ public static class FlexibleMemoryToolRegistrations
     public static void RegisterFlexibleMemoryTools(ToolRegistry registry, IServiceProvider serviceProvider)
     {
         var memoryTools = serviceProvider.GetRequiredService<FlexibleMemoryTools>();
+        var memorySearchV2 = serviceProvider.GetRequiredService<FlexibleMemorySearchToolV2>();
         
         // Core memory operations
         RegisterStoreMemory(registry, memoryTools);
         RegisterSearchMemories(registry, memoryTools);
+        RegisterSearchMemoriesV2(registry, memorySearchV2);
         RegisterUpdateMemory(registry, memoryTools);
         RegisterGetMemoryById(registry, memoryTools);
         
@@ -161,6 +163,62 @@ public static class FlexibleMemoryToolRegistrations
                     parameters?.IncludeArchived ?? false,
                     parameters?.BoostRecent ?? false,
                     parameters?.BoostFrequent ?? false);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private static void RegisterSearchMemoriesV2(ToolRegistry registry, FlexibleMemorySearchToolV2 tool)
+    {
+        registry.RegisterTool<SearchMemoriesV2Params>(
+            name: "flexible_search_memories_v2",
+            description: "🔍 AI-OPTIMIZED memory search! Returns structured data with type/status distributions, hotspots, patterns, and insights. Natural language queries with smart analysis. 90%+ token reduction vs original.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Search query (* for all)" },
+                    types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
+                    dateRange = new { type = "string", description = "Relative time: 'last-week', 'last-month', 'last-7-days'" },
+                    facets = new { type = "object", description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
+                    orderBy = new { type = "string", description = "Sort field: 'created', 'modified', 'type', 'score', or custom field" },
+                    orderDescending = new { type = "boolean", description = "Sort order (default: true)", @default = true },
+                    maxResults = new { type = "integer", description = "Maximum results (default: 50)", @default = 50 },
+                    includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false },
+                    boostRecent = new { type = "boolean", description = "Boost recently created memories", @default = false },
+                    boostFrequent = new { type = "boolean", description = "Boost frequently accessed memories", @default = false },
+                    mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
+                    detailRequest = new 
+                    { 
+                        type = "object", 
+                        description = "Optional detail request for cached data",
+                        properties = new
+                        {
+                            detailLevel = new { type = "string" },
+                            detailRequestToken = new { type = "string" }
+                        }
+                    }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.Query,
+                    parameters?.Types,
+                    parameters?.DateRange,
+                    parameters?.Facets,
+                    parameters?.OrderBy,
+                    parameters?.OrderDescending ?? true,
+                    parameters?.MaxResults ?? 50,
+                    parameters?.IncludeArchived ?? false,
+                    parameters?.BoostRecent ?? false,
+                    parameters?.BoostFrequent ?? false,
+                    Enum.TryParse<ResponseMode>(parameters?.Mode, true, out var mode) ? mode : ResponseMode.Summary,
+                    parameters?.DetailRequest,
+                    ct);
                     
                 return CreateSuccessResult(result);
             }
@@ -665,6 +723,22 @@ public class SearchMemoriesParams
     public bool? IncludeArchived { get; set; }
     public bool? BoostRecent { get; set; }
     public bool? BoostFrequent { get; set; }
+}
+
+public class SearchMemoriesV2Params
+{
+    public string? Query { get; set; }
+    public string[]? Types { get; set; }
+    public string? DateRange { get; set; }
+    public Dictionary<string, string>? Facets { get; set; }
+    public string? OrderBy { get; set; }
+    public bool? OrderDescending { get; set; }
+    public int? MaxResults { get; set; }
+    public bool? IncludeArchived { get; set; }
+    public bool? BoostRecent { get; set; }
+    public bool? BoostFrequent { get; set; }
+    public string? Mode { get; set; } = "summary";
+    public DetailRequest? DetailRequest { get; set; }
 }
 
 public class UpdateMemoryParams

@@ -5,7 +5,7 @@ using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class BatchOperationsTool
+public class BatchOperationsTool : IBatchOperationsTool
 {
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly GoToDefinitionTool _goToDefinitionTool;

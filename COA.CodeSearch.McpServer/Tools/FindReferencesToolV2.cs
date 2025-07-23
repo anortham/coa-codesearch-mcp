@@ -78,20 +78,8 @@ public class FindReferencesToolV2 : ClaudeOptimizedToolBase
             // Process references into our structure
             var referenceData = await ProcessReferencesAsync(references, includeDeclaration, cancellationToken);
 
-            // Create Claude-optimized response
-            var response = await CreateClaudeResponseAsync(
-                referenceData,
-                mode,
-                data => CreateSummaryData(data, symbol),
-                cancellationToken);
-
-            // Add symbol info to full response types
-            if (response is ClaudeOptimizedResponse<object> claudeResponse && 
-                claudeResponse.Data is FindReferencesData fullData)
-            {
-                fullData.Symbol = CreateSymbolInfo(symbol);
-            }
-
+            // Create AI-optimized response
+            var response = CreateAiOptimizedResponse(referenceData, symbol, mode, cancellationToken);
             return response;
         }
         catch (Exception ex)
@@ -147,15 +135,18 @@ public class FindReferencesToolV2 : ClaudeOptimizedToolBase
             }
         }
 
+        var groupedByFile = allReferences
+            .GroupBy(r => r.FilePath)
+            .ToDictionary(
+                g => g.Key,
+                g => g.ToList()
+            );
+
         return new FindReferencesData
         {
             References = allReferences,
-            GroupedByFile = allReferences
-                .GroupBy(r => r.FilePath)
-                .ToDictionary(
-                    g => g.Key,
-                    g => g.ToList()
-                )
+            GroupedByFile = groupedByFile,
+            AffectedFiles = groupedByFile.Count
         };
     }
 
@@ -225,6 +216,146 @@ public class FindReferencesToolV2 : ClaudeOptimizedToolBase
                 GetFullContextCommand = new { detailLevel = "preview", includeContext = true }
             }
         };
+    }
+
+    private object CreateAiOptimizedResponse(FindReferencesData data, ISymbol symbol, ResponseMode mode, CancellationToken cancellationToken)
+    {
+        // Calculate impact assessment
+        var definitionCount = data.References.Count(r => r.IsDefinition);
+        var usageCount = data.References.Count - definitionCount;
+        var impact = AssessReferenceImpact(usageCount, data.AffectedFiles);
+        
+        // Get hotspots
+        var hotspots = data.GroupedByFile
+            .OrderByDescending(kvp => kvp.Value.Count)
+            .Take(5)
+            .Select(kvp => new { file = kvp.Key, refs = kvp.Value.Count })
+            .ToList();
+
+        // Analyze reference types
+        var refTypes = data.References
+            .GroupBy(r => r.Kind)
+            .ToDictionary(g => g.Key.ToLowerInvariant(), g => g.Count());
+
+        // Generate priority-ordered actions
+        var actions = new List<object>();
+        
+        if (data.References.Count > 10)
+        {
+            actions.Add(new 
+            { 
+                id = "review_hotspots", 
+                cmd = new { detailLevel = "hotspots", maxFiles = 5 }, 
+                tokens = Math.Min(3000, hotspots.Count * 600),
+                priority = "recommended"
+            });
+        }
+
+        if (data.GroupedByFile.Values.Any(refs => refs.Any(r => r.FilePath.Contains("test", StringComparison.OrdinalIgnoreCase))))
+        {
+            actions.Add(new 
+            { 
+                id = "review_tests", 
+                cmd = new { detailLevel = "category", category = "tests" }, 
+                tokens = 2000,
+                priority = "normal"
+            });
+        }
+
+        if (mode == ResponseMode.Summary && data.References.Count < 100)
+        {
+            actions.Add(new 
+            { 
+                id = "full_details", 
+                cmd = new { responseMode = "full" }, 
+                tokens = EstimateFullResponseTokens(data),
+                priority = "available"
+            });
+        }
+
+        return new
+        {
+            success = true,
+            operation = "find_references",
+            symbol = new
+            {
+                name = symbol.Name,
+                type = symbol.Kind.ToString().ToLowerInvariant(),
+                container = symbol.ContainingType?.Name ?? symbol.ContainingNamespace?.Name ?? "global",
+                accessibility = symbol.DeclaredAccessibility.ToString().ToLowerInvariant()
+            },
+            summary = new
+            {
+                total = data.References.Count,
+                usages = usageCount,
+                definitions = definitionCount,
+                files = data.AffectedFiles,
+                impact = impact
+            },
+            refTypes = refTypes,
+            hotspots = hotspots,
+            insights = GenerateInsights(data, symbol, usageCount),
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                tokens = SizeEstimator.EstimateTokens(new { refs = data.References.Take(10) }),
+                cached = $"refs_{Guid.NewGuid().ToString("N")[..8]}"
+            }
+        };
+    }
+
+    private string AssessReferenceImpact(int usageCount, int fileCount)
+    {
+        if (usageCount == 0) return "unused";
+        if (usageCount < 3) return "minimal";
+        if (usageCount < 10 || fileCount < 5) return "low";
+        if (usageCount < 50 || fileCount < 15) return "medium";
+        return "high";
+    }
+
+    private List<string> GenerateInsights(FindReferencesData data, ISymbol symbol, int usageCount)
+    {
+        var insights = new List<string>();
+        
+        if (usageCount == 0)
+        {
+            insights.Add("Unused symbol - safe to remove");
+        }
+        else if (usageCount < 3)
+        {
+            insights.Add($"Only {usageCount} usage(s) - consider inlining");
+        }
+        else if (usageCount > 50)
+        {
+            insights.Add($"Heavily used ({usageCount} refs) - changes have wide impact");
+        }
+
+        // Test coverage insight
+        var testFiles = data.GroupedByFile.Keys.Count(f => f.Contains("test", StringComparison.OrdinalIgnoreCase));
+        if (testFiles > 0)
+        {
+            insights.Add($"Referenced in {testFiles} test file(s)");
+        }
+        else if (usageCount > 10)
+        {
+            insights.Add("No test coverage found - consider adding tests");
+        }
+
+        // Reference type insights
+        var refTypes = data.References.GroupBy(r => r.Kind).ToDictionary(g => g.Key, g => g.Count());
+        if (refTypes.ContainsKey("Assignment") && refTypes["Assignment"] > 5)
+        {
+            insights.Add($"Frequently reassigned ({refTypes["Assignment"]}x) - review mutability");
+        }
+
+        return insights;
+    }
+
+    private int EstimateFullResponseTokens(FindReferencesData data)
+    {
+        // Estimate ~50 tokens per reference with context
+        return Math.Min(25000, data.References.Count * 50);
     }
 
     private string DetermineReferenceKind(ReferenceLocation location, string lineText, bool isDefinition = false)
@@ -540,6 +671,7 @@ public class FindReferencesToolV2 : ClaudeOptimizedToolBase
         public List<ReferenceInfo> References { get; set; } = new();
         public Dictionary<string, List<ReferenceInfo>> GroupedByFile { get; set; } = new();
         public SymbolInfo? Symbol { get; set; }
+        public int AffectedFiles { get; set; }
     }
 
     private class ReferenceInfo
