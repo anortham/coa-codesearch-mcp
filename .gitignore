@@ -431,3 +431,7 @@ COA.CodeSearch.McpServer/.codesearch/
 # Logs directory - always exclude
 .codesearch/logs/
 **/.codesearch/logs/
+
+# Generated NuGet packages
+*.nupkg
+*.snupkg

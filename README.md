@@ -24,6 +24,26 @@ A high-performance Model Context Protocol (MCP) server that provides blazing-fas
 - Node.js (for TypeScript support - automatically installed if not present)
 - Visual Studio 2022 or Build Tools for Visual Studio (for MSBuild)
 
+## 🔨 Building from Source
+
+### For External Contributors
+The project uses project references for all internal dependencies. To build:
+
+```bash
+# Clone the repository
+git clone https://github.com/anortham/coa-codesearch-mcp.git
+cd coa-codesearch-mcp
+
+# Build using public NuGet sources only (avoids private feed authentication)
+dotnet restore --configfile NuGet.Public.config
+dotnet build --no-restore
+
+# Or build the entire solution
+dotnet build COA.Roslyn.MCP.sln --configfile NuGet.Public.config
+```
+
+All internal dependencies (like COA.Mcp.Protocol) use project references, not NuGet packages.
+
 ## 🌍 Cross-Platform Support
 
 The CodeSearch MCP Server is fully cross-platform and runs on:
