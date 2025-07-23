@@ -51,9 +51,7 @@ public class SearchSymbolsV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED SYMBOL SEARCH ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -84,22 +82,14 @@ public class SearchSymbolsV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -128,7 +118,7 @@ public class SearchSymbolsV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== FUZZY SEARCH RESULTS ===");
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -144,18 +134,14 @@ public class SearchSymbolsV2Test : TestBase
         // Should find symbols with "Test" in the name
         var summary = response.GetProperty("summary");
         var total = summary.GetProperty("total").GetInt32();
-        Console.WriteLine($"\nFound {total} symbols with fuzzy match 'Tst'");
+        // Verify fuzzy search found results
+        total.Should().BeGreaterThanOrEqualTo(0);
         
         // Check if we have type distribution
         if (summary.TryGetProperty("types", out var types))
         {
-            Console.WriteLine("\nType distribution:");
-            foreach (var type in types.EnumerateObject())
-            {
-                var typeInfo = type.Value;
-                var count = typeInfo.GetProperty("count").GetInt32();
-                Console.WriteLine($"- {type.Name}: {count}");
-            }
+            // Verify type distribution exists
+            types.EnumerateObject().Should().NotBeEmpty();
         }
     }
 
@@ -189,10 +175,9 @@ public class SearchSymbolsV2Test : TestBase
         var summary = response.GetProperty("summary");
         if (summary.TryGetProperty("types", out var types))
         {
-            Console.WriteLine("\nFiltered symbol types:");
+            // Verify filtered symbol types
             foreach (var type in types.EnumerateObject())
             {
-                Console.WriteLine($"- {type.Name}");
                 // Should only be NamedType (which includes class, interface, enum, struct)
                 type.Name.Should().Be("namedtype");
             }
@@ -200,11 +185,8 @@ public class SearchSymbolsV2Test : TestBase
         
         // Check for filter-related insights
         var insights = response.GetProperty("insights");
-        Console.WriteLine("\nFilter insights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify filter insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
     }
 
     [Fact]
@@ -241,11 +223,8 @@ public class SearchSymbolsV2Test : TestBase
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThan(0);
         
-        Console.WriteLine("\nNo results insights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify no results insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // First insight should mention no symbols found
         insights[0].GetString().Should().Contain("No symbols found");

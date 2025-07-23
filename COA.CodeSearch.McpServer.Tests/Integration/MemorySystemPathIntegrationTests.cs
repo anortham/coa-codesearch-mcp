@@ -204,7 +204,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
     }
 
     [Fact]
-    public async Task PathResolution_ExpectedBehavior()
+    public Task PathResolution_ExpectedBehavior()
     {
         // Define expected behavior for PathResolutionService
         
@@ -235,6 +235,8 @@ public class MemorySystemPathIntegrationTests : IDisposable
         Assert.NotEqual(workspacePath, workspaceIndexPath);
         Assert.Contains("index", workspaceIndexPath);
         Assert.True(workspaceIndexPath.Contains("MyProject") || workspaceIndexPath.Contains("_"));
+        
+        return Task.CompletedTask;
     }
 
     [Fact]

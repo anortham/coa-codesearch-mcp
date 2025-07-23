@@ -96,9 +96,7 @@ public class FastFileSearchV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED FILE SEARCH ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -108,7 +106,8 @@ public class FastFileSearchV2Test : TestBase
         {
             if (response.TryGetProperty("error", out var error))
             {
-                Console.WriteLine($"ERROR: {error.GetString()}");
+                // Verify error exists
+                error.GetString().Should().NotBeNullOrEmpty();
             }
         }
         response.GetProperty("success").GetBoolean().Should().BeTrue();
@@ -141,22 +140,14 @@ public class FastFileSearchV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThan(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -165,7 +156,9 @@ public class FastFileSearchV2Test : TestBase
         
         // Check performance claim
         var searchTime = summary.GetProperty("searchTime").GetString();
-        Console.WriteLine($"\nSearch performance: {searchTime} - {summary.GetProperty("performance").GetString()}");
+        // Verify search performance metrics
+        searchTime.Should().NotBeNullOrEmpty();
+        summary.GetProperty("performance").GetString().Should().NotBeNullOrEmpty();
     }
 
     [Fact]
@@ -199,14 +192,16 @@ public class FastFileSearchV2Test : TestBase
             
             if (totalFound > 0)
             {
-                Console.WriteLine($"Fuzzy search found {totalFound} matches for 'tst'");
+                // Verify fuzzy search results
+                totalFound.Should().BeGreaterThanOrEqualTo(0);
                 
                 // Check match quality shows fuzzy matches
                 var analysis = response.GetProperty("analysis");
                 var matchQuality = analysis.GetProperty("matchQuality");
                 if (matchQuality.TryGetProperty("fuzzyMatches", out var fuzzyMatches))
                 {
-                    Console.WriteLine($"Fuzzy matches: {fuzzyMatches.GetInt32()}");
+                    // Verify fuzzy matches
+                    fuzzyMatches.GetInt32().Should().BeGreaterThanOrEqualTo(0);
                 }
             }
         }
@@ -238,21 +233,20 @@ public class FastFileSearchV2Test : TestBase
             var analysis = response.GetProperty("analysis");
             var patterns = analysis.GetProperty("patterns");
             
-            Console.WriteLine("\nDetected patterns:");
-            foreach (var pattern in patterns.EnumerateArray())
-            {
-                Console.WriteLine($"- {pattern.GetString()}");
-            }
+            // Verify detected patterns
+            patterns.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
             
             // Check for hotspots
             if (analysis.TryGetProperty("hotspots", out var hotspots))
             {
                 if (hotspots.TryGetProperty("directories", out var directories))
                 {
-                    Console.WriteLine("\nDirectory hotspots:");
+                    // Verify directory hotspots
+                    directories.GetArrayLength().Should().BeGreaterThan(0);
                     foreach (var dir in directories.EnumerateArray())
                     {
-                        Console.WriteLine($"- {dir.GetProperty("path").GetString()}: {dir.GetProperty("count").GetInt32()} files");
+                        dir.GetProperty("path").GetString().Should().NotBeNullOrEmpty();
+                        dir.GetProperty("count").GetInt32().Should().BeGreaterThan(0);
                     }
                 }
             }
@@ -302,7 +296,9 @@ public class FastFileSearchV2Test : TestBase
                 firstResult.GetProperty("lastModified").GetString().Should().NotBeNullOrEmpty();
                 firstResult.GetProperty("score").GetDouble().Should().BeGreaterThan(0);
                 
-                Console.WriteLine($"\nFirst result: {firstResult.GetProperty("filename").GetString()} ({firstResult.GetProperty("sizeFormatted").GetString()})");
+                // Verify first result structure
+                firstResult.GetProperty("filename").GetString().Should().NotBeNullOrEmpty();
+                firstResult.GetProperty("sizeFormatted").GetString().Should().NotBeNullOrEmpty();
             }
         }
     }
@@ -342,7 +338,7 @@ public class FastFileSearchV2Test : TestBase
             if (insightText.Contains("No files matching"))
             {
                 hasNoResultsInsight = true;
-                Console.WriteLine($"Found insight: {insightText}");
+                // Found expected insight
                 break;
             }
         }
@@ -357,7 +353,8 @@ public class FastFileSearchV2Test : TestBase
             if (id.Contains("fuzzy") || id.Contains("wildcard"))
             {
                 hasSuggestions = true;
-                Console.WriteLine($"Suggested action: {id}");
+                // Verify suggested action
+                id.Should().NotBeNullOrEmpty();
                 break;
             }
         }

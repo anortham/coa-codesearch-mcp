@@ -487,6 +487,19 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         {
             insights.Add(analysis.Correlations.First());
         }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (analysis.TotalOperations == 0)
+            {
+                insights.Add("No operations were executed");
+            }
+            else
+            {
+                insights.Add($"Batch execution completed: {analysis.TotalOperations} operations processed");
+            }
+        }
 
         return insights;
     }
@@ -558,6 +571,31 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
                 tokens = analysis.TotalOperations * 100,
                 priority = "available"
             });
+        }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (analysis.TotalOperations > 0)
+            {
+                actions.Add(new
+                {
+                    id = "view_summary",
+                    cmd = new { showDetails = true },
+                    tokens = 1000,
+                    priority = "available"
+                });
+            }
+            else
+            {
+                actions.Add(new
+                {
+                    id = "setup_operations",
+                    cmd = new { operations = new[] { "get_diagnostics", "find_references" } },
+                    tokens = 1500,
+                    priority = "recommended"
+                });
+            }
         }
 
         return actions;

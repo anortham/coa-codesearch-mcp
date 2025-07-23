@@ -194,7 +194,7 @@ public class PathResolutionServiceUnitTests
     {
         // This tests the workspace name sanitization logic
         var basePath = @"C:\test\.codesearch";
-        var config = CreateConfiguration(null, basePath);
+        var config = CreateConfiguration(null!, basePath);
         var service = new PathResolutionService(config);
         var workspacePath = Path.Combine(@"C:\projects", workspaceName);
         

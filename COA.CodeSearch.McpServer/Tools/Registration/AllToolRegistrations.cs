@@ -613,17 +613,14 @@ public static class AllToolRegistrations
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                if (parameters.Operations == null || parameters.Operations.Count == 0)
+                if (parameters.Operations.ValueKind == JsonValueKind.Undefined || 
+                    (parameters.Operations.ValueKind == JsonValueKind.Array && parameters.Operations.GetArrayLength() == 0))
                     throw new InvalidParametersException("operations are required and cannot be empty");
                 
                 try
                 {
-                    // Convert operations list to JsonElement
-                    var operationsJson = JsonSerializer.Serialize(parameters.Operations);
-                    var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
-                    
                     var result = await tool.ExecuteAsync(
-                        operationsElement, 
+                        parameters.Operations, 
                         parameters.WorkspacePath,
                         Enum.TryParse<ResponseMode>(parameters.Mode, true, out var mode) ? mode : ResponseMode.Summary,
                         parameters.DetailRequest,
@@ -881,7 +878,7 @@ public static class AllToolRegistrations
 
     private class BatchOperationsV2Params
     {
-        public List<object>? Operations { get; set; }
+        public JsonElement Operations { get; set; }
         public string? WorkspacePath { get; set; }
         public string? Mode { get; set; } = "summary";
         public DetailRequest? DetailRequest { get; set; }

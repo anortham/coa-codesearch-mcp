@@ -355,3 +355,327 @@ public class ListPromptsResult
     [JsonPropertyName("prompts")]
     public List<Prompt> Prompts { get; set; } = new();
 }
+
+/// <summary>
+/// Notification sent to inform clients about the progress of long-running operations.
+/// This extends JsonRpcNotification and provides structured progress information for
+/// operations like workspace indexing, batch operations, and large file analysis.
+/// </summary>
+public class ProgressNotification : JsonRpcNotification
+{
+    /// <summary>
+    /// Gets or sets the progress token that identifies this specific operation.
+    /// This token is typically provided when starting the operation and should be
+    /// used consistently across all progress updates for that operation.
+    /// </summary>
+    [JsonPropertyName("progressToken")]
+    public string ProgressToken { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the current progress value.
+    /// This represents the number of completed items/steps in the operation.
+    /// </summary>
+    [JsonPropertyName("progress")]
+    public int Progress { get; set; }
+
+    /// <summary>
+    /// Gets or sets the total number of items/steps for this operation.
+    /// When null, indicates that the total is unknown (indeterminate progress).
+    /// </summary>
+    [JsonPropertyName("total")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public int? Total { get; set; }
+
+    /// <summary>
+    /// Gets or sets an optional descriptive message about the current progress step.
+    /// </summary>
+    /// <example>
+    /// "Indexing file: UserService.cs"
+    /// "Processing batch operation 5 of 12"
+    /// "Analyzing project structure..."
+    /// </example>
+    [JsonPropertyName("message")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public string? Message { get; set; }
+
+    /// <summary>
+    /// Initializes a new instance of the ProgressNotification class.
+    /// Sets the method to "notifications/progress" as per MCP protocol.
+    /// </summary>
+    public ProgressNotification()
+    {
+        Method = "notifications/progress";
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the ProgressNotification class with the specified parameters.
+    /// </summary>
+    /// <param name="progressToken">The progress token that identifies this operation.</param>
+    /// <param name="progress">The current progress value.</param>
+    /// <param name="total">The total number of items/steps (optional).</param>
+    /// <param name="message">An optional descriptive message.</param>
+    public ProgressNotification(string progressToken, int progress, int? total = null, string? message = null)
+        : this()
+    {
+        ProgressToken = progressToken;
+        Progress = progress;
+        Total = total;
+        Message = message;
+    }
+}
+
+#region Type Safety Improvements - Generic Base Classes
+
+/// <summary>
+/// Generic base class for strongly-typed JSON-RPC requests.
+/// This eliminates the need for object parameters and provides compile-time type safety.
+/// </summary>
+/// <typeparam name="TParams">The type of the request parameters.</typeparam>
+public class TypedJsonRpcRequest<TParams> : JsonRpcMessage
+{
+    /// <summary>
+    /// Gets or sets the request identifier. Used to correlate requests with responses.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public object Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the name of the method to be invoked.
+    /// </summary>
+    [JsonPropertyName("method")]
+    public string Method { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the strongly-typed parameters for the method call.
+    /// </summary>
+    [JsonPropertyName("params")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TParams? Params { get; set; }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcRequest class.
+    /// </summary>
+    public TypedJsonRpcRequest() { }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcRequest class with the specified parameters.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="method">The method name.</param>
+    /// <param name="parameters">The strongly-typed parameters.</param>
+    public TypedJsonRpcRequest(object id, string method, TParams? parameters = default)
+    {
+        Id = id;
+        Method = method;
+        Params = parameters;
+    }
+}
+
+/// <summary>
+/// Generic base class for strongly-typed JSON-RPC responses.
+/// This provides compile-time type safety for response data.
+/// </summary>
+/// <typeparam name="TResult">The type of the response result.</typeparam>
+public class TypedJsonRpcResponse<TResult> : JsonRpcMessage
+{
+    /// <summary>
+    /// Gets or sets the request identifier that this response correlates to.
+    /// </summary>
+    [JsonPropertyName("id")]
+    public object Id { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the strongly-typed result of the method call.
+    /// This property is mutually exclusive with Error.
+    /// </summary>
+    [JsonPropertyName("result")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TResult? Result { get; set; }
+
+    /// <summary>
+    /// Gets or sets the error information if the method call failed.
+    /// This property is mutually exclusive with Result.
+    /// </summary>
+    [JsonPropertyName("error")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public JsonRpcError? Error { get; set; }
+
+    /// <summary>
+    /// Gets a value indicating whether this response represents an error.
+    /// </summary>
+    [JsonIgnore]
+    public bool IsError => Error != null;
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcResponse class.
+    /// </summary>
+    public TypedJsonRpcResponse() { }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcResponse class with a successful result.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="result">The result data.</param>
+    public TypedJsonRpcResponse(object id, TResult result)
+    {
+        Id = id;
+        Result = result;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcResponse class with an error.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="error">The error information.</param>
+    public TypedJsonRpcResponse(object id, JsonRpcError error)
+    {
+        Id = id;
+        Error = error;
+    }
+}
+
+/// <summary>
+/// Generic base class for strongly-typed JSON-RPC notifications.
+/// Notifications do not expect a response from the receiver.
+/// </summary>
+/// <typeparam name="TParams">The type of the notification parameters.</typeparam>
+public class TypedJsonRpcNotification<TParams> : JsonRpcMessage
+{
+    /// <summary>
+    /// Gets or sets the name of the method to be invoked.
+    /// </summary>
+    [JsonPropertyName("method")]
+    public string Method { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the strongly-typed parameters for the method call.
+    /// </summary>
+    [JsonPropertyName("params")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public TParams? Params { get; set; }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcNotification class.
+    /// </summary>
+    public TypedJsonRpcNotification() { }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedJsonRpcNotification class with the specified parameters.
+    /// </summary>
+    /// <param name="method">The method name.</param>
+    /// <param name="parameters">The strongly-typed parameters.</param>
+    public TypedJsonRpcNotification(string method, TParams? parameters = default)
+    {
+        Method = method;
+        Params = parameters;
+    }
+}
+
+/// <summary>
+/// Generic base class for MCP tool requests with strongly-typed parameters.
+/// This provides a foundation for building type-safe tool implementations.
+/// </summary>
+/// <typeparam name="TParams">The type of the tool parameters.</typeparam>
+public abstract class TypedToolRequest<TParams> : TypedJsonRpcRequest<TParams>
+{
+    /// <summary>
+    /// Gets the name of the tool being invoked.
+    /// </summary>
+    [JsonIgnore]
+    public abstract string ToolName { get; }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedToolRequest class.
+    /// </summary>
+    protected TypedToolRequest()
+    {
+        Method = "tools/call";
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedToolRequest class with the specified parameters.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="parameters">The strongly-typed tool parameters.</param>
+    protected TypedToolRequest(object id, TParams? parameters = default)
+        : base(id, "tools/call", parameters)
+    {
+    }
+}
+
+/// <summary>
+/// Generic base class for MCP tool responses with strongly-typed results.
+/// This provides compile-time type safety for tool result data.
+/// </summary>
+/// <typeparam name="TResult">The type of the tool result.</typeparam>
+public class TypedToolResponse<TResult> : TypedJsonRpcResponse<CallToolResult>
+{
+    /// <summary>
+    /// Gets or sets the strongly-typed tool result data.
+    /// This is a convenience property that wraps the Result.Content.
+    /// </summary>
+    [JsonIgnore]
+    public TResult? ToolResult
+    {
+        get
+        {
+            if (Result?.Content?.Count > 0 && Result.Content[0].Type == "application/json")
+            {
+                try
+                {
+                    return System.Text.Json.JsonSerializer.Deserialize<TResult>(Result.Content[0].Text);
+                }
+                catch
+                {
+                    return default;
+                }
+            }
+            return default;
+        }
+        set
+        {
+            if (value != null)
+            {
+                Result = new CallToolResult
+                {
+                    Content = new List<ToolContent>
+                    {
+                        new ToolContent
+                        {
+                            Type = "application/json",
+                            Text = System.Text.Json.JsonSerializer.Serialize(value)
+                        }
+                    }
+                };
+            }
+        }
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedToolResponse class.
+    /// </summary>
+    public TypedToolResponse() { }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedToolResponse class with a successful result.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="toolResult">The strongly-typed tool result.</param>
+    public TypedToolResponse(object id, TResult toolResult)
+        : base(id, new CallToolResult())
+    {
+        ToolResult = toolResult;
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the TypedToolResponse class with an error.
+    /// </summary>
+    /// <param name="id">The request identifier.</param>
+    /// <param name="error">The error information.</param>
+    public TypedToolResponse(object id, JsonRpcError error)
+        : base(id, error)
+    {
+    }
+}
+
+#endregion

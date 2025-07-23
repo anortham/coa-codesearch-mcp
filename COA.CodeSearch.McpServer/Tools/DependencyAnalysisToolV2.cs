@@ -533,6 +533,18 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
                 priority = "available"
             });
         }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            actions.Add(new 
+            { 
+                id = "analyze_patterns", 
+                cmd = new { detailLevel = "summary" }, 
+                tokens = 1500,
+                priority = "available"
+            });
+        }
 
         return new
         {
@@ -662,6 +674,12 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
         if (targetSymbol.Kind == SymbolKind.NamedType && targetSymbol.IsAbstract)
         {
             insights.Add("Abstract type - stability is important for derived types");
+        }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            insights.Add($"Analyzed dependencies for '{targetSymbol.Name}' - found {data.Metrics.TotalDependencies} total dependencies");
         }
         
         return insights;

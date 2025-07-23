@@ -351,6 +351,31 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
                 priority = "available"
             });
         }
+        
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (totalProjects > 0)
+            {
+                actions.Add(new 
+                { 
+                    id = "explore_structure", 
+                    cmd = new { detailLevel = "overview" }, 
+                    tokens = 1500,
+                    priority = "available"
+                });
+            }
+            else
+            {
+                actions.Add(new 
+                { 
+                    id = "initialize_project", 
+                    cmd = new { createSample = true }, 
+                    tokens = 1000,
+                    priority = "available"
+                });
+            }
+        }
 
         return new
         {
@@ -511,6 +536,19 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
             if (allPackages > 0)
             {
                 insights.Add($"{allPackages} packages with version conflicts - consolidate versions");
+            }
+        }
+        
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (data.Projects.Count == 0)
+            {
+                insights.Add("No projects found in workspace");
+            }
+            else
+            {
+                insights.Add($"Solution contains {data.Projects.Count} project(s) with {totalLines:N0} total lines of code");
             }
         }
         

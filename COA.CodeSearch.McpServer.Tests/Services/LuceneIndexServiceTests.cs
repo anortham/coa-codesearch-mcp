@@ -97,7 +97,7 @@ public class LuceneIndexServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetIndexPath_MemoryPath_CrossPlatform()
+    public Task GetIndexPath_MemoryPath_CrossPlatform()
     {
         // Test both Windows and Unix-style paths
         var testPaths = new[]
@@ -125,6 +125,8 @@ public class LuceneIndexServiceTests : IDisposable
             // Verify GetIndexPath was NOT called for memory paths
             _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
         }
+        
+        return Task.CompletedTask;
     }
 
     [Fact]

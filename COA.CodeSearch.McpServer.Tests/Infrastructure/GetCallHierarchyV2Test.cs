@@ -52,9 +52,7 @@ public class GetCallHierarchyV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== AI-OPTIMIZED CALL HIERARCHY ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -88,22 +86,14 @@ public class GetCallHierarchyV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -132,7 +122,7 @@ public class GetCallHierarchyV2Test : TestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        Console.WriteLine("=== INCOMING CALLS ANALYSIS ===");
+        // Removed debug output for clean tests
         
         var response = JsonDocument.Parse(json).RootElement;
         
@@ -148,7 +138,8 @@ public class GetCallHierarchyV2Test : TestBase
         if (analysis.TryGetProperty("callPaths", out var callPaths))
         {
             callPaths.GetProperty("incoming").GetInt32().Should().BeGreaterThanOrEqualTo(0);
-            Console.WriteLine($"\nIncoming call paths: {callPaths.GetProperty("incoming").GetInt32()}");
+            // Verify incoming call paths structure
+            callPaths.GetProperty("incoming").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         }
     }
 
@@ -179,20 +170,14 @@ public class GetCallHierarchyV2Test : TestBase
         var issues = response.GetProperty("issues");
         if (issues.TryGetProperty("circular", out var circular))
         {
-            Console.WriteLine("\nCircular dependencies:");
-            foreach (var dep in circular.EnumerateArray())
-            {
-                Console.WriteLine($"- {dep.GetString()}");
-            }
+            // Verify circular dependencies structure
+            circular.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         }
         
         if (issues.TryGetProperty("deepNesting", out var deepNesting))
         {
-            Console.WriteLine("\nDeep nesting points:");
-            foreach (var point in deepNesting.EnumerateArray())
-            {
-                Console.WriteLine($"- {point.GetString()}");
-            }
+            // Verify deep nesting structure
+            deepNesting.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
         }
     }
 
@@ -222,6 +207,7 @@ public class GetCallHierarchyV2Test : TestBase
         response.GetProperty("success").GetBoolean().Should().BeFalse();
         response.GetProperty("error").GetString().Should().NotBeNullOrEmpty();
         
-        Console.WriteLine($"\nError handling: {response.GetProperty("error").GetString()}");
+        // Verify error message exists
+        response.GetProperty("error").GetString().Should().NotBeNullOrEmpty();
     }
 }

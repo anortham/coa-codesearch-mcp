@@ -92,6 +92,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
         
+        // Query Expansion for Memory Intelligence
+        services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
+        services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
+        
         // File Logging Service
         services.AddSingleton<FileLoggingService>();
         

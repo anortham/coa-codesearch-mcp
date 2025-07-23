@@ -46,9 +46,7 @@ public class DependencyAnalysisV2Test : TestBase
         });
         
         // Print it
-        Console.WriteLine("=== AI-OPTIMIZED DEPENDENCY ANALYSIS ===");
-        Console.WriteLine(json);
-        Console.WriteLine("=== END ===");
+        // Removed debug output for clean tests
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;
@@ -85,11 +83,8 @@ public class DependencyAnalysisV2Test : TestBase
         // Check insights
         var insights = response.GetProperty("insights");
         insights.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nInsights:");
-        foreach (var insight in insights.EnumerateArray())
-        {
-            Console.WriteLine($"- {insight.GetString()}");
-        }
+        // Verify insights exist
+        insights.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check hotspots
         var hotspots = response.GetProperty("hotspots");
@@ -98,13 +93,8 @@ public class DependencyAnalysisV2Test : TestBase
         // Check actions
         var actions = response.GetProperty("actions");
         actions.GetArrayLength().Should().BeGreaterThanOrEqualTo(0);
-        Console.WriteLine("\nActions:");
-        foreach (var action in actions.EnumerateArray())
-        {
-            var id = action.GetProperty("id").GetString();
-            var priority = action.GetProperty("priority").GetString();
-            Console.WriteLine($"- [{priority}] {id}");
-        }
+        // Verify actions exist
+        actions.GetArrayLength().Should().BeGreaterThan(0);
         
         // Check meta
         var meta = response.GetProperty("meta");
@@ -160,16 +150,17 @@ public class DependencyAnalysisV2Test : TestBase
         metrics.GetProperty("outgoing").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         
         // Check health and insights
-        Console.WriteLine("\nOutgoing Dependencies Analysis:");
-        Console.WriteLine($"Health: {response.GetProperty("health").GetString()}");
-        Console.WriteLine($"Outgoing count: {metrics.GetProperty("outgoing").GetInt32()}");
-        Console.WriteLine($"Instability: {metrics.GetProperty("instability").GetDouble()}");
+        // Verify outgoing dependencies analysis
+        response.GetProperty("health").GetString().Should().NotBeNullOrEmpty();
+        metrics.GetProperty("outgoing").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        metrics.GetProperty("instability").GetDouble().Should().BeGreaterThanOrEqualTo(0);
         
         // If there are circular dependencies, they should be reported
         var circular = response.GetProperty("circular");
         if (circular.GetProperty("found").GetBoolean())
         {
-            Console.WriteLine($"\nCircular dependencies found: {circular.GetProperty("count").GetInt32()}");
+            // Verify circular dependencies structure
+            circular.GetProperty("count").GetInt32().Should().BeGreaterThanOrEqualTo(0);
         }
     }
 }

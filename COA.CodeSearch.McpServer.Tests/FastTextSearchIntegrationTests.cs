@@ -194,13 +194,15 @@ public class FastTextSearchIntegrationTests : IDisposable
         var resultObj = JsonConvert.DeserializeObject<dynamic>(json);
         if (resultObj?.totalResults != null && (int?)resultObj?.totalResults > 0 && resultObj?.results != null)
         {
-            foreach (var res in resultObj?.results)
+#pragma warning disable CS8602 // Dereference of a possibly null reference.
+            foreach (var res in resultObj.results!)
             {
-                if (res?.Extension != null)
+                if (res != null && res.Extension != null)
                 {
                     Assert.Equal(".cs", (string)res.Extension);
                 }
             }
+#pragma warning restore CS8602 // Dereference of a possibly null reference.
         }
     }
 
