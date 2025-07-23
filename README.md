@@ -40,8 +40,8 @@ The CodeSearch MCP Server is fully cross-platform and runs on:
 
 ```bash
 # Clone the repository
-git clone https://github.com/YOUR-ORG/codesearch-mcp-server.git
-cd codesearch-mcp-server
+git clone https://github.com/anortham/coa-codesearch-mcp.git
+cd coa-codesearch-mcp
 
 # Restore dependencies
 dotnet restore
@@ -102,7 +102,67 @@ Add to your Claude Desktop configuration:
 ```
 
 ### Claude Code
-For Claude Code integration, build the server and follow Claude Code's MCP server integration process. The server runs in STDIO mode for communication.
+
+#### Method 1: Using Local Build (Development)
+1. Build the project in Release mode:
+   ```bash
+   cd "C:\source\COA Roslyn MCP"
+   dotnet build -c Release
+   ```
+
+2. Add to your Claude Code settings.json:
+   ```json
+   {
+     "mcpServers": {
+       "codesearch": {
+         "type": "stdio",
+         "command": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\COA.CodeSearch.McpServer.exe",
+         "args": [],
+         "env": {}
+       }
+     }
+   }
+   ```
+
+3. Restart Claude Code to load the MCP server
+
+#### Method 2: Using Published Build (Recommended)
+1. Create a published build:
+   ```bash
+   cd "C:\source\COA Roslyn MCP"
+   dotnet publish -c Release -r win-x64 --self-contained
+   ```
+
+2. Add to your Claude Code settings.json:
+   ```json
+   {
+     "mcpServers": {
+       "codesearch": {
+         "type": "stdio",
+         "command": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\win-x64\\publish\\COA.CodeSearch.McpServer.exe",
+         "args": [],
+         "env": {}
+       }
+     }
+   }
+   ```
+
+**Note**: Replace `C:\source\COA Roslyn MCP` with your actual project path.
+
+#### For GitHub Clones
+If you cloned from GitHub, update the paths accordingly:
+```json
+{
+  "mcpServers": {
+    "codesearch": {
+      "type": "stdio",
+      "command": "C:\\path\\to\\coa-codesearch-mcp\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\COA.CodeSearch.McpServer.exe",
+      "args": [],
+      "env": {}
+    }
+  }
+}
+```
 
 ### Testing with MCP Inspector
 ```bash
