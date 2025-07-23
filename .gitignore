@@ -435,3 +435,6 @@ COA.CodeSearch.McpServer/.codesearch/
 # Generated NuGet packages
 *.nupkg
 *.snupkg
+
+# Local NuGet configuration (contains private feed info)
+NuGet.config.local

@@ -26,7 +26,6 @@ A high-performance Model Context Protocol (MCP) server that provides blazing-fas
 
 ## 🔨 Building from Source
 
-### For External Contributors
 The project uses project references for all internal dependencies. To build:
 
 ```bash
@@ -34,12 +33,11 @@ The project uses project references for all internal dependencies. To build:
 git clone https://github.com/anortham/coa-codesearch-mcp.git
 cd coa-codesearch-mcp
 
-# Build using public NuGet sources only (avoids private feed authentication)
-dotnet restore --configfile NuGet.Public.config
-dotnet build --no-restore
+# Build the solution
+dotnet build
 
-# Or build the entire solution
-dotnet build COA.Roslyn.MCP.sln --configfile NuGet.Public.config
+# Or build specific projects
+dotnet build COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj
 ```
 
 All internal dependencies (like COA.Mcp.Protocol) use project references, not NuGet packages.
