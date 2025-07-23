@@ -166,6 +166,9 @@ public class IndexWorkspaceTool
                 }
             }
 
+            // Detect project type and provide helpful info
+            var projectInfo = DetectProjectType(workspacePath);
+            
             return new
             {
                 success = true,
@@ -175,7 +178,8 @@ public class IndexWorkspaceTool
                 duration = $"{duration.TotalSeconds:F2} seconds",
                 action = forceRebuild ? "rebuilt" : "created",
                 fileWatching = _fileWatcherService != null ? "enabled" : "disabled",
-                progressToken = progressToken
+                progressToken = progressToken,
+                projectInfo = projectInfo
             };
         }
         catch (Exception ex)
@@ -187,5 +191,114 @@ public class IndexWorkspaceTool
                 error = $"Failed to index workspace: {ex.Message}"
             };
         }
+    }
+    
+    private object DetectProjectType(string workspacePath)
+    {
+        var projectFiles = Directory.GetFiles(workspacePath, "*.csproj", SearchOption.AllDirectories);
+        var packageJsonFiles = Directory.GetFiles(workspacePath, "package.json", SearchOption.AllDirectories);
+        
+        var projectTypes = new List<string>();
+        var primaryExtensions = new HashSet<string>();
+        var tips = new List<string>();
+        
+        // Detect .NET project types
+        foreach (var projectFile in projectFiles)
+        {
+            try
+            {
+                var content = File.ReadAllText(projectFile);
+                
+                if (content.Contains("Microsoft.NET.Sdk.Web"))
+                {
+                    primaryExtensions.Add(".cs");
+                    
+                    if (content.Contains("Microsoft.AspNetCore.Components.WebAssembly") || 
+                        content.Contains("Blazor"))
+                    {
+                        projectTypes.Add("Blazor WebAssembly");
+                        primaryExtensions.Add(".razor");
+                        tips.Add("Use filePattern: '**/*.{cs,razor}' to search both C# and Blazor component files");
+                    }
+                    else if (content.Contains("Microsoft.AspNetCore.Components"))
+                    {
+                        projectTypes.Add("Blazor Server");
+                        primaryExtensions.Add(".razor");
+                        tips.Add("Use filePattern: '**/*.{cs,razor}' to search both C# and Blazor component files");
+                    }
+                    else
+                    {
+                        projectTypes.Add("ASP.NET Core");
+                        primaryExtensions.Add(".cshtml");
+                        tips.Add("Use filePattern: '**/*.{cs,cshtml}' to search both C# and Razor view files");
+                    }
+                }
+                else if (content.Contains("Microsoft.NET.Sdk"))
+                {
+                    projectTypes.Add(".NET");
+                    primaryExtensions.Add(".cs");
+                }
+                
+                // Check for common packages
+                if (content.Contains("PackageReference") && content.Contains("Wpf"))
+                {
+                    projectTypes.Add("WPF");
+                    primaryExtensions.Add(".xaml");
+                    tips.Add("Use filePattern: '**/*.{cs,xaml}' to search both C# and XAML files");
+                }
+            }
+            catch
+            {
+                // Ignore errors reading project files
+            }
+        }
+        
+        // Detect JavaScript/TypeScript projects
+        foreach (var packageJson in packageJsonFiles)
+        {
+            try
+            {
+                var content = File.ReadAllText(packageJson);
+                
+                if (content.Contains("@angular/"))
+                {
+                    projectTypes.Add("Angular");
+                    foreach (var ext in new[] { ".ts", ".html", ".scss" })
+                        primaryExtensions.Add(ext);
+                    tips.Add("Use filePattern: '**/*.{ts,html,scss}' for Angular components");
+                }
+                else if (content.Contains("react"))
+                {
+                    projectTypes.Add("React");
+                    foreach (var ext in new[] { ".ts", ".tsx", ".js", ".jsx" })
+                        primaryExtensions.Add(ext);
+                    tips.Add("Use filePattern: '**/*.{ts,tsx,js,jsx}' for React components");
+                }
+                else if (content.Contains("vue"))
+                {
+                    projectTypes.Add("Vue");
+                    foreach (var ext in new[] { ".vue", ".ts", ".js" })
+                        primaryExtensions.Add(ext);
+                    tips.Add("Use filePattern: '**/*.{vue,ts,js}' for Vue components");
+                }
+            }
+            catch
+            {
+                // Ignore errors
+            }
+        }
+        
+        // Default tip if no specific project type detected
+        if (!tips.Any())
+        {
+            tips.Add("Use fast_text_search_v2 without filePattern to search all file types");
+        }
+        
+        return new
+        {
+            type = projectTypes.Any() ? string.Join(", ", projectTypes) : "Unknown",
+            primaryExtensions = primaryExtensions.ToArray(),
+            tips = tips.ToArray()
+        };
     }
 }

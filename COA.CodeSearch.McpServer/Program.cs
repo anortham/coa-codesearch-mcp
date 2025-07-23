@@ -65,6 +65,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         

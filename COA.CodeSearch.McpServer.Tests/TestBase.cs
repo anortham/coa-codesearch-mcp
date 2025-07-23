@@ -39,6 +39,7 @@ public abstract class TestBase : IDisposable
         });
         
         // Add configuration
+        var testIndexPath = Path.Combine(Path.GetTempPath(), $"test_index_{Guid.NewGuid()}");
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
@@ -49,7 +50,8 @@ public abstract class TestBase : IDisposable
                 ["ResponseLimits:SafetyMargin"] = "0.8",
                 ["ResponseLimits:DefaultMaxResults"] = "50",
                 ["ResponseLimits:EnableTruncation"] = "true",
-                ["ResponseLimits:EnablePagination"] = "true"
+                ["ResponseLimits:EnablePagination"] = "true",
+                ["Lucene:IndexBasePath"] = testIndexPath
             })
             .Build();
         

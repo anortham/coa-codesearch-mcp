@@ -9,6 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
+using Xunit.Abstractions;
 
 namespace COA.CodeSearch.McpServer.Tests.Infrastructure;
 
@@ -16,9 +17,11 @@ public class FlexibleMemorySearchV2Test : TestBase
 {
     private readonly FlexibleMemorySearchToolV2 _tool;
     private readonly FlexibleMemoryService _memoryService;
+    private readonly ITestOutputHelper _output;
 
-    public FlexibleMemorySearchV2Test()
+    public FlexibleMemorySearchV2Test(ITestOutputHelper output)
     {
+        _output = output;
         _memoryService = ServiceProvider.GetRequiredService<FlexibleMemoryService>();
         _tool = new FlexibleMemorySearchToolV2(
             ServiceProvider.GetRequiredService<ILogger<FlexibleMemorySearchToolV2>>(),
@@ -30,6 +33,12 @@ public class FlexibleMemorySearchV2Test : TestBase
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
             ServiceProvider.GetRequiredService<IDetailRequestCache>());
+            
+        // Log the memory paths for debugging
+        var pathService = ServiceProvider.GetRequiredService<IPathResolutionService>();
+        _output.WriteLine($"Base path: {pathService.GetBasePath()}");
+        _output.WriteLine($"Project memory path: {pathService.GetProjectMemoryPath()}");
+        _output.WriteLine($"Local memory path: {pathService.GetLocalMemoryPath()}");
     }
 
     [Fact]
@@ -226,6 +235,9 @@ public class FlexibleMemorySearchV2Test : TestBase
         var meta = response.GetProperty("meta");
         meta.GetProperty("mode").GetString().Should().Be("full");
 
+        // Debug: Print the response to understand the structure
+        _output.WriteLine($"Full response: {json}");
+        
         // In full mode, memories should be present
         if (response.TryGetProperty("memories", out var memories))
         {
@@ -290,7 +302,15 @@ public class FlexibleMemorySearchV2Test : TestBase
 
         foreach (var memory in memories)
         {
-            await _memoryService.StoreMemoryAsync(memory);
+            var success = await _memoryService.StoreMemoryAsync(memory);
+            _output.WriteLine($"Stored memory {memory.Type}: {success}");
         }
+        
+        // Give time for indexing to complete
+        await Task.Delay(500);
+        
+        // Verify we can retrieve memories
+        var testMemory = await _memoryService.GetMemoryByIdAsync(memories[0].Id);
+        _output.WriteLine($"Test retrieval of first memory: {testMemory != null}");
     }
 }
