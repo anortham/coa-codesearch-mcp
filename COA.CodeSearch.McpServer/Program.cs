@@ -154,8 +154,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TypeScriptFindReferencesTool>();
         services.AddSingleton<TypeScriptSearchTool>();
         
-        // Register the MCP server as a hosted service
-        services.AddHostedService<McpServer>();
+        // Register the MCP server as a hosted service and notification service
+        services.AddSingleton<McpServer>();
+        services.AddSingleton<INotificationService>(provider => provider.GetRequiredService<McpServer>());
+        services.AddHostedService<McpServer>(provider => provider.GetRequiredService<McpServer>());
     })
     .UseConsoleLifetime(options =>
     {

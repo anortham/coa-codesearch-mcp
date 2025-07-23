@@ -9,17 +9,20 @@ public class IndexWorkspaceTool
     private readonly FileIndexingService _fileIndexingService;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly FileWatcherService? _fileWatcherService;
+    private readonly INotificationService? _notificationService;
 
     public IndexWorkspaceTool(
         ILogger<IndexWorkspaceTool> logger,
         FileIndexingService fileIndexingService,
         ILuceneIndexService luceneIndexService,
-        FileWatcherService? fileWatcherService = null)
+        FileWatcherService? fileWatcherService = null,
+        INotificationService? notificationService = null)
     {
         _logger = logger;
         _fileIndexingService = fileIndexingService;
         _luceneIndexService = luceneIndexService;
         _fileWatcherService = fileWatcherService;
+        _notificationService = notificationService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -115,10 +118,35 @@ public class IndexWorkspaceTool
             var startTime = DateTime.UtcNow;
             _logger.LogInformation("Starting index build for {WorkspacePath}", workspacePath);
             
+            // Generate a unique progress token for this operation
+            var progressToken = $"index-workspace-{Guid.NewGuid():N}";
+            
+            // Send initial progress notification
+            if (_notificationService != null)
+            {
+                await _notificationService.SendProgressAsync(
+                    progressToken, 
+                    0, 
+                    null, 
+                    $"Starting workspace indexing for {Path.GetFileName(workspacePath)}",
+                    cancellationToken);
+            }
+            
             var indexedCount = await _fileIndexingService.IndexDirectoryAsync(
                 workspacePath, 
                 workspacePath, 
                 cancellationToken);
+            
+            // Send completion progress notification
+            if (_notificationService != null)
+            {
+                await _notificationService.SendProgressAsync(
+                    progressToken, 
+                    100, 
+                    100, 
+                    $"Indexed {indexedCount} files successfully",
+                    cancellationToken);
+            }
             
             var duration = DateTime.UtcNow - startTime;
             _logger.LogInformation("Indexed {Count} files in {Duration:F2} seconds", indexedCount, duration.TotalSeconds);
@@ -146,7 +174,8 @@ public class IndexWorkspaceTool
                 filesIndexed = indexedCount,
                 duration = $"{duration.TotalSeconds:F2} seconds",
                 action = forceRebuild ? "rebuilt" : "created",
-                fileWatching = _fileWatcherService != null ? "enabled" : "disabled"
+                fileWatching = _fileWatcherService != null ? "enabled" : "disabled",
+                progressToken = progressToken
             };
         }
         catch (Exception ex)

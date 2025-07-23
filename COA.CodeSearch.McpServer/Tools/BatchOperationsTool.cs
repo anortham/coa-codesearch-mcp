@@ -18,6 +18,7 @@ public class BatchOperationsTool : IBatchOperationsTool
     private readonly GetCallHierarchyTool _callHierarchyTool;
     private readonly FastTextSearchTool _fastTextSearchTool;
     private readonly DependencyAnalysisTool _dependencyAnalysisTool;
+    private readonly INotificationService? _notificationService;
 
     public BatchOperationsTool(
         ILogger<BatchOperationsTool> logger,
@@ -30,7 +31,8 @@ public class BatchOperationsTool : IBatchOperationsTool
         GetDocumentSymbolsTool documentSymbolsTool,
         GetCallHierarchyTool callHierarchyTool,
         FastTextSearchTool fastTextSearchTool,
-        DependencyAnalysisTool dependencyAnalysisTool)
+        DependencyAnalysisTool dependencyAnalysisTool,
+        INotificationService? notificationService = null)
     {
         _logger = logger;
         _goToDefinitionTool = goToDefinitionTool;
@@ -43,6 +45,7 @@ public class BatchOperationsTool : IBatchOperationsTool
         _callHierarchyTool = callHierarchyTool;
         _fastTextSearchTool = fastTextSearchTool;
         _dependencyAnalysisTool = dependencyAnalysisTool;
+        _notificationService = notificationService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -52,9 +55,23 @@ public class BatchOperationsTool : IBatchOperationsTool
     {
         try
         {
-            _logger.LogInformation("BatchOperations request with {Count} operations", operations.GetArrayLength());
+            var operationCount = operations.GetArrayLength();
+            _logger.LogInformation("BatchOperations request with {Count} operations", operationCount);
 
             var results = new List<object>();
+            var progressToken = $"batch-operations-{Guid.NewGuid():N}";
+            var currentOperation = 0;
+
+            // Send initial progress notification
+            if (_notificationService != null && operationCount > 0)
+            {
+                await _notificationService.SendProgressAsync(
+                    progressToken, 
+                    0, 
+                    operationCount, 
+                    $"Starting batch operations (0/{operationCount})",
+                    cancellationToken);
+            }
 
             foreach (var operation in operations.EnumerateArray())
             {
@@ -96,13 +113,26 @@ public class BatchOperationsTool : IBatchOperationsTool
                         error = opEx.Message
                     });
                 }
+                
+                // Update progress after each operation
+                currentOperation++;
+                if (_notificationService != null && operationCount > 0)
+                {
+                    await _notificationService.SendProgressAsync(
+                        progressToken, 
+                        currentOperation, 
+                        operationCount, 
+                        $"Completed {operationType} ({currentOperation}/{operationCount})",
+                        cancellationToken);
+                }
             }
 
             return new
             {
                 success = true,
                 totalOperations = results.Count,
-                results = results
+                results = results,
+                progressToken = progressToken
             };
         }
         catch (Exception ex)
