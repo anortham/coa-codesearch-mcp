@@ -205,7 +205,7 @@ public class IndexWorkspaceTool
             // Detect project type and provide helpful info
             var projectInfo = DetectProjectType(workspacePath);
             
-            return new
+            var response = new
             {
                 success = true,
                 message = $"Successfully indexed {indexedCount} files",
@@ -217,29 +217,51 @@ public class IndexWorkspaceTool
                 progressToken = progressToken,
                 projectInfo = projectInfo
             };
+            
+            // Log response size for debugging
+            var responseJson = System.Text.Json.JsonSerializer.Serialize(response);
+            _logger.LogDebug("Index workspace response size: {Size} characters", responseJson.Length);
+            if (responseJson.Length > 50000) // Roughly 10k tokens
+            {
+                _logger.LogWarning("Index workspace response is very large: {Size} characters. This may exceed token limits.", responseJson.Length);
+            }
+            
+            return response;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error indexing workspace: {WorkspacePath}", workspacePath);
+            
+            // Limit error message size to prevent token overflow
+            var errorMessage = ex.Message;
+            if (errorMessage.Length > 500)
+            {
+                errorMessage = errorMessage.Substring(0, 497) + "...";
+            }
+            
             return new
             {
                 success = false,
-                error = $"Failed to index workspace: {ex.Message}"
+                error = $"Failed to index workspace: {errorMessage}",
+                errorType = ex.GetType().Name
             };
         }
     }
     
     private object DetectProjectType(string workspacePath)
     {
-        var projectFiles = Directory.GetFiles(workspacePath, "*.csproj", SearchOption.AllDirectories);
-        var packageJsonFiles = Directory.GetFiles(workspacePath, "package.json", SearchOption.AllDirectories);
-        
         var projectTypes = new List<string>();
         var primaryExtensions = new HashSet<string>();
         var tips = new List<string>();
         
-        // Detect .NET project types
-        foreach (var projectFile in projectFiles)
+        try
+        {
+            // Limit search to first 2 levels to avoid deep recursion in large repos
+            var projectFiles = GetFilesWithDepthLimit(workspacePath, "*.csproj", 2).Take(10).ToList();
+            var packageJsonFiles = GetFilesWithDepthLimit(workspacePath, "package.json", 2).Take(5).ToList();
+            
+            // Detect .NET project types
+            foreach (var projectFile in projectFiles)
         {
             try
             {
@@ -289,39 +311,44 @@ public class IndexWorkspaceTool
             }
         }
         
-        // Detect JavaScript/TypeScript projects
-        foreach (var packageJson in packageJsonFiles)
+            // Detect JavaScript/TypeScript projects
+            foreach (var packageJson in packageJsonFiles)
+            {
+                try
+                {
+                    var content = File.ReadAllText(packageJson);
+                    
+                    if (content.Contains("@angular/"))
+                    {
+                        projectTypes.Add("Angular");
+                        foreach (var ext in new[] { ".ts", ".html", ".scss" })
+                            primaryExtensions.Add(ext);
+                        tips.Add("Use filePattern: '**/*.{ts,html,scss}' for Angular components");
+                    }
+                    else if (content.Contains("react"))
+                    {
+                        projectTypes.Add("React");
+                        foreach (var ext in new[] { ".ts", ".tsx", ".js", ".jsx" })
+                            primaryExtensions.Add(ext);
+                        tips.Add("Use filePattern: '**/*.{ts,tsx,js,jsx}' for React components");
+                    }
+                    else if (content.Contains("vue"))
+                    {
+                        projectTypes.Add("Vue");
+                        foreach (var ext in new[] { ".vue", ".ts", ".js" })
+                            primaryExtensions.Add(ext);
+                        tips.Add("Use filePattern: '**/*.{vue,ts,js}' for Vue components");
+                    }
+                }
+                catch
+                {
+                    // Ignore errors
+                }
+            }
+        }
+        catch (Exception ex)
         {
-            try
-            {
-                var content = File.ReadAllText(packageJson);
-                
-                if (content.Contains("@angular/"))
-                {
-                    projectTypes.Add("Angular");
-                    foreach (var ext in new[] { ".ts", ".html", ".scss" })
-                        primaryExtensions.Add(ext);
-                    tips.Add("Use filePattern: '**/*.{ts,html,scss}' for Angular components");
-                }
-                else if (content.Contains("react"))
-                {
-                    projectTypes.Add("React");
-                    foreach (var ext in new[] { ".ts", ".tsx", ".js", ".jsx" })
-                        primaryExtensions.Add(ext);
-                    tips.Add("Use filePattern: '**/*.{ts,tsx,js,jsx}' for React components");
-                }
-                else if (content.Contains("vue"))
-                {
-                    projectTypes.Add("Vue");
-                    foreach (var ext in new[] { ".vue", ".ts", ".js" })
-                        primaryExtensions.Add(ext);
-                    tips.Add("Use filePattern: '**/*.{vue,ts,js}' for Vue components");
-                }
-            }
-            catch
-            {
-                // Ignore errors
-            }
+            _logger.LogWarning(ex, "Error detecting project type for {WorkspacePath}", workspacePath);
         }
         
         // Default tip if no specific project type detected
@@ -333,8 +360,8 @@ public class IndexWorkspaceTool
         return new
         {
             type = projectTypes.Any() ? string.Join(", ", projectTypes) : "Unknown",
-            primaryExtensions = primaryExtensions.ToArray(),
-            tips = tips.ToArray()
+            primaryExtensions = primaryExtensions.Take(10).ToArray(), // Limit array size
+            tips = tips.Take(5).ToArray() // Limit tips
         };
     }
     
@@ -367,6 +394,64 @@ public class IndexWorkspaceTool
         }
         
         return indexes;
+    }
+    
+    private IEnumerable<string> GetFilesWithDepthLimit(string rootPath, string pattern, int maxDepth)
+    {
+        var queue = new Queue<(string path, int depth)>();
+        queue.Enqueue((rootPath, 0));
+        
+        while (queue.Count > 0)
+        {
+            var (currentPath, depth) = queue.Dequeue();
+            
+            if (depth > maxDepth)
+                continue;
+                
+            // Yield matching files in current directory
+            string[] files;
+            try
+            {
+                files = Directory.GetFiles(currentPath, pattern);
+            }
+            catch
+            {
+                continue; // Skip directories we can't access
+            }
+            
+            foreach (var file in files)
+                yield return file;
+                
+            // Add subdirectories to queue if not at max depth
+            if (depth < maxDepth)
+            {
+                string[] subdirs;
+                try
+                {
+                    subdirs = Directory.GetDirectories(currentPath);
+                }
+                catch
+                {
+                    continue; // Skip directories we can't access
+                }
+                
+                foreach (var subdir in subdirs)
+                {
+                    var dirName = Path.GetFileName(subdir);
+                    // Skip common directories that shouldn't contain project files
+                    if (!string.IsNullOrEmpty(dirName) && 
+                        (dirName.StartsWith(".") || 
+                         dirName.Equals("node_modules", StringComparison.OrdinalIgnoreCase) ||
+                         dirName.Equals("bin", StringComparison.OrdinalIgnoreCase) ||
+                         dirName.Equals("obj", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        continue;
+                    }
+                    
+                    queue.Enqueue((subdir, depth + 1));
+                }
+            }
+        }
     }
     
     private class WorkspaceMetadata
