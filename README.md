@@ -111,47 +111,63 @@ npx @modelcontextprotocol/inspector dotnet run --project COA.CodeSearch.McpServe
 
 ## 🛠️ Available Tools (51 Total)
 
-### Search & Navigation (Core Tools)
+The server provides both standard tools and **AI-optimized V2 versions**. V2 tools feature intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
+
+### 🚀 V2 Tool Features
+- **Intelligent Summaries**: Automatic insights, hotspots, and actionable next steps
+- **Token-Aware**: Auto-switches to summary mode when responses exceed 5,000 tokens
+- **Progress Tracking**: Real-time notifications for long-running operations
+- **Pattern Recognition**: Identifies trends, anomalies, and optimization opportunities
+- **Progressive Disclosure**: Request specific details without re-executing operations
+
+### Search & Navigation
 - `go_to_definition` - Navigate to symbol definitions (C# & TypeScript)
-- `find_references` - Find all usages of a symbol
-- `search_symbols` - Search for C# symbols by name
-- `search_typescript` - Search for TypeScript symbols
+- `find_references` - 🔍 Find ALL usages instantly with AI-optimized summaries (V2)
+- `search_symbols` - Search C# symbols by name
+- `search_symbols_v2` - 🔍 AI-optimized symbol search with distribution insights
+- `search_typescript` - 🔍 Find TypeScript symbols FAST
 - `get_hover_info` - Get type information and documentation
 
 ### Fast Search Tools (Lucene-powered)
-- `index_workspace` - Build search index (required first!)
+- `index_workspace` - 🏗️ Build search index with progress notifications (required first!)
 - `fast_text_search` - Blazing fast text search (<50ms)
+- `fast_text_search_v2` - 🔍 AI-optimized with file distribution and hotspot analysis
 - `fast_file_search` - Find files with fuzzy matching
-- `fast_recent_files` - Find recently modified files
-- `fast_similar_files` - Find files with similar content
-- `fast_directory_search` - Search for directories
-- `fast_file_size_analysis` - Analyze files by size
+- `fast_file_search_v2` - 🔍 AI-optimized file search with directory insights
+- `fast_recent_files` - 🔍 Find recently modified files with time context
+- `fast_similar_files` - Find files with similar content using ML algorithms
+- `fast_directory_search` - Search for directories with fuzzy matching
+- `fast_file_size_analysis` - Analyze files by size with distribution insights
 
 ### Code Analysis
 - `get_implementations` - Find all implementations of interfaces/abstract classes
+- `get_implementations_v2` - 🔍 AI-optimized with inheritance pattern analysis
 - `get_call_hierarchy` - Trace method call chains
+- `get_call_hierarchy_v2` - 🔍 AI-optimized with circular dependency detection
 - `get_document_symbols` - Get file structure outline
-- `get_diagnostics` - Check compilation errors
-- `dependency_analysis` - Analyze code dependencies
-- `project_structure_analysis` - Analyze solution structure
-- `rename_symbol` - Safely rename symbols across codebase
+- `get_diagnostics` - 🔍 AI-optimized error analysis with priority recommendations (V2)
+- `dependency_analysis` - 🔍 AI-optimized dependency insights with refactoring suggestions (V2)
+- `project_structure_analysis` - 🔍 AI-optimized project analysis with architectural insights (V2)
+- `rename_symbol` - 🔍 Safe renaming with AI-powered impact analysis (V2)
 
 ### Memory System
-- `recall_context` - Load relevant context (use at session start!)
-- `flexible_store_memory` - Store any type of memory
-- `flexible_search_memories` - Search stored memories
+- `recall_context` - 🧠 Load relevant context (use at session start!)
+- `flexible_store_memory` - Store any type of memory with custom fields
+- `flexible_search_memories` - Search stored memories with natural language
+- `flexible_search_memories_v2` - 🔍 AI-optimized memory search with insights and patterns
 - `flexible_update_memory` - Update existing memories
-- `flexible_link_memories` - Create relationships
-- `flexible_store_working_memory` - Temporary session memories
-- `create_checklist` - Create persistent task lists
+- `flexible_link_memories` - Create relationships between memories
+- `flexible_store_working_memory` - Temporary session memories with auto-expiration
+- `create_checklist` - 📝 Create persistent task lists
 - `backup_memories_to_sqlite` - Backup for version control
 
 ### TypeScript-specific
-- `typescript_go_to_definition` - Navigate in TypeScript
-- `typescript_find_references` - Find TypeScript references
+- `typescript_go_to_definition` - ⚡ Jump to TypeScript definitions instantly
+- `typescript_find_references` - Find all TypeScript usages with tsserver accuracy
 
 ### Utilities
 - `batch_operations` - Run multiple operations in parallel
+- `batch_operations_v2` - 🚀 AI-optimized batch execution with pattern analysis
 - `set_logging` - Control file-based logging
 - `get_version` - Get server version info
 
@@ -215,7 +231,7 @@ Add `.codesearch/` to your `.gitignore` to exclude these files from version cont
    dotnet run --project COA.CodeSearch.McpServer -- stdio
    ```
 
-2. **In your AI Assistant**
+2. **Basic Usage**
    ```
    # First, index your workspace (one-time setup)
    index_workspace --workspacePath "C:/YourProject"
@@ -230,7 +246,19 @@ Add `.codesearch/` to your `.gitignore` to exclude these files from version cont
    go_to_definition --filePath "Auth.cs" --line 25 --column 15
    ```
 
-3. **Memory System Usage**
+3. **V2 Tools Example**
+   ```
+   # Use V2 tools for AI-optimized results
+   find_references --filePath "IUserService.cs" --line 10 --column 15
+   
+   # Response includes:
+   # - Summary: "47 references across 12 files"
+   # - Key Insight: "Heavy usage in Controllers (65%)"
+   # - Hotspots: UserController.cs (15), AuthController.cs (8)
+   # - Next Action: "Consider interface segregation"
+   ```
+
+4. **Memory System Usage**
    ```
    # Store architectural decision
    flexible_store_memory --type "ArchitecturalDecision" 
