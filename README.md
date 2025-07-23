@@ -294,8 +294,9 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 
 The server creates a `.codesearch` directory in your workspace containing:
 - `index/` - Lucene search indexes
-- `project-memory/` - Shared architectural decisions
-- `local-memory/` - Personal work sessions
+- `project-memory/` - Shared architectural decisions and team knowledge
+- `local-memory/` - Personal work sessions and notes
+- `backups/` - Automatic backups of memory indexes
 - `memories.db` - SQLite backup for version control
 - `logs/` - Debug logs (when enabled)
 
