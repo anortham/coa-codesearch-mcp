@@ -745,6 +745,7 @@ TypeScript support is automatically configured on server startup:
 - `search_typescript` - Search for TypeScript symbols
 - `typescript_go_to_definition` - Navigate to TypeScript definitions using tsserver
 - `typescript_find_references` - Find TypeScript references using tsserver
+- `typescript_rename_symbol` - Rename TypeScript symbols across the entire codebase with preview
 - `GoToDefinition` - Automatically delegates to TypeScript for .ts/.js files
 - `FindReferences` - Works seamlessly across C# and TypeScript
 - `GetHoverInfo` - Shows type information and documentation for TypeScript symbols
