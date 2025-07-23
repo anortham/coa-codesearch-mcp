@@ -106,13 +106,13 @@ Add to your Claude Desktop configuration:
 #### Method 1: Using Claude MCP Add Command (Easiest)
 1. Build the project in Release mode:
    ```bash
-   cd "C:\source\COA Roslyn MCP"
+   cd "C:\path\to\coa-codesearch-mcp"
    dotnet build -c Release
    ```
 
 2. Use Claude Code's built-in command:
    ```bash
-   claude mcp add "C:\source\COA Roslyn MCP\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
+   claude mcp add "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe" --name codesearch
    ```
 
 3. Claude Code will automatically restart with the server loaded
@@ -120,7 +120,7 @@ Add to your Claude Desktop configuration:
 #### Method 2: Manual Configuration
 1. Build the project in Release mode:
    ```bash
-   cd "C:\source\COA Roslyn MCP"
+   cd "C:\path\to\coa-codesearch-mcp"
    dotnet build -c Release
    ```
 
@@ -130,7 +130,7 @@ Add to your Claude Desktop configuration:
      "mcpServers": {
        "codesearch": {
          "type": "stdio",
-         "command": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\COA.CodeSearch.McpServer.exe",
+         "command": "C:\\path\\to\\coa-codesearch-mcp\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\COA.CodeSearch.McpServer.exe",
          "args": [],
          "env": {}
        }
@@ -143,7 +143,7 @@ Add to your Claude Desktop configuration:
 #### Method 3: Using Published Build (Production)
 1. Create a published build:
    ```bash
-   cd "C:\source\COA Roslyn MCP"
+   cd "C:\path\to\coa-codesearch-mcp"
    dotnet publish -c Release -r win-x64 --self-contained
    ```
 
@@ -153,7 +153,7 @@ Add to your Claude Desktop configuration:
      "mcpServers": {
        "codesearch": {
          "type": "stdio",
-         "command": "C:\\source\\COA Roslyn MCP\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\win-x64\\publish\\COA.CodeSearch.McpServer.exe",
+         "command": "C:\\path\\to\\coa-codesearch-mcp\\COA.CodeSearch.McpServer\\bin\\Release\\net9.0\\win-x64\\publish\\COA.CodeSearch.McpServer.exe",
          "args": [],
          "env": {}
        }
@@ -161,7 +161,7 @@ Add to your Claude Desktop configuration:
    }
    ```
 
-**Note**: Replace `C:\source\COA Roslyn MCP` with your actual project path.
+**Note**: Replace `C:\path\to\coa-codesearch-mcp` with your actual project path.
 
 #### For GitHub Clones
 If you cloned from GitHub:
