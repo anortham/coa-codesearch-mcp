@@ -126,7 +126,7 @@ claude mcp add codesearch ~/Source/coa-codesearch-mcp/COA.CodeSearch.McpServer/b
 ```
 
 
-## 🛠️ Available Tools (52 Total)
+## 🛠️ Available Tools (59 Total)
 
 The server provides both standard tools and **AI-optimized V2 versions**. V2 tools feature intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
 
@@ -141,6 +141,7 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `go_to_definition` - Navigate to symbol definitions (C# & TypeScript)
 - `find_references` - 🔍 Find ALL usages instantly with AI-optimized summaries (V2)
 - `search_symbols` - Search C# symbols by name
+- `advanced_symbol_search` - Find C# symbols with semantic filters
 - `search_symbols_v2` - 🔍 AI-optimized symbol search with distribution insights
 - `search_typescript` - 🔍 Find TypeScript symbols FAST
 - `get_hover_info` - Get type information and documentation
@@ -173,10 +174,32 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `flexible_search_memories` - Search stored memories with natural language
 - `flexible_search_memories_v2` - 🔍 AI-optimized memory search with insights and patterns
 - `flexible_update_memory` - Update existing memories
+- `flexible_get_memory` - Retrieve specific memory by ID
 - `flexible_link_memories` - Create relationships between memories
+- `flexible_unlink_memories` - Remove memory relationships
+- `flexible_get_related_memories` - Traverse memory relationships
 - `flexible_store_working_memory` - Temporary session memories with auto-expiration
+- `flexible_find_similar_memories` - Find memories with similar content
+- `flexible_archive_memories` - Archive old memories by type and age
+- `flexible_summarize_memories` - Compress old memories into summaries
+- `flexible_store_git_commit` - Link memories to Git commits
+- `flexible_memories_for_file` - Get all memories for a specific file
+- `flexible_store_technical_debt` - Track technical debt items
+- `flexible_store_question` - Store questions for follow-up
+- `flexible_store_deferred_task` - Track deferred tasks
+- `flexible_mark_memory_resolved` - Mark memories as resolved
+- `flexible_get_memory_suggestions` - Get context-aware suggestions
+- `flexible_list_templates` - List memory templates
+- `flexible_create_from_template` - Create memories from templates
+- `memory_dashboard` - View memory system statistics
 - `create_checklist` - 📝 Create persistent task lists
+- `add_checklist_item` - Add items to checklists
+- `toggle_checklist_item` - Toggle checklist item completion
+- `update_checklist_item` - Update checklist item details
+- `view_checklist` - View checklist with progress
+- `list_checklists` - List all available checklists
 - `backup_memories_to_sqlite` - Backup for version control
+- `restore_memories_from_sqlite` - Restore from backup
 
 ### TypeScript-specific
 - `search_typescript` - 🔍 Find TypeScript symbols FAST
