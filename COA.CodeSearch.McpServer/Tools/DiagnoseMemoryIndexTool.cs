@@ -60,7 +60,7 @@ public class DiagnoseMemoryIndexTool
             foreach (var hit in hits)
             {
                 var doc = searcher.Doc(hit.Doc);
-                var scope = doc.Get("scope");
+                var scope = doc.Get("type");
                 if (scope != null)
                 {
                     if (!scopeCounts.ContainsKey(scope))
