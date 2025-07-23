@@ -169,6 +169,7 @@ public class BatchOperationsTextSearchTests : TestBase
         // Register TypeScript services
         services.AddScoped<TypeScriptInstaller>();
         services.AddScoped<TypeScriptAnalysisService>();
+        services.AddScoped<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
         services.AddScoped<TypeScriptHoverInfoTool>();
         
         // Register all tools

@@ -28,7 +28,8 @@ public class FastTextSearchV2Test : LuceneTestBase
             ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
-            ServiceProvider.GetRequiredService<IDetailRequestCache>());
+            ServiceProvider.GetRequiredService<IDetailRequestCache>(),
+            null); // IContextAwarenessService is optional
             
         _indexTool = ServiceProvider.GetRequiredService<IndexWorkspaceTool>();
         _testWorkspacePath = GetTestProjectPath();

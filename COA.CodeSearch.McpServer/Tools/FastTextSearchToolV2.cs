@@ -3,6 +3,7 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Analysis;
+using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -24,6 +25,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly FileIndexingService _fileIndexingService;
+    private readonly IContextAwarenessService? _contextAwarenessService;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -33,12 +35,14 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IResponseSizeEstimator sizeEstimator,
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
-        IDetailRequestCache detailCache)
+        IDetailRequestCache detailCache,
+        IContextAwarenessService? contextAwarenessService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _configuration = configuration;
         _luceneIndexService = luceneIndexService;
         _fileIndexingService = fileIndexingService;
+        _contextAwarenessService = contextAwarenessService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -96,7 +100,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             var results = await ProcessSearchResultsAsync(searcher, topDocs, query, contextLines, cancellationToken);
 
             // Create AI-optimized response
-            return CreateAiOptimizedResponse(query, searchType, effectiveWorkspacePath, results, topDocs.TotalHits, filePattern, extensions, mode);
+            return await CreateAiOptimizedResponse(query, searchType, effectiveWorkspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -168,7 +172,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return results.OrderByDescending(r => r.Score).ToList();
     }
 
-    private object CreateAiOptimizedResponse(
+    private async Task<object> CreateAiOptimizedResponse(
         string query,
         string searchType,
         string workspacePath,
@@ -176,7 +180,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         long totalHits,
         string? filePattern,
         string[]? extensions,
-        ResponseMode mode)
+        ResponseMode mode,
+        CancellationToken cancellationToken = default)
     {
         // Group by extension
         var byExtension = results
@@ -209,8 +214,24 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             })
             .ToList();
 
+        // Check for alternate results if we got zero results with file restrictions
+        long? alternateHits = null;
+        Dictionary<string, int>? alternateExtensions = null;
+        if (totalHits == 0 && (filePattern != null || extensions?.Length > 0))
+        {
+            var (altHits, altExts) = await CheckAlternateSearchResults(query, workspacePath, searchType, false, cancellationToken);
+            if (altHits > 0)
+            {
+                alternateHits = altHits;
+                alternateExtensions = altExts;
+            }
+        }
+        
+        // Get project context
+        var projectContext = await GetProjectContextAsync(workspacePath);
+        
         // Generate insights
-        var insights = GenerateSearchInsights(query, searchType, results, totalHits, filePattern, extensions);
+        var insights = GenerateSearchInsights(query, searchType, workspacePath, results, totalHits, filePattern, extensions, projectContext, alternateHits, alternateExtensions);
 
         // Generate actions
         var actions = GenerateSearchActions(query, searchType, results, totalHits, hotspots, 
@@ -257,10 +278,14 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private List<string> GenerateSearchInsights(
         string query,
         string searchType,
+        string workspacePath,
         List<SearchResult> results,
         long totalHits,
         string? filePattern,
-        string[]? extensions)
+        string[]? extensions,
+        ProjectContext? projectContext,
+        long? alternateHits,
+        Dictionary<string, int>? alternateExtensions)
     {
         var insights = new List<string>();
 
@@ -268,13 +293,53 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         if (totalHits == 0)
         {
             insights.Add($"No matches found for '{query}'");
-            if (searchType == "standard" && !query.Contains("*"))
+            
+            // Check if alternate search would find results
+            if (alternateHits > 0 && alternateExtensions != null)
             {
-                insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
+                var topExtensions = alternateExtensions
+                    .OrderByDescending(kvp => kvp.Value)
+                    .Take(5)
+                    .Select(kvp => $"{kvp.Key} ({kvp.Value})")
+                    .ToList();
+                    
+                insights.Add($"Found {alternateHits} matches in other file types: {string.Join(", ", topExtensions)}");
+                insights.Add($"💡 TIP: Remove filePattern/extensions to search ALL file types");
+                insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --workspacePath \"{workspacePath}\"");
+                
+                // Project-aware suggestions
+                if (projectContext?.Technologies?.Contains("blazor", StringComparer.OrdinalIgnoreCase) == true)
+                {
+                    if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
+                    {
+                        insights.Add("🎯 Blazor project detected - UI components are in .razor files!");
+                        insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --extensions .cs,.razor --workspacePath \"{workspacePath}\"");
+                    }
+                }
+                else if (projectContext?.Technologies?.Contains("aspnet", StringComparer.OrdinalIgnoreCase) == true)
+                {
+                    if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
+                    {
+                        insights.Add("🎯 ASP.NET project detected - views are in .cshtml files!");
+                        insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --extensions .cs,.cshtml --workspacePath \"{workspacePath}\"");
+                    }
+                }
             }
-            if (extensions?.Length > 0)
+            else
             {
-                insights.Add($"Search limited to: {string.Join(", ", extensions)}");
+                // Original suggestions when no alternate results
+                if (searchType == "standard" && !query.Contains("*"))
+                {
+                    insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
+                }
+                if (extensions?.Length > 0)
+                {
+                    insights.Add($"Search limited to: {string.Join(", ", extensions)}");
+                }
+                if (!string.IsNullOrEmpty(filePattern))
+                {
+                    insights.Add($"Results filtered by pattern: {filePattern}");
+                }
             }
         }
         else if (totalHits > results.Count)
@@ -731,5 +796,77 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         public required string File { get; set; }
         public int Matches { get; set; }
         public int Lines { get; set; }
+    }
+    
+    private async Task<(long totalHits, Dictionary<string, int> extensionCounts)> CheckAlternateSearchResults(
+        string query,
+        string workspacePath,
+        string searchType,
+        bool caseSensitive,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            var analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
+            
+            // Build query without file pattern restrictions
+            var parser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+            parser.AllowLeadingWildcard = true;
+            
+            Query luceneQuery;
+            if (searchType == "fuzzy" && !query.Contains("~"))
+            {
+                luceneQuery = parser.Parse(query + "~");
+            }
+            else if (searchType == "phrase")
+            {
+                luceneQuery = parser.Parse($"\"{query}\"");
+            }
+            else
+            {
+                luceneQuery = parser.Parse(query);
+            }
+            
+            // Search without restrictions
+            var collector = TopScoreDocCollector.Create(1000, true);
+            searcher.Search(luceneQuery, collector);
+            
+            var topDocs = collector.GetTopDocs();
+            var extensionCounts = new Dictionary<string, int>();
+            
+            // Count extensions
+            foreach (var scoreDoc in topDocs.ScoreDocs)
+            {
+                var doc = searcher.Doc(scoreDoc.Doc);
+                var extension = doc.Get("extension") ?? ".unknown";
+                extensionCounts[extension] = extensionCounts.GetValueOrDefault(extension) + 1;
+            }
+            
+            return (topDocs.TotalHits, extensionCounts);
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Failed to check alternate search results");
+            return (0, new Dictionary<string, int>());
+        }
+    }
+    
+    private async Task<ProjectContext?> GetProjectContextAsync(string workspacePath)
+    {
+        try
+        {
+            if (_contextAwarenessService != null)
+            {
+                var context = await _contextAwarenessService.GetCurrentContextAsync();
+                return context.ProjectInfo;
+            }
+        }
+        catch (Exception ex)
+        {
+            Logger.LogDebug(ex, "Failed to get project context");
+        }
+        
+        return null;
     }
 }

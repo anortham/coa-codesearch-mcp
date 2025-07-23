@@ -968,7 +968,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchV2Params>(
             name: "fast_text_search_v2",
-            description: "🔍 AI-OPTIMIZED blazing fast text search! Returns structured data with file distribution, hotspots, and insights. 95%+ token reduction vs original. Searches millions of lines in <50ms.",
+            description: "🔍 AI-OPTIMIZED text search INSIDE files! Search for code, strings, or patterns across your entire codebase. Returns structured insights with hotspots and smart suggestions. ⚡ <50ms for millions of lines. When to use: Finding where something is used/implemented (e.g., 'where is IPushoverService used?')",
             inputSchema: new
             {
                 type = "object",
@@ -1071,7 +1071,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSearchV2Params>(
             name: "fast_file_search_v2",
-            description: "🔍 AI-OPTIMIZED file search! Returns structured data with match quality, directory hotspots, and smart insights. 95%+ token reduction vs original. Blazing fast with fuzzy matching.",
+            description: "📁 AI-OPTIMIZED search FOR file names! Find files by name with typo tolerance and smart patterns. Returns directory hotspots and insights. ⚡ <10ms response. When to use: Finding specific files (e.g., 'where is PushoverService.cs?')",
             inputSchema: new
             {
                 type = "object",
@@ -1337,7 +1337,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<IndexWorkspaceParams>(
             name: "index_workspace",
-            description: "🏗️ BUILD SEARCH INDEX - Run this FIRST to enable blazing-fast searches! Takes 5-60 seconds but then ALL searches are instant (<50ms). One-time setup per workspace. DO THIS before any fast_* tools!",
+            description: "🏗️ BUILD SEARCH INDEX - Run this FIRST to enable blazing-fast searches! Takes 5-60 seconds but then ALL searches are instant (<50ms). One-time setup per workspace. DO THIS before any fast_* tools! Detects project type (Blazor, ASP.NET, React, etc.) and provides search tips.",
             inputSchema: new
             {
                 type = "object",
