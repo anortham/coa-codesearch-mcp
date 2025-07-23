@@ -8,6 +8,7 @@ public class IndexWorkspaceTool
     private readonly ILogger<IndexWorkspaceTool> _logger;
     private readonly FileIndexingService _fileIndexingService;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly FileWatcherService? _fileWatcherService;
     private readonly INotificationService? _notificationService;
 
@@ -15,12 +16,14 @@ public class IndexWorkspaceTool
         ILogger<IndexWorkspaceTool> logger,
         FileIndexingService fileIndexingService,
         ILuceneIndexService luceneIndexService,
+        IPathResolutionService pathResolutionService,
         FileWatcherService? fileWatcherService = null,
         INotificationService? notificationService = null)
     {
         _logger = logger;
         _fileIndexingService = fileIndexingService;
         _luceneIndexService = luceneIndexService;
+        _pathResolutionService = pathResolutionService;
         _fileWatcherService = fileWatcherService;
         _notificationService = notificationService;
     }
@@ -45,8 +48,14 @@ public class IndexWorkspaceTool
             }
 
             // CRITICAL: Protect memory indexes from being indexed as code
-            if (workspacePath.Contains("memory", StringComparison.OrdinalIgnoreCase) || 
-                workspacePath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase))
+            var pathToCheck = Path.GetFullPath(workspacePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var pathSegments = pathToCheck.Split(Path.DirectorySeparatorChar);
+            
+            // Check if any segment in the path is exactly ".codesearch" or exactly one of the memory directories
+            if (pathSegments.Any(segment => 
+                segment.Equals(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals(PathConstants.ProjectMemoryDirectoryName, StringComparison.OrdinalIgnoreCase) ||
+                segment.Equals(PathConstants.LocalMemoryDirectoryName, StringComparison.OrdinalIgnoreCase)))
             {
                 _logger.LogWarning("Attempted to index protected path as workspace: {WorkspacePath}", workspacePath);
                 return new
@@ -63,6 +72,33 @@ public class IndexWorkspaceTool
                     success = false,
                     error = $"Workspace path does not exist: {workspacePath}"
                 };
+            }
+
+            // Check if this path is already covered by a parent index
+            var normalizedRequestPath = Path.GetFullPath(workspacePath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var existingIndexes = await GetExistingIndexesAsync();
+            
+            foreach (var existingIndex in existingIndexes)
+            {
+                var normalizedExistingPath = Path.GetFullPath(existingIndex.OriginalPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                
+                // Check if the requested path is a subdirectory of an existing indexed path
+                if (normalizedRequestPath.StartsWith(normalizedExistingPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                    normalizedRequestPath.Equals(normalizedExistingPath, StringComparison.OrdinalIgnoreCase))
+                {
+                    // This path is already covered by a parent index
+                    if (!normalizedRequestPath.Equals(normalizedExistingPath, StringComparison.OrdinalIgnoreCase))
+                    {
+                        _logger.LogInformation("Path {RequestPath} is already covered by parent index at {ParentPath}", workspacePath, existingIndex.OriginalPath);
+                        return new
+                        {
+                            success = true,
+                            message = $"This path is already indexed as part of parent workspace: {existingIndex.OriginalPath}",
+                            parentWorkspace = existingIndex.OriginalPath,
+                            action = "skipped_redundant"
+                        };
+                    }
+                }
             }
 
             // Check if index exists and get document count
@@ -300,5 +336,49 @@ public class IndexWorkspaceTool
             primaryExtensions = primaryExtensions.ToArray(),
             tips = tips.ToArray()
         };
+    }
+    
+    private async Task<List<WorkspaceIndexInfo>> GetExistingIndexesAsync()
+    {
+        var indexes = new List<WorkspaceIndexInfo>();
+        
+        try
+        {
+            // Get the metadata file path
+            var metadataPath = _pathResolutionService.GetWorkspaceMetadataPath();
+            
+            if (File.Exists(metadataPath))
+            {
+                var metadataJson = await File.ReadAllTextAsync(metadataPath);
+                var metadata = System.Text.Json.JsonSerializer.Deserialize<WorkspaceMetadata>(metadataJson);
+                
+                if (metadata?.Indexes != null)
+                {
+                    foreach (var kvp in metadata.Indexes)
+                    {
+                        indexes.Add(kvp.Value);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read workspace metadata");
+        }
+        
+        return indexes;
+    }
+    
+    private class WorkspaceMetadata
+    {
+        public Dictionary<string, WorkspaceIndexInfo> Indexes { get; set; } = new();
+    }
+    
+    private class WorkspaceIndexInfo
+    {
+        public string OriginalPath { get; set; } = string.Empty;
+        public string HashPath { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime LastAccessed { get; set; }
     }
 }
