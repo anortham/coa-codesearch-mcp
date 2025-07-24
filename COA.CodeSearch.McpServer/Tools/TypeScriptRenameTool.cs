@@ -7,8 +7,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for renaming TypeScript symbols using the TypeScript Language Service
 /// </summary>
-public class TypeScriptRenameTool
+public class TypeScriptRenameTool : ITool
 {
+    public string ToolName => "typescript_rename_symbol";
+    public string Description => "Rename TypeScript symbols using Language Service";
+    public ToolCategory Category => ToolCategory.TypeScript;
     private readonly ILogger<TypeScriptRenameTool> _logger;
     private readonly ITypeScriptAnalysisService _tsService;
     private static readonly Regex IdentifierRegex = new(@"^[a-zA-Z_$][a-zA-Z0-9_$]*$", RegexOptions.Compiled);

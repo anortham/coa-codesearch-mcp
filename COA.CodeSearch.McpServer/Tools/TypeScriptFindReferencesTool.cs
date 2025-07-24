@@ -6,8 +6,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for finding all references to TypeScript symbols
 /// </summary>
-public class TypeScriptFindReferencesTool
+public class TypeScriptFindReferencesTool : ITool
 {
+    public string ToolName => "typescript_find_references";
+    public string Description => "Find all references to TypeScript symbols";
+    public ToolCategory Category => ToolCategory.TypeScript;
     private readonly ILogger<TypeScriptFindReferencesTool> _logger;
     private readonly ITypeScriptAnalysisService _tsService;
 

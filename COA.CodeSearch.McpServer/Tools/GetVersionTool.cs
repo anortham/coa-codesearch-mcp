@@ -8,8 +8,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool to get the version and build information of the running MCP server.
 /// This helps Claude understand which version is actually running vs what's being edited.
 /// </summary>
-public class GetVersionTool
+public class GetVersionTool : ITool
 {
+    public string ToolName => "get_version";
+    public string Description => "Get version and build information";
+    public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<GetVersionTool> _logger;
     private static readonly Assembly ExecutingAssembly = Assembly.GetExecutingAssembly();
     private static readonly DateTime BuildDate = GetBuildDate();

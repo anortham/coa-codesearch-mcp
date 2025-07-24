@@ -14,6 +14,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "batch_operations_v2";
+    public override string Description => "AI-optimized batch operations";
+    public override ToolCategory Category => ToolCategory.Batch;
     private readonly IBatchOperationsTool _batchOperationsTool;
     private readonly IConfiguration _configuration;
 

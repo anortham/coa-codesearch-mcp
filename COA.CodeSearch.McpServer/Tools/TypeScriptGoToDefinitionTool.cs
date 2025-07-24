@@ -6,8 +6,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for navigating to TypeScript symbol definitions
 /// </summary>
-public class TypeScriptGoToDefinitionTool
+public class TypeScriptGoToDefinitionTool : ITool
 {
+    public string ToolName => "typescript_go_to_definition";
+    public string Description => "Navigate to TypeScript definitions using tsserver";
+    public ToolCategory Category => ToolCategory.TypeScript;
     private readonly ILogger<TypeScriptGoToDefinitionTool> _logger;
     private readonly ITypeScriptAnalysisService _tsService;
 

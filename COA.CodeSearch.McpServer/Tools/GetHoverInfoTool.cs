@@ -7,8 +7,11 @@ using System.Text;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GetHoverInfoTool
+public class GetHoverInfoTool : ITool
 {
+    public string ToolName => "get_hover_info";
+    public string Description => "Get detailed type information and documentation";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<GetHoverInfoTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly TypeScriptHoverInfoTool _tsHoverTool;

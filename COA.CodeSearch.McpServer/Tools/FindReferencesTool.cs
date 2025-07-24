@@ -6,8 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class FindReferencesTool
+public class FindReferencesTool : ITool
 {
+    public string ToolName => "find_references";
+    public string Description => "Find all references to a symbol across the codebase";
+    public ToolCategory Category => ToolCategory.Navigation;
     private readonly ILogger<FindReferencesTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly TypeScriptFindReferencesTool? _typeScriptTool;

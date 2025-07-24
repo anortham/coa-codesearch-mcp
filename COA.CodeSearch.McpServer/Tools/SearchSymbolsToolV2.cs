@@ -15,6 +15,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class SearchSymbolsToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "search_symbols_v2";
+    public override string Description => "AI-optimized symbol search with structured response";
+    public override ToolCategory Category => ToolCategory.Search;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
 

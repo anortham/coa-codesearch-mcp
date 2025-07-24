@@ -17,6 +17,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class GetCallHierarchyToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "get_call_hierarchy_v2";
+    public override string Description => "AI-optimized call hierarchy analysis";
+    public override ToolCategory Category => ToolCategory.Analysis;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
 

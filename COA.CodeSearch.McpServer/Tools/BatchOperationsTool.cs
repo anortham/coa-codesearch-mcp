@@ -5,8 +5,12 @@ using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class BatchOperationsTool : IBatchOperationsTool
+public class BatchOperationsTool : IBatchOperationsTool, ITool
 {
+    public string ToolName => "batch_operations";
+    public string Description => "Execute multiple operations in parallel for efficiency";
+    public ToolCategory Category => ToolCategory.Batch;
+    
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly GoToDefinitionTool _goToDefinitionTool;
     private readonly FindReferencesTool _findReferencesTool;

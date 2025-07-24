@@ -12,6 +12,10 @@ namespace COA.CodeSearch.McpServer.Tools;
 
 public class RenameSymbolTool : McpToolBase
 {
+    public override string ToolName => "rename_symbol";
+    public override string Description => "Safely rename symbols across entire codebase";
+    public override ToolCategory Category => ToolCategory.Refactoring;
+    
     private readonly CodeAnalysisService _workspaceService;
 
     public RenameSymbolTool(

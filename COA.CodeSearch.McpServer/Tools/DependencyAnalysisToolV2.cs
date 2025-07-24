@@ -17,6 +17,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "dependency_analysis_v2";
+    public override string Description => "AI-optimized dependency analysis";
+    public override ToolCategory Category => ToolCategory.Analysis;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
 

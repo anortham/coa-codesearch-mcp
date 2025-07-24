@@ -11,8 +11,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Straight blazin' fast file search using Lucene index - find files by name with fuzzy matching, wildcards, and typo correction
 /// </summary>
-public class FastFileSearchTool
+public class FastFileSearchTool : ITool
 {
+    public string ToolName => "fast_file_search";
+    public string Description => "Find files by name with fuzzy matching and typo correction";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastFileSearchTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;

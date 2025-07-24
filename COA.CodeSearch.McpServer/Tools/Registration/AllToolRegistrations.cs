@@ -922,7 +922,7 @@ public static class AllToolRegistrations
                 properties = new
                 {
                     query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
-                    workspacePath = new { type = "string", description = "Path to solution (.sln), project (.csproj), or directory to search" },
+                    workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories." },
                     filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs' for C# only, 'src/**/*.ts' for TypeScript in src)" },
                     extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Limit to specific file types (e.g., ['.cs', '.razor', '.js'])" },
                     contextLines = new { type = "integer", description = "Optional: Show N lines before/after each match for context (default: 0)" },
@@ -975,7 +975,7 @@ public static class AllToolRegistrations
                 properties = new
                 {
                     query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
-                    workspacePath = new { type = "string", description = "Path to solution (.sln), project (.csproj), or directory to search" },
+                    workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories." },
                     filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs' for C# only, 'src/**/*.ts' for TypeScript in src)" },
                     extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Limit to specific file types (e.g., ['.cs', '.razor', '.js'])" },
                     contextLines = new { type = "integer", description = "Optional: Show N lines before/after each match for context (default: 0)" },
@@ -1343,7 +1343,7 @@ public static class AllToolRegistrations
                 type = "object",
                 properties = new
                 {
-                    workspacePath = new { type = "string", description = "The workspace path to index" },
+                    workspacePath = new { type = "string", description = "Directory path to index (e.g., C:\\MyProject or C:\\source\\MyRepo). Must be a directory, not a file path." },
                     forceRebuild = new { type = "boolean", description = "Force rebuild even if index exists (default: false)" }
                 },
                 required = new[] { "workspacePath" }
@@ -1539,4 +1539,5 @@ public static class AllToolRegistrations
         public string[]? Scopes { get; set; }
         public bool? IncludeLocal { get; set; }
     }
+    
 }

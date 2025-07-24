@@ -12,8 +12,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Straight blazin' fast tool to find files with similar content using Lucene's "More Like This" feature
 /// </summary>
-public class FastSimilarFilesTool
+public class FastSimilarFilesTool : ITool
 {
+    public string ToolName => "fast_similar_files";
+    public string Description => "Find files with similar content using 'More Like This'";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastSimilarFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;

@@ -3,13 +3,20 @@ using COA.CodeSearch.McpServer.Models;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
+using COA.CodeSearch.McpServer.Tools;
+
 namespace COA.CodeSearch.McpServer.Infrastructure;
 
 /// <summary>
 /// Base class for MCP tools with built-in token limit handling
 /// </summary>
-public abstract class McpToolBase
+public abstract class McpToolBase : ITool
 {
+    // ITool implementation
+    public abstract string ToolName { get; }
+    public abstract string Description { get; }
+    public abstract ToolCategory Category { get; }
+    
     protected IResponseSizeEstimator SizeEstimator { get; }
     protected IResultTruncator Truncator { get; }
     protected ResponseLimitOptions Options { get; }

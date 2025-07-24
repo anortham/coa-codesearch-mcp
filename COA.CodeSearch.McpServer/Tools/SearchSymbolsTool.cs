@@ -8,8 +8,11 @@ using System.Text.RegularExpressions;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class SearchSymbolsTool
+public class SearchSymbolsTool : ITool
 {
+    public string ToolName => "search_symbols";
+    public string Description => "Search for C# symbols by name with wildcards and fuzzy matching";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<SearchSymbolsTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;

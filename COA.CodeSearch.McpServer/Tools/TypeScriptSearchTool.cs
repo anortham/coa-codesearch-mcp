@@ -6,8 +6,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for searching TypeScript symbols across a codebase
 /// </summary>
-public class TypeScriptSearchTool
+public class TypeScriptSearchTool : ITool
 {
+    public string ToolName => "search_typescript";
+    public string Description => "Search for TypeScript symbols across codebase";
+    public ToolCategory Category => ToolCategory.TypeScript;
     private readonly ILogger<TypeScriptSearchTool> _logger;
     private readonly TypeScriptTextAnalysisService _tsAnalysis;
     private readonly ILuceneIndexService _luceneService;

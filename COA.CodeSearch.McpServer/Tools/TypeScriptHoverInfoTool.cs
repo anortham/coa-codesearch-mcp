@@ -4,8 +4,11 @@ using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class TypeScriptHoverInfoTool
+public class TypeScriptHoverInfoTool : ITool
 {
+    public string ToolName => "typescript_hover_info";
+    public string Description => "Get TypeScript type information and docs";
+    public ToolCategory Category => ToolCategory.TypeScript;
     private readonly ILogger<TypeScriptHoverInfoTool> _logger;
     private readonly ITypeScriptAnalysisService _tsService;
 

@@ -6,8 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GetDocumentSymbolsTool
+public class GetDocumentSymbolsTool : ITool
 {
+    public string ToolName => "get_document_symbols";
+    public string Description => "Get outline of all symbols in a file";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<GetDocumentSymbolsTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
 

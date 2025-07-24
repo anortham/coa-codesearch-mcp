@@ -4,8 +4,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GetDiagnosticsTool
+public class GetDiagnosticsTool : ITool
 {
+    public string ToolName => "get_diagnostics";
+    public string Description => "Check for compilation errors and warnings";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<GetDiagnosticsTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
 

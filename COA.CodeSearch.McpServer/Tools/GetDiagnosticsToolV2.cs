@@ -13,6 +13,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class GetDiagnosticsToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "get_diagnostics_v2";
+    public override string Description => "AI-optimized diagnostics with categorization";
+    public override ToolCategory Category => ToolCategory.Analysis;
     private readonly CodeAnalysisService _workspaceService;
 
     public GetDiagnosticsToolV2(

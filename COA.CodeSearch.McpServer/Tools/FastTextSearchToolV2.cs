@@ -19,9 +19,13 @@ namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// AI-optimized version of FastTextSearchTool with structured response format
+/// Updated for memory lifecycle testing - improved error handling
 /// </summary>
 public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "fast_text_search_v2";
+    public override string Description => "AI-optimized text search with insights";
+    public override ToolCategory Category => ToolCategory.Search;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly FileIndexingService _fileIndexingService;
@@ -79,18 +83,15 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 return CreateErrorResponse<object>("Workspace path cannot be empty");
             }
 
-            // Handle file paths by converting to directory paths
-            string effectiveWorkspacePath = ResolveWorkspacePath(workspacePath);
-
             // Ensure the directory is indexed first
-            if (!await EnsureIndexedAsync(effectiveWorkspacePath, cancellationToken))
+            if (!await EnsureIndexedAsync(workspacePath, cancellationToken))
             {
                 return CreateErrorResponse<object>("Failed to index workspace");
             }
 
             // Get the searcher
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(effectiveWorkspacePath, cancellationToken);
-            var analyzer = await _luceneIndexService.GetAnalyzerAsync(effectiveWorkspacePath, cancellationToken);
+            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            var analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
 
             // Build the query
             var luceneQuery = BuildQuery(query, searchType, caseSensitive, filePattern, extensions, analyzer);
@@ -100,7 +101,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             var results = await ProcessSearchResultsAsync(searcher, topDocs, query, contextLines, cancellationToken);
 
             // Create AI-optimized response
-            return await CreateAiOptimizedResponse(query, searchType, effectiveWorkspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
+            return await CreateAiOptimizedResponse(query, searchType, workspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
         }
         catch (Exception ex)
         {
@@ -109,23 +110,6 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         }
     }
 
-    private string ResolveWorkspacePath(string workspacePath)
-    {
-        if (File.Exists(workspacePath))
-        {
-            Logger.LogWarning("File path provided as workspace: {FilePath}. Will use parent directory or project root for indexing.", workspacePath);
-            
-            var directory = Path.GetDirectoryName(workspacePath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                var projectRoot = FindProjectRoot(directory);
-                var effectiveWorkspacePath = projectRoot ?? directory;
-                Logger.LogInformation("Resolved file path to workspace: {EffectiveWorkspacePath}", effectiveWorkspacePath);
-                return effectiveWorkspacePath;
-            }
-        }
-        return workspacePath;
-    }
 
     private async Task<List<SearchResult>> ProcessSearchResultsAsync(
         IndexSearcher searcher,
@@ -705,58 +689,6 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return escapedQuery;
     }
 
-    private string? FindProjectRoot(string startPath)
-    {
-        var currentPath = startPath;
-        
-        while (!string.IsNullOrEmpty(currentPath))
-        {
-            // Check for various project root indicators
-            var projectIndicators = new[]
-            {
-                ".git",
-                "*.sln",
-                "*.csproj",
-                "package.json",
-                "tsconfig.json",
-                "Cargo.toml",
-                "go.mod"
-            };
-            
-            foreach (var indicator in projectIndicators)
-            {
-                if (indicator.Contains('*'))
-                {
-                    // It's a pattern, check for files
-                    var files = Directory.GetFiles(currentPath, indicator);
-                    if (files.Length > 0)
-                    {
-                        Logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
-                        return currentPath;
-                    }
-                }
-                else
-                {
-                    // It's a directory or file name
-                    var indicatorPath = Path.Combine(currentPath, indicator);
-                    if (Directory.Exists(indicatorPath) || File.Exists(indicatorPath))
-                    {
-                        Logger.LogDebug("Found project indicator {Indicator} at {Path}, using as project root", indicator, currentPath);
-                        return currentPath;
-                    }
-                }
-            }
-            
-            var parent = Directory.GetParent(currentPath);
-            if (parent == null)
-                break;
-                
-            currentPath = parent.FullName;
-        }
-        
-        Logger.LogDebug("No project root indicators found, will use parent directory");
-        return null;
-    }
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {

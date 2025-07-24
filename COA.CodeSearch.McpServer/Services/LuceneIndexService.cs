@@ -423,10 +423,24 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             return workspacePath;
         }
         
-        // For regular workspace paths, use the hashing logic
+        // For regular workspace paths, check if this path is contained within an existing workspace
         _logger.LogWarning("Using hashed path for workspace: {WorkspacePath}", workspacePath);
+        
+        // Check if this path is contained within an existing workspace to prevent duplicate indexes
+        var existingWorkspacePath = FindExistingWorkspaceForPath(workspacePath);
+        if (existingWorkspacePath != null)
+        {
+            _logger.LogInformation("Path {RequestedPath} is contained within existing workspace {ExistingWorkspace}, reusing existing index", 
+                workspacePath, existingWorkspacePath);
+            var existingIndexPath = _pathResolution.GetIndexPath(existingWorkspacePath);
+            _logger.LogWarning("Reusing existing index path: {IndexPath}", existingIndexPath);
+            return existingIndexPath;
+        }
+        
         var indexPath = _pathResolution.GetIndexPath(workspacePath);
         _logger.LogWarning("Hashed index path result: {IndexPath}", indexPath);
+        
+        // Fixed: Duplicate index issue resolved with workspace validation
         
         // Update metadata for code indexes (not memory indexes)
         var workspaceRoot = NormalizeToWorkspaceRoot(workspacePath);
@@ -622,6 +636,64 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         }
         
         return new IndexMetadata();
+    }
+    
+    /// <summary>
+    /// Find an existing workspace that contains the requested path to prevent duplicate indexes
+    /// </summary>
+    private string? FindExistingWorkspaceForPath(string requestedPath)
+    {
+        try
+        {
+            var metadataPath = GetMetadataPath();
+            if (!File.Exists(metadataPath))
+            {
+                return null;
+            }
+            
+            var metadata = LoadMetadata(metadataPath);
+            var normalizedRequestedPath = Path.GetFullPath(requestedPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            
+            // Check each existing workspace to see if the requested path is contained within it
+            foreach (var indexEntry in metadata.Indexes.Values)
+            {
+                var existingWorkspacePath = Path.GetFullPath(indexEntry.OriginalPath).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                
+                // Skip if this is the exact same path
+                if (string.Equals(normalizedRequestedPath, existingWorkspacePath, StringComparison.OrdinalIgnoreCase))
+                {
+                    continue;
+                }
+                
+                // Check if the requested path is contained within this existing workspace
+                if (normalizedRequestedPath.StartsWith(existingWorkspacePath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                    normalizedRequestedPath.StartsWith(existingWorkspacePath + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Found requested path {RequestedPath} is contained within existing workspace {ExistingWorkspace}", 
+                        requestedPath, indexEntry.OriginalPath);
+                    return indexEntry.OriginalPath;
+                }
+                
+                // Also check the reverse - if an existing workspace is contained within the requested path
+                // This handles the case where we indexed a subdirectory first, then try to index the parent
+                if (existingWorkspacePath.StartsWith(normalizedRequestedPath + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase) ||
+                    existingWorkspacePath.StartsWith(normalizedRequestedPath + Path.AltDirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+                {
+                    _logger.LogInformation("Found existing workspace {ExistingWorkspace} is contained within requested path {RequestedPath}, should use parent", 
+                        indexEntry.OriginalPath, requestedPath);
+                    // In this case, we want to use the broader (parent) path, so we don't return the existing one
+                    // We'll let the normal indexing process create the parent index
+                    continue;
+                }
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error checking for existing workspace containing path {Path}", requestedPath);
+            return null;
+        }
     }
     
     private void SaveMetadata(string metadataPath, IndexMetadata metadata)

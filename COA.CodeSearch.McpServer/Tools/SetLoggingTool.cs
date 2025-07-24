@@ -7,8 +7,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for controlling file-based logging dynamically
 /// </summary>
-public class SetLoggingTool
+public class SetLoggingTool : ITool
 {
+    public string ToolName => "set_logging";
+    public string Description => "Control file-based logging dynamically";
+    public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<SetLoggingTool> _logger;
     private readonly FileLoggingService _fileLoggingService;
     private readonly IPathResolutionService _pathResolution;

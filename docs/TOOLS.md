@@ -1,6 +1,6 @@
 # CodeSearch MCP Server - Tool Reference
 
-Complete documentation for all 52 tools available in the CodeSearch MCP Server.
+Complete documentation for all 62 tools available in the CodeSearch MCP Server.
 
 ## 🚀 V2 Tools - AI-Optimized Features
 
@@ -78,6 +78,7 @@ V2 tools are marked with 🔍 in the documentation below.
   - [typescript_go_to_definition](#typescript_go_to_definition)
   - [typescript_find_references](#typescript_find_references)
   - [typescript_rename_symbol](#typescript_rename_symbol)
+  - [typescript_hover_info](#typescript_hover_info)
 - [Utilities](#utilities)
   - [set_logging](#set_logging)
   - [get_version](#get_version)
@@ -1591,6 +1592,38 @@ typescript_rename_symbol --filePath "C:/project/models/User.ts" --line 10 --colu
 - Preview mode doesn't modify files
 - Uses tsserver for accurate rename analysis
 
+### typescript_hover_info
+
+Get TypeScript type information and documentation - shows detailed type info like IDE hover tooltips.
+
+**Parameters:**
+- `filePath` (string, required): Path to source file
+- `line` (integer, required): Line number (1-based)
+- `column` (integer, required): Column number (1-based)
+
+**Example:**
+```bash
+typescript_hover_info --filePath "C:/project/components/Button.tsx" --line 15 --column 10
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "hoverInfo": {
+    "displayString": "(property) Button.onClick: (event: MouseEvent) => void",
+    "documentation": "Handles button click events",
+    "tags": []
+  }
+}
+```
+
+**Tips:**
+- Shows complete type information including generics
+- Includes JSDoc documentation when available
+- Works with complex types, interfaces, and type aliases
+- Uses real TypeScript language server for accuracy
+
 ## Utilities
 
 ### set_logging
@@ -1708,6 +1741,7 @@ get_version
 - typescript_go_to_definition
 - typescript_find_references
 - typescript_rename_symbol
+- typescript_hover_info
 
 ### Both C# and TypeScript
 - go_to_definition

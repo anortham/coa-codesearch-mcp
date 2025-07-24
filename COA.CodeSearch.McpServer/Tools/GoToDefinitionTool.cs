@@ -6,8 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GoToDefinitionTool
+public class GoToDefinitionTool : ITool
 {
+    public string ToolName => "go_to_definition";
+    public string Description => "Navigate to symbol definitions instantly - works across entire solutions for C# and TypeScript";
+    public ToolCategory Category => ToolCategory.Navigation;
     private readonly ILogger<GoToDefinitionTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly TypeScriptGoToDefinitionTool? _typeScriptTool;
@@ -22,6 +25,9 @@ public class GoToDefinitionTool
         _typeScriptTool = typeScriptTool;
     }
 
+    /// <summary>
+    /// Navigates to the definition of the symbol at the specified location
+    /// </summary>
     public async Task<object> ExecuteAsync(
         string filePath,
         int line,

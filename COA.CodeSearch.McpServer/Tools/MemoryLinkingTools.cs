@@ -8,8 +8,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tools for managing relationships between memories
 /// </summary>
-public class MemoryLinkingTools
+public class MemoryLinkingTools : ITool
 {
+    public string ToolName => "memory_linking";
+    public string Description => "Memory relationship management";
+    public ToolCategory Category => ToolCategory.Memory;
     private readonly ILogger<MemoryLinkingTools> _logger;
     private readonly FlexibleMemoryService _memoryService;
     

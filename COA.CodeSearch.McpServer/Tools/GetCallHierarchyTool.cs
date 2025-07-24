@@ -8,8 +8,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GetCallHierarchyTool
+public class GetCallHierarchyTool : ITool
 {
+    public string ToolName => "get_call_hierarchy";
+    public string Description => "Trace method call chains to understand execution flow";
+    public ToolCategory Category => ToolCategory.Navigation;
     private readonly ILogger<GetCallHierarchyTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
 

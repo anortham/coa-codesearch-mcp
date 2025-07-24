@@ -5,8 +5,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class ProjectStructureAnalysisTool
+public class ProjectStructureAnalysisTool : ITool
 {
+    public string ToolName => "project_structure_analysis";
+    public string Description => "Analyze project structure with metrics";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<ProjectStructureAnalysisTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
