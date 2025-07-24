@@ -646,11 +646,11 @@ public class FlexibleMemoryService : IMemoryService
     {
         var memory = new FlexibleMemoryEntry
         {
-            Id = doc.Get("id"),
-            Type = doc.Get("type"),
-            Content = doc.Get("content"),
-            Created = new DateTime(long.Parse(doc.Get("created"))),
-            Modified = new DateTime(long.Parse(doc.Get("modified"))),
+            Id = doc.Get("id") ?? Guid.NewGuid().ToString(),
+            Type = doc.Get("type") ?? "Unknown",
+            Content = doc.Get("content") ?? "",
+            Created = new DateTime(long.Parse(doc.Get("created") ?? DateTime.UtcNow.Ticks.ToString())),
+            Modified = new DateTime(long.Parse(doc.Get("modified") ?? DateTime.UtcNow.Ticks.ToString())),
             IsShared = bool.Parse(doc.Get("is_shared") ?? "true"),
             AccessCount = int.Parse(doc.Get("access_count") ?? "0"),
             SessionId = doc.Get("session_id") ?? ""
@@ -824,6 +824,7 @@ public class FlexibleMemoryService : IMemoryService
         
         // Calculate type facets
         facets["type"] = memories
+            .Where(m => !string.IsNullOrEmpty(m.Type))
             .GroupBy(m => m.Type)
             .ToDictionary(g => g.Key, g => g.Count());
         

@@ -1195,8 +1195,8 @@ public static class AllToolRegistrations
     private static void RegisterBackupRestore(ToolRegistry registry, ClaudeMemoryTools tool)
     {
         registry.RegisterTool<BackupMemoriesParams>(
-            name: "backup_memories_to_sqlite",
-            description: "Export memories to SQLite file for version control and team sharing. Use cases: commit memories.db to git for team collaboration, backup before major changes, transfer knowledge to new machines. Backs up architectural decisions, code patterns, and project insights by default.",
+            name: "backup_memories",
+            description: "Export memories to JSON file for version control and team sharing. Creates timestamped, human-readable backups. Use cases: commit to git for team collaboration, backup before major changes, transfer knowledge to new machines. By default backs up only project memories (ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight). Use includeLocal=true to include personal memories.",
             inputSchema: new
             {
                 type = "object",
@@ -1218,8 +1218,8 @@ public static class AllToolRegistrations
         );
         
         registry.RegisterTool<RestoreMemoriesParams>(
-            name: "restore_memories_from_sqlite",
-            description: "Restore memories from SQLite database backup to Lucene index. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.",
+            name: "restore_memories",
+            description: "Restore memories from JSON backup file. Automatically finds most recent backup if no file specified. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.",
             inputSchema: new
             {
                 type = "object",

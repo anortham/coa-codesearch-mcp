@@ -166,7 +166,7 @@ COA.CodeSearch.McpServer/
 - Persistent architectural knowledge across sessions
 - Manual context loading and saving
 - Session tracking and work history
-- SQLite backup/restore for version control
+- JSON backup/restore for version control
 
 ## Development Guidelines
 
@@ -763,8 +763,8 @@ To use the memory system effectively:
 #### Essential Tools
 
 - `recall_context` - Load relevant context at session start (ALWAYS use this first!)
-- `backup_memories_to_sqlite` - Backup memories for version control
-- `restore_memories_from_sqlite` - Restore memories from backup
+- `backup_memories` - Export memories to JSON for version control
+- `restore_memories` - Restore memories from JSON backup
 - **Smart Recall (Phase 4)**: The flexible_search_memories tool now includes automatic natural language understanding
   - Detects natural language queries and expands them semantically
   - Synonym expansion (e.g., "bug" → "defect", "issue", "error")
@@ -781,14 +781,14 @@ To use the memory system effectively:
 
 ### Manual Backup/Restore
 
-- `backup_memories_to_sqlite` - Backup project memories to SQLite for version control
-- `restore_memories_from_sqlite` - Restore memories from SQLite (useful for new machines)
+- `backup_memories` - Export project memories to JSON for version control
+- `restore_memories` - Restore memories from JSON (useful for new machines)
 
 Example workflow:
 
-1. Before major changes: `mcp__codesearch__backup_memories_to_sqlite`
-2. Check in `memories.db` to source control
-3. On new machine: `mcp__codesearch__restore_memories_from_sqlite`
+1. Before major changes: `mcp__codesearch__backup_memories`
+2. Check in `memories_*.json` files to source control
+3. On new machine: `mcp__codesearch__restore_memories`
 
 ### Working Memory Examples
 

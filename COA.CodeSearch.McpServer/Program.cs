@@ -25,6 +25,9 @@ if (args.Length > 0 && (args[0] == "--help" || args[0] == "-h"))
     return 0;
 }
 
+// Early cleanup of stuck write.lock files before any services start
+await PerformEarlyStartupCleanup();
+
 // Build and run the host
 var host = Host.CreateDefaultBuilder(args)
     .ConfigureAppConfiguration((context, config) =>
@@ -99,7 +102,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Claude Memory System
         services.AddSingleton<ClaudeMemoryService>();
-        services.AddSingleton<MemoryBackupService>();
+        services.AddSingleton<JsonMemoryBackupService>();
         
         // Flexible Memory System
         services.AddSingleton<FlexibleMemoryService>();
@@ -204,6 +207,37 @@ static void SetupMSBuildEnvironment()
     Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", "false");
     Environment.SetEnvironmentVariable("ROSLYN_COMPILER_LOCATION", "");
     Environment.SetEnvironmentVariable("ROSLYN_ANALYZERS_ENABLED", "false");
+}
+
+static async Task PerformEarlyStartupCleanup()
+{
+    try
+    {
+        // Create minimal configuration for PathResolutionService
+        var configBuilder = new ConfigurationBuilder()
+            .AddJsonFile("appsettings.json", optional: true)
+            .AddEnvironmentVariables("MCP_");
+        var configuration = configBuilder.Build();
+        
+        // Create minimal services needed for cleanup
+        var pathResolution = new PathResolutionService(configuration);
+        
+        // Create a simple console logger for startup
+        using var loggerFactory = LoggerFactory.Create(builder => 
+            builder.AddConsole().SetMinimumLevel(LogLevel.Information));
+        var logger = loggerFactory.CreateLogger("Startup");
+        
+        // Perform the cleanup
+        LuceneIndexService.CleanupStuckIndexesOnStartup(pathResolution, logger);
+        
+        // Small delay to ensure cleanup completes
+        await Task.Delay(500);
+    }
+    catch (Exception ex)
+    {
+        Console.Error.WriteLine($"WARNING: Early startup cleanup failed: {ex.Message}");
+        // Don't fail startup - just log and continue
+    }
 }
 
 static void ShowHelp()

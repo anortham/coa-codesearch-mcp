@@ -193,8 +193,8 @@ All tools now feature AI-optimized responses with intelligent summaries, progres
 - `update_checklist_item` - Update checklist item details
 - `view_checklist` - View checklist with progress
 - `list_checklists` - List all available checklists
-- `backup_memories_to_sqlite` - Backup for version control
-- `restore_memories_from_sqlite` - Restore from backup
+- `backup_memories` - Export memories to JSON for version control
+- `restore_memories` - Restore memories from JSON backup
 
 ### TypeScript-specific
 - `search_typescript` - Find TypeScript symbols by name
@@ -252,10 +252,10 @@ The server creates a `.codesearch` directory in your workspace containing:
 - `index/` - Lucene search indexes
 - `project-memory/` - Shared architectural decisions and team knowledge
 - `local-memory/` - Personal work sessions and notes
-- `backups/memories.db` - SQLite backup database (created by `backup_memories_to_sqlite` tool)
+- `backups/` - JSON memory backups (created by `backup_memories` tool)
 - `logs/` - Debug logs (when enabled)
 
-Add `.codesearch/` to your `.gitignore` to exclude these files from version control, except for `.codesearch/backups/memories.db` which should be committed for team sharing.
+Add `.codesearch/` to your `.gitignore` to exclude these files from version control, except for `.codesearch/backups/*.json` files which can be committed for team sharing.
 
 ### Memory Backup System
 
@@ -267,11 +267,11 @@ The memory system uses two storage mechanisms with a clear separation between sh
 - Not suitable for version control (binary files)
 - Automatically maintained by the memory system
 
-**SQLite Backup** (`.codesearch/backups/memories.db`):
-- Single portable database file created by `backup_memories_to_sqlite`
+**JSON Backup** (`.codesearch/backups/memories_YYYYMMDD_HHMMSS.json`):
+- Timestamped, human-readable JSON files created by `backup_memories`
 - Perfect for version control and team sharing
-- Contains only essential memory data (no index structures)
-- Can be restored on any machine with `restore_memories_from_sqlite`
+- Easy to inspect, debug, and merge
+- Can be restored on any machine with `restore_memories`
 
 #### Two Memory Workspaces
 
@@ -287,7 +287,7 @@ The memory system uses two storage mechanisms with a clear separation between sh
 
 #### What Gets Backed Up by Default
 
-When you run `backup_memories_to_sqlite` without parameters:
+When you run `backup_memories` without parameters:
 - ✅ **Backs up**: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight
 - ❌ **Excludes**: WorkSession, LocalInsight, WorkingMemory, any custom types with `IsShared = false`
 
@@ -307,28 +307,33 @@ Examples:
 
 ```bash
 # Default: Backs up only shared project memories
-backup_memories_to_sqlite
+backup_memories
 
 # Include both project AND local memories
-backup_memories_to_sqlite --includeLocal true
+backup_memories --includeLocal true
 
 # Backup specific memory types
-backup_memories_to_sqlite --scopes ["TechnicalDebt", "Question"]
+backup_memories --scopes ["TechnicalDebt", "Question"]
 
 # Full backup including all local developer memories
-backup_memories_to_sqlite --scopes ["ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "WorkSession", "LocalInsight"] --includeLocal true
+backup_memories --scopes ["ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "WorkSession", "LocalInsight"] --includeLocal true
 
-# Restore from backup (same options apply)
-restore_memories_from_sqlite
-restore_memories_from_sqlite --includeLocal true
+# Restore from backup (auto-finds most recent)
+restore_memories
+
+# Restore from specific backup file
+restore_memories --backupFile "memories_20250724_225355.json"
+
+# Restore including local memories
+restore_memories --includeLocal true
 ```
 
 #### Version Control Strategy
 
 **Recommended workflow:**
-1. Run `backup_memories_to_sqlite` (project memories only)
-2. Commit `.codesearch/backups/memories.db` to version control
-3. Team members pull and run `restore_memories_from_sqlite`
+1. Run `backup_memories` (project memories only)
+2. Commit `.codesearch/backups/memories_*.json` to version control
+3. Team members pull and run `restore_memories`
 4. Everyone has the same shared architectural knowledge
 
 **Privacy preserved:**

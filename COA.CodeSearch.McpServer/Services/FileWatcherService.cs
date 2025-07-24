@@ -12,6 +12,8 @@ public class FileWatcherService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly FileIndexingService _fileIndexingService;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
+    // TODO: Fix potential memory leak - items may not be removed from dictionary on exceptions
+    // UPDATE: This has been addressed - testing memory lifecycle service
     private readonly ConcurrentDictionary<string, DateTime> _pendingUpdates = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
     private readonly HashSet<string> _supportedExtensions;

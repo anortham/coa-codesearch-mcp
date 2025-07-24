@@ -1,5 +1,6 @@
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
+// TODO: Refactor duplicate path validation logic - UPDATED FOR LIFECYCLE TEST
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
@@ -83,6 +84,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
+        
+        // Note: Stuck lock cleanup now happens early in Program.cs before services start
         
         // Clean up any memory entries from metadata on startup
         CleanupMemoryEntriesFromMetadata();
@@ -836,7 +839,99 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
     }
     
     /// <summary>
-    /// Clean up old or stuck indexes (only in the index subdirectory, never memory indexes)
+    /// Static method to clean up stuck write.lock files during startup (before services start)
+    /// </summary>
+    public static void CleanupStuckIndexesOnStartup(IPathResolutionService pathResolution, ILogger logger)
+    {
+        var lockTimeout = TimeSpan.FromMinutes(1); // Aggressive timeout for startup cleanup
+        const string WriteLockFilename = "write.lock";
+        
+        logger.LogWarning("STARTUP: Beginning early write.lock cleanup before services start");
+        
+        // Clean up workspace indexes
+        var indexRoot = pathResolution.GetIndexRootPath();
+        if (System.IO.Directory.Exists(indexRoot))
+        {
+            logger.LogWarning("STARTUP: Checking workspace indexes at {Path}", indexRoot);
+            
+            foreach (var indexDir in System.IO.Directory.GetDirectories(indexRoot))
+            {
+                var lockPath = Path.Combine(indexDir, WriteLockFilename);
+                
+                if (File.Exists(lockPath))
+                {
+                    var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
+                    var hashPath = Path.GetFileName(indexDir);
+                    
+                    logger.LogWarning("STARTUP: Found workspace lock at {Path}, age: {Age}", lockPath, lockAge);
+                    
+                    if (lockAge > lockTimeout)
+                    {
+                        try
+                        {
+                            File.Delete(lockPath);
+                            logger.LogWarning("STARTUP: Removed stuck workspace lock at {Path}", lockPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            logger.LogError(ex, "STARTUP: Failed to remove stuck workspace lock at {Path}", lockPath);
+                        }
+                    }
+                    else
+                    {
+                        logger.LogInformation("STARTUP: Workspace lock is recent ({Age}), leaving it alone", lockAge);
+                    }
+                }
+            }
+        }
+        
+        // Clean up memory indexes
+        var memoryPaths = new[]
+        {
+            pathResolution.GetProjectMemoryPath(),
+            pathResolution.GetLocalMemoryPath()
+        };
+        
+        foreach (var memoryPath in memoryPaths)
+        {
+            if (!System.IO.Directory.Exists(memoryPath))
+            {
+                continue;
+            }
+            
+            var lockPath = Path.Combine(memoryPath, WriteLockFilename);
+            
+            if (File.Exists(lockPath))
+            {
+                var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
+                var memoryType = Path.GetFileName(memoryPath);
+                
+                logger.LogWarning("STARTUP: Found {MemoryType} memory lock, age: {Age}", memoryType, lockAge);
+                
+                if (lockAge > lockTimeout)
+                {
+                    try
+                    {
+                        File.Delete(lockPath);
+                        logger.LogWarning("STARTUP: Removed stuck {MemoryType} memory lock", memoryType);
+                    }
+                    catch (Exception ex)
+                    {
+                        logger.LogError(ex, "STARTUP: Failed to remove {MemoryType} memory lock at {Path}", memoryType, lockPath);
+                    }
+                }
+                else
+                {
+                    logger.LogInformation("STARTUP: {MemoryType} memory lock is recent ({Age}), leaving it alone", memoryType, lockAge);
+                }
+            }
+        }
+        
+        logger.LogWarning("STARTUP: Early write.lock cleanup completed");
+    }
+    
+    /// <summary>
+    /// Clean up stuck write.lock files from workspace indexes and memory indexes
     /// </summary>
     public void CleanupStuckIndexes()
     {
@@ -848,8 +943,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             return;
         }
         
-        _logger.LogInformation("Checking for stuck locks in code search indexes at {Path}", indexRoot);
+        _logger.LogWarning("STARTUP: Checking for stuck write.lock files in indexes at {Path}", indexRoot);
         
+        // Clean up workspace indexes
         foreach (var indexDir in System.IO.Directory.GetDirectories(indexRoot))
         {
             var lockPath = Path.Combine(indexDir, WriteLockFilename);
@@ -876,6 +972,56 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
                     {
                         _logger.LogError(ex, "Failed to remove stuck lock at {Path}{PathInfo}", lockPath, pathInfo);
                     }
+                }
+            }
+        }
+        
+        // Also clean up memory indexes
+        CleanupMemoryIndexLocks();
+    }
+    
+    /// <summary>
+    /// Clean up stuck write.lock files in memory indexes (project-memory and local-memory)
+    /// </summary>
+    private void CleanupMemoryIndexLocks()
+    {
+        var memoryPaths = new[]
+        {
+            _pathResolution.GetProjectMemoryPath(),
+            _pathResolution.GetLocalMemoryPath()
+        };
+        
+        foreach (var memoryPath in memoryPaths)
+        {
+            if (!System.IO.Directory.Exists(memoryPath))
+            {
+                continue;
+            }
+            
+            var lockPath = Path.Combine(memoryPath, WriteLockFilename);
+            
+            if (File.Exists(lockPath))
+            {
+                var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockPath);
+                var memoryType = Path.GetFileName(memoryPath);
+                
+                _logger.LogWarning("STARTUP: Found write.lock in {MemoryType} memory index, age: {Age}", memoryType, lockAge);
+                
+                if (lockAge > _lockTimeout)
+                {
+                    try
+                    {
+                        File.Delete(lockPath);
+                        _logger.LogWarning("STARTUP: Removed stuck write.lock from {MemoryType} memory index", memoryType);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to remove stuck lock from {MemoryType} memory index at {Path}", memoryType, lockPath);
+                    }
+                }
+                else
+                {
+                    _logger.LogInformation("Write.lock in {MemoryType} memory index is recent ({Age}), leaving it alone", memoryType, lockAge);
                 }
             }
         }
@@ -986,6 +1132,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         if (_disposed)
             return;
             
+        _logger.LogWarning("LuceneIndexService.Dispose() called - beginning shutdown cleanup of {Count} index contexts", _indexes.Count);
         _disposed = true;
         
         // Close all writers and readers
@@ -995,7 +1142,22 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
             context.Lock.Wait();
             try
             {
-                context.Writer?.Dispose();
+                // Commit before disposing to ensure all changes are written to disk
+                if (context.Writer != null)
+                {
+                    try
+                    {
+                        context.Writer.Commit();
+                        _logger.LogDebug("Committed pending changes during shutdown for {Path}", context.Path);
+                    }
+                    catch (Exception commitEx)
+                    {
+                        _logger.LogWarning(commitEx, "Failed to commit changes during shutdown for {Path}", context.Path);
+                    }
+                    
+                    context.Writer.Dispose();
+                }
+                
                 context.Reader?.Dispose();
                 context.Directory?.Dispose();
             }
@@ -1014,6 +1176,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager
         _analyzer?.Dispose();
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
+        
+        _logger.LogWarning("LuceneIndexService.Dispose() completed - all Lucene resources cleaned up");
     }
     
     #region ILuceneIndexService Implementation
