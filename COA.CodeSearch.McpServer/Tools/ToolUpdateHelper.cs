@@ -24,15 +24,11 @@ public static class ToolUpdateHelper
         ["AdvancedSymbolSearchTool"] = ("Advanced symbol search with semantic filters", ToolCategory.Search),
         
         // Analysis tools
-        ["GetDiagnosticsTool"] = ("Check for compilation errors and warnings", ToolCategory.Analysis),
-        ["DependencyAnalysisTool"] = ("Analyze code dependencies and coupling", ToolCategory.Analysis),
-        ["ProjectStructureAnalysisTool"] = ("Analyze project structure with metrics", ToolCategory.Analysis),
         ["GetDocumentSymbolsTool"] = ("Get outline of all symbols in a file", ToolCategory.Analysis),
         ["FastFileSizeAnalysisTool"] = ("Analyze files by size and distribution", ToolCategory.Analysis),
         ["GetHoverInfoTool"] = ("Get detailed type information and documentation", ToolCategory.Analysis),
         
         // Refactoring tools
-        ["RenameSymbolTool"] = ("Safely rename symbols across entire codebase", ToolCategory.Refactoring),
         
         // TypeScript tools
         ["TypeScriptGoToDefinitionTool"] = ("Navigate to TypeScript definitions using tsserver", ToolCategory.TypeScript),

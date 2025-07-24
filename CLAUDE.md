@@ -5,6 +5,7 @@ This document provides context and guidelines for AI assistants working on the C
 ## IMPORTANT: Environment Context
 
 **This project is being developed in Claude Code, NOT Claude Desktop.** The MCP server integration will be different:
+
 - Claude Code has its own MCP integration mechanism
 - Do not look for Claude Desktop configuration files
 - MCP servers in Claude Code are configured differently than in Claude Desktop
@@ -12,6 +13,7 @@ This document provides context and guidelines for AI assistants working on the C
 ## CRITICAL: Understanding Code Versions
 
 **You must be aware of which version of the code you're running vs. editing:**
+
 - **MCP Tools (`mcp__codesearch__*`)**: These execute on the INSTALLED version of the MCP server, not the code you're currently editing
 - **Code Changes**: When you modify code in the project, those changes DO NOT affect the running MCP server
 - **Testing Changes**: To test code changes, you must:
@@ -25,17 +27,20 @@ This document provides context and guidelines for AI assistants working on the C
 **NEVER run the MCP server locally during development sessions!**
 
 DO NOT execute commands like:
+
 - `dotnet run --project COA.CodeSearch.McpServer -- stdio`
 - `dotnet run -- stdio --test-mode`
 - Any variation of running the MCP server directly
 
 **Why this is critical:**
+
 - Running the MCP server locally creates a separate process that locks the Lucene index
 - This process may not terminate when Claude session ends, creating an orphaned process
 - The orphaned process holds `write.lock` files, preventing the main MCP server from functioning
 - Results in complete failure of all search operations until manually resolved
 
 **If you need to test the MCP server:**
+
 - Build it: `dotnet build -c Release`
 - Let the user handle installation/restart
 - Test through the normal MCP tools interface
@@ -43,6 +48,7 @@ DO NOT execute commands like:
 ## ⚠️ CRITICAL: Build Configuration During Development
 
 **IMPORTANT: Build in Debug mode during development sessions!**
+**IMPORTANT: Build before you run the tests!**
 
 - **During Development**: Claude should build using `dotnet build -c Debug` because the Release DLL is locked by the running session
 - **User Workflow**: When user exits Claude Code to load new code, they build in Release mode to update their setup
@@ -56,6 +62,7 @@ COA CodeSearch MCP Server is a high-performance Model Context Protocol (MCP) ser
 ## Key Commands
 
 ### Build and Test
+
 ```bash
 # Build the project
 dotnet build
@@ -74,6 +81,7 @@ dotnet list package --outdated
 ```
 
 ### MCP Server Commands
+
 ```bash
 # Run server in STDIO mode for Claude Code
 dotnet run -- stdio
@@ -115,18 +123,21 @@ COA.CodeSearch.McpServer/
 ## Architecture Decisions
 
 ### 1. **Roslyn Integration**
+
 - Uses Microsoft.CodeAnalysis for all code analysis
 - MSBuildWorkspace for loading solutions
 - Incremental compilation for performance
 - Cached semantic models
 
 ### 2. **MCP Implementation**
+
 - STDIO transport for Claude Code integration
 - Strongly-typed tools with manual registration via ToolRegistry
 - Resources for read-only data access
 - Structured error handling with protocol-level wrapping
 
 ### 3. **Performance Optimizations**
+
 - Native AOT compilation for faster startup
 - Workspace caching with LRU eviction
 - Lazy loading of projects
@@ -136,12 +147,14 @@ COA.CodeSearch.McpServer/
 - Automatic TypeScript server reuse across operations
 
 ### 4. **Error Handling**
+
 - Graceful degradation when projects don't compile
 - Timeout protection for long operations
 - Detailed error messages for debugging
 - Fallback to syntax-only analysis
 
 ### 5. **Claude Optimization (v2 Tools)**
+
 - Progressive disclosure with token limit protection (25,000 token limit)
 - Auto-mode switching at 5,000 token threshold
 - Smart analysis with insights, hotspots, and next actions
@@ -149,6 +162,7 @@ COA.CodeSearch.McpServer/
 - Context-aware suggestions and priority-based recommendations
 
 ### 6. **Memory System**
+
 - Persistent architectural knowledge across sessions
 - Manual context loading and saving
 - Session tracking and work history
@@ -163,6 +177,7 @@ COA.CodeSearch.McpServer/
 See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md) for the authoritative guide on path handling.
 
 **Key Rules:**
+
 1. **NEVER** construct paths manually (e.g., `Path.Combine(basePath, "logs")`)
 2. **NEVER** call `Directory.CreateDirectory()` directly
 3. **NEVER** read configuration for paths - always use `IPathResolutionService`
@@ -177,6 +192,7 @@ See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md) for the
 This is the SINGLE SOURCE OF TRUTH for all path operations to prevent the recurring path-related bugs.
 
 ### Code Style
+
 - Use C# 12 features with nullable reference types
 - Follow standard C# naming conventions
 - Async all the way down
@@ -188,18 +204,19 @@ This is the SINGLE SOURCE OF TRUTH for all path operations to prevent the recurr
 Tools in this project follow a functional registration pattern:
 
 #### 1. Tool Class Implementation
+
 ```csharp
 public class MyTool
 {
     private readonly ILogger<MyTool> _logger;
     private readonly ICodeAnalysisService _codeAnalysisService;
-    
+
     public MyTool(ILogger<MyTool> logger, ICodeAnalysisService codeAnalysisService)
     {
         _logger = logger;
         _codeAnalysisService = codeAnalysisService;
     }
-    
+
     public async Task<MyResult> ExecuteAsync(string param1, string? param2 = null)
     {
         try
@@ -217,6 +234,7 @@ public class MyTool
 ```
 
 #### 2. Tool Registration (in AllToolRegistrations.cs)
+
 ```csharp
 private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
 {
@@ -243,6 +261,7 @@ private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
 ```
 
 #### 3. Parameter Model
+
 ```csharp
 public class MyToolParams
 {
@@ -254,12 +273,14 @@ public class MyToolParams
 ### Base Classes for Tools
 
 #### McpToolBase
+
 For tools that need token limit handling and response optimization:
+
 ```csharp
 public class MyTool : McpToolBase
 {
     protected override int MaxTokens => 10000; // Override default limit
-    
+
     public async Task<object> ExecuteAsync(params)
     {
         // Implementation
@@ -269,7 +290,9 @@ public class MyTool : McpToolBase
 ```
 
 #### ClaudeOptimizedToolBase
+
 For v2 tools with progressive disclosure and smart summaries:
+
 ```csharp
 public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
 {
@@ -277,7 +300,7 @@ public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
     {
         // Get all data
     }
-    
+
     protected override SummaryData CreateSummary(MyData fullData, int estimatedTokens)
     {
         // Create smart summary with insights
@@ -288,6 +311,7 @@ public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
 ### Adding New Tools
 
 1. Create a new tool class in the Tools folder
+
    - Inherit from `McpToolBase` or `ClaudeOptimizedToolBase` for advanced features (optional)
    - Implement an `ExecuteAsync` method with your tool logic
    - Inject required services via constructor
@@ -295,11 +319,13 @@ public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
 2. Create a parameter model class for strongly-typed parameters
 
 3. Add registration method in `AllToolRegistrations.cs`:
+
    - Define the tool name, description, and JSON schema
    - Create handler that calls your tool's ExecuteAsync method
    - Wrap results using `CreateSuccessResult` or `CreateErrorResult`
 
 4. Register the tool in DI container in `Program.cs`:
+
    ```csharp
    services.AddSingleton<MyTool>();
    ```
@@ -319,19 +345,23 @@ public class MyToolV2 : ClaudeOptimizedToolBase<MyData>
 ## File Watcher and Auto-Indexing
 
 ### Auto-Indexing on Startup
+
 The `WorkspaceAutoIndexService` automatically re-indexes all previously indexed workspaces on startup:
+
 - Runs 3 seconds after server startup (configurable)
 - Re-indexes each workspace to detect changes made while the server was off
 - Automatically starts file watching after indexing
 - Can be disabled via `WorkspaceAutoIndex:Enabled` in appsettings.json
 
 ### File Watcher Improvements
+
 - **Windows Compatibility**: Fixed file modification detection with expanded NotifyFilter flags
 - **Auto-Start**: File watchers are started automatically after workspace indexing
 - **Real-time Updates**: Index updates as files are created, modified, or deleted
 - **Debouncing**: Batches rapid file changes to avoid excessive re-indexing
 
 ### Configuration
+
 ```json
 {
   "FileWatcher": {
@@ -349,6 +379,7 @@ The `WorkspaceAutoIndexService` automatically re-indexes all previously indexed 
 ## Common Tasks
 
 ### 1. **Adding a new navigation feature**
+
 ```bash
 # Create new tool class
 # Update RoslynWorkspaceService if needed
@@ -357,12 +388,14 @@ The `WorkspaceAutoIndexService` automatically re-indexes all previously indexed 
 ```
 
 ### 2. **Improving performance**
+
 - Profile with dotTrace or PerfView
 - Check for unnecessary allocations
 - Consider caching strategies
 - Use ValueTask where appropriate
 
 ### 3. **Debugging MCP communication**
+
 - Enable debug logging in appsettings.json
 - Use MCP Inspector tool
 - Check STDIO input/output
@@ -394,17 +427,26 @@ Claude: "Review hotspots" (uses cached detail request)
 → Impact assessment for proposed changes
 ```
 
-### v2 Tools Available
+### AI-Optimized Tools (V2)
 
-- **FindReferencesToolV2**: Smart reference analysis with impact insights
-- **RenameSymbolToolV2**: Intelligent rename preview with risk assessment  
-- **GetDiagnosticsToolV2**: Categorized diagnostics with priority recommendations
-- **DependencyAnalysisToolV2**: Architecture analysis with circular dependency detection
-- **ProjectStructureAnalysisToolV2**: Solution insights with hotspot identification
+All tools now use AI-optimized V2 versions with progressive disclosure:
+
+- **batch_operations_v2**: Execute multiple operations in parallel with smart analysis
+- **search_symbols_v2**: AI-optimized symbol search with structured response
+- **get_implementations_v2**: Smart implementation discovery with inheritance analysis
+- **get_call_hierarchy_v2**: AI-optimized call hierarchy with circular dependency detection
+- **fast_text_search_v2**: Blazing fast text search with insights and hotspots
+- **fast_file_search_v2**: AI-optimized file search with distribution analysis
+- **get_diagnostics**: Categorized diagnostics with priority recommendations
+- **find_references_v2**: Smart reference analysis with impact insights
+- **rename_symbol**: Intelligent rename preview with risk assessment
+- **dependency_analysis**: Architecture analysis with circular dependency detection
+- **project_structure_analysis**: Solution insights with hotspot identification
 
 ## Configuration
 
 ### appsettings.json
+
 ```json
 {
   "Logging": {
@@ -431,6 +473,7 @@ Claude: "Review hotspots" (uses cached detail request)
 ```
 
 ### Environment Variables
+
 - `MCP_LOG_LEVEL`: Override log level
 - `MCP_WORKSPACE_PATH`: Default workspace path
 - `MCP_MAX_MEMORY_MB`: Memory limit for AOT
@@ -458,10 +501,12 @@ Note: Claude Code manages MCP servers through its own configuration system, not 
 ### Common Issues
 
 1. **MSBuild not found**
+
    - Install Build Tools for Visual Studio
    - Run MSBuildLocator.RegisterDefaults()
 
 2. **High memory usage**
+
    - Check workspace cache settings
    - Enable workspace eviction
    - Reduce ParallelismDegree
@@ -476,25 +521,33 @@ Note: Claude Code manages MCP servers through its own configuration system, not 
 The MCP server includes smart response handling designed specifically for Claude's workflow:
 
 ## Auto-Mode Switching
+
 Tools automatically switch to summary mode when responses exceed 5,000 tokens:
+
 ```json
 {
   "success": true,
   "mode": "summary",
-  "autoModeSwitch": true,  // Indicates automatic switch
-  "data": { /* summary data */ }
+  "autoModeSwitch": true, // Indicates automatic switch
+  "data": {
+    /* summary data */
+  }
 }
 ```
 
 ## Smart Summaries
+
 Summary responses include:
+
 - **Key Insights**: "CmsController.cs has 30% of all changes"
 - **Hotspots**: Files with highest concentration of results
 - **Categories**: Results grouped by file type (controllers, services, etc.)
 - **Impact Analysis**: Risk factors and suggestions
 
 ## Efficient Drill-Down
+
 Request specific details without re-executing operations:
+
 ```json
 // Get details for high-impact files
 {
@@ -513,12 +566,15 @@ Request specific details without re-executing operations:
 ```
 
 ## Token Awareness
+
 All responses include token estimates:
+
 - `estimatedTokens`: Current response size
 - `estimatedFullResponseTokens`: Full data size
 - Available detail levels show token cost
 
 ## Usage Example
+
 ```bash
 # 1. Initial request - auto-switches to summary if large
 rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementService
@@ -543,10 +599,12 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 
 ## Memory System Quick Start
 
-**SIMPLIFIED: Tool count reduced from 60+ to 49, then increased to 51 with new Git and file context tools**
+**SIMPLIFIED: Streamlined to essential memory tools plus AI-optimized code analysis tools**
 
 ### Session Startup
+
 To use the memory system effectively:
+
 1. Start each session with `mcp__codesearch__recall_context "what I'm working on"`
 2. This loads recent work sessions and architectural decisions
 3. Provides relevant context for your current work
@@ -554,6 +612,7 @@ To use the memory system effectively:
 ### Available Memory Tools
 
 #### Flexible Memory System (Primary API)
+
 - `flexible_store_memory` - Store ANY type of memory with custom fields
   - Use `--type "TechnicalDebt"` instead of specialized tools
   - Use `--type "Question"` for questions
@@ -568,18 +627,21 @@ To use the memory system effectively:
 - `flexible_memories_for_file` - Find all memories related to a specific file (NEW!)
 
 #### Memory Linking (New!)
+
 - `flexible_link_memories` - Create relationships between memories
 - `flexible_get_related_memories` - Traverse memory relationships
 - `flexible_unlink_memories` - Remove relationships
 
 #### Working Memory (Phase 4 - New!)
+
 - `flexible_store_working_memory` - Store temporary memories with expiration
   - Default: expires at end of session
-  - Time-based: '1h', '4h', '24h', '7d' 
+  - Time-based: '1h', '4h', '24h', '7d'
   - Automatically filtered out when expired
   - Always local (not shared with team)
 
 #### Persistent Checklists (New!)
+
 - `create_checklist` - Create persistent checklists for cross-session task tracking
 - `add_checklist_item` - Add items with notes and file references
 - `toggle_checklist_item` - Mark items complete/incomplete with tracking
@@ -588,6 +650,7 @@ To use the memory system effectively:
 - `list_checklists` - List all checklists with filtering options
 
 #### Essential Tools
+
 - `recall_context` - Load relevant context at session start (ALWAYS use this first!)
 - `backup_memories_to_sqlite` - Backup memories for version control
 - `restore_memories_from_sqlite` - Restore memories from backup
@@ -598,6 +661,7 @@ To use the memory system effectively:
   - Flexible matching with boosted relevance
 
 #### Memory Summarization (Phase 4 - New!)
+
 - `flexible_summarize_memories` - Compress old memories into summaries
   - Groups memories by time period and extracts key themes
   - Preserves important files and insights
@@ -605,10 +669,12 @@ To use the memory system effectively:
   - Optionally archives originals after summarization
 
 ### Manual Backup/Restore
+
 - `backup_memories_to_sqlite` - Backup project memories to SQLite for version control
 - `restore_memories_from_sqlite` - Restore memories from SQLite (useful for new machines)
 
 Example workflow:
+
 1. Before major changes: `mcp__codesearch__backup_memories_to_sqlite`
 2. Check in `memories.db` to source control
 3. On new machine: `mcp__codesearch__restore_memories_from_sqlite`
@@ -616,9 +682,10 @@ Example workflow:
 ### Working Memory Examples
 
 Store temporary session memories:
+
 ```bash
 # Store a working memory for current session
-flexible_store_working_memory --content "User wants to refactor the auth system - start with UserService" 
+flexible_store_working_memory --content "User wants to refactor the auth system - start with UserService"
 
 # Store with specific expiration
 flexible_store_working_memory --content "Remember to check performance after cache implementation" --expiresIn "4h"
@@ -630,6 +697,7 @@ flexible_store_working_memory --content "Debugging null reference in payment pro
 ### Memory Summarization Examples
 
 Compress old memories into insightful summaries:
+
 ```bash
 # Summarize old work sessions
 flexible_summarize_memories --type "WorkSession" --daysOld 30 --batchSize 10
@@ -642,6 +710,7 @@ flexible_summarize_memories --type "ArchitecturalDecision" --daysOld 180 --batch
 ```
 
 The summarization includes:
+
 - Key themes and word frequency analysis
 - Most referenced files
 - Type-specific insights (resolution rates, patterns)
@@ -650,6 +719,7 @@ The summarization includes:
 ### Memory Linking Examples
 
 Create relationships between related memories:
+
 ```bash
 # Link a bug report to its resolution
 flexible_link_memories --sourceId "bug-123" --targetId "fix-456" --relationshipType "resolvedBy"
@@ -664,6 +734,7 @@ flexible_link_memories --sourceId "caching-decision" --targetId "performance-ana
 ### Git Integration Examples
 
 Store memories linked to Git commits:
+
 ```bash
 # Store architectural decision tied to a commit
 flexible_store_git_commit --sha "abc123def" --message "Refactor authentication system" --description "Implemented JWT-based authentication to improve security and scalability" --author "John Doe" --branch "feature/auth-refactor" --filesChanged ["AuthService.cs", "JwtHandler.cs"]
@@ -675,6 +746,7 @@ flexible_store_git_commit --sha "def456ghi" --message "Fix null reference in pay
 ### File Context Examples
 
 Find all memories related to a specific file:
+
 ```bash
 # Find all memories for a file
 flexible_memories_for_file --filePath "Services/AuthService.cs"
@@ -686,6 +758,7 @@ flexible_memories_for_file --filePath "Services/AuthService.cs" --includeArchive
 The tool will return memories grouped by type (e.g., ArchitecturalDecision, TechnicalDebt, GitCommit) that reference the file.
 
 Traverse memory relationships:
+
 ```bash
 # Find all memories related to a specific memory (depth 2)
 flexible_get_related_memories --memoryId "epic-001" --maxDepth 2
@@ -695,6 +768,7 @@ flexible_get_related_memories --memoryId "bug-123" --relationshipTypes ["resolve
 ```
 
 Common relationship types:
+
 - `relatedTo` - General relationship
 - `blockedBy`/`blocks` - Dependency tracking
 - `implements`/`implementedBy` - Implementation relationships
@@ -706,6 +780,7 @@ Common relationship types:
 ### Persistent Checklist Examples
 
 Create and manage checklists that persist across sessions:
+
 ```bash
 # Create a new checklist
 create_checklist --title "Implement Authentication System" --description "Full auth implementation with JWT" --isShared true
@@ -726,6 +801,7 @@ list_checklists --includeCompleted false --onlyShared true
 ```
 
 Checklists automatically:
+
 - Track progress percentage
 - Link items to parent checklist
 - Update status when all items complete
@@ -735,13 +811,16 @@ Checklists automatically:
 ## TypeScript Support
 
 ### Automatic Installation
+
 TypeScript support is automatically configured on server startup:
+
 1. `TypeScriptInitializationService` checks for existing TypeScript installation
 2. Downloads and installs TypeScript + tsserver if needed
 3. Caches installation in local app data for future sessions
 4. Validates installation and starts tsserver process
 
 ### TypeScript Tools
+
 - `search_typescript` - Search for TypeScript symbols
 - `typescript_go_to_definition` - Navigate to TypeScript definitions using tsserver
 - `typescript_find_references` - Find TypeScript references using tsserver
@@ -753,9 +832,11 @@ TypeScript support is automatically configured on server startup:
 ## Debugging with File Logging
 
 ### Dynamic File Logging Control
+
 The MCP server includes a file-based logging system that can be enabled/disabled at runtime without affecting the MCP protocol:
 
 #### Using the set_logging Tool
+
 ```bash
 # Start file logging with debug level
 mcp__codesearch__set_logging --action start --level debug
@@ -777,9 +858,11 @@ mcp__codesearch__set_logging --action cleanup --cleanup true
 ```
 
 #### Log File Location
+
 Logs are written to: `%LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\`
 
 #### Important Notes
+
 - Logs are ONLY written to files, never to stdout (to avoid MCP protocol contamination)
 - Log files are automatically rotated hourly and limited to 50MB each
 - TypeScript server logs are written to `%TEMP%\tsserver.log`
@@ -788,32 +871,39 @@ Logs are written to: `%LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\`
 ## Fast Text Search - Blazing Performance
 
 #### Index Management
+
 - `index_workspace` - Build search index (required before fast_text_search)
 - Indexes are cached in `.codesearch/index/{hash}` directories
 - Automatic index updates on file changes
 
 ### Fast Search Tools
+
 - `fast_text_search` - Blazing fast text search across millions of lines in milliseconds
-  - Supports wildcards (*), fuzzy (~), exact phrases (""), and regex patterns
+
+  - Supports wildcards (\*), fuzzy (~), exact phrases (""), and regex patterns
   - Context lines for better understanding
-  - File pattern filtering (e.g., *.cs, src/**/*.ts)
+  - File pattern filtering (e.g., _.cs, src/\*\*/_.ts)
 
 - `fast_file_search` - Blazing fast file search with fuzzy matching and typo correction
+
   - Find files by name with typo tolerance (e.g., "UserServce" finds "UserService.cs")
   - Supports wildcards, fuzzy matching, exact, and regex modes
   - Performance: < 10ms for most searches
 
 - `fast_recent_files` - Find recently modified files using indexed timestamps
+
   - Time frames: '30m', '24h', '7d', '4w' for minutes, hours, days, weeks
   - Filter by file patterns and extensions
   - Shows friendly "time ago" format
 
 - `fast_file_size_analysis` - Analyze files by size with multiple modes
+
   - Modes: 'largest', 'smallest', 'range', 'zero', 'distribution'
   - Find storage hogs, empty files, or analyze size distributions
   - Provides detailed statistics by file type
 
 - `fast_similar_files` - Find files with similar content using Lucene's "More Like This"
+
   - Perfect for finding duplicate code, related implementations, or similar patterns
   - Configurable similarity thresholds
   - Shows top matching terms
@@ -824,13 +914,20 @@ Logs are written to: `%LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\`
   - Shows file counts and types per directory
 
 ### Batch Operations
+
 The `batch_operations` tool allows executing multiple operations in parallel:
+
 ```json
 {
   "operations": [
-    {"type": "text_search", "query": "TODO", "filePattern": "*.cs"},
-    {"type": "search_symbols", "searchPattern": "*Service"},
-    {"type": "find_references", "filePath": "User.cs", "line": 10, "column": 5}
+    { "type": "text_search", "query": "TODO", "filePattern": "*.cs" },
+    { "type": "search_symbols", "searchPattern": "*Service" },
+    {
+      "type": "find_references",
+      "filePath": "User.cs",
+      "line": 10,
+      "column": 5
+    }
   ]
 }
 ```
@@ -842,12 +939,14 @@ The `batch_operations` tool allows executing multiple operations in parallel:
 When working with full-stack applications (e.g., ASP.NET backend + TypeScript/React/Vue frontend), be aware of these language boundaries:
 
 #### Language-Specific Tools
+
 - **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`, `get_document_symbols`
 - **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references`, `typescript_rename_symbol`
 - **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`
 - **All Languages**: `fast_text_search`, `fast_file_search`, and other Lucene-based tools
 
 #### Key Limitation: No Cross-Language Reference Tracking
+
 - Finding references to a C# `UserProfile` class will NOT show TypeScript usages
 - Finding references to a TypeScript `UserProfile` interface will NOT show C# API endpoints
 - Each language is analyzed in isolation by its respective language server
@@ -855,13 +954,17 @@ When working with full-stack applications (e.g., ASP.NET backend + TypeScript/Re
 ### Best Practices for Full-Stack Analysis
 
 #### 1. **Context-Aware Tool Usage**
+
 Developers typically work in language-specific contexts:
+
 - Frontend work: Use TypeScript tools for component analysis
 - Backend work: Use C# tools for API analysis
 - Switch tools when switching contexts
 
 #### 2. **System-Wide Analysis**
+
 For comprehensive analysis across the full stack:
+
 ```bash
 # Example: Find all usages of UserProfile across C# and TypeScript
 1. mcp__codesearch__find_references --file Models/UserProfile.cs --line 5 --column 10
@@ -870,13 +973,17 @@ For comprehensive analysis across the full stack:
 ```
 
 #### 3. **API Contract Analysis**
+
 When analyzing API boundaries:
+
 - Check C# controller return types
 - Check TypeScript service method signatures
 - Use `fast_text_search` to find API endpoint URLs in both codebases
 
 #### 4. **Future Composite Tools**
+
 Planned tools will provide unified views:
+
 - `FindReferencesAcrossLanguages` - Combines C#, TypeScript, and text search results
 - `AnalyzeFullStackProject` - Shows both .NET and frontend project structure
 - Automatic result deduplication and organization
@@ -886,23 +993,26 @@ Planned tools will provide unified views:
 When renaming a model that spans backend and frontend:
 
 1. **Analyze Impact**:
+
    ```bash
    # Find C# usages
    mcp__codesearch__find_references --file Models/User.cs
-   
+
    # Find TypeScript usages
    mcp__codesearch__find_references --file models/User.ts
-   
+
    # Find string references (API routes, etc.)
    mcp__codesearch__fast_text_search --query "\"User\"" --searchType phrase
    ```
 
 2. **Rename Backend** (C# only):
+
    ```bash
    mcp__codesearch__rename_symbol --file Models/User.cs --newName Customer
    ```
 
 3. **Rename Frontend** (TypeScript):
+
    ```bash
    mcp__codesearch__typescript_rename_symbol --file models/User.ts --newName Customer
    ```

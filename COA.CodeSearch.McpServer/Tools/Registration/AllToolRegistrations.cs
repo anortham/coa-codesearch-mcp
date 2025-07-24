@@ -21,9 +21,7 @@ public static class AllToolRegistrations
         // Core navigation tools
         RegisterGoToDefinition(registry, serviceProvider.GetRequiredService<GoToDefinitionTool>());
         RegisterFindReferences(registry, serviceProvider.GetRequiredService<FindReferencesToolV2>());
-        RegisterSearchSymbols(registry, serviceProvider.GetRequiredService<SearchSymbolsTool>());
         RegisterSearchSymbolsV2(registry, serviceProvider.GetRequiredService<SearchSymbolsToolV2>());
-        RegisterGetImplementations(registry, serviceProvider.GetRequiredService<GetImplementationsTool>());
         RegisterGetImplementationsV2(registry, serviceProvider.GetRequiredService<GetImplementationsToolV2>());
         
         // Code information tools
@@ -32,19 +30,15 @@ public static class AllToolRegistrations
         RegisterGetDiagnostics(registry, serviceProvider.GetRequiredService<GetDiagnosticsToolV2>());
         
         // Advanced analysis tools
-        RegisterGetCallHierarchy(registry, serviceProvider.GetRequiredService<GetCallHierarchyTool>());
         RegisterGetCallHierarchyV2(registry, serviceProvider.GetRequiredService<GetCallHierarchyToolV2>());
         RegisterRenameSymbol(registry, serviceProvider.GetRequiredService<RenameSymbolToolV2>());
-        RegisterBatchOperations(registry, serviceProvider.GetRequiredService<BatchOperationsTool>());
         RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>());
         RegisterAdvancedSymbolSearch(registry, serviceProvider.GetRequiredService<AdvancedSymbolSearchTool>());
         RegisterDependencyAnalysis(registry, serviceProvider.GetRequiredService<DependencyAnalysisToolV2>());
         RegisterProjectStructureAnalysis(registry, serviceProvider.GetRequiredService<ProjectStructureAnalysisToolV2>());
         
         // Text search tools
-        RegisterFastTextSearch(registry, serviceProvider.GetRequiredService<FastTextSearchTool>());
         RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
-        RegisterFastFileSearch(registry, serviceProvider.GetRequiredService<FastFileSearchTool>());
         RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>());
         RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
         RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
@@ -80,7 +74,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GoToDefinitionParams>(
             name: "go_to_definition",
-            description: "⚡ Navigate to symbol definitions instantly - 50ms response! Works across entire solutions for C# and TypeScript. MUCH faster than grep/find. Use this instead of searching manually.",
+            description: "Navigate to symbol definitions in both C# and TypeScript files. Auto-detects file type and delegates to appropriate language server. Use this for mixed codebases.",
             inputSchema: new
             {
                 type = "object",
@@ -111,7 +105,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "🔍 Find ALL usages of any symbol in milliseconds! Semantic search that understands code structure. Auto-summarizes large results with insights. STOP using grep - this is 100x faster and more accurate. Works for C# and TypeScript.",
+            description: "Find all references to a symbol across C# and TypeScript codebases. Returns locations where the symbol is used, with smart summarization for large result sets. Includes semantic analysis and inheritance tracking.",
             inputSchema: new
             {
                 type = "object",
@@ -150,47 +144,12 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterSearchSymbols(ToolRegistry registry, SearchSymbolsTool tool)
-    {
-        registry.RegisterTool<SearchSymbolsParams>(
-            name: "search_symbols",
-            description: "🎯 Find C# symbols (classes, methods, properties) by name in ~100ms! Supports wildcards and fuzzy matching. AVOID using grep/find for symbol search - this is purpose-built and 50x faster.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    workspacePath = new { type = "string", description = "Path to solution or project" },
-                    searchPattern = new { type = "string", description = "Search pattern (supports wildcards)" },
-                    caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
-                    searchType = new { type = "string", description = "Type of search: 'exact', 'contains', 'startsWith', 'wildcard', 'fuzzy'", @default = "contains" },
-                    symbolTypes = new { type = "array", items = new { type = "string" }, description = "Filter by symbol types" },
-                    maxResults = new { type = "integer", description = "Maximum results", @default = 100 }
-                },
-                required = new[] { "workspacePath", "searchPattern" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.SearchPattern, "searchPattern"),
-                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
-                    parameters.SymbolTypes,
-                    parameters.SearchType == "fuzzy",
-                    parameters.MaxResults ?? 100,
-                    ct);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
 
     private static void RegisterSearchSymbolsV2(ToolRegistry registry, SearchSymbolsToolV2 tool)
     {
         registry.RegisterTool<SearchSymbolsV2Params>(
-            name: "search_symbols_v2",
-            description: "🔍 AI-OPTIMIZED symbol search! Returns structured data with distribution, hotspots, and insights. 95%+ token reduction vs original. Supports wildcards and fuzzy matching.",
+            name: "search_symbols",
+            description: "Find C# symbols by name using patterns and wildcards. Use when you know part of a symbol name but need to find exact matches. For filtering by access level or modifiers, use advanced_symbol_search.",
             inputSchema: new
             {
                 type = "object",
@@ -235,42 +194,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterGetImplementations(ToolRegistry registry, GetImplementationsTool tool)
-    {
-        registry.RegisterTool<GetImplementationsParams>(
-            name: "get_implementations",
-            description: "Discover all concrete implementations of interfaces or abstract classes - essential for navigating inheritance hierarchies. C# ONLY. For TypeScript, use typescript_find_references on interfaces.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    filePath = new { type = "string", description = "Path to the source file" },
-                    line = new { type = "integer", description = "Line number (1-based)" },
-                    column = new { type = "integer", description = "Column number (1-based)" }
-                },
-                required = new[] { "filePath", "line", "column" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.FilePath, "filePath"),
-                    ValidatePositive(parameters.Line, "line"),
-                    ValidatePositive(parameters.Column, "column"),
-                    ct);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-
     private static void RegisterGetImplementationsV2(ToolRegistry registry, GetImplementationsToolV2 tool)
     {
         registry.RegisterTool<GetImplementationsV2Params>(
-            name: "get_implementations_v2",
-            description: "🔍 AI-OPTIMIZED implementation discovery! Returns structured data with inheritance patterns, project distribution, and interface usage insights. 95%+ token reduction vs original.",
+            name: "get_implementations",
+            description: "Find all classes that implement an interface or inherit from a base class. Use when exploring polymorphism, understanding inheritance hierarchies, or finding all concrete implementations.",
             inputSchema: new
             {
                 type = "object",
@@ -310,7 +238,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetHoverInfoParams>(
             name: "get_hover_info",
-            description: "Get detailed type information, signatures, and documentation for any symbol - like IDE hover tooltips. Works with C# and TypeScript. Shows XML docs when available.",
+            description: "Get type information and documentation for a symbol at a specific location. Use when you need to understand what a symbol is, its signature, or read its documentation without navigating away.",
             inputSchema: new
             {
                 type = "object",
@@ -341,7 +269,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDocumentSymbolsParams>(
             name: "get_document_symbols",
-            description: "Get a complete outline of all classes, methods, and properties in a file - perfect for understanding file structure. C# ONLY - uses Roslyn document symbols.",
+            description: "Get structural outline of a C# file showing all classes, methods, and properties. Use when you need to understand file organization or quickly see all members in a class.",
             inputSchema: new
             {
                 type = "object",
@@ -370,7 +298,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GetDiagnosticsParams>(
             name: "get_diagnostics",
-            description: "Check for compilation errors and warnings across your codebase. C# ONLY - uses Roslyn compiler diagnostics. TypeScript diagnostics not supported. Returns full diagnostics for <5000 tokens, otherwise groups by severity with smart insights. Use responseMode='summary' for overview.",
+            description: "Check for compilation errors and warnings in C# code. Use when debugging build issues, code quality checks, or before committing changes. Helps identify syntax errors, unused variables, and other issues.",
             inputSchema: new
             {
                 type = "object",
@@ -406,46 +334,11 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterGetCallHierarchy(ToolRegistry registry, GetCallHierarchyTool tool)
-    {
-        registry.RegisterTool<GetCallHierarchyParams>(
-            name: "get_call_hierarchy",
-            description: "Trace method call chains to understand execution flow - see what calls a method and what it calls. C# ONLY - uses Roslyn semantic analysis.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    filePath = new { type = "string", description = "Path to the source file" },
-                    line = new { type = "integer", description = "Line number (1-based)" },
-                    column = new { type = "integer", description = "Column number (1-based)" },
-                    direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both'", @default = "incoming" },
-                    maxDepth = new { type = "integer", description = "Maximum depth to traverse", @default = 3 }
-                },
-                required = new[] { "filePath", "line", "column" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.FilePath, "filePath"),
-                    ValidatePositive(parameters.Line, "line"),
-                    ValidatePositive(parameters.Column, "column"),
-                    parameters.Direction ?? "incoming",
-                    parameters.MaxDepth ?? 3,
-                    ct);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-
     private static void RegisterGetCallHierarchyV2(ToolRegistry registry, GetCallHierarchyToolV2 tool)
     {
         registry.RegisterTool<GetCallHierarchyV2Params>(
-            name: "get_call_hierarchy_v2",
-            description: "🔍 AI-OPTIMIZED call hierarchy analysis! Returns structured data with circular dependencies, hotspots, and critical paths. 95%+ token reduction vs original. Detects recursion and deep nesting.",
+            name: "get_call_hierarchy",
+            description: "Analyze who calls a method and what it calls. Use when understanding code flow, impact analysis before changes, or identifying circular dependencies and complex call chains.",
             inputSchema: new
             {
                 type = "object",
@@ -494,7 +387,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<RenameSymbolParams>(
             name: "rename_symbol",
-            description: "Safely rename any symbol across your entire codebase - all references updated automatically. C# ONLY - uses Roslyn refactoring engine. For TypeScript renaming, use typescript tools. Shows full changes for <5000 tokens, otherwise provides impact summary with risk assessment. Set preview=false to apply changes.",
+            description: "Safely rename a symbol throughout the entire codebase with automatic reference updates. Use when refactoring to improve naming or when a symbol name no longer reflects its purpose.",
             inputSchema: new
             {
                 type = "object",
@@ -535,55 +428,12 @@ public static class AllToolRegistrations
         );
     }
 
-    private static void RegisterBatchOperations(ToolRegistry registry, BatchOperationsTool tool)
-    {
-        registry.RegisterTool<BatchOperationsParams>(
-            name: "batch_operations",
-            description: "🚀 Run MULTIPLE operations in PARALLEL - 10x faster than sequential! Perfect for complex analysis. ALWAYS use this when you need multiple operations. Supports all major tools.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    workspacePath = new { type = "string", description = "Path to workspace" },
-                    operations = new 
-                    { 
-                        type = "array", 
-                        items = new { type = "object" },
-                        description = "Array of operations to execute"
-                    }
-                },
-                required = new[] { "workspacePath", "operations" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                if (parameters.Operations == null || parameters.Operations.Count == 0)
-                    throw new InvalidParametersException("operations are required and cannot be empty");
-                
-                try
-                {
-                    // Convert operations list to JsonElement
-                    var operationsJson = JsonSerializer.Serialize(parameters.Operations);
-                    var operationsElement = JsonSerializer.Deserialize<JsonElement>(operationsJson);
-                    
-                    var result = await tool.ExecuteAsync(operationsElement, parameters.WorkspacePath, ct);
-                        
-                    return CreateSuccessResult(result);
-                }
-                catch (JsonException ex)
-                {
-                    throw new InvalidParametersException($"Invalid JSON in operations: {ex.Message}");
-                }
-            }
-        );
-    }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
     {
         registry.RegisterTool<BatchOperationsV2Params>(
-            name: "batch_operations_v2",
-            description: "🚀 AI-OPTIMIZED batch operations! Executes multiple operations in parallel with structured response. Returns operation summary, success metrics, hotspots, patterns, and correlations. 90%+ token reduction vs original.",
+            name: "batch_operations",
+            description: "Run multiple analysis operations simultaneously and get combined insights. Use when you need comprehensive analysis across different aspects (symbols, references, diagnostics) of the same codebase area.",
             inputSchema: new
             {
                 type = "object",
@@ -640,7 +490,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<AdvancedSymbolSearchParams>(
             name: "advanced_symbol_search",
-            description: "Find C# symbols with semantic filters - search by accessibility (public/private), modifiers (static/abstract), return types, or namespace. Use when search_symbols isn't specific enough.",
+            description: "Search C# symbols with detailed semantic filters (accessibility, modifiers, return types, namespaces). Use when you need more than just name-based searching offered by search_symbols.",
             inputSchema: new
             {
                 type = "object",
@@ -785,15 +635,6 @@ public static class AllToolRegistrations
         public string? ResponseMode { get; set; }
     }
 
-    private class SearchSymbolsParams
-    {
-        public string? WorkspacePath { get; set; }
-        public string? SearchPattern { get; set; }
-        public bool? CaseSensitive { get; set; }
-        public string? SearchType { get; set; }
-        public string[]? SymbolTypes { get; set; }
-        public int? MaxResults { get; set; }
-    }
 
     private class SearchSymbolsV2Params
     {
@@ -803,13 +644,6 @@ public static class AllToolRegistrations
         public bool? Fuzzy { get; set; }
         public int? MaxResults { get; set; }
         public string? ResponseMode { get; set; }
-    }
-
-    private class GetImplementationsParams
-    {
-        public string? FilePath { get; set; }
-        public int Line { get; set; }
-        public int Column { get; set; }
     }
 
     private class GetImplementationsV2Params
@@ -841,15 +675,6 @@ public static class AllToolRegistrations
         public string? ResponseMode { get; set; }
     }
 
-    private class GetCallHierarchyParams
-    {
-        public string? FilePath { get; set; }
-        public int Line { get; set; }
-        public int Column { get; set; }
-        public string? Direction { get; set; }
-        public int? MaxDepth { get; set; }
-    }
-
     private class GetCallHierarchyV2Params
     {
         public string? FilePath { get; set; }
@@ -870,11 +695,6 @@ public static class AllToolRegistrations
         public string? ResponseMode { get; set; }
     }
 
-    private class BatchOperationsParams
-    {
-        public string? WorkspacePath { get; set; }
-        public List<object>? Operations { get; set; }
-    }
 
     private class BatchOperationsV2Params
     {
@@ -911,64 +731,11 @@ public static class AllToolRegistrations
         public string? ResponseMode { get; set; }
     }
     
-    private static void RegisterFastTextSearch(ToolRegistry registry, FastTextSearchTool tool)
-    {
-        registry.RegisterTool<FastTextSearchParams>(
-            name: "fast_text_search",
-            description: "🚀 BLAZING FAST text search - searches MILLIONS of lines in <50ms! Supports wildcards, fuzzy, phrases, regex. NEVER use grep/find/rg - this is 1000x faster! Run index_workspace first, then enjoy instant results.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
-                    workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories." },
-                    filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs' for C# only, 'src/**/*.ts' for TypeScript in src)" },
-                    extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Limit to specific file types (e.g., ['.cs', '.razor', '.js'])" },
-                    contextLines = new { type = "integer", description = "Optional: Show N lines before/after each match for context (default: 0)" },
-                    maxResults = new { type = "integer", description = "Maximum number of results", @default = 50 },
-                    caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
-                    searchType = new { type = "string", description = "Optional: Search mode - 'standard' (default), 'wildcard' (with *), 'fuzzy' (approximate), 'phrase' (exact)", @default = "standard" }
-                },
-                required = new[] { "query", "workspacePath" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.Query, "query"),
-                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
-                    parameters.FilePattern,
-                    parameters.Extensions,
-                    parameters.ContextLines,
-                    parameters.MaxResults ?? 50,
-                    parameters.CaseSensitive ?? false,
-                    parameters.SearchType ?? "standard",
-                    ct);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private class FastTextSearchParams
-    {
-        public string? Query { get; set; }
-        public string? WorkspacePath { get; set; }
-        public string? FilePattern { get; set; }
-        public string[]? Extensions { get; set; }
-        public int? ContextLines { get; set; }
-        public int? MaxResults { get; set; }
-        public bool? CaseSensitive { get; set; }
-        public string? SearchType { get; set; }
-    }
-    
     private static void RegisterFastTextSearchV2(ToolRegistry registry, FastTextSearchToolV2 tool)
     {
         registry.RegisterTool<FastTextSearchV2Params>(
-            name: "fast_text_search_v2",
-            description: "🔍 AI-OPTIMIZED text search INSIDE files! Search for code, strings, or patterns across your entire codebase. Returns structured insights with hotspots and smart suggestions. ⚡ <50ms for millions of lines. When to use: Finding where something is used/implemented (e.g., 'where is IPushoverService used?')",
+            name: "fast_text_search",
+            description: "Search for text content within files across the codebase. Use when looking for specific strings, error messages, configuration values, or any text that appears in code, comments, or documentation.",
             inputSchema: new
             {
                 type = "object",
@@ -1032,46 +799,12 @@ public static class AllToolRegistrations
         public string? ResponseMode { get; set; }
     }
     
-    private static void RegisterFastFileSearch(ToolRegistry registry, FastFileSearchTool tool)
-    {
-        registry.RegisterTool<FastFileSearchParams>(
-            name: "fast_file_search",
-            description: "⚡ Find files INSTANTLY - 10ms response! Handles typos, wildcards, fuzzy matching. STOP using find/ls/dir commands - this searches thousands of files instantly. Run index_workspace first.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
-                    workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
-                    maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
-                    includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false }
-                },
-                required = new[] { "query", "workspacePath" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.Query, "query"),
-                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
-                    parameters.SearchType ?? "standard",
-                    parameters.MaxResults ?? 50,
-                    parameters.IncludeDirectories ?? false,
-                    ct);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
 
     private static void RegisterFastFileSearchV2(ToolRegistry registry, FastFileSearchToolV2 tool)
     {
         registry.RegisterTool<FastFileSearchV2Params>(
-            name: "fast_file_search_v2",
-            description: "📁 AI-OPTIMIZED search FOR file names! Find files by name with typo tolerance and smart patterns. Returns directory hotspots and insights. ⚡ <10ms response. When to use: Finding specific files (e.g., 'where is PushoverService.cs?')",
+            name: "fast_file_search",
+            description: "Find files by name when you know the filename but not the exact location. Use when looking for specific files, especially with typos or partial names (e.g., find 'UserService.cs' by searching 'UserServ').",
             inputSchema: new
             {
                 type = "object",
@@ -1111,14 +844,6 @@ public static class AllToolRegistrations
         );
     }
     
-    private class FastFileSearchParams
-    {
-        public string? Query { get; set; }
-        public string? WorkspacePath { get; set; }
-        public string? SearchType { get; set; }
-        public int? MaxResults { get; set; }
-        public bool? IncludeDirectories { get; set; }
-    }
 
     private class FastFileSearchV2Params
     {
@@ -1134,7 +859,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastRecentFilesParams>(
             name: "fast_recent_files",
-            description: "📅 Find recently changed files INSTANTLY! See what changed in last 30min/24h/7d/etc. DON'T use find -mtime or git log --name-only - this is instant! Perfect for resuming work.",
+            description: "Find files that were recently changed within a time period. Use when resuming work after a break, reviewing recent changes, or finding files that were worked on today/this week.",
             inputSchema: new
             {
                 type = "object",

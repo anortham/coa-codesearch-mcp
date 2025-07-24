@@ -10,7 +10,7 @@ public class EscapeQueryTextTests
     public void EscapeQueryText_EscapesSpecialCharactersCorrectly()
     {
         // Use reflection to test the private method
-        var fastTextSearchToolType = typeof(FastTextSearchTool);
+        var fastTextSearchToolType = typeof(FastTextSearchToolV2);
         var escapeMethod = fastTextSearchToolType.GetMethod("EscapeQueryText", 
             BindingFlags.NonPublic | BindingFlags.Static);
         
