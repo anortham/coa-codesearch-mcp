@@ -14,10 +14,10 @@ public class ClaudeMemoryTools : ITool
     public string Description => "Essential memory system operations";
     public ToolCategory Category => ToolCategory.Memory;
     private readonly ClaudeMemoryService _memoryService;
-    private readonly MemoryBackupService _backupService;
+    private readonly JsonMemoryBackupService _backupService;
     private readonly ILogger<ClaudeMemoryTools> _logger;
 
-    public ClaudeMemoryTools(ILogger<ClaudeMemoryTools> logger, ClaudeMemoryService memoryService, MemoryBackupService backupService)
+    public ClaudeMemoryTools(ILogger<ClaudeMemoryTools> logger, ClaudeMemoryService memoryService, JsonMemoryBackupService backupService)
     {
         _logger = logger;
         _memoryService = memoryService;
@@ -112,7 +112,7 @@ public class ClaudeMemoryTools : ITool
                 scopes = scopes.Concat(new[] { "WorkSession", "LocalInsight" }).ToArray();
             }
             
-            var result = await _backupService.BackupMemoriesAsync(scopes);
+            var result = await _backupService.BackupMemoriesAsync(scopes, includeLocal);
             
             if (result.Success)
             {
@@ -163,7 +163,7 @@ public class ClaudeMemoryTools : ITool
                 scopes = scopes.Concat(new[] { "WorkSession", "LocalInsight" }).ToArray();
             }
             
-            var result = await _backupService.RestoreMemoriesAsync(scopes);
+            var result = await _backupService.RestoreMemoriesAsync(null, scopes, includeLocal);
             
             if (result.Success)
             {

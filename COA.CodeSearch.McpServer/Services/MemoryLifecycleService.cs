@@ -39,15 +39,17 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
             // Delay startup to avoid interfering with MCP server initialization
             await Task.Delay(TimeSpan.FromSeconds(10), stoppingToken);
             
-            _logger.LogInformation("Memory Lifecycle Service started");
+            _logger.LogInformation("MemoryLifecycleService started - monitoring file changes for automatic memory resolution");
             
             // Only run if explicitly enabled
             var enabled = _options.Value.Enabled ?? true;
             if (!enabled)
             {
-                _logger.LogInformation("Memory Lifecycle Service is disabled in configuration");
+                _logger.LogInformation("MemoryLifecycleService is disabled in configuration - no automatic memory resolution will occur");
                 return;
             }
+            
+            _logger.LogInformation("MemoryLifecycleService: Starting periodic stale memory checks every {Hours} hours", _options.Value.CheckIntervalHours);
             
             while (!stoppingToken.IsCancellationRequested)
             {
@@ -80,29 +82,36 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
     /// </summary>
     public async Task OnFileChangedAsync(MemoryLifecycleFileChangeEvent changeEvent)
     {
-        _logger.LogDebug("Processing file change: {FilePath} ({ChangeType})", 
+        _logger.LogInformation("MemoryLifecycleService: Processing file change: {FilePath} ({ChangeType})", 
             changeEvent.FilePath, changeEvent.ChangeType);
         
         try
         {
             // Find memories related to this file
+            // Use a simple search that won't go through query expansion
             var relatedMemories = await _memoryService.SearchMemoriesAsync(new FlexibleMemorySearchRequest
             {
-                Query = $"files:\"{changeEvent.FilePath}\"",
-                MaxResults = 100,
+                Query = "*", // Search all memories
+                MaxResults = 1000, // Get more since we'll filter
                 IncludeArchived = false
             });
             
-            if (relatedMemories.TotalFound == 0)
+            // Filter memories that reference this file
+            var memoriesReferencingFile = relatedMemories.Memories
+                .Where(m => m.FilesInvolved.Any(f => 
+                    f.Equals(changeEvent.FilePath, StringComparison.OrdinalIgnoreCase)))
+                .ToList();
+            
+            if (memoriesReferencingFile.Count == 0)
             {
                 return;
             }
             
-            _logger.LogInformation("Found {Count} memories related to changed file: {FilePath}", 
-                relatedMemories.TotalFound, changeEvent.FilePath);
+            _logger.LogInformation("MemoryLifecycleService: Found {Count} memories related to changed file: {FilePath}", 
+                memoriesReferencingFile.Count, changeEvent.FilePath);
             
             // Process each memory
-            foreach (var memory in relatedMemories.Memories)
+            foreach (var memory in memoriesReferencingFile)
             {
                 await ProcessMemoryForFileChangeAsync(memory, changeEvent);
             }
@@ -121,8 +130,8 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
         // Calculate confidence for auto-resolution
         var confidence = CalculateResolutionConfidence(memory, changeEvent);
         
-        _logger.LogDebug("Memory {Id} confidence for auto-resolution: {Confidence:F2}", 
-            memory.Id, confidence);
+        _logger.LogInformation("MemoryLifecycleService: Memory {Id} ({Type}) confidence for auto-resolution: {Confidence:F2}", 
+            memory.Id, memory.Type, confidence);
         
         // Store confidence data for learning
         _confidenceCache.TryAdd(memory.Id, new MemoryConfidenceData

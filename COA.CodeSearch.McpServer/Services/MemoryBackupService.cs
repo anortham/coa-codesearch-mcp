@@ -339,6 +339,8 @@ public class MemoryBackupService : IDisposable
         string workspace,
         CancellationToken cancellationToken)
     {
+        _logger.LogInformation("RestoreScopeAsync: Starting restore for scope '{Scope}' to workspace '{Workspace}'", scope, workspace);
+        
         // Get all memories for this scope
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT id, json_data FROM memories WHERE scope = @scope";
@@ -346,7 +348,10 @@ public class MemoryBackupService : IDisposable
         
         using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         if (!reader.HasRows)
+        {
+            _logger.LogInformation("RestoreScopeAsync: No memories found for scope '{Scope}'", scope);
             return 0;
+        }
         
         var writer = await _luceneService.GetIndexWriterAsync(workspace, cancellationToken);
         var count = 0;
@@ -381,8 +386,19 @@ public class MemoryBackupService : IDisposable
                         }
                     }
                     
+                    // Ensure critical fields exist with proper types
+                    if (doc.GetField("id") == null)
+                    {
+                        doc.Add(new StringField("id", id, Field.Store.YES));
+                    }
+                    if (doc.GetField("type") == null)
+                    {
+                        doc.Add(new StringField("type", scope, Field.Store.YES));
+                    }
+                    
                     writer.AddDocument(doc);
                     count++;
+                    _logger.LogDebug("RestoreScopeAsync: Restored memory {Id} to index", id);
                 }
             }
             catch (Exception ex)
@@ -404,12 +420,41 @@ public class MemoryBackupService : IDisposable
         switch (element.ValueKind)
         {
             case JsonValueKind.String:
-                doc.Add(new TextField(name, element.GetString() ?? "", Field.Store.YES));
+                var stringValue = element.GetString() ?? "";
+                // Use StringField for exact match fields, TextField for searchable content
+                if (name == "id" || name == "type" || name == "is_shared" || name == "session_id" || name == "file")
+                {
+                    doc.Add(new StringField(name, stringValue, Field.Store.YES));
+                }
+                else
+                {
+                    doc.Add(new TextField(name, stringValue, Field.Store.YES));
+                }
                 break;
             case JsonValueKind.Number:
                 if (element.TryGetInt64(out var longValue))
                 {
-                    doc.Add(new Int64Field(name, longValue, Field.Store.YES));
+                    // Date fields need special handling with proper FieldType for numeric range queries
+                    if (name == "created" || name == "modified" || name == "timestamp_ticks" || name == "last_accessed")
+                    {
+                        var dateFieldType = new FieldType 
+                        { 
+                            IsIndexed = true,
+                            IsStored = true,
+                            NumericType = NumericType.INT64,
+                            NumericPrecisionStep = 8
+                        };
+                        doc.Add(new Int64Field(name, longValue, dateFieldType));
+                        doc.Add(new NumericDocValuesField(name, longValue));
+                    }
+                    else if (name == "access_count")
+                    {
+                        doc.Add(new Int32Field(name, (int)longValue, Field.Store.YES));
+                    }
+                    else
+                    {
+                        doc.Add(new Int64Field(name, longValue, Field.Store.YES));
+                    }
                 }
                 else if (element.TryGetDouble(out var doubleValue))
                 {
@@ -457,10 +502,11 @@ public class MemoryBackupService : IDisposable
                                    or "SecurityRule" 
                                    or "ProjectInsight";
         
-        // Return just the memory path names - PathResolutionService will handle the full path resolution
+        // Return the FULL memory paths from PathResolutionService
+        // This ensures we get the actual memory index, not the workspace index
         return isProjectScope
-            ? _configuration["ClaudeMemory:ProjectMemoryPath"] ?? "project-memory"
-            : _configuration["ClaudeMemory:LocalMemoryPath"] ?? "local-memory";
+            ? _pathResolutionService.GetProjectMemoryPath()
+            : _pathResolutionService.GetLocalMemoryPath();
     }
     
     private async Task<DateTime> GetLastBackupTimeAsync()
