@@ -424,4 +424,19 @@ public class BackupFileInfo
     public int MemoryCount { get; set; }
 }
 
-// Using BackupResult and RestoreResult from MemoryBackupService
+public class BackupResult
+{
+    public bool Success { get; set; }
+    public string? Error { get; set; }
+    public int DocumentsBackedUp { get; set; }
+    public string BackupPath { get; set; } = "";
+    public DateTime BackupTime { get; set; }
+}
+
+public class RestoreResult
+{
+    public bool Success { get; set; }
+    public string? Error { get; set; }
+    public int DocumentsRestored { get; set; }
+    public DateTime RestoreTime { get; set; }
+}

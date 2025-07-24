@@ -672,6 +672,7 @@ public class DateRangeProductionTest
     }
 }
 
+/*
 /// <summary>
 /// Tool to analyze the SQLite backup and understand the current state of production memories
 /// </summary>
@@ -823,3 +824,4 @@ public static class AnalyzeSqliteMemories
             // Console.WriteLine("\n=== Analysis Complete ===");
         }
 }
+*/

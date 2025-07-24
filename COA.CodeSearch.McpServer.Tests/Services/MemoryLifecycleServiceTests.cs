@@ -287,7 +287,7 @@ public class MemoryLifecycleServiceTests
         
         // Assert
         _mockMemoryService.Verify(s => s.SearchMemoriesAsync(
-            It.Is<FlexibleMemorySearchRequest>(r => r.Query.Contains(changeEvent.FilePath))), 
+            It.Is<FlexibleMemorySearchRequest>(r => r.Query == "*" && r.MaxResults == 1000)), 
             Times.Once);
     }
     
