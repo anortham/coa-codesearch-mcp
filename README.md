@@ -9,7 +9,7 @@ A high-performance Model Context Protocol (MCP) server that provides blazing-fas
 - **Blazing Fast Search**: Lucene indexing for instant text search across millions of lines
 - **Smart Memory System**: Persistent architectural knowledge and decision tracking
 - **Progressive Disclosure**: Intelligent response handling optimized for AI assistants
-- **Cross-Language Navigation**: Go to definition, find references across C# and TypeScript
+- **Cross-Language Navigation**: Go to definition works across C# and TypeScript
 - **Workspace Intelligence**: Automatic project structure analysis and dependency tracking
 
 ### Performance
@@ -138,8 +138,8 @@ All tools now feature AI-optimized responses with intelligent summaries, progres
 - **Progressive Disclosure**: Request specific details without re-executing operations
 
 ### Search & Navigation
-- `go_to_definition` - Navigate to symbol definitions (C# & TypeScript)
-- `find_references` - 🔍 Find ALL usages instantly with AI-optimized summaries
+- `go_to_definition` - Navigate to symbol definitions (auto-detects C# or TypeScript)
+- `find_references` - 🔍 Find ALL C# usages instantly with AI-optimized summaries
 - `search_symbols` - 🔍 AI-optimized symbol search with distribution insights
 - `advanced_symbol_search` - Find C# symbols with semantic filters
 - `search_typescript` - 🔍 Find TypeScript symbols FAST

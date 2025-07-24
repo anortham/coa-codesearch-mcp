@@ -13,12 +13,12 @@ public class GoToDefinitionTool : ITool
     public ToolCategory Category => ToolCategory.Navigation;
     private readonly ILogger<GoToDefinitionTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
-    private readonly TypeScriptGoToDefinitionTool? _typeScriptTool;
+    private readonly TypeScriptGoToDefinitionTool _typeScriptTool;
 
     public GoToDefinitionTool(
         ILogger<GoToDefinitionTool> logger, 
         CodeAnalysisService workspaceService,
-        TypeScriptGoToDefinitionTool? typeScriptTool = null)
+        TypeScriptGoToDefinitionTool typeScriptTool)
     {
         _logger = logger;
         _workspaceService = workspaceService;
@@ -42,19 +42,8 @@ public class GoToDefinitionTool : ITool
             var extension = Path.GetExtension(filePath).ToLowerInvariant();
             if (IsTypeScriptFile(extension))
             {
-                if (_typeScriptTool != null)
-                {
-                    _logger.LogInformation("Delegating to TypeScript GoToDefinition tool");
-                    return await _typeScriptTool.GoToDefinitionAsync(filePath, line, column, cancellationToken);
-                }
-                else
-                {
-                    return new
-                    {
-                        success = false,
-                        error = "TypeScript analysis is not available"
-                    };
-                }
+                _logger.LogInformation("Delegating to TypeScript GoToDefinition tool");
+                return await _typeScriptTool.GoToDefinitionAsync(filePath, line, column, cancellationToken);
             }
 
             // Get the document

@@ -87,7 +87,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
             name: "typescript_go_to_definition",
-            description: "Navigate to TypeScript/JavaScript symbol definitions using tsserver directly. Use this for TypeScript-specific features or when go_to_definition doesn't provide enough detail.",
+            description: "Direct TypeScript/JavaScript definition navigation using tsserver. Use only if go_to_definition fails on TypeScript files or you need TypeScript-specific behavior. For most cases, use go_to_definition which auto-detects language.",
             inputSchema: new
             {
                 type = "object",
@@ -118,7 +118,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
             name: "typescript_find_references",
-            description: "Find all references to a TypeScript symbol using tsserver - accurate reference finding across the entire TypeScript codebase",
+            description: "Find all references to a TypeScript/JavaScript symbol using tsserver. Provides TypeScript-specific semantic analysis. For C# references, use find_references.",
             inputSchema: new
             {
                 type = "object",
@@ -159,7 +159,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptRenameParams>(
             name: "typescript_rename_symbol",
-            description: "Rename TypeScript symbols with preview of all affected locations. Shows all occurrences that would be renamed. Note: The MCP server provides rename analysis but doesn't modify files directly.",
+            description: "Rename TypeScript symbols with preview of affected locations. TypeScript-only rename analysis. For C# renaming use rename_symbol. Shows changes but doesn't modify files.",
             inputSchema: new
             {
                 type = "object",
@@ -202,7 +202,7 @@ public static class TypeScriptToolRegistrations
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
             name: "typescript_hover_info",
-            description: "Get TypeScript type information and docs - shows detailed type info like IDE hover tooltips for TypeScript symbols",
+            description: "Get TypeScript type information and documentation. Shows detailed type info like IDE hover tooltips. Use for .ts/.js files when you need TypeScript semantic information.",
             inputSchema: new
             {
                 type = "object",

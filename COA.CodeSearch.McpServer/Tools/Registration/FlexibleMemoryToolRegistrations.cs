@@ -61,8 +61,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreMemoryParams>(
-            name: "flexible_store_memory",
-            description: "Save important knowledge that should persist across work sessions. Use when you make architectural decisions, discover technical debt, identify patterns, or want to remember insights for later.",
+            name: "store_memory",
+            description: "Store knowledge PERMANENTLY (never expires). Use when you discover something important that should persist forever: architectural decisions, technical debt, code patterns, project insights. If you're unsure, use this - temporary storage is for session reminders only.",
             inputSchema: new
             {
                 type = "object",
@@ -97,8 +97,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterStoreWorkingMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreWorkingMemoryParams>(
-            name: "flexible_store_working_memory",
-            description: "📝 Track temporary context during work - auto-expires! Perfect for 'remember to check X' or 'user wants Y'. No cleanup needed - expires automatically. Better than mental notes!",
+            name: "store_temporary_memory",
+            description: "Store notes that AUTO-DELETE after session ends (or specified time). Only use for temporary reminders like 'check this file later' or 'user wants feature X'. For important knowledge that should persist (architectural decisions, technical debt), use store_memory instead.",
             inputSchema: new
             {
                 type = "object",
@@ -131,8 +131,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterSearchMemoriesV2(ToolRegistry registry, FlexibleMemorySearchToolV2 tool)
     {
         registry.RegisterTool<SearchMemoriesV2Params>(
-            name: "flexible_search_memories",
-            description: "Search stored memories with AI analysis, insights, and structured summaries. Supports natural language queries, context-awareness, and intelligent query expansion.",
+            name: "search_memories",
+            description: "Search through stored memories using natural language queries. Includes AI-powered query expansion, context-awareness, and intelligent filtering by type, date, files, and custom fields.",
             inputSchema: new
             {
                 type = "object",
@@ -197,8 +197,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterUpdateMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<UpdateMemoryParams>(
-            name: "flexible_update_memory",
-            description: "Update an existing memory's content and fields. Supports partial updates - only specified fields are modified.",
+            name: "update_memory",
+            description: "Update a memory's content, status, or custom fields. Supports partial updates - only the fields you specify are changed. Use to mark technical debt as resolved, update status, or add new information.",
             inputSchema: new
             {
                 type = "object",
@@ -377,8 +377,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterFindSimilarMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<FindSimilarMemoriesParams>(
-            name: "flexible_find_similar_memories",
-            description: "Find memories with similar content using 'More Like This' algorithm - ideal for discovering related memories, duplicate content, or similar patterns.",
+            name: "find_similar_memories",
+            description: "Find memories with similar content to a given memory. Uses semantic analysis to discover related architectural decisions, duplicate technical debt, or similar code patterns.",
             inputSchema: new
             {
                 type = "object",
@@ -405,8 +405,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterArchiveMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<ArchiveMemoriesParams>(
-            name: "flexible_archive_memories",
-            description: "Archive old memories of a specific type to reduce clutter while preserving them for future reference.",
+            name: "archive_memories",
+            description: "Archive old memories by type and age to reduce clutter. Archived memories are preserved but excluded from regular searches. Use to clean up resolved technical debt or old work sessions.",
             inputSchema: new
             {
                 type = "object",
@@ -433,8 +433,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemoryById(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemoryByIdParams>(
-            name: "flexible_get_memory",
-            description: "Retrieve a specific memory by its ID with all associated fields and metadata.",
+            name: "get_memory",
+            description: "Retrieve a memory by its ID. Returns full content, metadata, related files, custom fields, and relationship information.",
             inputSchema: new
             {
                 type = "object",
@@ -459,8 +459,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterSummarizeMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<SummarizeMemoriesParams>(
-            name: "flexible_summarize_memories",
-            description: "Summarize old memories to save space and improve relevance. Creates condensed summaries of multiple memories while preserving key insights.",
+            name: "summarize_memories",
+            description: "Create condensed summaries of old memories by type and time period. Extracts key themes, most referenced files, and type-specific insights (e.g., resolution rates for technical debt).",
             inputSchema: new
             {
                 type = "object",
@@ -510,8 +510,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterListTemplates(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<ListTemplatesParams>(
-            name: "flexible_list_templates",
-            description: "List available memory templates for common scenarios like code reviews, performance issues, security findings",
+            name: "list_memory_templates",
+            description: "List available memory templates for common scenarios. Templates provide structured formats for code reviews, performance issues, security findings, and architectural decisions.",
             inputSchema: new
             {
                 type = "object",
@@ -529,8 +529,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterCreateFromTemplate(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<CreateFromTemplateParams>(
-            name: "flexible_create_from_template",
-            description: "Create a memory from a predefined template with placeholders - ensures consistent structure for common memory types",
+            name: "create_memory_from_template",
+            description: "Create a memory using a predefined template. Templates ensure consistent structure for common scenarios like security findings or architectural decisions. Use list_memory_templates to see available options.",
             inputSchema: new
             {
                 type = "object",
@@ -561,8 +561,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemorySuggestions(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemorySuggestionsParams>(
-            name: "flexible_get_memory_suggestions",
-            description: "Get context-aware memory suggestions based on what you're currently working on - suggests relevant memories, templates, and actions",
+            name: "get_memory_suggestions",
+            description: "Get contextual suggestions for the current work. Analyzes what you're working on and suggests relevant existing memories, appropriate templates, and recommended actions.",
             inputSchema: new
             {
                 type = "object",
@@ -593,8 +593,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterStoreGitCommitMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreGitCommitMemoryParams>(
-            name: "flexible_store_git_commit",
-            description: "Link a memory to a specific Git commit - track important changes, architectural decisions, or insights tied to specific commits",
+            name: "store_git_commit_memory",
+            description: "Store a memory linked to a specific Git commit SHA. Use to track architectural decisions, important bug fixes, or insights tied to specific code changes.",
             inputSchema: new
             {
                 type = "object",
@@ -643,7 +643,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<TimelineParams>(
             name: "memory_timeline",
-            description: "📅 View memories in a beautiful chronological timeline! Groups by time periods (Today, Yesterday, This Week). Perfect for understanding recent work and project history. User-friendly visualization.",
+            description: "View memories in chronological timeline format. Groups by time periods (Today, Yesterday, This Week). Perfect for understanding recent work and project history with user-friendly visualization.",
             inputSchema: new
             {
                 type = "object",
@@ -674,8 +674,8 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemoriesForFile(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemoriesForFileParams>(
-            name: "flexible_memories_for_file",
-            description: "Find all memories related to a specific file - see architectural decisions, technical debt, patterns, and insights for any file",
+            name: "get_memories_for_file",
+            description: "Find all memories related to a specific file. Shows architectural decisions, technical debt, code patterns, and project insights associated with the file path.",
             inputSchema: new
             {
                 type = "object",

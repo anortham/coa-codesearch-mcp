@@ -74,7 +74,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<GoToDefinitionParams>(
             name: "go_to_definition",
-            description: "Navigate to symbol definitions in both C# and TypeScript files. Auto-detects file type and delegates to appropriate language server. Use this for mixed codebases.",
+            description: "Navigate to symbol definitions. Auto-detects language (C# or TypeScript) based on file extension and uses the appropriate analyzer.",
             inputSchema: new
             {
                 type = "object",
@@ -105,7 +105,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FindReferencesParams>(
             name: "find_references",
-            description: "Find all references to a symbol across C# and TypeScript codebases. Returns locations where the symbol is used, with smart summarization for large result sets. Includes semantic analysis and inheritance tracking.",
+            description: "Find all references to a C# symbol across the codebase using Roslyn analysis. Returns locations where the symbol is used, with smart summarization for large result sets. For TypeScript references, use typescript_find_references.",
             inputSchema: new
             {
                 type = "object",
@@ -115,7 +115,7 @@ public static class AllToolRegistrations
                     line = new { type = "integer", description = "Line number (1-based)" },
                     column = new { type = "integer", description = "Column number (1-based)" },
                     includeDeclaration = new { type = "boolean", description = "Include the declaration", @default = true },
-                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "full" }
                 },
                 required = new[] { "filePath", "line", "column" }
             },
@@ -149,7 +149,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<SearchSymbolsV2Params>(
             name: "search_symbols",
-            description: "Find C# symbols by name using patterns and wildcards. Use when you know part of a symbol name but need to find exact matches. For filtering by access level or modifiers, use advanced_symbol_search.",
+            description: "Find C# symbols by name using patterns and wildcards. USE THIS for most symbol searches - just searches by name. Only use advanced_symbol_search if you need to filter by access level (public/private) or modifiers (static/abstract).",
             inputSchema: new
             {
                 type = "object",
@@ -207,7 +207,7 @@ public static class AllToolRegistrations
                     filePath = new { type = "string", description = "Path to the source file" },
                     line = new { type = "integer", description = "Line number (1-based)" },
                     column = new { type = "integer", description = "Column number (1-based)" },
-                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
                 required = new[] { "filePath", "line", "column" }
             },
@@ -307,7 +307,7 @@ public static class AllToolRegistrations
                     path = new { type = "string", description = "Path to file, project, or solution" },
                     severities = new { type = "array", items = new { type = "string" }, description = "Filter by severity: Error, Warning, Info, Hidden" },
                     includeSuppressions = new { type = "boolean", description = "Include suppressed diagnostics", @default = false },
-                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "full" }
                 },
                 required = new[] { "path" }
             },
@@ -349,7 +349,7 @@ public static class AllToolRegistrations
                     column = new { type = "integer", description = "Column number (1-based)" },
                     direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both'", @default = "both" },
                     maxDepth = new { type = "integer", description = "Maximum depth to traverse", @default = 2 },
-                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
                 required = new[] { "filePath", "line", "column" }
             },
@@ -433,7 +433,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<BatchOperationsV2Params>(
             name: "batch_operations",
-            description: "Run multiple analysis operations simultaneously and get combined insights. Use when you need comprehensive analysis across different aspects (symbols, references, diagnostics) of the same codebase area.",
+            description: "Execute multiple code analysis operations in parallel for comprehensive insights. Combines results across different analysis types, identifies patterns, and suggests next steps. Faster than running operations sequentially. Supported: search_symbols, find_references, go_to_definition, get_hover_info, get_implementations, get_diagnostics, get_call_hierarchy, text_search, analyze_dependencies.",
             inputSchema: new
             {
                 type = "object",
@@ -443,7 +443,7 @@ public static class AllToolRegistrations
                     { 
                         type = "array", 
                         items = new { type = "object" },
-                        description = "Array of operations to execute. Each operation must have 'type' or 'operation' field."
+                        description = "Array of operations to execute. Format: [{\"operation\": \"search_symbols\", \"searchPattern\": \"User*\"}, {\"operation\": \"text_search\", \"query\": \"TODO\"}]. Each operation must have 'operation' field plus operation-specific parameters."
                     },
                     workspacePath = new { type = "string", description = "Default workspace path for operations" },
                     mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
@@ -490,7 +490,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<AdvancedSymbolSearchParams>(
             name: "advanced_symbol_search",
-            description: "Search C# symbols with detailed semantic filters (accessibility, modifiers, return types, namespaces). Use when you need more than just name-based searching offered by search_symbols.",
+            description: "ADVANCED: Search C# symbols with semantic filters beyond name matching. Most users should use search_symbols instead. Only use this when you need complex filters like: find public static methods, private fields in specific namespaces, virtual methods returning Task, abstract classes.",
             inputSchema: new
             {
                 type = "object",
@@ -498,7 +498,7 @@ public static class AllToolRegistrations
                 {
                     workspacePath = new { type = "string", description = "Path to workspace" },
                     query = new { type = "string", description = "Search query" },
-                    filters = new { type = "object", description = "Advanced filters" }
+                    filters = new { type = "object", description = "Semantic filters. Available keys: kinds (array), accessibility (array: public/private/protected/internal), isStatic/isAbstract/isVirtual/isOverride (bool), returnType/containingType/containingNamespace (string). Example: {\"accessibility\": [\"public\"], \"isStatic\": true, \"returnType\": \"Task\"}" }
                 },
                 required = new[] { "workspacePath", "query" }
             },
@@ -532,19 +532,19 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<DependencyAnalysisParams>(
             name: "dependency_analysis",
-            description: "Analyze code dependencies to understand coupling and architecture. C# ONLY - analyzes .NET project references and namespace dependencies. Does not include TypeScript/JavaScript dependencies. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
+            description: "C# ONLY: Analyze code dependencies to understand coupling and architecture. Analyzes .NET project references and namespace dependencies. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    symbol = new { type = "string", description = "Symbol to analyze" },
-                    workspacePath = new { type = "string", description = "Path to workspace" },
+                    symbol = new { type = "string", description = "C# symbol to analyze (class, interface, method name)" },
+                    workspacePath = new { type = "string", description = "Path to .NET solution or project directory" },
                     direction = new { type = "string", description = "Direction: 'incoming', 'outgoing', or 'both'", @default = "both" },
                     depth = new { type = "integer", description = "Analysis depth", @default = 3 },
                     includeTests = new { type = "boolean", description = "Include test projects", @default = false },
                     includeExternalDependencies = new { type = "boolean", description = "Include external dependencies", @default = false },
-                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large graphs.", @default = "full" }
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary when graph exceeds 5000 tokens.", @default = "full" }
                 },
                 required = new[] { "symbol", "workspacePath" }
             },
@@ -579,7 +579,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<ProjectStructureAnalysisParams>(
             name: "project_structure_analysis",
-            description: "Analyze project structure with metrics on size, complexity, and organization. .NET PROJECTS ONLY - analyzes .sln/.csproj files using MSBuildWorkspace. Does not include TypeScript, JavaScript, or frontend code. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
+            description: ".NET PROJECTS ONLY: Analyze project structure with metrics on size, complexity, and organization. Analyzes .sln/.csproj files using MSBuildWorkspace. Does not include TypeScript, JavaScript, or frontend code. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
                 type = "object",
@@ -589,7 +589,7 @@ public static class AllToolRegistrations
                     includeMetrics = new { type = "boolean", description = "Include code metrics", @default = true },
                     includeFiles = new { type = "boolean", description = "Include file listings", @default = false },
                     includeNuGetPackages = new { type = "boolean", description = "Include NuGet packages", @default = false },
-                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary for large results.", @default = "full" }
+                    responseMode = new { type = "string", description = "Response mode: 'full' (default) or 'summary'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "full" }
                 },
                 required = new[] { "workspacePath" }
             },
@@ -734,8 +734,8 @@ public static class AllToolRegistrations
     private static void RegisterFastTextSearchV2(ToolRegistry registry, FastTextSearchToolV2 tool)
     {
         registry.RegisterTool<FastTextSearchV2Params>(
-            name: "fast_text_search",
-            description: "Search for text content within files across the codebase. Use when looking for specific strings, error messages, configuration values, or any text that appears in code, comments, or documentation.",
+            name: "text_search",
+            description: "Search for text content within files across the codebase. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific strings, error messages, configuration values, or any text that appears in code, comments, or documentation.",
             inputSchema: new
             {
                 type = "object",
@@ -749,7 +749,7 @@ public static class AllToolRegistrations
                     maxResults = new { type = "integer", description = "Maximum number of results", @default = 50 },
                     caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
                     searchType = new { type = "string", description = "Optional: Search mode - 'standard' (default), 'wildcard' (with *), 'fuzzy' (approximate), 'phrase' (exact)", @default = "standard" },
-                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
                 required = new[] { "query", "workspacePath" }
             },
@@ -803,8 +803,8 @@ public static class AllToolRegistrations
     private static void RegisterFastFileSearchV2(ToolRegistry registry, FastFileSearchToolV2 tool)
     {
         registry.RegisterTool<FastFileSearchV2Params>(
-            name: "fast_file_search",
-            description: "Find files by name when you know the filename but not the exact location. Use when looking for specific files, especially with typos or partial names (e.g., find 'UserService.cs' by searching 'UserServ').",
+            name: "file_search",
+            description: "Find files by name when you know the filename but not the exact location. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific files, especially with typos or partial names (e.g., find 'UserService.cs' by searching 'UserServ').",
             inputSchema: new
             {
                 type = "object",
@@ -815,7 +815,7 @@ public static class AllToolRegistrations
                     searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
                     includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false },
-                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", @default = "summary" }
+                    responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
                 required = new[] { "query", "workspacePath" }
             },
@@ -858,8 +858,8 @@ public static class AllToolRegistrations
     private static void RegisterFastRecentFiles(ToolRegistry registry, FastRecentFilesTool tool)
     {
         registry.RegisterTool<FastRecentFilesParams>(
-            name: "fast_recent_files",
-            description: "Find files that were recently changed within a time period. Use when resuming work after a break, reviewing recent changes, or finding files that were worked on today/this week.",
+            name: "recent_files",
+            description: "Find files that were recently changed within a time period. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when resuming work after a break, reviewing recent changes, or finding files that were worked on today/this week.",
             inputSchema: new
             {
                 type = "object",
@@ -905,8 +905,8 @@ public static class AllToolRegistrations
     private static void RegisterFastFileSizeAnalysis(ToolRegistry registry, FastFileSizeAnalysisTool tool)
     {
         registry.RegisterTool<FastFileSizeAnalysisParams>(
-            name: "fast_file_size_analysis",
-            description: "Analyze files by size - find large files, empty files, or analyze size distributions. Uses indexed data for instant results across entire codebase.",
+            name: "file_size_analysis",
+            description: "Analyze files by size - find large files, empty files, or analyze size distributions. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Uses indexed data for instant results across entire codebase.",
             inputSchema: new
             {
                 type = "object",
@@ -958,8 +958,8 @@ public static class AllToolRegistrations
     private static void RegisterFastSimilarFiles(ToolRegistry registry, FastSimilarFilesTool tool)
     {
         registry.RegisterTool<FastSimilarFilesParams>(
-            name: "fast_similar_files",
-            description: "Find files with similar content using 'More Like This' algorithm - ideal for discovering duplicate code, related implementations, or similar patterns. Shows similarity scores and matching terms.",
+            name: "similar_files",
+            description: "Find files with similar content using 'More Like This' algorithm - ideal for discovering duplicate code, related implementations, or similar patterns. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows similarity scores and matching terms.",
             inputSchema: new
             {
                 type = "object",
@@ -1014,8 +1014,8 @@ public static class AllToolRegistrations
     private static void RegisterFastDirectorySearch(ToolRegistry registry, FastDirectorySearchTool tool)
     {
         registry.RegisterTool<FastDirectorySearchParams>(
-            name: "fast_directory_search",
-            description: "Search for directories/folders with fuzzy matching - locate project folders, discover structure, find namespaces. Shows file counts and supports typo correction.",
+            name: "directory_search",
+            description: "Search for directories/folders with fuzzy matching - locate project folders, discover structure, find namespaces. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows file counts and supports typo correction.",
             inputSchema: new
             {
                 type = "object",
@@ -1062,7 +1062,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<IndexWorkspaceParams>(
             name: "index_workspace",
-            description: "🏗️ BUILD SEARCH INDEX - Run this FIRST to enable blazing-fast searches! Takes 5-60 seconds but then ALL searches are instant (<50ms). One-time setup per workspace. DO THIS before any fast_* tools! Detects project type (Blazor, ASP.NET, React, etc.) and provides search tips.",
+            description: "REQUIRED FIRST STEP: Build search index to enable text searches. You MUST run this before using text_search, file_search, recent_files, and other indexed search tools - they will fail without it. One-time setup per workspace, then searches are instant.",
             inputSchema: new
             {
                 type = "object",
@@ -1094,8 +1094,8 @@ public static class AllToolRegistrations
     private static void RegisterSetLogging(ToolRegistry registry, SetLoggingTool tool)
     {
         registry.RegisterTool<SetLoggingParams>(
-            name: "set_logging",
-            description: "Control file-based logging for debugging. Logs are written to .codesearch/logs directory. Actions: start, stop, status, list, setlevel, cleanup",
+            name: "log_diagnostics",
+            description: "View and manage log files. Logs are written to .codesearch/logs directory. Actions: status, list, cleanup",
             inputSchema: new
             {
                 type = "object",
@@ -1103,12 +1103,8 @@ public static class AllToolRegistrations
                 {
                     action = new { 
                         type = "string", 
-                        description = "Action to perform: 'start', 'stop', 'status', 'list', 'setlevel', 'cleanup'",
-                        @enum = new[] { "start", "stop", "status", "list", "setlevel", "cleanup" }
-                    },
-                    level = new { 
-                        type = "string", 
-                        description = "Log level for 'start' or 'setlevel' actions: Verbose, Debug, Information, Warning, Error, Fatal" 
+                        description = "Action to perform: 'status', 'list', 'cleanup'",
+                        @enum = new[] { "status", "list", "cleanup" }
                     },
                     cleanup = new { 
                         type = "boolean", 
@@ -1123,7 +1119,7 @@ public static class AllToolRegistrations
                 
                 var result = await tool.ExecuteAsync(
                     ValidateRequired(parameters.Action, "action"),
-                    parameters.Level,
+                    null, // level parameter removed - configuration-driven now
                     parameters.Cleanup,
                     ct);
                 
@@ -1135,7 +1131,6 @@ public static class AllToolRegistrations
     private class SetLoggingParams
     {
         public string? Action { get; set; }
-        public string? Level { get; set; }
         public bool? Cleanup { get; set; }
     }
     
@@ -1162,7 +1157,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<RecallContextParams>(
             name: "recall_context",
-            description: "🧠 LOAD RELEVANT CONTEXT - Start EVERY session with this! Loads past decisions, patterns, insights about what you're working on. Essential for consistency. Your memory assistant!",
+            description: "Load relevant project knowledge from previous sessions including architectural decisions, code patterns, and insights. Searches stored memories based on your current work context. Recommended at session start to restore context from past work.",
             inputSchema: new
             {
                 type = "object",
@@ -1201,7 +1196,7 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<BackupMemoriesParams>(
             name: "backup_memories_to_sqlite",
-            description: "Backup memories from Lucene index to SQLite database for version control and sharing. By default backs up only project-level memories (architectural decisions, patterns, security rules) which can be shared with the team.",
+            description: "Export memories to SQLite file for version control and team sharing. Use cases: commit memories.db to git for team collaboration, backup before major changes, transfer knowledge to new machines. Backs up architectural decisions, code patterns, and project insights by default.",
             inputSchema: new
             {
                 type = "object",

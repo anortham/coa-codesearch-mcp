@@ -9,8 +9,8 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class SetLoggingTool : ITool
 {
-    public string ToolName => "set_logging";
-    public string Description => "Control file-based logging dynamically";
+    public string ToolName => "log_diagnostics";
+    public string Description => "View and manage log files";
     public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<SetLoggingTool> _logger;
     private readonly FileLoggingService _fileLoggingService;
@@ -39,17 +39,14 @@ public class SetLoggingTool : ITool
         {
             return action.ToLowerInvariant() switch
             {
-                "start" => await StartLoggingAsync(level),
-                "stop" => await StopLoggingAsync(),
                 "status" => await GetStatusAsync(),
                 "list" => await ListLogsAsync(),
-                "setlevel" => await SetLogLevelAsync(level),
                 "cleanup" => await CleanupLogsAsync(cleanup ?? false),
                 _ => new
                 {
                     success = false,
                     error = $"Unknown action: {action}",
-                    validActions = new[] { "start", "stop", "status", "list", "setlevel", "cleanup" }
+                    validActions = new[] { "status", "list", "cleanup" }
                 }
             };
         }
@@ -64,32 +61,7 @@ public class SetLoggingTool : ITool
         }
     }
 
-    private Task<object> StartLoggingAsync(string? level)
-    {
-        var logLevel = ParseLogLevel(level);
-        
-        _fileLoggingService.StartLogging(logLevel);
-        
-        return Task.FromResult<object>(new
-        {
-            success = true,
-            message = "File logging started",
-            logFile = _fileLoggingService.CurrentLogFile,
-            logLevel = logLevel.ToString(),
-            hint = "Logs are being written to the .codesearch/logs directory"
-        });
-    }
-
-    private Task<object> StopLoggingAsync()
-    {
-        _fileLoggingService.StopLogging();
-        
-        return Task.FromResult<object>(new
-        {
-            success = true,
-            message = "File logging stopped"
-        });
-    }
+    // Removed StartLoggingAsync and StopLoggingAsync - configuration-driven now
 
     private Task<object> GetStatusAsync()
     {
@@ -129,29 +101,7 @@ public class SetLoggingTool : ITool
         });
     }
 
-    private Task<object> SetLogLevelAsync(string? level)
-    {
-        if (string.IsNullOrEmpty(level))
-        {
-            return Task.FromResult<object>(new
-            {
-                success = false,
-                error = "Log level is required",
-                validLevels = new[] { "Verbose", "Debug", "Information", "Warning", "Error", "Fatal" }
-            });
-        }
-
-        var logLevel = ParseLogLevel(level);
-        _fileLoggingService.SetLogLevel(logLevel);
-        
-        return Task.FromResult<object>(new
-        {
-            success = true,
-            message = $"Log level changed to {logLevel}",
-            previousLevel = _fileLoggingService.CurrentLogLevel.ToString(),
-            newLevel = logLevel.ToString()
-        });
-    }
+    // Removed SetLogLevelAsync - configuration-driven now
 
     private Task<object> CleanupLogsAsync(bool confirm)
     {
@@ -179,22 +129,7 @@ public class SetLoggingTool : ITool
         });
     }
 
-    private static LogEventLevel ParseLogLevel(string? level)
-    {
-        if (string.IsNullOrEmpty(level))
-            return LogEventLevel.Debug;  // Default to Debug for temporary debugging sessions
-
-        return level.ToLowerInvariant() switch
-        {
-            "verbose" or "trace" => LogEventLevel.Verbose,
-            "debug" => LogEventLevel.Debug,
-            "information" or "info" => LogEventLevel.Information,
-            "warning" or "warn" => LogEventLevel.Warning,
-            "error" => LogEventLevel.Error,
-            "fatal" => LogEventLevel.Fatal,
-            _ => LogEventLevel.Debug  // Default to Debug for unrecognized levels
-        };
-    }
+    // Removed ParseLogLevel - configuration-driven now
 
     private static string FormatFileSize(long bytes)
     {

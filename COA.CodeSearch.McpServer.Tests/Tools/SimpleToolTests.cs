@@ -28,7 +28,8 @@ public class SimpleToolTests : TestBase
         // Arrange
         var tool = new GoToDefinitionTool(
             ServiceProvider.GetRequiredService<ILogger<GoToDefinitionTool>>(),
-            WorkspaceService);
+            WorkspaceService,
+            ServiceProvider.GetRequiredService<TypeScriptGoToDefinitionTool>());
         
         // Act
         var result = await tool.ExecuteAsync("NonExistentFile.cs", 1, 1);

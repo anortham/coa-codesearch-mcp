@@ -116,6 +116,8 @@ public class FileWatcherService : BackgroundService
             return Task.CompletedTask;
         }
 
+        _logger.LogInformation("FileWatcherService ExecuteAsync started - file watching is enabled");
+
         // Start the background processing task
         // Note: Watching of workspaces is initiated by WorkspaceAutoIndexService on startup
         // and by IndexWorkspaceTool when manually indexing
@@ -182,7 +184,7 @@ public class FileWatcherService : BackgroundService
 
     private async Task ProcessBatchAsync(List<FileChangeEvent> batch, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("Processing batch of {Count} file changes", batch.Count);
+        _logger.LogInformation("Processing batch of {Count} file changes", batch.Count);
 
         // Group by workspace for efficient processing
         var workspaceGroups = batch.GroupBy(c => c.WorkspacePath);
@@ -198,7 +200,7 @@ public class FileWatcherService : BackgroundService
                 try
                 {
                     await _fileIndexingService.DeleteFileAsync(workspacePath, delete.FilePath, cancellationToken);
-                    _logger.LogDebug("Deleted from index: {FilePath}", delete.FilePath);
+                    _logger.LogInformation("Deleted from index: {FilePath}", delete.FilePath);
                     
                     // Notify subscribers
                     await NotifySubscribersAsync(delete, cancellationToken);
@@ -216,7 +218,7 @@ public class FileWatcherService : BackgroundService
                 try
                 {
                     await _fileIndexingService.UpdateFileAsync(workspacePath, update.FilePath, cancellationToken);
-                    _logger.LogDebug("Updated in index: {FilePath}", update.FilePath);
+                    _logger.LogInformation("Updated in index: {FilePath}", update.FilePath);
                     
                     // Notify subscribers
                     await NotifySubscribersAsync(update, cancellationToken);
@@ -295,7 +297,7 @@ public class FileWatcherService : BackgroundService
             return;
         }
 
-        _logger.LogDebug("File changed detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
+        _logger.LogInformation("File changed detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
         
         var added = _changeQueue.TryAdd(new FileChangeEvent
         {
@@ -315,12 +317,19 @@ public class FileWatcherService : BackgroundService
         if (ShouldIgnoreFile(e.FullPath))
             return;
 
-        _changeQueue.TryAdd(new FileChangeEvent
+        _logger.LogInformation("File created detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
+        
+        var added = _changeQueue.TryAdd(new FileChangeEvent
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Created
         });
+        
+        if (!added)
+        {
+            _logger.LogWarning("Failed to add file create event to queue for: {FilePath}", e.FullPath);
+        }
     }
 
     private void OnFileDeleted(string workspacePath, FileSystemEventArgs e)
@@ -328,12 +337,19 @@ public class FileWatcherService : BackgroundService
         if (ShouldIgnoreFile(e.FullPath))
             return;
 
-        _changeQueue.TryAdd(new FileChangeEvent
+        _logger.LogInformation("File deleted detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
+        
+        var added = _changeQueue.TryAdd(new FileChangeEvent
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Deleted
         });
+        
+        if (!added)
+        {
+            _logger.LogWarning("Failed to add file delete event to queue for: {FilePath}", e.FullPath);
+        }
     }
 
     private void OnFileRenamed(string workspacePath, RenamedEventArgs e)
