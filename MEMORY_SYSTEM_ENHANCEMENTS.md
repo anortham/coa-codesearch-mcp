@@ -228,7 +228,7 @@ Memories aren't just static notes - they're living entities that need to be trac
   - Ranks suggestions by relevance (0.0 to 1.0)
 - [x] **Clean up legacy memory tools** ✅ COMPLETED
   - [x] Removed `remember_decision`, `remember_pattern`, `remember_security_rule`, `remember_session`
-  - [x] Kept only essential tools: `recall_context`, `backup_memories_to_sqlite`, `restore_memories_from_sqlite`
+  - [x] Kept only essential tools: `recall_context`, `backup_memories`, `restore_memories`
   - [x] Removed specialized flexible tools (`flexible_store_technical_debt`, etc.) in favor of generic `flexible_store_memory`
   - [x] **Reduced total tool count from 60+ to 49 tools**
   - [x] **Added 2 new tools for Phase 5 integrations: now at 51 tools total**
@@ -242,7 +242,7 @@ Memories aren't just static notes - they're living entities that need to be trac
 - [ ] Integration with other tools (PRs, issues, etc.)
 
 ### Additional Features Implemented
-- [x] SQLite backup/restore for version control (`backup_memories_to_sqlite`, `restore_memories_from_sqlite`)
+- [x] JSON backup/restore for version control (`backup_memories`, `restore_memories`)
 - [x] Diagnostic tools (`diagnose_memory_index`)
 - [x] Session tracking and work history
 - [x] Custom analyzers for better search

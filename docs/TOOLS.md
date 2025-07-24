@@ -55,8 +55,8 @@ All code analysis tools now provide AI-optimized responses with:
   - [flexible_get_related_memories](#flexible_get_related_memories)
   - [flexible_unlink_memories](#flexible_unlink_memories)
   - [memory_dashboard](#memory_dashboard)
-  - [backup_memories_to_sqlite](#backup_memories_to_sqlite)
-  - [restore_memories_from_sqlite](#restore_memories_from_sqlite)
+  - [backup_memories](#backup_memories)
+  - [restore_memories](#restore_memories)
 - [Checklist System](#checklist-system)
   - [create_checklist](#create_checklist)
   - [add_checklist_item](#add_checklist_item)
@@ -1339,9 +1339,9 @@ memory_dashboard
 }
 ```
 
-### backup_memories_to_sqlite
+### backup_memories
 
-Backup memories for version control.
+Backup memories to JSON for version control.
 
 **Parameters:**
 - `scopes` (array, optional): Memory types to backup
@@ -1349,30 +1349,31 @@ Backup memories for version control.
 
 **Example:**
 ```
-backup_memories_to_sqlite --scopes ["ArchitecturalDecision", "CodePattern"]
+backup_memories --scopes ["ArchitecturalDecision", "CodePattern"]
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "backupPath": "C:/project/.codesearch/backups/backup_20250122_103000",
+  "backupPath": "C:/project/.codesearch/backups/memories_20250124_143000.json",
   "stats": {
     "memoriesBackedUp": 165,
     "backupSizeBytes": 524288,
-    "tablesCreated": ["memories", "relationships", "metadata"]
+    "format": "json"
   }
 }
 ```
 
 **Tips:**
 - Default backs up only project-level memories
-- Check in memories.db to version control
+- Check in JSON files to version control
 - Use for team sharing
+- JSON format is human-readable
 
-### restore_memories_from_sqlite
+### restore_memories
 
-Restore memories from backup.
+Restore memories from JSON backup.
 
 **Parameters:**
 - `scopes` (array, optional): Memory types to restore
@@ -1380,7 +1381,7 @@ Restore memories from backup.
 
 **Example:**
 ```
-restore_memories_from_sqlite
+restore_memories
 ```
 
 ## Checklist System
