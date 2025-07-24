@@ -24,7 +24,6 @@ public static class FlexibleMemoryToolRegistrations
         
         // Core memory operations
         RegisterStoreMemory(registry, memoryTools);
-        RegisterSearchMemories(registry, memoryTools);
         RegisterSearchMemoriesV2(registry, memorySearchV2);
         RegisterUpdateMemory(registry, memoryTools);
         RegisterGetMemoryById(registry, memoryTools);
@@ -63,7 +62,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<StoreMemoryParams>(
             name: "flexible_store_memory",
-            description: "💾 Store ANY knowledge persistently - decisions, patterns, insights, issues. Flexible fields for easy querying later. Better than comments or TODOs - searchable across sessions!",
+            description: "Save important knowledge that should persist across work sessions. Use when you make architectural decisions, discover technical debt, identify patterns, or want to remember insights for later.",
             inputSchema: new
             {
                 type = "object",
@@ -129,53 +128,11 @@ public static class FlexibleMemoryToolRegistrations
         );
     }
     
-    private static void RegisterSearchMemories(ToolRegistry registry, FlexibleMemoryTools tool)
-    {
-        registry.RegisterTool<SearchMemoriesParams>(
-            name: "flexible_search_memories",
-            description: "🔍 Search ALL stored knowledge INSTANTLY! Natural language queries, filters by type/date/status. Finds patterns, decisions, TODOs across sessions. Your external brain - use it!",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    query = new { type = "string", description = "Search query (* for all)" },
-                    types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
-                    dateRange = new { type = "string", description = "Relative time: 'last-week', 'last-month', 'last-7-days'" },
-                    facets = new { type = "object", description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
-                    orderBy = new { type = "string", description = "Sort field: 'created', 'modified', 'type', 'score', or custom field" },
-                    orderDescending = new { type = "boolean", description = "Sort order (default: true)", @default = true },
-                    maxResults = new { type = "integer", description = "Maximum results (default: 50)", @default = 50 },
-                    includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false },
-                    boostRecent = new { type = "boolean", description = "Boost recently created memories", @default = false },
-                    boostFrequent = new { type = "boolean", description = "Boost frequently accessed memories", @default = false }
-                },
-                required = new string[] { }
-            },
-            handler: async (parameters, ct) =>
-            {
-                var result = await tool.SearchMemoriesAsync(
-                    parameters?.Query,
-                    parameters?.Types,
-                    parameters?.DateRange,
-                    parameters?.Facets,
-                    parameters?.OrderBy,
-                    parameters?.OrderDescending ?? true,
-                    parameters?.MaxResults ?? 50,
-                    parameters?.IncludeArchived ?? false,
-                    parameters?.BoostRecent ?? false,
-                    parameters?.BoostFrequent ?? false);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
     private static void RegisterSearchMemoriesV2(ToolRegistry registry, FlexibleMemorySearchToolV2 tool)
     {
         registry.RegisterTool<SearchMemoriesV2Params>(
-            name: "flexible_search_memories_v2",
-            description: "🔍 AI-OPTIMIZED memory search! Returns structured data with type/status distributions, hotspots, patterns, and insights. Natural language queries with smart analysis. 90%+ token reduction vs original.",
+            name: "flexible_search_memories",
+            description: "Search stored memories with AI analysis, insights, and structured summaries. Supports natural language queries, context-awareness, and intelligent query expansion.",
             inputSchema: new
             {
                 type = "object",

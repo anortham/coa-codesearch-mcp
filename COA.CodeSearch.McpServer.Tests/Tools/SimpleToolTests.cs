@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Infrastructure;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
@@ -61,45 +62,6 @@ public class SimpleToolTests : TestBase
         root.GetProperty("error").GetString().Should().Contain("Could not find document");
     }
     
-    [Fact]
-    public async Task SearchSymbolsTool_Should_Return_Error_For_Empty_Pattern()
-    {
-        // Arrange
-        var tool = new SearchSymbolsTool(
-            ServiceProvider.GetRequiredService<ILogger<SearchSymbolsTool>>(),
-            WorkspaceService,
-            ServiceProvider.GetRequiredService<IConfiguration>());
-        
-        // Act
-        var result = await tool.ExecuteAsync("", "test.csproj", null, false, 100);
-        
-        // Assert
-        var json = JsonSerializer.Serialize(result);
-        var jsonDoc = JsonDocument.Parse(json);
-        var root = jsonDoc.RootElement;
-        
-        root.GetProperty("success").GetBoolean().Should().BeFalse();
-        root.GetProperty("error").GetString().Should().Contain("pattern cannot be empty");
-    }
-    
-    [Fact]
-    public async Task GetDiagnosticsTool_Should_Return_Error_For_Invalid_Path()
-    {
-        // Arrange
-        var tool = new GetDiagnosticsTool(
-            ServiceProvider.GetRequiredService<ILogger<GetDiagnosticsTool>>(),
-            WorkspaceService);
-        
-        // Act
-        var result = await tool.ExecuteAsync("NonExistent.cs", null);
-        
-        // Assert
-        var json = JsonSerializer.Serialize(result);
-        var jsonDoc = JsonDocument.Parse(json);
-        var root = jsonDoc.RootElement;
-        
-        root.GetProperty("success").GetBoolean().Should().BeFalse();
-    }
     
     [Fact]
     public async Task GetHoverInfoTool_Should_Return_Error_For_Missing_Document()
@@ -147,69 +109,6 @@ public class SimpleToolTests : TestBase
         
         // Act
         var result = await tool.ExecuteAsync("NonExistentFile.cs");
-        
-        // Assert
-        var json = JsonSerializer.Serialize(result);
-        var jsonDoc = JsonDocument.Parse(json);
-        var root = jsonDoc.RootElement;
-        
-        root.GetProperty("success").GetBoolean().Should().BeFalse();
-        root.GetProperty("error").GetString().Should().Contain("Could not find document");
-    }
-    
-    [Fact]
-    public async Task GetImplementationsTool_Should_Return_Error_For_Missing_Document()
-    {
-        // Arrange
-        var tool = new GetImplementationsTool(
-            ServiceProvider.GetRequiredService<ILogger<GetImplementationsTool>>(),
-            WorkspaceService);
-        
-        // Act
-        var result = await tool.ExecuteAsync("NonExistentFile.cs", 1, 1);
-        
-        // Assert
-        var json = JsonSerializer.Serialize(result);
-        var jsonDoc = JsonDocument.Parse(json);
-        var root = jsonDoc.RootElement;
-        
-        root.GetProperty("success").GetBoolean().Should().BeFalse();
-        root.GetProperty("error").GetString().Should().Contain("Could not find document");
-    }
-    
-    [Fact]
-    public async Task GetCallHierarchyTool_Should_Return_Error_For_Missing_Document()
-    {
-        // Arrange
-        var tool = new GetCallHierarchyTool(
-            ServiceProvider.GetRequiredService<ILogger<GetCallHierarchyTool>>(),
-            WorkspaceService);
-        
-        // Act
-        var result = await tool.ExecuteAsync("NonExistentFile.cs", 1, 1, "incoming", 5);
-        
-        // Assert
-        var json = JsonSerializer.Serialize(result);
-        var jsonDoc = JsonDocument.Parse(json);
-        var root = jsonDoc.RootElement;
-        
-        root.GetProperty("success").GetBoolean().Should().BeFalse();
-        root.GetProperty("error").GetString().Should().Contain("Could not find document");
-    }
-    
-    [Fact]
-    public async Task RenameSymbolTool_Should_Return_Error_For_Missing_Document()
-    {
-        // Arrange
-        var tool = new RenameSymbolTool(
-            ServiceProvider.GetRequiredService<ILogger<RenameSymbolTool>>(),
-            WorkspaceService,
-            ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
-            ServiceProvider.GetRequiredService<IResultTruncator>(),
-            ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>());
-        
-        // Act
-        var result = await tool.ExecuteAsync("NonExistentFile.cs", 1, 1, "NewName", true);
         
         // Assert
         var json = JsonSerializer.Serialize(result);

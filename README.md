@@ -126,11 +126,11 @@ claude mcp add codesearch ~/Source/coa-codesearch-mcp/COA.CodeSearch.McpServer/b
 ```
 
 
-## 🛠️ Available Tools (62 Total)
+## 🛠️ Available Tools
 
-The server provides both standard tools and **AI-optimized V2 versions**. V2 tools feature intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
+All tools now feature AI-optimized responses with intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
 
-### 🚀 V2 Tool Features
+### 🚀 AI-Optimized Features
 - **Intelligent Summaries**: Automatic insights, hotspots, and actionable next steps
 - **Token-Aware**: Auto-switches to summary mode when responses exceed 5,000 tokens
 - **Progress Tracking**: Real-time notifications for long-running operations
@@ -139,40 +139,34 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 
 ### Search & Navigation
 - `go_to_definition` - Navigate to symbol definitions (C# & TypeScript)
-- `find_references` - 🔍 Find ALL usages instantly with AI-optimized summaries (V2)
-- `search_symbols` - Search C# symbols by name
+- `find_references` - 🔍 Find ALL usages instantly with AI-optimized summaries
+- `search_symbols` - 🔍 AI-optimized symbol search with distribution insights
 - `advanced_symbol_search` - Find C# symbols with semantic filters
-- `search_symbols_v2` - 🔍 AI-optimized symbol search with distribution insights
 - `search_typescript` - 🔍 Find TypeScript symbols FAST
 - `get_hover_info` - Get type information and documentation
 
 ### Fast Search Tools (Lucene-powered)
 - `index_workspace` - 🏗️ Build search index with progress notifications (required first!)
-- `fast_text_search` - Blazing fast text search (<50ms)
-- `fast_text_search_v2` - 🔍 AI-optimized with file distribution and hotspot analysis
-- `fast_file_search` - Find files with fuzzy matching
-- `fast_file_search_v2` - 🔍 AI-optimized file search with directory insights
+- `fast_text_search` - 🔍 AI-optimized text search with file distribution and hotspot analysis
+- `fast_file_search` - 🔍 AI-optimized file search with directory insights
 - `fast_recent_files` - 🔍 Find recently modified files with time context
 - `fast_similar_files` - Find files with similar content using ML algorithms
 - `fast_directory_search` - Search for directories with fuzzy matching
 - `fast_file_size_analysis` - Analyze files by size with distribution insights
 
 ### Code Analysis
-- `get_implementations` - Find all implementations of interfaces/abstract classes
-- `get_implementations_v2` - 🔍 AI-optimized with inheritance pattern analysis
-- `get_call_hierarchy` - Trace method call chains
-- `get_call_hierarchy_v2` - 🔍 AI-optimized with circular dependency detection
+- `get_implementations` - 🔍 AI-optimized implementation discovery with inheritance pattern analysis
+- `get_call_hierarchy` - 🔍 AI-optimized call hierarchy with circular dependency detection
 - `get_document_symbols` - Get file structure outline
-- `get_diagnostics` - 🔍 AI-optimized error analysis with priority recommendations (V2)
-- `dependency_analysis` - 🔍 AI-optimized dependency insights with refactoring suggestions (V2)
-- `project_structure_analysis` - 🔍 AI-optimized project analysis with architectural insights (V2)
-- `rename_symbol` - 🔍 Safe renaming with AI-powered impact analysis (V2)
+- `get_diagnostics` - 🔍 AI-optimized error analysis with priority recommendations
+- `dependency_analysis` - 🔍 AI-optimized dependency insights with refactoring suggestions
+- `project_structure_analysis` - 🔍 AI-optimized project analysis with architectural insights
+- `rename_symbol` - 🔍 Safe renaming with AI-powered impact analysis
 
 ### Memory System
 - `recall_context` - 🧠 Load relevant context (use at session start!)
 - `flexible_store_memory` - Store any type of memory with custom fields
-- `flexible_search_memories` - Search stored memories with natural language
-- `flexible_search_memories_v2` - 🔍 AI-optimized memory search with insights and patterns
+- `flexible_search_memories` - Search stored memories with AI analysis, insights, and patterns
 - `flexible_update_memory` - Update existing memories
 - `flexible_get_memory` - Retrieve specific memory by ID
 - `flexible_link_memories` - Create relationships between memories
@@ -203,15 +197,14 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `restore_memories_from_sqlite` - Restore from backup
 
 ### TypeScript-specific
-- `search_typescript` - 🔍 Find TypeScript symbols FAST
-- `typescript_go_to_definition` - ⚡ Jump to TypeScript definitions instantly
-- `typescript_find_references` - Find all TypeScript usages with tsserver accuracy
-- `typescript_rename_symbol` - 🔧 Rename TypeScript symbols across the entire codebase
+- `search_typescript` - Find TypeScript symbols by name
+- `typescript_go_to_definition` - Navigate to TypeScript symbol definitions
+- `typescript_find_references` - Find all TypeScript symbol usages
+- `typescript_rename_symbol` - Rename TypeScript symbols across the codebase
 - `typescript_hover_info` - 💡 Get TypeScript type information and docs like IDE hover tooltips
 
 ### Utilities
-- `batch_operations` - Run multiple operations in parallel
-- `batch_operations_v2` - 🚀 AI-optimized batch execution with pattern analysis
+- `batch_operations` - 🚀 AI-optimized batch execution with pattern analysis
 - `set_logging` - Control file-based logging
 - `get_version` - Get server version info
 
@@ -368,9 +361,9 @@ restore_memories_from_sqlite --includeLocal true
    go_to_definition --filePath "Auth.cs" --line 25 --column 15
    ```
 
-3. **V2 Tools Example**
+3. **AI-Optimized Tools Example**
    ```
-   # Use V2 tools for AI-optimized results
+   # All tools now use AI-optimized responses
    find_references --filePath "IUserService.cs" --line 10 --column 15
    
    # Response includes:
@@ -381,13 +374,60 @@ restore_memories_from_sqlite --includeLocal true
    ```
 
 4. **Memory System Usage**
-   ```
-   # Store architectural decision
-   flexible_store_memory --type "ArchitecturalDecision" 
-     --content "Using JWT for authentication"
    
-   # Create a checklist
-   create_checklist --title "Implement Auth System"
+   The memory system helps you capture and recall important decisions, patterns, and insights. Here are common user phrases and what they accomplish:
+   
+   **"Remember this decision"**
+   ```
+   flexible_store_memory --type "ArchitecturalDecision" 
+     --content "Using JWT for authentication instead of sessions for better scalability"
+     --files ["AuthService.cs", "JwtMiddleware.cs"]
+   ```
+   
+   **"Note this technical debt"**
+   ```
+   flexible_store_memory --type "TechnicalDebt" 
+     --content "UserService has grown too large - needs refactoring into smaller services"
+     --fields '{"priority": "high", "status": "identified"}'
+     --files ["Services/UserService.cs"]
+   ```
+   
+   **"Track this pattern I discovered"**
+   ```
+   flexible_store_memory --type "CodePattern" 
+     --content "All API controllers follow the same validation pattern using FluentValidation"
+     --files ["Controllers/UserController.cs", "Controllers/OrderController.cs"]
+   ```
+   
+   **"Remember to check this later"**
+   ```
+   flexible_store_working_memory 
+     --content "Check if the new caching implementation affects memory usage"
+     --expiresIn "24h"
+   ```
+   
+   **"What was I working on?"**
+   ```
+   recall_context "authentication system implementation"
+   ```
+   
+   **"Find my notes about caching"**
+   ```
+   flexible_search_memories --query "caching performance redis"
+   ```
+   
+   **"Create a task list"**
+   ```
+   create_checklist --title "API Refactoring Tasks"
+   add_checklist_item --checklistId "abc123" 
+     --itemText "Extract validation logic to separate classes"
+     --relatedFiles ["Controllers/BaseController.cs"]
+   ```
+   
+   **"Link this bug to its fix"**
+   ```
+   flexible_link_memories --sourceId "bug-001" --targetId "fix-002" 
+     --relationshipType "resolvedBy"
    ```
 
 ## 🐛 Troubleshooting

@@ -89,16 +89,10 @@ public abstract class TestBase : IDisposable
         // Add tools required by BatchOperationsTool
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();
-        services.AddSingleton<SearchSymbolsTool>();
-        services.AddSingleton<GetDiagnosticsTool>();
+        services.AddSingleton<GetDiagnosticsToolV2>();
         services.AddSingleton<GetHoverInfoTool>();
-        services.AddSingleton<GetImplementationsTool>();
         services.AddSingleton<GetDocumentSymbolsTool>();
-        services.AddSingleton<GetCallHierarchyTool>();
-        services.AddSingleton<FastTextSearchTool>();
-        services.AddSingleton<DependencyAnalysisTool>();
-        services.AddSingleton<BatchOperationsTool>();
-        services.AddSingleton<IBatchOperationsTool>(provider => provider.GetRequiredService<BatchOperationsTool>());
+        services.AddSingleton<DependencyAnalysisToolV2>();
         
         ServiceProvider = services.BuildServiceProvider();
         WorkspaceService = ServiceProvider.GetRequiredService<CodeAnalysisService>();

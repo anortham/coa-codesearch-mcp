@@ -1117,3 +1117,91 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
         public SolutionMetrics? SolutionMetrics { get; set; }
     }
 }
+
+// Extension method to get declared symbols from syntax root
+public static class SemanticModelExtensions
+{
+    public static IEnumerable<ISymbol> GetDeclaredSymbols(this SemanticModel semanticModel, SyntaxNode syntaxRoot, CancellationToken cancellationToken)
+    {
+        var symbols = new List<ISymbol>();
+        
+        foreach (var node in syntaxRoot.DescendantNodes())
+        {
+            var symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken);
+            if (symbol != null)
+            {
+                symbols.Add(symbol);
+            }
+        }
+        
+        return symbols;
+    }
+}
+
+// Model classes
+public class ProjectAnalysis
+{
+    public string Name { get; set; } = "";
+    public string Id { get; set; } = "";
+    public string FilePath { get; set; } = "";
+    public string Language { get; set; } = "";
+    public string AssemblyName { get; set; } = "";
+    public string DefaultNamespace { get; set; } = "";
+    public string OutputType { get; set; } = "";
+    public string TargetFramework { get; set; } = "";
+    public List<ProjectReference>? ProjectReferences { get; set; }
+    public List<AssemblyReference>? AssemblyReferences { get; set; }
+    public List<NuGetPackage>? NuGetPackages { get; set; }
+    public List<SourceFile>? SourceFiles { get; set; }
+    public ProjectMetrics? Metrics { get; set; }
+}
+
+public class ProjectReference
+{
+    public string ProjectId { get; set; } = "";
+    public string ProjectName { get; set; } = "";
+}
+
+public class AssemblyReference
+{
+    public string Name { get; set; } = "";
+    public string FilePath { get; set; } = "";
+    public bool IsFrameworkReference { get; set; }
+}
+
+public class NuGetPackage
+{
+    public string Name { get; set; } = "";
+    public string Version { get; set; } = "";
+    public string Path { get; set; } = "";
+}
+
+public class SourceFile
+{
+    public string Name { get; set; } = "";
+    public string FilePath { get; set; } = "";
+    public List<string> Folders { get; set; } = new();
+}
+
+public class ProjectMetrics
+{
+    public int TotalFiles { get; set; }
+    public int TotalLines { get; set; }
+    public int TotalClasses { get; set; }
+    public int TotalMethods { get; set; }
+    public int TotalProperties { get; set; }
+    public int ProjectReferences { get; set; }
+    public int AssemblyReferences { get; set; }
+}
+
+public class SolutionMetrics
+{
+    public int TotalProjects { get; set; }
+    public int TotalFiles { get; set; }
+    public int TotalLines { get; set; }
+    public int TotalClasses { get; set; }
+    public int TotalMethods { get; set; }
+    public int TotalProperties { get; set; }
+    public List<string> Languages { get; set; } = new();
+    public List<string> TargetFrameworks { get; set; } = new();
+}

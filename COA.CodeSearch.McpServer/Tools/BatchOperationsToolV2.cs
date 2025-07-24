@@ -17,21 +17,60 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     public override string ToolName => "batch_operations_v2";
     public override string Description => "AI-optimized batch operations";
     public override ToolCategory Category => ToolCategory.Batch;
-    private readonly IBatchOperationsTool _batchOperationsTool;
     private readonly IConfiguration _configuration;
+    private readonly INotificationService? _notificationService;
+    
+    // V2 tools
+    private readonly SearchSymbolsToolV2 _searchSymbolsToolV2;
+    private readonly FindReferencesToolV2 _findReferencesToolV2;
+    private readonly GetImplementationsToolV2 _getImplementationsToolV2;
+    private readonly GetCallHierarchyToolV2 _getCallHierarchyToolV2;
+    private readonly FastTextSearchToolV2 _fastTextSearchToolV2;
+    
+    // V1 tools (no V2 available yet)
+    private readonly GoToDefinitionTool _goToDefinitionTool;
+    private readonly GetHoverInfoTool _getHoverInfoTool;
+    private readonly GetDocumentSymbolsTool _getDocumentSymbolsTool;
+    
+    // Already V2 (registered without _v2 suffix)
+    private readonly GetDiagnosticsToolV2 _getDiagnosticsToolV2;
+    private readonly DependencyAnalysisToolV2 _dependencyAnalysisToolV2;
 
     public BatchOperationsToolV2(
         ILogger<BatchOperationsToolV2> logger,
-        IBatchOperationsTool batchOperationsTool,
         IConfiguration configuration,
         IResponseSizeEstimator sizeEstimator,
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
-        IDetailRequestCache detailCache)
+        IDetailRequestCache detailCache,
+        INotificationService? notificationService,
+        // V2 tools
+        SearchSymbolsToolV2 searchSymbolsToolV2,
+        FindReferencesToolV2 findReferencesToolV2,
+        GetImplementationsToolV2 getImplementationsToolV2,
+        GetCallHierarchyToolV2 getCallHierarchyToolV2,
+        FastTextSearchToolV2 fastTextSearchToolV2,
+        // V1 tools
+        GoToDefinitionTool goToDefinitionTool,
+        GetHoverInfoTool getHoverInfoTool,
+        GetDocumentSymbolsTool getDocumentSymbolsTool,
+        // Already V2
+        GetDiagnosticsToolV2 getDiagnosticsToolV2,
+        DependencyAnalysisToolV2 dependencyAnalysisToolV2)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
-        _batchOperationsTool = batchOperationsTool;
         _configuration = configuration;
+        _notificationService = notificationService;
+        _searchSymbolsToolV2 = searchSymbolsToolV2;
+        _findReferencesToolV2 = findReferencesToolV2;
+        _getImplementationsToolV2 = getImplementationsToolV2;
+        _getCallHierarchyToolV2 = getCallHierarchyToolV2;
+        _fastTextSearchToolV2 = fastTextSearchToolV2;
+        _goToDefinitionTool = goToDefinitionTool;
+        _getHoverInfoTool = getHoverInfoTool;
+        _getDocumentSymbolsTool = getDocumentSymbolsTool;
+        _getDiagnosticsToolV2 = getDiagnosticsToolV2;
+        _dependencyAnalysisToolV2 = dependencyAnalysisToolV2;
     }
 
     public async Task<object> ExecuteAsync(
@@ -49,29 +88,263 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
                 return await HandleDetailRequestAsync(detailRequest, cancellationToken);
             }
 
-            Logger.LogInformation("BatchOperationsV2 request with {Count} operations", operations.GetArrayLength());
+            var operationCount = operations.GetArrayLength();
+            Logger.LogInformation("BatchOperationsV2 request with {Count} operations", operationCount);
 
-            // Execute batch operations using the original tool
-            var result = await _batchOperationsTool.ExecuteAsync(operations, workspacePath, cancellationToken);
-            
-            // Parse the result
-            var resultJson = JsonSerializer.Serialize(result);
-            var resultDoc = JsonDocument.Parse(resultJson);
-            var resultRoot = resultDoc.RootElement;
+            var results = new List<object>();
+            var progressToken = $"batch-operations-{Guid.NewGuid():N}";
+            var currentOperation = 0;
 
-            if (!resultRoot.GetProperty("success").GetBoolean())
+            // Send initial progress notification
+            await SendProgressNotification(progressToken, 0, operationCount, "Starting batch operations...");
+
+            // Execute each operation
+            foreach (var operation in operations.EnumerateArray())
             {
-                return CreateErrorResponse<object>(resultRoot.GetProperty("error").GetString() ?? "Batch operation failed");
+                currentOperation++;
+                var operationType = operation.GetProperty("operation").GetString() 
+                    ?? operation.GetProperty("type").GetString() 
+                    ?? throw new InvalidOperationException("Operation must have 'operation' or 'type' property");
+
+                await SendProgressNotification(progressToken, currentOperation, operationCount, 
+                    $"Executing {operationType}...");
+
+                try
+                {
+                    var operationResult = await ExecuteOperationAsync(operation, workspacePath, cancellationToken);
+                    results.Add(operationResult);
+                }
+                catch (Exception ex)
+                {
+                    Logger.LogError(ex, "Error executing operation {Type}", operationType);
+                    results.Add(new
+                    {
+                        success = false,
+                        operation = operationType,
+                        error = ex.Message
+                    });
+                }
             }
 
+            // Create batch result
+            var batchResult = new
+            {
+                success = true,
+                results = results,
+                summary = new
+                {
+                    total = operationCount,
+                    successful = results.Count(r => GetSuccess(r)),
+                    failed = results.Count(r => !GetSuccess(r))
+                }
+            };
+
             // Create AI-optimized response
-            return CreateAiOptimizedResponse(operations, resultRoot, mode);
+            var resultJson = JsonSerializer.Serialize(batchResult);
+            var resultDoc = JsonDocument.Parse(resultJson);
+            return CreateAiOptimizedResponse(operations, resultDoc.RootElement, mode);
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error in BatchOperationsV2");
             return CreateErrorResponse<object>(ex.Message);
         }
+    }
+
+    private async Task<object> ExecuteOperationAsync(
+        JsonElement operation,
+        string? defaultWorkspacePath,
+        CancellationToken cancellationToken)
+    {
+        var operationType = operation.GetProperty("operation").GetString() 
+            ?? operation.GetProperty("type").GetString() 
+            ?? throw new InvalidOperationException("Operation must have 'operation' or 'type' property");
+
+        return operationType switch
+        {
+            "search_symbols" => await ExecuteSearchSymbolsAsync(operation, defaultWorkspacePath, cancellationToken),
+            "find_references" => await ExecuteFindReferencesAsync(operation, cancellationToken),
+            "go_to_definition" => await ExecuteGoToDefinitionAsync(operation, cancellationToken),
+            "get_hover_info" => await ExecuteGetHoverInfoAsync(operation, cancellationToken),
+            "get_implementations" => await ExecuteGetImplementationsAsync(operation, cancellationToken),
+            "get_document_symbols" => await ExecuteGetDocumentSymbolsAsync(operation, cancellationToken),
+            "get_diagnostics" => await ExecuteGetDiagnosticsAsync(operation, cancellationToken),
+            "get_call_hierarchy" => await ExecuteGetCallHierarchyAsync(operation, cancellationToken),
+            "text_search" or "fast_text_search" or "textSearch" => await ExecuteTextSearchAsync(operation, defaultWorkspacePath, cancellationToken),
+            "analyze_dependencies" => await ExecuteAnalyzeDependenciesAsync(operation, defaultWorkspacePath, cancellationToken),
+            _ => throw new NotSupportedException($"Operation type '{operationType}' not supported in batch operations")
+        };
+    }
+
+    private async Task SendProgressNotification(string token, int current, int total, string message)
+    {
+        if (_notificationService != null)
+        {
+            var percentage = total > 0 ? (int)((current * 100.0) / total) : 0;
+            await _notificationService.SendProgressAsync(token, percentage, total, message);
+        }
+    }
+
+    private static bool GetSuccess(object result)
+    {
+        if (result is JsonElement json)
+        {
+            return json.TryGetProperty("success", out var success) && success.GetBoolean();
+        }
+        
+        var resultJson = JsonSerializer.Serialize(result);
+        var doc = JsonDocument.Parse(resultJson);
+        return doc.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+    }
+
+    // Individual operation execution methods
+    
+    private async Task<object> ExecuteSearchSymbolsAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        if (!operation.TryGetProperty("searchPattern", out var searchPatternProp))
+        {
+            throw new InvalidOperationException("search_symbols operation requires 'searchPattern'");
+        }
+
+        return await _searchSymbolsToolV2.ExecuteAsync(
+            searchPatternProp.GetString()!,
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("kinds", out var k) && k.ValueKind == JsonValueKind.Array
+                ? k.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            operation.TryGetProperty("fuzzy", out var f) && f.GetBoolean(),
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100,
+            ResponseMode.Summary, // Always use summary mode in batch operations
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteFindReferencesAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _findReferencesToolV2.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.GetProperty("line").GetInt32(),
+            operation.GetProperty("column").GetInt32(),
+            operation.TryGetProperty("includeDeclaration", out var id) && id.GetBoolean(),
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGoToDefinitionAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _goToDefinitionTool.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.GetProperty("line").GetInt32(),
+            operation.GetProperty("column").GetInt32(),
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGetHoverInfoAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _getHoverInfoTool.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.GetProperty("line").GetInt32(),
+            operation.GetProperty("column").GetInt32(),
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGetImplementationsAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _getImplementationsToolV2.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.GetProperty("line").GetInt32(),
+            operation.GetProperty("column").GetInt32(),
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGetDocumentSymbolsAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _getDocumentSymbolsTool.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.TryGetProperty("includeMembers", out var im) && im.GetBoolean(),
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGetDiagnosticsAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _getDiagnosticsToolV2.ExecuteAsync(
+            operation.GetProperty("path").GetString()!,
+            operation.TryGetProperty("severities", out var s) && s.ValueKind == JsonValueKind.Array
+                ? s.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteGetCallHierarchyAsync(JsonElement operation, CancellationToken cancellationToken)
+    {
+        return await _getCallHierarchyToolV2.ExecuteAsync(
+            operation.GetProperty("filePath").GetString()!,
+            operation.GetProperty("line").GetInt32(),
+            operation.GetProperty("column").GetInt32(),
+            operation.TryGetProperty("direction", out var dir) ? dir.GetString() ?? "both" : "both",
+            operation.TryGetProperty("maxDepth", out var md) ? md.GetInt32() : 2,
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteTextSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        if (!operation.TryGetProperty("query", out var queryProp))
+        {
+            throw new InvalidOperationException("text_search operation requires 'query'");
+        }
+
+        return await _fastTextSearchToolV2.ExecuteAsync(
+            queryProp.GetString()!,
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
+            operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            operation.TryGetProperty("contextLines", out var cl) ? cl.GetInt32() : 0,
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 50,
+            operation.TryGetProperty("caseSensitive", out var cs) && cs.GetBoolean(),
+            operation.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteAnalyzeDependenciesAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        return await _dependencyAnalysisToolV2.ExecuteAsync(
+            operation.GetProperty("symbol").GetString()!,
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("direction", out var dd) ? dd.GetString() ?? "both" : "both",
+            operation.TryGetProperty("depth", out var dp) ? dp.GetInt32() : 3,
+            operation.TryGetProperty("includeTests", out var it) && it.GetBoolean(),
+            operation.TryGetProperty("includeExternalDependencies", out var ied) && ied.GetBoolean(),
+            ResponseMode.Summary,
+            null,
+            cancellationToken);
+    }
+
+    private string GetWorkspacePath(JsonElement operation, string? defaultWorkspacePath)
+    {
+        // First check if the operation has its own workspacePath
+        if (operation.TryGetProperty("workspacePath", out var wsPath) && wsPath.ValueKind == JsonValueKind.String)
+        {
+            return wsPath.GetString()!;
+        }
+
+        // Otherwise use the default
+        if (string.IsNullOrEmpty(defaultWorkspacePath))
+        {
+            throw new InvalidOperationException("Operation requires workspacePath but none was provided");
+        }
+
+        return defaultWorkspacePath;
     }
 
     private object CreateAiOptimizedResponse(

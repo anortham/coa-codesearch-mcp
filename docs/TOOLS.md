@@ -1,33 +1,27 @@
 # CodeSearch MCP Server - Tool Reference
 
-Complete documentation for all 62 tools available in the CodeSearch MCP Server.
+Complete documentation for all tools available in the CodeSearch MCP Server.
 
-## 🚀 V2 Tools - AI-Optimized Features
+## Tool Categories
 
-Many tools have V2 versions that provide AI-optimized responses with:
+All code analysis tools now provide AI-optimized responses with:
 - **Intelligent Summaries**: Automatic insights, patterns, and actionable recommendations
 - **Token Management**: Auto-switches to summary mode for large results (>5,000 tokens)
 - **Progressive Disclosure**: Request specific details without re-running operations
 - **Pattern Recognition**: Identifies trends, hotspots, and optimization opportunities
 - **Progress Tracking**: Real-time notifications for long-running operations
 
-V2 tools are marked with 🔍 in the documentation below.
-
 ## Table of Contents
 
 - [Search & Navigation (Core Tools)](#search--navigation-core-tools)
   - [go_to_definition](#go_to_definition)
-  - [find_references](#find_references) 🔍 V2
+  - [find_references](#find_references)
   - [search_symbols](#search_symbols)
-  - [search_symbols_v2](#search_symbols_v2) 🔍
   - [get_implementations](#get_implementations)
-  - [get_implementations_v2](#get_implementations_v2) 🔍
 - [Fast Search Tools (Lucene-powered)](#fast-search-tools-lucene-powered)
-  - [index_workspace](#index_workspace) 🏗️ Progress Tracking
+  - [index_workspace](#index_workspace) 🏗️
   - [fast_text_search](#fast_text_search)
-  - [fast_text_search_v2](#fast_text_search_v2) 🔍
   - [fast_file_search](#fast_file_search)
-  - [fast_file_search_v2](#fast_file_search_v2) 🔍
   - [fast_recent_files](#fast_recent_files)
   - [fast_file_size_analysis](#fast_file_size_analysis)
   - [fast_similar_files](#fast_similar_files)
@@ -35,20 +29,17 @@ V2 tools are marked with 🔍 in the documentation below.
 - [Code Analysis](#code-analysis)
   - [get_hover_info](#get_hover_info)
   - [get_document_symbols](#get_document_symbols)
-  - [get_diagnostics](#get_diagnostics) 🔍 V2
+  - [get_diagnostics](#get_diagnostics)
   - [get_call_hierarchy](#get_call_hierarchy)
-  - [get_call_hierarchy_v2](#get_call_hierarchy_v2) 🔍
-  - [rename_symbol](#rename_symbol) 🔍 V2
-  - [batch_operations](#batch_operations) 🏗️ Progress Tracking
-  - [batch_operations_v2](#batch_operations_v2) 🔍
+  - [rename_symbol](#rename_symbol)
+  - [batch_operations](#batch_operations)
   - [advanced_symbol_search](#advanced_symbol_search)
-  - [dependency_analysis](#dependency_analysis) 🔍 V2
-  - [project_structure_analysis](#project_structure_analysis) 🔍 V2
+  - [dependency_analysis](#dependency_analysis)
+  - [project_structure_analysis](#project_structure_analysis)
 - [Memory System](#memory-system)
   - [recall_context](#recall_context)
   - [flexible_store_memory](#flexible_store_memory)
   - [flexible_search_memories](#flexible_search_memories)
-  - [flexible_search_memories_v2](#flexible_search_memories_v2) 🔍
   - [flexible_update_memory](#flexible_update_memory)
   - [flexible_get_memory](#flexible_get_memory)
   - [flexible_store_working_memory](#flexible_store_working_memory)
@@ -121,9 +112,9 @@ go_to_definition --filePath "C:/project/UserService.cs" --line 25 --column 15
 - Returns multiple locations for partial classes
 - ~50ms response time for cached workspaces
 
-### find_references 🔍
+### find_references
 
-Find all references to a symbol. Supports both C# and TypeScript. This is the V2 AI-optimized version with intelligent summaries and insights.
+Find all references to a symbol. Supports both C# and TypeScript with AI-optimized intelligent summaries and insights.
 
 **Parameters:**
 - `filePath` (string, required): The absolute path to the file
@@ -156,7 +147,7 @@ find_references --filePath "C:/project/Models/User.cs" --line 10 --column 14
 }
 ```
 
-**V2 Summary Mode Example:**
+**Summary Mode Example:**
 ```json
 {
   "success": true,
@@ -193,52 +184,57 @@ find_references --filePath "C:/project/Models/User.cs" --line 10 --column 14
 
 ### search_symbols
 
-Search for C# symbols by name pattern. Supports wildcards and fuzzy matching.
+Search for C# symbols by name pattern with AI-optimized insights. Supports wildcards and fuzzy matching.
 
 **Parameters:**
 - `workspacePath` (string, required): Path to solution or project
-- `searchPattern` (string, required): Search pattern (supports wildcards)
-- `searchType` (string, optional): "exact", "contains", "startsWith", "wildcard", "fuzzy"
-- `symbolTypes` (array, optional): Filter by types ["Class", "Interface", "Method", etc.]
-- `caseSensitive` (boolean, optional): Case sensitive search (default: false)
+- `pattern` (string, required): Search pattern (supports wildcards)
+- `fuzzy` (boolean, optional): Use fuzzy matching (default: false)
+- `kinds` (array, optional): Filter by symbol types ["class", "interface", "method", etc.]
 - `maxResults` (integer, optional): Maximum results (default: 100)
+- `responseMode` (string, optional): "full" or "summary"
 
 **Example:**
 ```
-search_symbols --workspacePath "C:/project/MyApp.sln" --searchPattern "*Service" --searchType "wildcard"
+search_symbols --workspacePath "C:/project/MyApp.sln" --pattern "*Service" --responseMode "summary"
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "symbols": [
-    {
-      "name": "UserService",
-      "fullName": "MyApp.Services.UserService",
-      "kind": "Class",
-      "filePath": "C:/project/Services/UserService.cs",
-      "line": 10,
-      "column": 14
-    }
-  ],
-  "totalCount": 15
+  "mode": "summary",
+  "data": {
+    "totalSymbols": 15,
+    "distribution": {
+      "class": 10,
+      "interface": 5
+    },
+    "insights": [
+      "Service layer well-defined with consistent naming",
+      "Consider extracting common interface for services"
+    ],
+    "hotspots": [
+      {"namespace": "MyApp.Services", "count": 12}
+    ]
+  }
 }
 ```
 
 **Tips:**
-- ~100ms response time
+- AI-optimized with pattern analysis
 - Use fuzzy matching for typo tolerance
 - C# only - use `search_typescript` for TypeScript
 
 ### get_implementations
 
-Find all implementations of an interface or abstract class (C# only).
+Find all implementations of an interface or abstract class with AI-optimized insights (C# only).
 
 **Parameters:**
 - `filePath` (string, required): Path to the source file
 - `line` (integer, required): Line number (1-based)
 - `column` (integer, required): Column number (1-based)
+- `responseMode` (string, optional): "full" or "summary"
 
 **Example:**
 ```
@@ -249,15 +245,18 @@ get_implementations --filePath "C:/project/IUserService.cs" --line 5 --column 18
 ```json
 {
   "success": true,
-  "implementations": [
-    {
-      "filePath": "C:/project/Services/UserService.cs",
-      "line": 10,
-      "column": 14,
-      "preview": "public class UserService : IUserService",
-      "symbolName": "UserService"
+  "mode": "summary",
+  "data": {
+    "interface": "IUserService",
+    "implementationCount": 3,
+    "insights": [
+      "Multiple implementations suggest strategy pattern",
+      "Consider dependency injection for flexibility"
+    ],
+    "distribution": {
+      "byProject": {"Core": 2, "Tests": 1}
     }
-  ]
+  }
 }
 ```
 
@@ -299,7 +298,7 @@ index_workspace --workspacePath "C:/project" --forceRebuild false
 
 ### fast_text_search
 
-Blazing fast text search across entire codebase. Searches millions of lines in <50ms.
+Blazing fast text search across entire codebase with AI-optimized insights. Searches millions of lines in <50ms.
 
 **Parameters:**
 - `query` (string, required): Text to search for
@@ -310,48 +309,45 @@ Blazing fast text search across entire codebase. Searches millions of lines in <
 - `extensions` (array, optional): Filter by extensions [".cs", ".ts"]
 - `contextLines` (integer, optional): Lines of context to show (default: 0)
 - `maxResults` (integer, optional): Maximum results (default: 50)
+- `responseMode` (string, optional): "full" or "summary"
 
 **Example:**
 ```
-fast_text_search --query "authentication" --workspacePath "C:/project" --contextLines 2
+fast_text_search --query "authentication" --workspacePath "C:/project" --responseMode "summary"
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "query": "authentication",
-  "totalResults": 156,
-  "results": [
-    {
-      "filePath": "C:/project/Services/AuthService.cs",
-      "fileName": "AuthService.cs",
-      "line": 45,
-      "content": "    public async Task<bool> ValidateAuthentication(string token)",
-      "context": [
-        {"lineNumber": 43, "content": "    /// <summary>", "isMatch": false},
-        {"lineNumber": 44, "content": "    /// Validates user authentication token", "isMatch": false},
-        {"lineNumber": 45, "content": "    public async Task<bool> ValidateAuthentication(string token)", "isMatch": true},
-        {"lineNumber": 46, "content": "    {", "isMatch": false},
-        {"lineNumber": 47, "content": "        if (string.IsNullOrEmpty(token))", "isMatch": false}
-      ],
-      "score": 0.8765
-    }
-  ],
-  "searchDurationMs": 42,
-  "performance": "blazin' fast"
+  "mode": "summary",
+  "data": {
+    "totalMatches": 156,
+    "fileCount": 23,
+    "distribution": {
+      "byExtension": {".cs": 120, ".ts": 36},
+      "byDirectory": {"Services": 85, "Controllers": 45}
+    },
+    "insights": [
+      "Authentication logic concentrated in Services layer",
+      "Consider centralizing auth constants"
+    ],
+    "hotspots": [
+      {"file": "AuthService.cs", "matches": 32}
+    ]
+  }
 }
 ```
 
 **Tips:**
+- AI-optimized with pattern analysis
 - Supports wildcards (*), fuzzy (~), phrases ("exact match")
 - Use filePattern for faster searches in specific areas
-- Regex support for complex patterns
-- Results include relevance scores
+- Provides insights on code organization
 
 ### fast_file_search
 
-Find files by name with fuzzy matching and typo correction.
+Find files by name with fuzzy matching, typo correction, and AI-optimized insights.
 
 **Parameters:**
 - `query` (string, required): File name to search for
@@ -359,6 +355,7 @@ Find files by name with fuzzy matching and typo correction.
 - `searchType` (string, optional): "standard", "fuzzy", "wildcard", "exact", "regex"
 - `includeDirectories` (boolean, optional): Include directory names (default: false)
 - `maxResults` (integer, optional): Maximum results (default: 50)
+- `responseMode` (string, optional): "full" or "summary"
 
 **Example:**
 ```
@@ -369,30 +366,30 @@ fast_file_search --query "UserServce~" --workspacePath "C:/project" --searchType
 ```json
 {
   "success": true,
-  "query": "UserServce~",
-  "searchType": "fuzzy",
-  "results": [
-    {
-      "path": "C:/project/Services/UserService.cs",
-      "filename": "UserService.cs",
-      "relativePath": "Services/UserService.cs",
-      "extension": ".cs",
-      "size": 5234,
-      "lastModified": "2025-01-22T10:30:00",
-      "score": 0.95,
-      "language": "csharp"
-    }
-  ],
-  "searchDurationMs": 8,
-  "performance": "blazin' fast"
+  "mode": "summary",
+  "data": {
+    "totalFiles": 15,
+    "topMatch": "UserService.cs",
+    "distribution": {
+      "byDirectory": {"Services": 8, "Tests": 5},
+      "byExtension": {".cs": 12, ".csproj": 3}
+    },
+    "insights": [
+      "Service files well-organized in Services directory",
+      "Consider consistent file naming convention"
+    ],
+    "suggestions": [
+      "Did you mean: UserService.cs?"
+    ]
+  }
 }
 ```
 
 **Tips:**
-- Fuzzy search finds files despite typos
+- AI-powered typo suggestions
 - < 10ms response time typically
 - Wildcard support: User*.cs
-- Shows file size and last modified
+- Provides directory organization insights
 
 ### fast_recent_files
 
@@ -634,7 +631,7 @@ get_document_symbols --filePath "C:/project/UserService.cs"
 
 ### get_diagnostics
 
-Check for compilation errors and warnings (C# only).
+Check for compilation errors and warnings with AI-optimized priority recommendations (C# only).
 
 **Parameters:**
 - `path` (string, required): File, project, or solution path
@@ -652,17 +649,22 @@ get_diagnostics --path "C:/project/MyApp.sln" --severities ["Error", "Warning"]
 {
   "success": true,
   "mode": "summary",
-  "summary": {
+  "data": {
     "totalDiagnostics": 15,
-    "byServerity": {
+    "bySeverity": {
       "Error": 2,
       "Warning": 13
     },
+    "insights": [
+      "2 critical errors blocking compilation",
+      "Most warnings are nullable reference types"
+    ],
+    "priorities": [
+      "Fix CS0246 in UserService.cs - missing namespace",
+      "Address CS8618 warnings by initializing properties"
+    ],
     "hotspots": [
-      {
-        "file": "UserService.cs",
-        "count": 5
-      }
+      {"file": "UserService.cs", "count": 5}
     ]
   }
 }
@@ -670,44 +672,51 @@ get_diagnostics --path "C:/project/MyApp.sln" --severities ["Error", "Warning"]
 
 ### get_call_hierarchy
 
-Trace method call chains to understand execution flow (C# only).
+Trace method call chains with circular dependency detection and AI-optimized insights (C# only).
 
 **Parameters:**
 - `filePath` (string, required): Path to source file
 - `line` (integer, required): Line number (1-based)
 - `column` (integer, required): Column number (1-based)
 - `direction` (string, optional): "incoming", "outgoing", or "both"
-- `maxDepth` (integer, optional): Maximum depth to traverse (default: 3)
+- `maxDepth` (integer, optional): Maximum depth to traverse (default: 2)
+- `responseMode` (string, optional): "full" or "summary"
 
 **Example:**
 ```
-get_call_hierarchy --filePath "C:/project/UserService.cs" --line 25 --column 20 --direction "incoming"
+get_call_hierarchy --filePath "C:/project/UserService.cs" --line 25 --column 20 --direction "both"
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "hierarchy": {
-    "root": {
-      "name": "CreateUserAsync",
-      "file": "UserService.cs",
-      "callers": [
-        {
-          "name": "RegisterUser",
-          "file": "AuthController.cs",
-          "line": 45,
-          "callers": []
-        }
-      ]
-    }
+  "mode": "summary",
+  "data": {
+    "method": "CreateUserAsync",
+    "callStats": {
+      "incomingPaths": 5,
+      "outgoingCalls": 8,
+      "maxDepth": 3
+    },
+    "insights": [
+      "Method is a central orchestration point",
+      "Circular dependency detected: CreateUser -> ValidateUser -> CreateUser"
+    ],
+    "criticalPaths": [
+      "AuthController.RegisterUser -> UserService.CreateUserAsync -> Database.SaveUser"
+    ],
+    "recommendations": [
+      "Consider breaking circular dependency with events",
+      "High fan-out suggests need for decomposition"
+    ]
   }
 }
 ```
 
 ### rename_symbol
 
-Safely rename symbols across entire codebase (C# only).
+Safely rename symbols across entire codebase with AI-powered risk assessment (C# only).
 
 **Parameters:**
 - `filePath` (string, required): Path to source file
@@ -726,43 +735,50 @@ rename_symbol --filePath "C:/project/User.cs" --line 10 --column 14 --newName "C
 ```json
 {
   "success": true,
+  "operation": "rename_symbol",
+  "symbol": {
+    "old": "User",
+    "new": "Customer",
+    "type": "class",
+    "scope": "public"
+  },
+  "impact": {
+    "refs": 47,
+    "files": 15,
+    "risk": "medium"
+  },
   "preview": true,
-  "changes": [
-    {
-      "filePath": "C:/project/User.cs",
-      "changes": [
-        {
-          "line": 10,
-          "oldText": "public class User",
-          "newText": "public class Customer"
-        }
-      ]
-    }
+  "hotspots": [
+    {"file": "UserService.cs", "refs": 12}
   ],
-  "totalFiles": 15,
-  "totalChanges": 47
+  "actions": [
+    {"id": "review_hotspots", "priority": "recommended"},
+    {"id": "apply", "priority": "normal"}
+  ]
 }
 ```
 
 **Tips:**
+- AI assesses risk based on scope and usage
 - Always preview first
 - Uses Roslyn refactoring engine
-- Updates all references automatically
+- Provides impact analysis before applying
 
 ### batch_operations
 
-Run multiple operations in parallel for 10x faster analysis.
+Run multiple operations in parallel with AI-optimized pattern analysis and correlation insights.
 
 **Parameters:**
-- `workspacePath` (string, required): Path to workspace
 - `operations` (array, required): Array of operations to execute
+- `workspacePath` (string, optional): Default workspace path
+- `mode` (string, optional): "summary" or "full"
 
 **Example:**
 ```
-batch_operations --workspacePath "C:/project" --operations [
-  {"type": "text_search", "query": "TODO", "filePattern": "*.cs"},
-  {"type": "find_references", "filePath": "User.cs", "line": 10, "column": 14},
-  {"type": "search_symbols", "searchPattern": "*Service"}
+batch_operations --operations [
+  {"operation": "text_search", "query": "TODO", "filePattern": "*.cs"},
+  {"operation": "find_references", "filePath": "User.cs", "line": 10, "column": 14},
+  {"operation": "search_symbols", "pattern": "*Service"}
 ]
 ```
 
@@ -770,26 +786,33 @@ batch_operations --workspacePath "C:/project" --operations [
 ```json
 {
   "success": true,
-  "results": [
-    {
-      "operation": "text_search",
-      "success": true,
-      "result": { /* text search results */ }
-    },
-    {
-      "operation": "find_references",
-      "success": true,
-      "result": { /* references */ }
-    }
+  "mode": "summary",
+  "executionTime": 250,
+  "summary": {
+    "totalOperations": 3,
+    "successful": 3,
+    "failed": 0
+  },
+  "insights": [
+    "TODO comments concentrated in Service layer",
+    "User class heavily referenced - consider interface extraction"
   ],
-  "executionTimeMs": 250
+  "correlations": [
+    "Files with TODOs also have high reference counts"
+  ],
+  "results": {
+    "text_search": {"matches": 15, "files": 8},
+    "find_references": {"refs": 47, "files": 12},
+    "search_symbols": {"symbols": 23}
+  }
 }
 ```
 
 **Tips:**
-- Dramatically faster than sequential
-- Supports most major tool types
-- Great for comprehensive analysis
+- AI analyzes patterns across operations
+- 10x faster than sequential execution
+- Provides cross-operation insights
+- Great for comprehensive codebase analysis
 
 ### advanced_symbol_search
 
@@ -817,7 +840,7 @@ advanced_symbol_search --workspacePath "C:/project" --query "Service" --filters 
 
 ### dependency_analysis
 
-Analyze code dependencies to understand coupling (C# only).
+Analyze code dependencies with circular dependency detection and architectural insights (C# only).
 
 **Parameters:**
 - `symbol` (string, required): Symbol to analyze
@@ -838,15 +861,27 @@ dependency_analysis --symbol "UserService" --workspacePath "C:/project" --direct
 {
   "success": true,
   "mode": "summary",
-  "analysis": {
+  "data": {
     "symbol": "UserService",
-    "directDependencies": 5,
-    "transitiveDependencies": 15,
-    "circularDependencies": ["UserService -> AuthService -> UserService"],
-    "couplingScore": 0.72,
-    "recommendations": [
-      "Consider extracting interface for UserService",
-      "Circular dependency detected with AuthService"
+    "metrics": {
+      "directDependencies": 5,
+      "transitiveDependencies": 15,
+      "couplingScore": 0.72
+    },
+    "insights": [
+      "High coupling score indicates tight dependencies",
+      "Circular dependency creates maintenance risk"
+    ],
+    "circularDependencies": [
+      "UserService -> AuthService -> UserService"
+    ],
+    "refactoringOpportunities": [
+      "Extract IUserService interface to reduce coupling",
+      "Use events to break circular dependency"
+    ],
+    "architecturalPatterns": [
+      "Repository pattern partially implemented",
+      "Consider full CQRS for complex operations"
     ]
   }
 }
@@ -854,7 +889,7 @@ dependency_analysis --symbol "UserService" --workspacePath "C:/project" --direct
 
 ### project_structure_analysis
 
-Analyze .NET project structure with metrics (.NET only).
+Analyze .NET project structure with architectural insights and complexity metrics (.NET only).
 
 **Parameters:**
 - `workspacePath` (string, required): Path to solution/project
@@ -873,26 +908,32 @@ project_structure_analysis --workspacePath "C:/project/MyApp.sln" --responseMode
 {
   "success": true,
   "mode": "summary",
-  "summary": {
-    "totalProjects": 8,
-    "totalFiles": 1250,
-    "totalLinesOfCode": 125000,
-    "languages": {
-      "C#": 95,
-      "TypeScript": 3,
-      "Other": 2
+  "data": {
+    "overview": {
+      "totalProjects": 8,
+      "totalFiles": 1250,
+      "totalLinesOfCode": 125000
     },
-    "largestProjects": [
-      {
-        "name": "MyApp.Core",
-        "files": 450,
-        "linesOfCode": 45000
-      }
+    "insights": [
+      "Well-structured layered architecture detected",
+      "Core project has 36% of codebase - consider splitting"
+    ],
+    "architecturalPatterns": [
+      "Clean Architecture with clear separation",
+      "Repository pattern consistently used"
+    ],
+    "hotspots": [
+      {"project": "MyApp.Core", "complexity": "high", "loc": 45000}
     ],
     "metrics": {
       "averageComplexity": 3.2,
-      "highComplexityMethods": 15
-    }
+      "highComplexityMethods": 15,
+      "testCoverage": "estimated 65%"
+    },
+    "recommendations": [
+      "Split Core project into domain-specific modules",
+      "Add integration test project"
+    ]
   }
 }
 ```
@@ -1708,7 +1749,7 @@ get_version
 
 ### Refactoring Pattern
 ```
-1. search_symbols --searchPattern "OldName*"
+1. search_symbols --pattern "OldName*"
 2. find_references (for each symbol found)
 3. rename_symbol --newName "NewName" --preview true
 4. rename_symbol --newName "NewName" --preview false
@@ -1751,34 +1792,9 @@ get_version
 - All memory tools
 - All utility tools
 
-## 🔍 V2 Tools - Detailed Documentation
+## AI-Optimized Response Structure
 
-### Overview
-V2 tools are AI-optimized versions that provide intelligent analysis beyond raw data. They automatically adapt their responses based on result size and complexity.
-
-### Available V2 Tools
-
-#### Search & Navigation V2
-- **find_references** - Already using V2 with AI summaries
-- **search_symbols_v2** - Enhanced symbol search with distribution analysis
-- **get_implementations_v2** - Implementation discovery with inheritance insights
-
-#### Fast Search V2
-- **fast_text_search_v2** - Text search with file distribution and pattern analysis
-- **fast_file_search_v2** - File search with directory hotspot detection
-- **flexible_search_memories_v2** - Memory search with trend analysis
-
-#### Code Analysis V2
-- **get_diagnostics** - Already using V2 with priority recommendations
-- **get_call_hierarchy_v2** - Call analysis with circular dependency detection
-- **rename_symbol** - Already using V2 with impact assessment
-- **batch_operations_v2** - Batch execution with operation pattern analysis
-- **dependency_analysis** - Already using V2 with architectural insights
-- **project_structure_analysis** - Already using V2 with complexity metrics
-
-### V2 Response Structure
-
-All V2 tools follow a consistent response pattern:
+All code analysis tools follow a consistent AI-optimized response pattern:
 
 ```json
 {
@@ -1850,9 +1866,9 @@ Progress notification format:
 
 1. **Start with context**: Always use `recall_context` at session start
 2. **Index before searching**: Run `index_workspace` for fast searches
-3. **Use V2 tools**: They provide better insights for AI assistants
+3. **Leverage AI insights**: All tools provide intelligent analysis
 4. **Store decisions**: Use memory system to track important decisions
-5. **Leverage summaries**: Let V2 tools auto-summarize large results
-6. **Follow recommendations**: V2 tools provide actionable next steps
-7. **Batch when possible**: Use batch_operations_v2 for multiple queries
+5. **Use summary mode**: Tools auto-summarize large results
+6. **Follow recommendations**: Tools provide actionable next steps
+7. **Batch when possible**: Use batch_operations for multiple queries
 8. **Preview destructive ops**: Always preview renames before applying
