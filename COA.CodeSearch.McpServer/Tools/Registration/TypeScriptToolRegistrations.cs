@@ -37,6 +37,12 @@ public static class TypeScriptToolRegistrations
         {
             RegisterTypeScriptRename(registry, renameTool);
         }
+        
+        var hoverTool = serviceProvider.GetService<TypeScriptHoverInfoTool>();
+        if (hoverTool != null)
+        {
+            RegisterTypeScriptHoverInfo(registry, hoverTool);
+        }
     }
     
     private static void RegisterTypeScriptSearch(ToolRegistry registry, TypeScriptSearchTool tool)
@@ -190,6 +196,37 @@ public static class TypeScriptToolRegistrations
         public int? Line { get; set; }
         public int? Column { get; set; }
         public bool? IncludeDeclaration { get; set; }
+    }
+    
+    private static void RegisterTypeScriptHoverInfo(ToolRegistry registry, TypeScriptHoverInfoTool tool)
+    {
+        registry.RegisterTool<TypeScriptNavigationParams>(
+            name: "typescript_hover_info",
+            description: "Get TypeScript type information and docs - shows detailed type info like IDE hover tooltips for TypeScript symbols",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    filePath = new { type = "string", description = "Path to the source file" },
+                    line = new { type = "integer", description = "Line number (1-based)" },
+                    column = new { type = "integer", description = "Column number (1-based)" }
+                },
+                required = new[] { "filePath", "line", "column" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.FilePath, "filePath"),
+                    parameters.Line ?? throw new InvalidParametersException("line is required"),
+                    parameters.Column ?? throw new InvalidParametersException("column is required"),
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
     }
     
     private class TypeScriptRenameParams

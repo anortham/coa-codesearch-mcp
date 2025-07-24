@@ -75,7 +75,16 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<FileIndexingService>();
         
-        // File watching service
+        // Memory lifecycle configuration
+        services.Configure<MemoryLifecycleOptions>(
+            context.Configuration.GetSection("MemoryLifecycle"));
+        
+        // Memory lifecycle service
+        services.AddSingleton<MemoryLifecycleService>();
+        services.AddSingleton<IFileChangeSubscriber>(provider => provider.GetRequiredService<MemoryLifecycleService>());
+        services.AddHostedService(provider => provider.GetRequiredService<MemoryLifecycleService>());
+        
+        // File watching service - must be registered after IFileChangeSubscriber implementations
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
         
@@ -88,10 +97,12 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Flexible Memory System
         services.AddSingleton<FlexibleMemoryService>();
+        services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<FlexibleMemorySearchToolV2>();
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
+        services.AddSingleton<TimelineTool>();
         
         // Query Expansion for Memory Intelligence
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
@@ -150,11 +161,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
         
+        
         // TypeScript tools
         services.AddSingleton<TypeScriptGoToDefinitionTool>();
         services.AddSingleton<TypeScriptFindReferencesTool>();
         services.AddSingleton<TypeScriptSearchTool>();
         services.AddSingleton<TypeScriptRenameTool>();
+        services.AddSingleton<TypeScriptHoverInfoTool>();
         
         // Register the MCP server as a hosted service and notification service
         services.AddSingleton<McpServer>();

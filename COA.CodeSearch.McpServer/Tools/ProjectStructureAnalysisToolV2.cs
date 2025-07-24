@@ -14,6 +14,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "project_structure_analysis_v2";
+    public override string Description => "AI-optimized project analysis";
+    public override ToolCategory Category => ToolCategory.Analysis;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
 

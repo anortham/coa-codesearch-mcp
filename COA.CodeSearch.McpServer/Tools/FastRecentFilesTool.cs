@@ -9,8 +9,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Straight blazin' fast tool to find recently modified files using Lucene's indexed lastModified field
 /// </summary>
-public class FastRecentFilesTool
+public class FastRecentFilesTool : ITool
 {
+    public string ToolName => "fast_recent_files";
+    public string Description => "Find recently modified files using indexed timestamps";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastRecentFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;

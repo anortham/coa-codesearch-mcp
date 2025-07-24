@@ -6,8 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class DependencyAnalysisTool
+public class DependencyAnalysisTool : ITool
 {
+    public string ToolName => "dependency_analysis";
+    public string Description => "Analyze code dependencies and coupling";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<DependencyAnalysisTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;

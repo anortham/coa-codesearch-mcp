@@ -126,7 +126,7 @@ claude mcp add codesearch ~/Source/coa-codesearch-mcp/COA.CodeSearch.McpServer/b
 ```
 
 
-## 🛠️ Available Tools (59 Total)
+## 🛠️ Available Tools (62 Total)
 
 The server provides both standard tools and **AI-optimized V2 versions**. V2 tools feature intelligent summaries, progress tracking, and token-aware responses that automatically adapt to prevent overwhelming AI assistants.
 
@@ -192,6 +192,7 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `flexible_list_templates` - List memory templates
 - `flexible_create_from_template` - Create memories from templates
 - `memory_dashboard` - View memory system statistics
+- `memory_timeline` - 📅 View memories in chronological timeline
 - `create_checklist` - 📝 Create persistent task lists
 - `add_checklist_item` - Add items to checklists
 - `toggle_checklist_item` - Toggle checklist item completion
@@ -206,6 +207,7 @@ The server provides both standard tools and **AI-optimized V2 versions**. V2 too
 - `typescript_go_to_definition` - ⚡ Jump to TypeScript definitions instantly
 - `typescript_find_references` - Find all TypeScript usages with tsserver accuracy
 - `typescript_rename_symbol` - 🔧 Rename TypeScript symbols across the entire codebase
+- `typescript_hover_info` - 💡 Get TypeScript type information and docs like IDE hover tooltips
 
 ### Utilities
 - `batch_operations` - Run multiple operations in parallel

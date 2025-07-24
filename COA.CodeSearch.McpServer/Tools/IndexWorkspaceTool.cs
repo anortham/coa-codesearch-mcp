@@ -3,8 +3,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class IndexWorkspaceTool
+public class IndexWorkspaceTool : ITool
 {
+    public string ToolName => "index_workspace";
+    public string Description => "Build search index for blazing fast searches";
+    public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<IndexWorkspaceTool> _logger;
     private readonly FileIndexingService _fileIndexingService;
     private readonly ILuceneIndexService _luceneIndexService;

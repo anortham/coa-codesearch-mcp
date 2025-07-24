@@ -20,6 +20,7 @@ public static class FlexibleMemoryToolRegistrations
     {
         var memoryTools = serviceProvider.GetRequiredService<FlexibleMemoryTools>();
         var memorySearchV2 = serviceProvider.GetRequiredService<FlexibleMemorySearchToolV2>();
+        var timelineTool = serviceProvider.GetRequiredService<TimelineTool>();
         
         // Core memory operations
         RegisterStoreMemory(registry, memoryTools);
@@ -39,6 +40,7 @@ public static class FlexibleMemoryToolRegistrations
         // Management
         RegisterArchiveMemories(registry, memoryTools);
         RegisterMemoryDashboard(registry, memoryTools);
+        RegisterTimeline(registry, timelineTool);
         
         // Templates
         RegisterListTemplates(registry, memoryTools);
@@ -680,6 +682,38 @@ public static class FlexibleMemoryToolRegistrations
         );
     }
     
+    private static void RegisterTimeline(ToolRegistry registry, TimelineTool tool)
+    {
+        registry.RegisterTool<TimelineParams>(
+            name: "memory_timeline",
+            description: "📅 View memories in a beautiful chronological timeline! Groups by time periods (Today, Yesterday, This Week). Perfect for understanding recent work and project history. User-friendly visualization.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    days = new { type = "integer", description = "Number of days to include (default: 7)", @default = 7 },
+                    types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
+                    includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false },
+                    includeExpired = new { type = "boolean", description = "Include expired working memories (default: false)", @default = false },
+                    maxPerGroup = new { type = "integer", description = "Maximum memories per time group (default: 10)", @default = 10 }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.GetTimelineAsync(
+                    parameters?.Days ?? 7,
+                    parameters?.Types,
+                    parameters?.IncludeArchived ?? false,
+                    parameters?.IncludeExpired ?? false,
+                    parameters?.MaxPerGroup ?? 10);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
     private static void RegisterGetMemoriesForFile(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemoriesForFileParams>(
@@ -871,4 +905,13 @@ public class GetMemoriesForFileParams
 {
     public string FilePath { get; set; } = "";
     public bool? IncludeArchived { get; set; }
+}
+
+public class TimelineParams
+{
+    public int? Days { get; set; }
+    public string[]? Types { get; set; }
+    public bool? IncludeArchived { get; set; }
+    public bool? IncludeExpired { get; set; }
+    public int? MaxPerGroup { get; set; }
 }

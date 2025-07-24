@@ -11,8 +11,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Straight blazin' fast directory search using Lucene index - find folders by name with fuzzy matching
 /// </summary>
-public class FastDirectorySearchTool
+public class FastDirectorySearchTool : ITool
 {
+    public string ToolName => "fast_directory_search";
+    public string Description => "Search for directories with fuzzy matching";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastDirectorySearchTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;

@@ -15,8 +15,11 @@ using System.Threading.Channels;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class FastTextSearchTool
+public class FastTextSearchTool : ITool
 {
+    public string ToolName => "fast_text_search";
+    public string Description => "Blazing fast text search across millions of lines using Lucene";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastTextSearchTool> _logger;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _luceneIndexService;

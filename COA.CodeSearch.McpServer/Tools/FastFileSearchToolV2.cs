@@ -18,6 +18,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "fast_file_search_v2";
+    public override string Description => "AI-optimized file search with hotspots";
+    public override ToolCategory Category => ToolCategory.Search;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IConfiguration _configuration;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;

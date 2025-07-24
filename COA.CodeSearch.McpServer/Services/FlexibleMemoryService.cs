@@ -16,7 +16,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Enhanced memory service with flexible schema and advanced search capabilities
 /// </summary>
-public class FlexibleMemoryService
+public class FlexibleMemoryService : IMemoryService
 {
     private readonly ILogger<FlexibleMemoryService> _logger;
     private readonly IConfiguration _configuration;

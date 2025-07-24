@@ -8,8 +8,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tools for the flexible memory system
 /// </summary>
-public class FlexibleMemoryTools
+public class FlexibleMemoryTools : ITool
 {
+    public string ToolName => "flexible_memory";
+    public string Description => "Flexible memory storage and retrieval";
+    public ToolCategory Category => ToolCategory.Memory;
     private readonly ILogger<FlexibleMemoryTools> _logger;
     private readonly FlexibleMemoryService _memoryService;
     private readonly IPathResolutionService _pathResolution;

@@ -6,8 +6,11 @@ using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class GetImplementationsTool
+public class GetImplementationsTool : ITool
 {
+    public string ToolName => "get_implementations";
+    public string Description => "Discover all concrete implementations of interfaces or abstract classes";
+    public ToolCategory Category => ToolCategory.Navigation;
     private readonly ILogger<GetImplementationsTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
 

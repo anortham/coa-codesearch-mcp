@@ -9,8 +9,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tools for persistent checklists
 /// </summary>
-public class ChecklistTools
+public class ChecklistTools : ITool
 {
+    public string ToolName => "checklist";
+    public string Description => "Persistent checklist management";
+    public ToolCategory Category => ToolCategory.Memory;
     private readonly ILogger<ChecklistTools> _logger;
     private readonly FlexibleMemoryService _memoryService;
     private readonly MemoryLinkingTools _linkingTools;

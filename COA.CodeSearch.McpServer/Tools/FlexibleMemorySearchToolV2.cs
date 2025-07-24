@@ -14,6 +14,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "flexible_memory_search_v2";
+    public override string Description => "AI-optimized memory search";
+    public override ToolCategory Category => ToolCategory.Memory;
     private readonly FlexibleMemoryService _memoryService;
     private readonly IConfiguration _configuration;
     private readonly IQueryExpansionService _queryExpansion;

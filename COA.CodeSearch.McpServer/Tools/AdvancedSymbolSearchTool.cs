@@ -8,8 +8,11 @@ using System.Text.RegularExpressions;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
-public class AdvancedSymbolSearchTool
+public class AdvancedSymbolSearchTool : ITool
 {
+    public string ToolName => "advanced_symbol_search";
+    public string Description => "Advanced symbol search with semantic filters";
+    public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<AdvancedSymbolSearchTool> _logger;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;

@@ -16,6 +16,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class RenameSymbolToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "rename_symbol_v2";
+    public override string Description => "AI-optimized symbol renaming with risk assessment";
+    public override ToolCategory Category => ToolCategory.Refactoring;
     private readonly CodeAnalysisService _workspaceService;
     private static readonly Regex IdentifierRegex = new(@"^[a-zA-Z_][a-zA-Z0-9_]*$", RegexOptions.Compiled);
 

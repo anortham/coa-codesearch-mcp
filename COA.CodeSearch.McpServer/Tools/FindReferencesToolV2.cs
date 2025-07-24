@@ -14,6 +14,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class FindReferencesToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "find_references_v2";
+    public override string Description => "AI-optimized reference finding with insights";
+    public override ToolCategory Category => ToolCategory.Navigation;
     private readonly CodeAnalysisService _workspaceService;
 
     public FindReferencesToolV2(

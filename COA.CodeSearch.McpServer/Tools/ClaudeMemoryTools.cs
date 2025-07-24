@@ -8,8 +8,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Essential MCP tools for Claude's persistent memory system
 /// Only includes tools that don't have flexible memory equivalents
 /// </summary>
-public class ClaudeMemoryTools
+public class ClaudeMemoryTools : ITool
 {
+    public string ToolName => "claude_memory";
+    public string Description => "Essential memory system operations";
+    public ToolCategory Category => ToolCategory.Memory;
     private readonly ClaudeMemoryService _memoryService;
     private readonly MemoryBackupService _backupService;
     private readonly ILogger<ClaudeMemoryTools> _logger;

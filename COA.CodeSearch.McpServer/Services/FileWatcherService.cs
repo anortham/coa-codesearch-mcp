@@ -19,15 +19,22 @@ public class FileWatcherService : BackgroundService
     private readonly int _debounceMilliseconds;
     private readonly int _batchSize;
     private readonly bool _enabled;
+    private readonly List<IFileChangeSubscriber> _subscribers = new();
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
-        FileIndexingService fileIndexingService)
+        FileIndexingService fileIndexingService,
+        IEnumerable<IFileChangeSubscriber>? subscribers = null)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
+        
+        if (subscribers != null)
+        {
+            _subscribers.AddRange(subscribers);
+        }
 
         // Load configuration
         _enabled = configuration.GetValue("FileWatcher:Enabled", true);
@@ -192,6 +199,9 @@ public class FileWatcherService : BackgroundService
                 {
                     await _fileIndexingService.DeleteFileAsync(workspacePath, delete.FilePath, cancellationToken);
                     _logger.LogDebug("Deleted from index: {FilePath}", delete.FilePath);
+                    
+                    // Notify subscribers
+                    await NotifySubscribersAsync(delete, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -207,6 +217,9 @@ public class FileWatcherService : BackgroundService
                 {
                     await _fileIndexingService.UpdateFileAsync(workspacePath, update.FilePath, cancellationToken);
                     _logger.LogDebug("Updated in index: {FilePath}", update.FilePath);
+                    
+                    // Notify subscribers
+                    await NotifySubscribersAsync(update, cancellationToken);
                 }
                 catch (Exception ex)
                 {
@@ -214,6 +227,64 @@ public class FileWatcherService : BackgroundService
                 }
             }
         }
+    }
+    
+    private async Task NotifySubscribersAsync(FileChangeEvent changeEvent, CancellationToken cancellationToken)
+    {
+        if (_subscribers.Count == 0)
+            return;
+        
+        try
+        {
+            // Convert internal FileChangeEvent to public one for subscribers
+            var publicEvent = new MemoryLifecycleFileChangeEvent
+            {
+                FilePath = changeEvent.FilePath,
+                ChangeType = ConvertChangeType(changeEvent.ChangeType),
+                Timestamp = DateTime.UtcNow
+            };
+            
+            // Notify all subscribers in parallel but with timeout
+            var notificationTasks = _subscribers.Select(async subscriber =>
+            {
+                try
+                {
+                    // Create a timeout for each subscriber notification
+                    using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                    cts.CancelAfter(TimeSpan.FromSeconds(5)); // 5 second timeout per subscriber
+                    
+                    await subscriber.OnFileChangedAsync(publicEvent);
+                }
+                catch (OperationCanceledException)
+                {
+                    _logger.LogWarning("Subscriber {Type} timed out processing file change event", 
+                        subscriber.GetType().Name);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Subscriber {Type} failed to process file change event", 
+                        subscriber.GetType().Name);
+                }
+            });
+            
+            await Task.WhenAll(notificationTasks);
+        }
+        catch (Exception ex)
+        {
+            // Don't let subscriber failures affect file indexing
+            _logger.LogError(ex, "Error notifying subscribers of file change");
+        }
+    }
+    
+    private MemoryLifecycleFileChangeType ConvertChangeType(FileChangeType internalType)
+    {
+        return internalType switch
+        {
+            FileChangeType.Created => MemoryLifecycleFileChangeType.Created,
+            FileChangeType.Modified => MemoryLifecycleFileChangeType.Modified,
+            FileChangeType.Deleted => MemoryLifecycleFileChangeType.Deleted,
+            _ => MemoryLifecycleFileChangeType.Modified
+        };
     }
 
     private void OnFileChanged(string workspacePath, FileSystemEventArgs e)
@@ -347,4 +418,21 @@ public class FileWatcherService : BackgroundService
         Modified,
         Deleted
     }
+}
+
+// Public types for IFileChangeSubscriber pattern
+public class MemoryLifecycleFileChangeEvent
+{
+    public string FilePath { get; set; } = string.Empty;
+    public MemoryLifecycleFileChangeType ChangeType { get; set; }
+    public DateTime Timestamp { get; set; }
+    public string? OldPath { get; set; } // For renames
+}
+
+public enum MemoryLifecycleFileChangeType
+{
+    Created,
+    Modified,
+    Deleted,
+    Renamed
 }

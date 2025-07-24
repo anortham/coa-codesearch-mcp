@@ -15,6 +15,9 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class GetImplementationsToolV2 : ClaudeOptimizedToolBase
 {
+    public override string ToolName => "get_implementations_v2";
+    public override string Description => "AI-optimized implementation discovery";
+    public override ToolCategory Category => ToolCategory.Analysis;
     private readonly CodeAnalysisService _workspaceService;
     private readonly IConfiguration _configuration;
 

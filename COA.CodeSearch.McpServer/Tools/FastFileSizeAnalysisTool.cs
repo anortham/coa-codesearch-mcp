@@ -9,8 +9,11 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Straight blazin' fast file size analysis using Lucene's indexed size field - find large files, analyze distributions, etc.
 /// </summary>
-public class FastFileSizeAnalysisTool
+public class FastFileSizeAnalysisTool : ITool
 {
+    public string ToolName => "fast_file_size_analysis";
+    public string Description => "Analyze files by size and distribution";
+    public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<FastFileSizeAnalysisTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
