@@ -20,7 +20,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterLinkMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<LinkMemoriesParams>(
-            name: "flexible_link_memories",
+            name: "link_memories",
             description: "Create a relationship between two memories. Supports various relationship types like 'blockedBy', 'implements', 'supersedes', etc.",
             inputSchema: new
             {
@@ -77,7 +77,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterGetRelatedMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<GetRelatedMemoriesParams>(
-            name: "flexible_get_related_memories",
+            name: "get_related_memories",
             description: "Get all memories related to a given memory, traversing relationships up to specified depth. Returns a graph of connected memories.",
             inputSchema: new
             {
@@ -138,7 +138,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterUnlinkMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<UnlinkMemoriesParams>(
-            name: "flexible_unlink_memories",
+            name: "unlink_memories",
             description: "Remove a relationship between two memories",
             inputSchema: new
             {

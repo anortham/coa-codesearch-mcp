@@ -597,6 +597,117 @@ rename_symbol --file ICmsService.cs --line 10 --newName IContentManagementServic
 - Integration with .NET CLI tools
 - Semantic code search with embeddings
 
+## Best Practices for Effective Tool Usage
+
+### 🚀 Tool Usage Patterns That Drive Productivity
+
+1. **Start Every Session with Context**
+   ```bash
+   mcp__codesearch__recall_context "refactoring authentication system"
+   ```
+   - Loads previous decisions and insights
+   - Helps maintain continuity across sessions
+   - Prevents re-discovering known issues
+
+2. **Index Before Searching**
+   ```bash
+   mcp__codesearch__index_workspace --workspacePath "C:/MyProject"
+   ```
+   - Required for all fast_* search tools
+   - One-time setup per workspace
+   - Enables millisecond search performance
+
+3. **Use Batch Operations for Comprehensive Analysis**
+   ```bash
+   mcp__codesearch__batch_operations --operations [
+     {"operation": "search_symbols", "pattern": "I*Service"},
+     {"operation": "text_search", "query": "TODO"},
+     {"operation": "find_references", "filePath": "User.cs", "line": 10, "column": 5}
+   ]
+   ```
+   - 10x faster than sequential operations
+   - Provides cross-operation insights
+   - Identifies patterns and correlations
+
+4. **Leverage Progressive Disclosure**
+   - Start with summary mode for large operations
+   - Use detail requests to drill down
+   - Saves tokens and provides better insights
+
+5. **Store Important Discoveries**
+   ```bash
+   # Found a bug
+   mcp__codesearch__store_memory --type "TechnicalDebt" --content "Null reference in payment processing"
+   
+   # Made a decision
+   mcp__codesearch__store_memory --type "ArchitecturalDecision" --content "Using JWT for auth"
+   ```
+
+### 📋 Common Workflow Patterns
+
+**Understanding a New Codebase:**
+1. `index_workspace` - Enable fast search
+2. `project_structure_analysis` - Get overview
+3. `search_symbols --pattern "*Service"` - Find key components
+4. `dependency_analysis` - Understand relationships
+5. `store_memory` - Document findings
+
+**Investigating an Issue:**
+1. `recall_context "bug investigation"`
+2. `text_search --query "error message"`
+3. `find_references` on suspicious code
+4. `get_call_hierarchy` to trace execution
+5. `store_memory --type "TechnicalDebt"`
+
+**Refactoring Safely:**
+1. `search_symbols --pattern "OldName*"`
+2. `find_references` for each symbol
+3. `rename_symbol --preview true`
+4. `get_diagnostics` to check for errors
+5. `store_memory --type "ArchitecturalDecision"`
+
+### 🎯 Tool Selection Guidelines
+
+**For Finding Code:**
+- Known file name → `file_search`
+- Text/string/comment → `text_search`
+- C# symbols → `search_symbols`
+- TypeScript symbols → `search_typescript`
+- Recent changes → `recent_files`
+
+**For Understanding Code:**
+- Symbol definition → `go_to_definition`
+- Where used → `find_references` (C#) or `typescript_find_references`
+- Call flow → `get_call_hierarchy`
+- Dependencies → `dependency_analysis`
+- Type info → `get_hover_info`
+
+**For Modifying Code:**
+- Rename → `rename_symbol` with preview
+- Multiple changes → Plan with `batch_operations` first
+- Track changes → `store_memory` for decisions
+
+### 💡 Pro Tips
+
+1. **Always Preview Destructive Operations**
+   - Use `--preview true` for renames
+   - Check diagnostics before committing
+
+2. **Use Memory System as Your Second Brain**
+   - Store every important decision
+   - Link related memories
+   - Search memories before re-investigating
+
+3. **Let Tools Guide You**
+   - Follow "Next Actions" suggestions
+   - Trust hotspot analysis
+   - Use recommended detail levels
+
+4. **Optimize for Token Usage**
+   - Prefer summary mode initially
+   - Use file patterns to narrow searches
+   - Batch related operations
+
 ## Memory System Quick Start
 
 **SIMPLIFIED: Streamlined to essential memory tools plus AI-optimized code analysis tools**
@@ -825,8 +936,8 @@ TypeScript support is automatically configured on server startup:
 - `typescript_go_to_definition` - Navigate to TypeScript definitions using tsserver
 - `typescript_find_references` - Find TypeScript references using tsserver
 - `typescript_rename_symbol` - Rename TypeScript symbols across the entire codebase with preview
-- `GoToDefinition` - Automatically delegates to TypeScript for .ts/.js files
-- `FindReferences` - Works seamlessly across C# and TypeScript
+- `GoToDefinition` - Navigate to definitions (auto-detects language based on file extension)
+- `FindReferences` - Find all references to C# symbols (use typescript_find_references for TypeScript)
 - `GetHoverInfo` - Shows type information and documentation for TypeScript symbols
 
 ## Debugging with File Logging
@@ -942,7 +1053,7 @@ When working with full-stack applications (e.g., ASP.NET backend + TypeScript/Re
 
 - **C# Only**: `search_symbols`, `get_implementations`, `get_diagnostics`, `get_call_hierarchy`, `dependency_analysis`, `rename_symbol`, `project_structure_analysis`, `get_document_symbols`
 - **TypeScript Only**: `search_typescript`, `typescript_go_to_definition`, `typescript_find_references`, `typescript_rename_symbol`
-- **Both C# and TypeScript**: `find_references`, `go_to_definition`, `get_hover_info`
+- **Both C# and TypeScript**: `go_to_definition`, `get_hover_info`
 - **All Languages**: `fast_text_search`, `fast_file_search`, and other Lucene-based tools
 
 #### Key Limitation: No Cross-Language Reference Tracking
@@ -999,7 +1110,7 @@ When renaming a model that spans backend and frontend:
    mcp__codesearch__find_references --file Models/User.cs
 
    # Find TypeScript usages
-   mcp__codesearch__find_references --file models/User.ts
+   mcp__codesearch__typescript_find_references --file models/User.ts
 
    # Find string references (API routes, etc.)
    mcp__codesearch__fast_text_search --query "\"User\"" --searchType phrase

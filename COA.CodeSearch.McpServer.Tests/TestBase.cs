@@ -86,6 +86,12 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
+        // Add TypeScript services (required by GoToDefinitionTool)
+        services.AddSingleton<TypeScriptInstaller>();
+        services.AddSingleton<TypeScriptAnalysisService>();
+        services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
+        services.AddSingleton<TypeScriptGoToDefinitionTool>();
+        
         // Add tools required by BatchOperationsTool
         services.AddSingleton<GoToDefinitionTool>();
         services.AddSingleton<FindReferencesTool>();

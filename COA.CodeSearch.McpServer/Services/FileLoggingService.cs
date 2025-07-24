@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Serilog;
@@ -16,15 +17,21 @@ public class FileLoggingService : IHostedService, IDisposable
     private readonly ILogger<FileLoggingService> _logger;
     private readonly ILoggerFactory _loggerFactory;
     private readonly IPathResolutionService _pathResolution;
+    private readonly IConfiguration _configuration;
     private Logger? _fileLogger;
     private FileLoggingProvider? _fileLoggingProvider;
     private readonly string _logDirectory;
     private readonly object _lock = new();
-    private bool _isEnabled = false;
     private readonly LoggingLevelSwitch _levelSwitch;
     private static Logger? _globalFileLogger;
+    
+    // Configuration settings
+    private readonly bool _enabled;
+    private readonly int _retainedFileCount;
+    private readonly long _fileSizeLimitBytes;
+    private readonly RollingInterval _rollingInterval;
 
-    public bool IsEnabled => _isEnabled;
+    public bool IsEnabled => _fileLogger != null;
     public string CurrentLogFile { get; private set; } = string.Empty;
     public LogEventLevel CurrentLogLevel => _levelSwitch.MinimumLevel;
     
@@ -33,20 +40,30 @@ public class FileLoggingService : IHostedService, IDisposable
     /// </summary>
     public static Serilog.ILogger GlobalFileLogger => _globalFileLogger ?? Serilog.Log.Logger;
 
-    public FileLoggingService(ILogger<FileLoggingService> logger, ILoggerFactory loggerFactory, IPathResolutionService pathResolution)
+    public FileLoggingService(ILogger<FileLoggingService> logger, ILoggerFactory loggerFactory, IPathResolutionService pathResolution, IConfiguration configuration)
     {
         _logger = logger;
         _loggerFactory = loggerFactory;
         _pathResolution = pathResolution;
+        _configuration = configuration;
+        
+        // Read configuration
+        var fileLoggingConfig = _configuration.GetSection("FileLogging");
+        _enabled = fileLoggingConfig.GetValue("Enabled", true);
+        _retainedFileCount = fileLoggingConfig.GetValue("RetainedFileCount", 10);
+        _fileSizeLimitBytes = fileLoggingConfig.GetValue("FileSizeLimitBytes", 50 * 1024 * 1024L); // 50MB default
+        _rollingInterval = Enum.Parse<RollingInterval>(fileLoggingConfig.GetValue("RollingInterval", "Hour") ?? "Hour");
+        
+        var logLevelStr = fileLoggingConfig.GetValue("LogLevel", "Debug") ?? "Debug";
+        var logLevel = Enum.Parse<LogEventLevel>(logLevelStr);
+        _levelSwitch = new LoggingLevelSwitch(logLevel);
         
         // Use the centralized logs directory
         try
         {
             _logDirectory = _pathResolution.GetLogsPath();
-            _levelSwitch = new LoggingLevelSwitch(LogEventLevel.Debug);  // Default to Debug for debugging sessions
-            
-            // PathResolutionService already creates the directory
-            _logger.LogInformation("File logging service initialized. Log directory: {LogDirectory}", _logDirectory);
+            _logger.LogInformation("File logging service initialized. Log directory: {LogDirectory}, Enabled: {Enabled}, Level: {LogLevel}", 
+                _logDirectory, _enabled, logLevel);
         }
         catch (Exception ex)
         {
@@ -67,15 +84,15 @@ public class FileLoggingService : IHostedService, IDisposable
     }
 
     /// <summary>
-    /// Start file logging with the specified log level
+    /// Start file logging with configuration settings
     /// </summary>
-    public void StartLogging(LogEventLevel logLevel = LogEventLevel.Debug)
+    private void StartLogging()
     {
         lock (_lock)
         {
-            if (_isEnabled)
+            if (_fileLogger != null)
             {
-                _logger.LogInformation("File logging is already enabled");
+                _logger.LogInformation("File logging is already started");
                 return;
             }
 
@@ -89,18 +106,15 @@ public class FileLoggingService : IHostedService, IDisposable
                 var logFileName = $"codesearch_{timestamp}.log";
                 CurrentLogFile = Path.Combine(_logDirectory, logFileName);
 
-                // Update log level
-                _levelSwitch.MinimumLevel = logLevel;
-
                 // Create file logger - IMPORTANT: Only writes to file, no console/stdout output
                 _fileLogger = new LoggerConfiguration()
                     .MinimumLevel.ControlledBy(_levelSwitch)
                     .WriteTo.File(
                         CurrentLogFile,
-                        rollingInterval: RollingInterval.Hour,
+                        rollingInterval: _rollingInterval,
                         rollOnFileSizeLimit: true,
-                        fileSizeLimitBytes: 50 * 1024 * 1024, // 50MB
-                        retainedFileCountLimit: 10,
+                        fileSizeLimitBytes: _fileSizeLimitBytes,
+                        retainedFileCountLimit: _retainedFileCount,
                         outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}")
                     .CreateLogger();
                 
@@ -112,12 +126,11 @@ public class FileLoggingService : IHostedService, IDisposable
                 _fileLoggingProvider = new FileLoggingProvider(_fileLogger);
                 (_loggerFactory as LoggerFactory)?.AddProvider(_fileLoggingProvider);
 
-                _isEnabled = true;
-                _logger.LogInformation("File logging started. Log file: {LogFile}, Level: {LogLevel}", CurrentLogFile, logLevel);
+                _logger.LogInformation("File logging started. Log file: {LogFile}, Level: {LogLevel}", CurrentLogFile, _levelSwitch.MinimumLevel);
                 
                 // Write initial log entry
                 _fileLogger.Information("=== COA CodeSearch MCP Server Log Started ===");
-                _fileLogger.Information("Log Level: {LogLevel}", logLevel);
+                _fileLogger.Information("Log Level: {LogLevel}", _levelSwitch.MinimumLevel);
                 _fileLogger.Information("Server Version: {Version}", typeof(FileLoggingService).Assembly.GetName().Version);
                 _fileLogger.Information("Operating System: {OS}", Environment.OSVersion);
                 _fileLogger.Information("CLR Version: {CLR}", Environment.Version);
@@ -130,55 +143,9 @@ public class FileLoggingService : IHostedService, IDisposable
         }
     }
 
-    /// <summary>
-    /// Stop file logging
-    /// </summary>
-    public void StopLogging()
-    {
-        lock (_lock)
-        {
-            if (!_isEnabled)
-            {
-                _logger.LogInformation("File logging is already disabled");
-                return;
-            }
+    // Remove StopLogging - logging is now configuration-driven
 
-            try
-            {
-                _fileLogger?.Information("=== COA CodeSearch MCP Server Log Stopped ===");
-                
-                // Remove the provider from the logger factory
-                if (_fileLoggingProvider != null && _loggerFactory is LoggerFactory factory)
-                {
-                    // Note: LoggerFactory doesn't have a RemoveProvider method in .NET Core
-                    // We'll just dispose the provider which will stop it from logging
-                    _fileLoggingProvider.Dispose();
-                    _fileLoggingProvider = null;
-                }
-                
-                _fileLogger?.Dispose();
-                _fileLogger = null;
-                _isEnabled = false;
-                CurrentLogFile = string.Empty;
-                
-                _logger.LogInformation("File logging stopped");
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Error stopping file logging");
-            }
-        }
-    }
-
-    /// <summary>
-    /// Change the logging level dynamically
-    /// </summary>
-    public void SetLogLevel(LogEventLevel logLevel)
-    {
-        _levelSwitch.MinimumLevel = logLevel;
-        _logger.LogInformation("Log level changed to: {LogLevel}", logLevel);
-        _fileLogger?.Information("Log level changed to: {LogLevel}", logLevel);
-    }
+    // Remove SetLogLevel - configuration-driven now
 
     /// <summary>
     /// Get list of existing log files
@@ -255,7 +222,14 @@ public class FileLoggingService : IHostedService, IDisposable
 
     public void Dispose()
     {
-        StopLogging();
+        lock (_lock)
+        {
+            _fileLogger?.Information("=== COA CodeSearch MCP Server Log Stopped ===");
+            _fileLoggingProvider?.Dispose();
+            _fileLogger?.Dispose();
+            _fileLogger = null;
+            _fileLoggingProvider = null;
+        }
     }
 
     /// <summary>
@@ -263,10 +237,16 @@ public class FileLoggingService : IHostedService, IDisposable
     /// </summary>
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        if (!_enabled)
+        {
+            _logger.LogInformation("File logging is disabled in configuration");
+            return Task.CompletedTask;
+        }
+        
         try
         {
-            // Auto-start file logging with Debug level
-            StartLogging(LogEventLevel.Debug);
+            // Start file logging with configured settings
+            StartLogging();
         }
         catch (Exception ex)
         {
@@ -281,7 +261,8 @@ public class FileLoggingService : IHostedService, IDisposable
     /// </summary>
     public Task StopAsync(CancellationToken cancellationToken)
     {
-        StopLogging();
+        // Dispose will handle cleanup
+        Dispose();
         return Task.CompletedTask;
     }
 }

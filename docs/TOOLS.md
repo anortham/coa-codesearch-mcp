@@ -78,7 +78,7 @@ All code analysis tools now provide AI-optimized responses with:
 
 ### go_to_definition
 
-Navigate to the definition of a symbol at a specific position. Works for both C# and TypeScript.
+Navigate to the definition of a symbol at a specific position. Auto-detects language (C# or TypeScript) based on file extension.
 
 **Parameters:**
 - `filePath` (string, required): The absolute path to the file
@@ -114,7 +114,7 @@ go_to_definition --filePath "C:/project/UserService.cs" --line 25 --column 15
 
 ### find_references
 
-Find all references to a symbol. Supports both C# and TypeScript with AI-optimized intelligent summaries and insights.
+Find all references to a C# symbol. For TypeScript references, use typescript_find_references. Provides AI-optimized intelligent summaries and insights.
 
 **Parameters:**
 - `filePath` (string, required): The absolute path to the file
@@ -1786,7 +1786,6 @@ get_version
 
 ### Both C# and TypeScript
 - go_to_definition
-- find_references
 - get_hover_info
 - All fast_* search tools
 - All memory tools

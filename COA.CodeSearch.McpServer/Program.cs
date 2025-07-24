@@ -10,6 +10,8 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 
 // Track server start time for version tool
+// TEST COMMENT: Testing file watcher detection - added at 12:59 PM
+// TEST COMMENT 2: Another test at 1:38 PM to trigger file watcher
 Program.ServerStartTime = DateTime.UtcNow;
 
 // Register MSBuild before anything else
@@ -79,6 +81,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.Configure<MemoryLifecycleOptions>(
             context.Configuration.GetSection("MemoryLifecycle"));
         
+        // File Logging Service - register FIRST so all other services can log to file
+        services.AddSingleton<FileLoggingService>();
+        services.AddHostedService(provider => provider.GetRequiredService<FileLoggingService>());
+        
         // Memory lifecycle service
         services.AddSingleton<MemoryLifecycleService>();
         services.AddSingleton<IFileChangeSubscriber>(provider => provider.GetRequiredService<MemoryLifecycleService>());
@@ -107,9 +113,6 @@ var host = Host.CreateDefaultBuilder(args)
         // Query Expansion for Memory Intelligence
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
-        
-        // File Logging Service
-        services.AddSingleton<FileLoggingService>();
         
         // TypeScript Analysis
         services.AddSingleton<TypeScriptInstaller>();
