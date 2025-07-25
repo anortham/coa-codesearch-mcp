@@ -71,7 +71,7 @@ public class FastTextSearchV2Test : LuceneTestBase
         
         // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("operation").GetString().Should().Be("fast_text_search");
+        response.GetProperty("operation").GetString().Should().Be("text_search");
         
         // Check query
         var query = response.GetProperty("query");
@@ -143,7 +143,7 @@ public class FastTextSearchV2Test : LuceneTestBase
         
         // Check AI-optimized response
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("operation").GetString().Should().Be("fast_text_search");
+        response.GetProperty("operation").GetString().Should().Be("text_search");
         
         // Check query has extensions
         var query = response.GetProperty("query");

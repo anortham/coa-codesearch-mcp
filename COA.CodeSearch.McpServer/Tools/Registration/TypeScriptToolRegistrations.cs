@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Protocol;
 using Microsoft.Extensions.DependencyInjection;
@@ -48,8 +49,8 @@ public static class TypeScriptToolRegistrations
     private static void RegisterTypeScriptSearch(ToolRegistry registry, TypeScriptSearchTool tool)
     {
         registry.RegisterTool<TypeScriptSearchParams>(
-            name: "search_typescript",
-            description: "Search for TypeScript symbols (interfaces, types, classes, functions) by name. Uses TypeScript language server for semantic understanding. For text search use fast_text_search.",
+            name: ToolNames.SearchTypeScript,
+            description: "Search for TypeScript symbols (interfaces, types, classes, functions) by name. Uses TypeScript language server for semantic understanding. For text search use text_search.",
             inputSchema: new
             {
                 type = "object",
@@ -86,7 +87,7 @@ public static class TypeScriptToolRegistrations
     private static void RegisterTypeScriptGoToDefinition(ToolRegistry registry, TypeScriptGoToDefinitionTool tool)
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
-            name: "typescript_go_to_definition",
+            name: ToolNames.TypeScriptGoToDefinition,
             description: "Direct TypeScript/JavaScript definition navigation using tsserver. Use only if go_to_definition fails on TypeScript files or you need TypeScript-specific behavior. For most cases, use go_to_definition which auto-detects language.",
             inputSchema: new
             {
@@ -117,7 +118,7 @@ public static class TypeScriptToolRegistrations
     private static void RegisterTypeScriptFindReferences(ToolRegistry registry, TypeScriptFindReferencesTool tool)
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
-            name: "typescript_find_references",
+            name: ToolNames.TypeScriptFindReferences,
             description: "Find all references to a TypeScript/JavaScript symbol using tsserver. Provides TypeScript-specific semantic analysis. For C# references, use find_references.",
             inputSchema: new
             {
@@ -158,7 +159,7 @@ public static class TypeScriptToolRegistrations
     private static void RegisterTypeScriptRename(ToolRegistry registry, TypeScriptRenameTool tool)
     {
         registry.RegisterTool<TypeScriptRenameParams>(
-            name: "typescript_rename_symbol",
+            name: ToolNames.TypeScriptRenameSymbol,
             description: "Rename TypeScript symbols with preview of affected locations. TypeScript-only rename analysis. For C# renaming use rename_symbol. Shows changes but doesn't modify files.",
             inputSchema: new
             {
@@ -201,7 +202,7 @@ public static class TypeScriptToolRegistrations
     private static void RegisterTypeScriptHoverInfo(ToolRegistry registry, TypeScriptHoverInfoTool tool)
     {
         registry.RegisterTool<TypeScriptNavigationParams>(
-            name: "typescript_hover_info",
+            name: ToolNames.TypeScriptHoverInfo,
             description: "Get TypeScript type information and documentation. Shows detailed type info like IDE hover tooltips. Use for .ts/.js files when you need TypeScript semantic information.",
             inputSchema: new
             {

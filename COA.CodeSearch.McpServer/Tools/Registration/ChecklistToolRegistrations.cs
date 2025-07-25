@@ -1,4 +1,5 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
@@ -31,7 +32,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterCreateChecklist(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<CreateChecklistParams>(
-            name: "create_checklist",
+            name: ToolNames.CreateChecklist,
             description: "Create a new persistent checklist that tracks tasks across sessions. Checklists can be personal or shared with the team.",
             inputSchema: new
             {
@@ -65,7 +66,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterAddChecklistItems(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<AddChecklistItemsParams>(
-            name: "add_checklist_items",
+            name: ToolNames.AddChecklistItems,
             description: "Add one or more items to an existing checklist. Items are automatically ordered and linked to their parent checklist. Pass a single item in the array to add just one item.",
             inputSchema: new
             {
@@ -109,7 +110,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterToggleChecklistItem(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<ToggleChecklistItemParams>(
-            name: "toggle_checklist_item",
+            name: ToolNames.ToggleChecklistItem,
             description: "Toggle the completion status of a checklist item. Automatically updates parent checklist progress.",
             inputSchema: new
             {
@@ -139,7 +140,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterUpdateChecklistItem(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<UpdateChecklistItemParams>(
-            name: "update_checklist_item",
+            name: ToolNames.UpdateChecklistItem,
             description: "Update the text, notes, or custom fields of a checklist item.",
             inputSchema: new
             {
@@ -171,7 +172,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterViewChecklist(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<ViewChecklistParams>(
-            name: "view_checklist",
+            name: ToolNames.ViewChecklist,
             description: "View a checklist with all its items, progress tracking, and optional markdown export. Shows completion status, dates, and related files.",
             inputSchema: new
             {
@@ -201,7 +202,7 @@ public static class ChecklistToolRegistrations
     private static void RegisterListChecklists(ToolRegistry registry, ChecklistTools tool)
     {
         registry.RegisterTool<ListChecklistsParams>(
-            name: "list_checklists",
+            name: ToolNames.ListChecklists,
             description: "List all available checklists with summary information including progress and status.",
             inputSchema: new
             {

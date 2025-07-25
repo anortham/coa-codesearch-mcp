@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -20,7 +21,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterLinkMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<LinkMemoriesParams>(
-            name: "link_memories",
+            name: ToolNames.LinkMemories,
             description: "Create a relationship between two memories. Supports various relationship types like 'blockedBy', 'implements', 'supersedes', etc.",
             inputSchema: new
             {
@@ -77,7 +78,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterGetRelatedMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<GetRelatedMemoriesParams>(
-            name: "get_related_memories",
+            name: ToolNames.GetRelatedMemories,
             description: "Get all memories related to a given memory, traversing relationships up to specified depth. Returns a graph of connected memories.",
             inputSchema: new
             {
@@ -138,7 +139,7 @@ public static class MemoryLinkingToolRegistrations
     private static void RegisterUnlinkMemoriesTool(ToolRegistry registry, MemoryLinkingTools tool)
     {
         registry.RegisterTool<UnlinkMemoriesParams>(
-            name: "unlink_memories",
+            name: ToolNames.UnlinkMemories,
             description: "Remove a relationship between two memories",
             inputSchema: new
             {

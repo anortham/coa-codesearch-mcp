@@ -241,109 +241,6 @@ public class FlexibleMemoryTools : ITool
     }
     
     /// <summary>
-    /// Store a technical debt memory
-    /// </summary>
-    public async Task<StoreMemoryResult> StoreTechnicalDebtAsync(
-        string description,
-        string? status = null,
-        string? priority = null,
-        string? category = null,
-        int? estimatedHours = null,
-        string[]? files = null,
-        string[]? tags = null)
-    {
-        var fields = new Dictionary<string, JsonElement>();
-        
-        if (!string.IsNullOrEmpty(status))
-            fields[MemoryFields.Status] = JsonDocument.Parse($"\"{status}\"").RootElement;
-        
-        if (!string.IsNullOrEmpty(priority))
-            fields[MemoryFields.Priority] = JsonDocument.Parse($"\"{priority}\"").RootElement;
-        
-        if (!string.IsNullOrEmpty(category))
-            fields[MemoryFields.Category] = JsonDocument.Parse($"\"{category}\"").RootElement;
-        
-        if (estimatedHours.HasValue)
-            fields["estimatedHours"] = JsonDocument.Parse(estimatedHours.Value.ToString()).RootElement;
-        
-        if (tags != null && tags.Length > 0)
-            fields[MemoryFields.Tags] = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(tags));
-        
-        return await StoreMemoryAsync(
-            MemoryTypes.TechnicalDebt,
-            description,
-            isShared: true,
-            files: files,
-            fields: fields
-        );
-    }
-    
-    /// <summary>
-    /// Store a question memory
-    /// </summary>
-    public async Task<StoreMemoryResult> StoreQuestionAsync(
-        string question,
-        string? context = null,
-        string? status = null,
-        string[]? files = null,
-        string[]? tags = null)
-    {
-        var fields = new Dictionary<string, JsonElement>();
-        
-        if (!string.IsNullOrEmpty(status))
-            fields[MemoryFields.Status] = JsonDocument.Parse($"\"{status}\"").RootElement;
-        
-        if (!string.IsNullOrEmpty(context))
-            fields["context"] = JsonDocument.Parse($"\"{context}\"").RootElement;
-        
-        if (tags != null && tags.Length > 0)
-            fields[MemoryFields.Tags] = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(tags));
-        
-        return await StoreMemoryAsync(
-            MemoryTypes.Question,
-            question,
-            isShared: true,
-            files: files,
-            fields: fields
-        );
-    }
-    
-    /// <summary>
-    /// Store a deferred task memory
-    /// </summary>
-    public async Task<StoreMemoryResult> StoreDeferredTaskAsync(
-        string task,
-        string reason,
-        DateTime? deferredUntil = null,
-        string? priority = null,
-        string[]? files = null,
-        string[]? blockedBy = null)
-    {
-        var fields = new Dictionary<string, JsonElement>
-        {
-            ["reason"] = JsonDocument.Parse($"\"{reason}\"").RootElement,
-            [MemoryFields.Status] = JsonDocument.Parse($"\"{MemoryStatus.Deferred}\"").RootElement
-        };
-        
-        if (deferredUntil.HasValue)
-            fields["deferredUntil"] = JsonDocument.Parse($"\"{deferredUntil.Value:O}\"").RootElement;
-        
-        if (!string.IsNullOrEmpty(priority))
-            fields[MemoryFields.Priority] = JsonDocument.Parse($"\"{priority}\"").RootElement;
-        
-        if (blockedBy != null && blockedBy.Length > 0)
-            fields["blockedBy"] = JsonSerializer.Deserialize<JsonElement>(JsonSerializer.Serialize(blockedBy));
-        
-        return await StoreMemoryAsync(
-            MemoryTypes.DeferredTask,
-            task,
-            isShared: true,
-            files: files,
-            fields: fields
-        );
-    }
-    
-    /// <summary>
     /// Find memories similar to a given memory
     /// </summary>
     public async Task<SimilarMemoriesResult> FindSimilarMemoriesAsync(string memoryId, int maxResults = 10)
@@ -836,7 +733,7 @@ public class FlexibleMemoryTools : ITool
     private string GenerateExampleUsage(MemoryTemplate template)
     {
         var placeholders = string.Join(" ", template.RequiredPlaceholders.Select(p => $"--{p} \"...\""));
-        return $"flexible_create_from_template --templateId \"{template.Id}\" {placeholders}";
+        return $"create_memory_from_template --templateId \"{template.Id}\" {placeholders}";
     }
     
     /// <summary>
@@ -877,7 +774,7 @@ public class FlexibleMemoryTools : ITool
                         Description = memory.Content.Length > 100 
                             ? memory.Content.Substring(0, 100) + "..." 
                             : memory.Content,
-                        Action = $"flexible_update_memory --id \"{memory.Id}\" --status \"in-progress\"",
+                        Action = $"update_memory --id \"{memory.Id}\" --status \"in-progress\"",
                         Relevance = 0.9
                     });
                 }
@@ -896,7 +793,7 @@ public class FlexibleMemoryTools : ITool
                         Description = memory.Content.Length > 100 
                             ? memory.Content.Substring(0, 100) + "..." 
                             : memory.Content,
-                        Action = $"flexible_get_memory --id \"{memory.Id}\"",
+                        Action = $"get_memory --id \"{memory.Id}\"",
                         Relevance = 0.7
                     });
                 }
@@ -913,7 +810,7 @@ public class FlexibleMemoryTools : ITool
                     Type = "template",
                     Title = "Create Code Review Finding",
                     Description = "Document issues found during code review",
-                    Action = $"flexible_create_from_template --templateId \"code-review\" --file \"{currentFile ?? "file.cs"}\"",
+                    Action = $"create_memory_from_template --templateId \"code-review\" --file \"{currentFile ?? "file.cs"}\"",
                     Relevance = 0.8
                 });
             }
@@ -925,7 +822,7 @@ public class FlexibleMemoryTools : ITool
                     Type = "template",
                     Title = "Track Performance Issue",
                     Description = "Document performance problems that need optimization",
-                    Action = "flexible_create_from_template --templateId \"performance-issue\"",
+                    Action = "create_memory_from_template --templateId \"performance-issue\"",
                     Relevance = 0.8
                 });
             }
@@ -937,7 +834,7 @@ public class FlexibleMemoryTools : ITool
                     Type = "template",
                     Title = "Document Security Finding",
                     Description = "Record security vulnerabilities or concerns",
-                    Action = "flexible_create_from_template --templateId \"security-audit\"",
+                    Action = "create_memory_from_template --templateId \"security-audit\"",
                     Relevance = 0.9
                 });
             }
@@ -950,7 +847,7 @@ public class FlexibleMemoryTools : ITool
                     Type = "working-memory",
                     Title = "Save Current Context",
                     Description = "Store this context as working memory for later reference",
-                    Action = $"flexible_store_working_memory --content \"{currentContext}\" --expiresIn \"4h\"",
+                    Action = $"store_temporary_memory --content \"{currentContext}\" --expiresIn \"4h\"",
                     Relevance = 0.6
                 });
             }
@@ -972,7 +869,7 @@ public class FlexibleMemoryTools : ITool
                         Type = "file-context",
                         Title = $"View memories for {Path.GetFileName(currentFile)}",
                         Description = $"Found {fileMemories.TotalFound} memories related to this file",
-                        Action = $"flexible_search_memories --query \"{currentFile}\"",
+                        Action = $"search_memories --query \"{currentFile}\"",
                         Relevance = 0.7
                     });
                 }

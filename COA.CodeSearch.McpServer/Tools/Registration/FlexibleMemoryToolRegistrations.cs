@@ -1,4 +1,5 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
@@ -50,18 +51,12 @@ public static class FlexibleMemoryToolRegistrations
         
         // File context
         RegisterGetMemoriesForFile(registry, memoryTools);
-        
-        // REMOVED specialized tools - use flexible_store_memory with appropriate type instead:
-        // RegisterMarkMemoryResolved(registry, memoryTools); - use flexible_update_memory
-        // RegisterStoreTechnicalDebt(registry, memoryTools); - use flexible_store_memory or templates
-        // RegisterStoreQuestion(registry, memoryTools); - use flexible_store_memory or templates
-        // RegisterStoreDeferredTask(registry, memoryTools); - use flexible_store_memory or templates
     }
     
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreMemoryParams>(
-            name: "store_memory",
+            name: ToolNames.StoreMemory,
             description: "Store knowledge PERMANENTLY (never expires). Use when you discover something important that should persist forever: architectural decisions, technical debt, code patterns, project insights. If you're unsure, use this - temporary storage is for session reminders only.",
             inputSchema: new
             {
@@ -97,7 +92,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterStoreWorkingMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreWorkingMemoryParams>(
-            name: "store_temporary_memory",
+            name: ToolNames.StoreTemporaryMemory,
             description: "Store notes that AUTO-DELETE after session ends (or specified time). Only use for temporary reminders like 'check this file later' or 'user wants feature X'. For important knowledge that should persist (architectural decisions, technical debt), use store_memory instead.",
             inputSchema: new
             {
@@ -131,7 +126,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterSearchMemoriesV2(ToolRegistry registry, FlexibleMemorySearchToolV2 tool)
     {
         registry.RegisterTool<SearchMemoriesV2Params>(
-            name: "search_memories",
+            name: ToolNames.SearchMemories,
             description: "Search through stored memories using natural language queries. Includes AI-powered query expansion, context-awareness, and intelligent filtering by type, date, files, and custom fields.",
             inputSchema: new
             {
@@ -197,7 +192,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterUpdateMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<UpdateMemoryParams>(
-            name: "update_memory",
+            name: ToolNames.UpdateMemory,
             description: "Update a memory's content, status, or custom fields. Supports partial updates - only the fields you specify are changed. Use to mark technical debt as resolved, update status, or add new information.",
             inputSchema: new
             {
@@ -228,156 +223,10 @@ public static class FlexibleMemoryToolRegistrations
         );
     }
     
-    private static void RegisterMarkMemoryResolved(ToolRegistry registry, FlexibleMemoryTools tool)
-    {
-        registry.RegisterTool<MarkMemoryResolvedParams>(
-            name: "flexible_mark_memory_resolved",
-            description: "Mark a memory as resolved/completed. Adds resolved timestamp and optional resolution note.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    id = new { type = "string", description = "Memory ID to mark as resolved" },
-                    resolutionNote = new { type = "string", description = "Optional note about the resolution" }
-                },
-                required = new[] { "id" }
-            },
-            handler: async (parameters, ct) =>
-            {
-#pragma warning disable CS8602 // Dereference of a possibly null reference - parameters are marked as required
-                var result = await tool.MarkMemoryResolvedAsync(
-                    parameters.Id ?? throw new ArgumentNullException(nameof(parameters.Id)),
-                    parameters.ResolutionNote
-                );
-#pragma warning restore CS8602
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterStoreTechnicalDebt(ToolRegistry registry, FlexibleMemoryTools tool)
-    {
-        registry.RegisterTool<StoreTechnicalDebtParams>(
-            name: "flexible_store_technical_debt",
-            description: "Store a technical debt item with predefined fields optimized for debt tracking and prioritization.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    description = new { type = "string", description = "Description of the technical debt" },
-                    status = new { type = "string", description = "Status: pending, in-progress, done, deferred" },
-                    priority = new { type = "string", description = "Priority: low, medium, high, critical" },
-                    category = new { type = "string", description = "Category: performance, security, maintainability, etc." },
-                    estimatedHours = new { type = "integer", description = "Estimated hours to resolve" },
-                    files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    tags = new { type = "array", items = new { type = "string" }, description = "Tags for categorization" }
-                },
-                required = new[] { "description" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.StoreTechnicalDebtAsync(
-                    ValidateRequired(parameters.Description, "description"),
-                    parameters.Status,
-                    parameters.Priority,
-                    parameters.Category,
-                    parameters.EstimatedHours,
-                    parameters.Files,
-                    parameters.Tags);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterStoreQuestion(ToolRegistry registry, FlexibleMemoryTools tool)
-    {
-        registry.RegisterTool<StoreQuestionParams>(
-            name: "flexible_store_question",
-            description: "Store a question with context and tracking status for later follow-up and resolution.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    question = new { type = "string", description = "The question to store" },
-                    context = new { type = "string", description = "Additional context about the question" },
-                    status = new { type = "string", description = "Status: open, answered, investigating" },
-                    files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    tags = new { type = "array", items = new { type = "string" }, description = "Tags for categorization" }
-                },
-                required = new[] { "question" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.StoreQuestionAsync(
-                    ValidateRequired(parameters.Question, "question"),
-                    parameters.Context,
-                    parameters.Status,
-                    parameters.Files,
-                    parameters.Tags);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
-    private static void RegisterStoreDeferredTask(ToolRegistry registry, FlexibleMemoryTools tool)
-    {
-        registry.RegisterTool<StoreDeferredTaskParams>(
-            name: "flexible_store_deferred_task",
-            description: "Store a deferred task with reason and optional defer-until date for future processing.",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    task = new { type = "string", description = "The deferred task" },
-                    reason = new { type = "string", description = "Reason for deferring" },
-                    deferredUntil = new { type = "string", description = "ISO date when task should be reconsidered" },
-                    priority = new { type = "string", description = "Priority: low, medium, high, critical" },
-                    files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    blockedBy = new { type = "array", items = new { type = "string" }, description = "Dependencies blocking this task" }
-                },
-                required = new[] { "task", "reason" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                DateTime? deferredUntil = null;
-                if (!string.IsNullOrEmpty(parameters.DeferredUntil))
-                {
-                    if (DateTime.TryParse(parameters.DeferredUntil, out var parsed))
-                    {
-                        deferredUntil = parsed;
-                    }
-                }
-                
-                var result = await tool.StoreDeferredTaskAsync(
-                    ValidateRequired(parameters.Task, "task"),
-                    ValidateRequired(parameters.Reason, "reason"),
-                    deferredUntil,
-                    parameters.Priority,
-                    parameters.Files,
-                    parameters.BlockedBy);
-                    
-                return CreateSuccessResult(result);
-            }
-        );
-    }
-    
     private static void RegisterFindSimilarMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<FindSimilarMemoriesParams>(
-            name: "find_similar_memories",
+            name: ToolNames.FindSimilarMemories,
             description: "Find memories with similar content to a given memory. Uses semantic analysis to discover related architectural decisions, duplicate technical debt, or similar code patterns.",
             inputSchema: new
             {
@@ -405,7 +254,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterArchiveMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<ArchiveMemoriesParams>(
-            name: "archive_memories",
+            name: ToolNames.ArchiveMemories,
             description: "Archive old memories by type and age to reduce clutter. Archived memories are preserved but excluded from regular searches. Use to clean up resolved technical debt or old work sessions.",
             inputSchema: new
             {
@@ -433,7 +282,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemoryById(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemoryByIdParams>(
-            name: "get_memory",
+            name: ToolNames.GetMemory,
             description: "Retrieve a memory by its ID. Returns full content, metadata, related files, custom fields, and relationship information.",
             inputSchema: new
             {
@@ -459,7 +308,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterSummarizeMemories(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<SummarizeMemoriesParams>(
-            name: "summarize_memories",
+            name: ToolNames.SummarizeMemories,
             description: "Create condensed summaries of old memories by type and time period. Extracts key themes, most referenced files, and type-specific insights (e.g., resolution rates for technical debt).",
             inputSchema: new
             {
@@ -491,7 +340,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterMemoryDashboard(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<object>(
-            name: "memory_dashboard",
+            name: ToolNames.MemoryDashboard,
             description: "Get memory system dashboard with statistics, health checks, and insights. Shows total memories, type distribution, recent activity, storage info, and health recommendations.",
             inputSchema: new
             {
@@ -510,7 +359,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterListTemplates(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<ListTemplatesParams>(
-            name: "list_memory_templates",
+            name: ToolNames.ListMemoryTemplates,
             description: "List available memory templates for common scenarios. Templates provide structured formats for code reviews, performance issues, security findings, and architectural decisions.",
             inputSchema: new
             {
@@ -529,7 +378,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterCreateFromTemplate(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<CreateFromTemplateParams>(
-            name: "create_memory_from_template",
+            name: ToolNames.CreateMemoryFromTemplate,
             description: "Create a memory using a predefined template. Templates ensure consistent structure for common scenarios like security findings or architectural decisions. Use list_memory_templates to see available options.",
             inputSchema: new
             {
@@ -561,7 +410,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemorySuggestions(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemorySuggestionsParams>(
-            name: "get_memory_suggestions",
+            name: ToolNames.GetMemorySuggestions,
             description: "Get contextual suggestions for the current work. Analyzes what you're working on and suggests relevant existing memories, appropriate templates, and recommended actions.",
             inputSchema: new
             {
@@ -593,7 +442,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterStoreGitCommitMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<StoreGitCommitMemoryParams>(
-            name: "store_git_commit_memory",
+            name: ToolNames.StoreGitCommitMemory,
             description: "Store a memory linked to a specific Git commit SHA. Use to track architectural decisions, important bug fixes, or insights tied to specific code changes.",
             inputSchema: new
             {
@@ -642,7 +491,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterTimeline(ToolRegistry registry, TimelineTool tool)
     {
         registry.RegisterTool<TimelineParams>(
-            name: "memory_timeline",
+            name: ToolNames.MemoryTimeline,
             description: "View memories in chronological timeline format. Groups by time periods (Today, Yesterday, This Week). Perfect for understanding recent work and project history with user-friendly visualization.",
             inputSchema: new
             {
@@ -674,7 +523,7 @@ public static class FlexibleMemoryToolRegistrations
     private static void RegisterGetMemoriesForFile(ToolRegistry registry, FlexibleMemoryTools tool)
     {
         registry.RegisterTool<GetMemoriesForFileParams>(
-            name: "get_memories_for_file",
+            name: ToolNames.GetMemoriesForFile,
             description: "Find all memories related to a specific file. Shows architectural decisions, technical debt, code patterns, and project insights associated with the file path.",
             inputSchema: new
             {
@@ -756,36 +605,6 @@ public class UpdateMemoryParams
     public string[]? RemoveFiles { get; set; }
 }
 
-public class StoreTechnicalDebtParams
-{
-    public string Description { get; set; } = "";
-    public string? Status { get; set; }
-    public string? Priority { get; set; }
-    public string? Category { get; set; }
-    public int? EstimatedHours { get; set; }
-    public string[]? Files { get; set; }
-    public string[]? Tags { get; set; }
-}
-
-public class StoreQuestionParams
-{
-    public string Question { get; set; } = "";
-    public string? Context { get; set; }
-    public string? Status { get; set; }
-    public string[]? Files { get; set; }
-    public string[]? Tags { get; set; }
-}
-
-public class StoreDeferredTaskParams
-{
-    public string Task { get; set; } = "";
-    public string Reason { get; set; } = "";
-    public string? DeferredUntil { get; set; }
-    public string? Priority { get; set; }
-    public string[]? Files { get; set; }
-    public string[]? BlockedBy { get; set; }
-}
-
 public class FindSimilarMemoriesParams
 {
     public string MemoryId { get; set; } = "";
@@ -829,12 +648,6 @@ public class GetMemorySuggestionsParams
     public string? CurrentFile { get; set; }
     public string[]? RecentFiles { get; set; }
     public int? MaxSuggestions { get; set; }
-}
-
-public class MarkMemoryResolvedParams
-{
-    public string Id { get; set; } = "";
-    public string? ResolutionNote { get; set; }
 }
 
 public class StoreWorkingMemoryParams

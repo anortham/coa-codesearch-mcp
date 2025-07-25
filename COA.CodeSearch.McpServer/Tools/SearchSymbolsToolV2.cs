@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -296,7 +297,7 @@ public class SearchSymbolsToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "search_symbols",
+            operation = ToolNames.SearchSymbols,
             query = new
             {
                 pattern = pattern,

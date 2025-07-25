@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -552,7 +553,7 @@ public class DependencyAnalysisToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "dependency_analysis",
+            operation = ToolNames.DependencyAnalysis,
             target = new
             {
                 symbol = targetSymbol.Name,

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -68,7 +69,7 @@ public class FlexibleMemorySearchV2Test : TestBase
 
         // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("operation").GetString().Should().Be("memory_search");
+        response.GetProperty("operation").GetString().Should().Be(ToolNames.SearchMemories);
 
         // Check query
         var query = response.GetProperty("query");

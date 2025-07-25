@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -23,7 +24,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
 {
-    public override string ToolName => "fast_text_search_v2";
+    public override string ToolName => ToolNames.TextSearch;
     public override string Description => "AI-optimized text search with insights";
     public override ToolCategory Category => ToolCategory.Search;
     private readonly IConfiguration _configuration;
@@ -225,7 +226,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "fast_text_search",
+            operation = ToolNames.TextSearch,
             query = new
             {
                 text = query,
@@ -289,7 +290,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                     
                 insights.Add($"Found {alternateHits} matches in other file types: {string.Join(", ", topExtensions)}");
                 insights.Add($"💡 TIP: Remove filePattern/extensions to search ALL file types");
-                insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --workspacePath \"{workspacePath}\"");
+                insights.Add($"🔍 Try: text_search --query \"{query}\" --workspacePath \"{workspacePath}\"");
                 
                 // Project-aware suggestions
                 if (projectContext?.Technologies?.Contains("blazor", StringComparer.OrdinalIgnoreCase) == true)
@@ -297,7 +298,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                     if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
                     {
                         insights.Add("🎯 Blazor project detected - UI components are in .razor files!");
-                        insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --extensions .cs,.razor --workspacePath \"{workspacePath}\"");
+                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .cs,.razor --workspacePath \"{workspacePath}\"");
                     }
                 }
                 else if (projectContext?.Technologies?.Contains("aspnet", StringComparer.OrdinalIgnoreCase) == true)
@@ -305,7 +306,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                     if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
                     {
                         insights.Add("🎯 ASP.NET project detected - views are in .cshtml files!");
-                        insights.Add($"🔍 Try: fast_text_search --query \"{query}\" --extensions .cs,.cshtml --workspacePath \"{workspacePath}\"");
+                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .cs,.cshtml --workspacePath \"{workspacePath}\"");
                     }
                 }
             }
