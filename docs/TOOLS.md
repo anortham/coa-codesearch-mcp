@@ -59,7 +59,7 @@ All code analysis tools now provide AI-optimized responses with:
   - [restore_memories](#restore_memories)
 - [Checklist System](#checklist-system)
   - [create_checklist](#create_checklist)
-  - [add_checklist_item](#add_checklist_item)
+  - [add_checklist_items](#add_checklist_items)
   - [toggle_checklist_item](#toggle_checklist_item)
   - [update_checklist_item](#update_checklist_item)
   - [view_checklist](#view_checklist)
@@ -1411,20 +1411,29 @@ create_checklist --title "API Refactoring Tasks" --description "Breaking changes
 }
 ```
 
-### add_checklist_item
+### add_checklist_items
 
-Add item to existing checklist.
+Add one or more items to existing checklist. Pass a single item in the array to add just one item.
 
 **Parameters:**
 - `checklistId` (string, required): Checklist ID
-- `itemText` (string, required): Item description
-- `notes` (string, optional): Additional notes
-- `relatedFiles` (array, optional): Related files
-- `customFields` (object, optional): Custom fields
+- `items` (array, required): Array of items to add (can be a single item)
+  - `itemText` (string, required): Item description
+  - `notes` (string, optional): Additional notes
+  - `relatedFiles` (array, optional): Related files
+  - `customFields` (object, optional): Custom fields
 
-**Example:**
+**Examples:**
 ```
-add_checklist_item --checklistId "checklist789" --itemText "Update authentication endpoints" --notes "Switch to JWT"
+# Add single item
+add_checklist_items --checklistId "checklist789" --items [{"itemText": "Update authentication endpoints", "notes": "Switch to JWT"}]
+
+# Add multiple items
+add_checklist_items --checklistId "checklist789" --items [
+  {"itemText": "Update authentication endpoints", "notes": "Switch to JWT"},
+  {"itemText": "Add rate limiting", "relatedFiles": ["/api/middleware.cs"]},
+  {"itemText": "Update API documentation"}
+]
 ```
 
 ### toggle_checklist_item

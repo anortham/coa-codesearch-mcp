@@ -101,7 +101,7 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 
 ### Task Management
 - `create_checklist` - Create persistent task lists
-- `add_checklist_item` - Add tasks
+- `add_checklist_items` - Add one or more tasks
 - `toggle_checklist_item` - Mark complete/incomplete
 - `update_checklist_item` - Update task details
 - `view_checklist` - View with progress

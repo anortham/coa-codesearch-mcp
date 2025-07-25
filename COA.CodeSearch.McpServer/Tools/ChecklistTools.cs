@@ -75,14 +75,11 @@ public class ChecklistTools : ITool
     }
     
     /// <summary>
-    /// Add an item to a checklist
+    /// Add one or more items to a checklist
     /// </summary>
-    public async Task<AddChecklistItemResult> AddChecklistItemAsync(
+    public async Task<AddChecklistItemsResult> AddChecklistItemsAsync(
         string checklistId,
-        string itemText,
-        string? notes = null,
-        string[]? relatedFiles = null,
-        Dictionary<string, JsonElement>? customFields = null)
+        ChecklistItemInput[] items)
     {
         try
         {
@@ -90,7 +87,7 @@ public class ChecklistTools : ITool
             var checklist = await _memoryService.GetMemoryByIdAsync(checklistId);
             if (checklist == null || checklist.Type != MemoryTypes.Checklist)
             {
-                return new AddChecklistItemResult
+                return new AddChecklistItemsResult
                 {
                     Success = false,
                     Message = "Checklist not found"
@@ -99,69 +96,106 @@ public class ChecklistTools : ITool
             
             // Get current item count
             var itemCount = checklist.GetField<int>(MemoryFields.ItemCount);
-            var nextOrder = itemCount + 1;
+            var addedItems = new List<AddedChecklistItem>();
+            var failedItems = new List<string>();
             
-            // Create the checklist item
-            var item = new FlexibleMemoryEntry
+            // Process each item
+            for (int i = 0; i < items.Length; i++)
             {
-                Type = MemoryTypes.ChecklistItem,
-                Content = itemText,
-                IsShared = checklist.IsShared,
-                SessionId = checklist.SessionId,
-                FilesInvolved = relatedFiles ?? Array.Empty<string>(),
-                Fields = customFields ?? new Dictionary<string, JsonElement>()
-            };
-            
-            // Add item-specific fields
-            item.SetField(MemoryFields.ParentChecklistId, checklistId);
-            item.SetField(MemoryFields.IsCompleted, false);
-            item.SetField(MemoryFields.ItemOrder, nextOrder);
-            if (!string.IsNullOrEmpty(notes))
-            {
-                item.SetField("notes", notes);
+                var itemInput = items[i];
+                var nextOrder = itemCount + i + 1;
+                
+                try
+                {
+                    // Create the checklist item
+                    var item = new FlexibleMemoryEntry
+                    {
+                        Type = MemoryTypes.ChecklistItem,
+                        Content = itemInput.ItemText,
+                        IsShared = checklist.IsShared,
+                        SessionId = checklist.SessionId,
+                        FilesInvolved = itemInput.RelatedFiles ?? Array.Empty<string>(),
+                        Fields = itemInput.CustomFields ?? new Dictionary<string, JsonElement>()
+                    };
+                    
+                    // Add item-specific fields
+                    item.SetField(MemoryFields.ParentChecklistId, checklistId);
+                    item.SetField(MemoryFields.IsCompleted, false);
+                    item.SetField(MemoryFields.ItemOrder, nextOrder);
+                    if (!string.IsNullOrEmpty(itemInput.Notes))
+                    {
+                        item.SetField("notes", itemInput.Notes);
+                    }
+                    
+                    var success = await _memoryService.StoreMemoryAsync(item);
+                    
+                    if (success)
+                    {
+                        // Link the item to the checklist
+                        await _linkingTools.LinkMemoriesAsync(
+                            sourceId: checklistId,
+                            targetId: item.Id,
+                            relationshipType: MemoryRelationshipTypes.ParentOf,
+                            bidirectional: true
+                        );
+                        
+                        addedItems.Add(new AddedChecklistItem
+                        {
+                            ItemId = item.Id,
+                            ItemText = itemInput.ItemText,
+                            ItemOrder = nextOrder
+                        });
+                    }
+                    else
+                    {
+                        failedItems.Add(itemInput.ItemText);
+                    }
+                }
+                catch (Exception itemEx)
+                {
+                    _logger.LogError(itemEx, "Error adding item '{ItemText}'", itemInput.ItemText);
+                    failedItems.Add(itemInput.ItemText);
+                }
             }
             
-            var success = await _memoryService.StoreMemoryAsync(item);
-            
-            if (success)
+            // Update checklist item count with the number of successfully added items
+            if (addedItems.Count > 0)
             {
-                // Update checklist item count
                 var updateRequest = new MemoryUpdateRequest
                 {
                     Id = checklistId,
                     FieldUpdates = new Dictionary<string, JsonElement?>
                     {
-                        [MemoryFields.ItemCount] = JsonDocument.Parse(JsonSerializer.Serialize(itemCount + 1)).RootElement
+                        [MemoryFields.ItemCount] = JsonDocument.Parse(JsonSerializer.Serialize(itemCount + addedItems.Count)).RootElement
                     }
                 };
                 await _memoryService.UpdateMemoryAsync(updateRequest);
-                
-                // Link the item to the checklist
-                await _linkingTools.LinkMemoriesAsync(
-                    sourceId: checklistId,
-                    targetId: item.Id,
-                    relationshipType: MemoryRelationshipTypes.ParentOf,
-                    bidirectional: true
-                );
             }
             
-            return new AddChecklistItemResult
+            var overallSuccess = addedItems.Count > 0 && failedItems.Count == 0;
+            var message = overallSuccess 
+                ? $"Added {addedItems.Count} item{(addedItems.Count == 1 ? "" : "s")} to checklist"
+                : failedItems.Count == 0 
+                    ? "No items were added to the checklist"
+                    : $"Added {addedItems.Count} item{(addedItems.Count == 1 ? "" : "s")}, {failedItems.Count} failed";
+            
+            return new AddChecklistItemsResult
             {
-                Success = success,
-                ItemId = success ? item.Id : null,
-                ItemOrder = nextOrder,
-                Message = success 
-                    ? $"Added item '{itemText}' to checklist"
-                    : "Failed to add item to checklist"
+                Success = overallSuccess,
+                AddedItems = addedItems,
+                FailedItems = failedItems,
+                TotalAdded = addedItems.Count,
+                TotalFailed = failedItems.Count,
+                Message = message
             };
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error adding checklist item");
-            return new AddChecklistItemResult
+            _logger.LogError(ex, "Error adding checklist items");
+            return new AddChecklistItemsResult
             {
                 Success = false,
-                Message = $"Error adding checklist item: {ex.Message}"
+                Message = $"Error adding checklist items: {ex.Message}"
             };
         }
     }
@@ -589,6 +623,31 @@ public class AddChecklistItemResult
     public string? ItemId { get; set; }
     public int ItemOrder { get; set; }
     public string Message { get; set; } = "";
+}
+
+public class AddChecklistItemsResult
+{
+    public bool Success { get; set; }
+    public List<AddedChecklistItem> AddedItems { get; set; } = new();
+    public List<string> FailedItems { get; set; } = new();
+    public int TotalAdded { get; set; }
+    public int TotalFailed { get; set; }
+    public string Message { get; set; } = "";
+}
+
+public class AddedChecklistItem
+{
+    public string ItemId { get; set; } = "";
+    public string ItemText { get; set; } = "";
+    public int ItemOrder { get; set; }
+}
+
+public class ChecklistItemInput
+{
+    public string ItemText { get; set; } = "";
+    public string? Notes { get; set; }
+    public string[]? RelatedFiles { get; set; }
+    public Dictionary<string, JsonElement>? CustomFields { get; set; }
 }
 
 public class ToggleChecklistItemResult
