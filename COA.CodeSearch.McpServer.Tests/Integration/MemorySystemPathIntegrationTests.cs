@@ -183,12 +183,13 @@ public class MemorySystemPathIntegrationTests : IDisposable
         Assert.NotNull(createResult.ChecklistId);
         
         // Add items
-        var addResult = await checklistTools.AddChecklistItemAsync(
+        var addResult = await checklistTools.AddChecklistItemsAsync(
             createResult.ChecklistId!,
-            "Fix path resolution bug"
+            new[] { new ChecklistItemInput { ItemText = "Fix path resolution bug" } }
         );
         
         Assert.True(addResult.Success);
+        Assert.Equal(1, addResult.TotalAdded);
         
         // View checklist
         var viewResult = await checklistTools.ViewChecklistAsync(createResult.ChecklistId!);

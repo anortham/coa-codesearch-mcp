@@ -21,7 +21,7 @@ public static class ChecklistToolRegistrations
         var checklistTools = serviceProvider.GetRequiredService<ChecklistTools>();
         
         RegisterCreateChecklist(registry, checklistTools);
-        RegisterAddChecklistItem(registry, checklistTools);
+        RegisterAddChecklistItems(registry, checklistTools);
         RegisterToggleChecklistItem(registry, checklistTools);
         RegisterUpdateChecklistItem(registry, checklistTools);
         RegisterViewChecklist(registry, checklistTools);
@@ -62,34 +62,44 @@ public static class ChecklistToolRegistrations
         );
     }
     
-    private static void RegisterAddChecklistItem(ToolRegistry registry, ChecklistTools tool)
+    private static void RegisterAddChecklistItems(ToolRegistry registry, ChecklistTools tool)
     {
-        registry.RegisterTool<AddChecklistItemParams>(
-            name: "add_checklist_item",
-            description: "Add a new item to an existing checklist. Items are automatically ordered and linked to their parent checklist.",
+        registry.RegisterTool<AddChecklistItemsParams>(
+            name: "add_checklist_items",
+            description: "Add one or more items to an existing checklist. Items are automatically ordered and linked to their parent checklist. Pass a single item in the array to add just one item.",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    checklistId = new { type = "string", description = "ID of the checklist to add item to" },
-                    itemText = new { type = "string", description = "Text/description of the checklist item" },
-                    notes = new { type = "string", description = "Optional notes or additional details" },
-                    relatedFiles = new { type = "array", items = new { type = "string" }, description = "Files related to this item" },
-                    customFields = new { type = "object", description = "Optional custom fields as JSON object" }
+                    checklistId = new { type = "string", description = "ID of the checklist to add items to" },
+                    items = new { 
+                        type = "array", 
+                        description = "Array of items to add (can be a single item)",
+                        items = new {
+                            type = "object",
+                            properties = new
+                            {
+                                itemText = new { type = "string", description = "Text/description of the checklist item" },
+                                notes = new { type = "string", description = "Optional notes or additional details" },
+                                relatedFiles = new { type = "array", items = new { type = "string" }, description = "Files related to this item" },
+                                customFields = new { type = "object", description = "Optional custom fields as JSON object" }
+                            },
+                            required = new[] { "itemText" }
+                        }
+                    }
                 },
-                required = new[] { "checklistId", "itemText" }
+                required = new[] { "checklistId", "items" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                if (parameters.Items == null || parameters.Items.Length == 0) 
+                    throw new InvalidParametersException("At least one item is required");
                 
-                var result = await tool.AddChecklistItemAsync(
+                var result = await tool.AddChecklistItemsAsync(
                     ValidateRequired(parameters.ChecklistId, "checklistId"),
-                    ValidateRequired(parameters.ItemText, "itemText"),
-                    parameters.Notes,
-                    parameters.RelatedFiles,
-                    parameters.CustomFields);
+                    parameters.Items);
                     
                 return CreateSuccessResult(result);
             }
@@ -227,13 +237,10 @@ public class CreateChecklistParams
     public Dictionary<string, JsonElement>? CustomFields { get; set; }
 }
 
-public class AddChecklistItemParams
+public class AddChecklistItemsParams
 {
     public required string ChecklistId { get; set; }
-    public required string ItemText { get; set; }
-    public string? Notes { get; set; }
-    public string[]? RelatedFiles { get; set; }
-    public Dictionary<string, JsonElement>? CustomFields { get; set; }
+    public required ChecklistItemInput[] Items { get; set; }
 }
 
 public class ToggleChecklistItemParams

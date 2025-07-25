@@ -260,7 +260,7 @@ Memories aren't just static notes - they're living entities that need to be trac
   - Includes progress tracking and markdown export
   - Tools implemented:
     - `create_checklist` - Create persistent checklists (personal or shared)
-    - `add_checklist_item` - Add items with notes and file references
+    - `add_checklist_items` - Add one or more items with notes and file references
     - `toggle_checklist_item` - Mark items complete/incomplete with tracking
     - `update_checklist_item` - Update item text, notes, or custom fields
     - `view_checklist` - View with progress and optional markdown export

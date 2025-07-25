@@ -157,8 +157,15 @@ Track tasks across sessions:
 # Create checklist
 mcp__codesearch__create_checklist --title "Implement Auth System" --isShared true
 
-# Add items
-mcp__codesearch__add_checklist_item --checklistId "abc123" --itemText "Create login endpoint"
+# Add items (single item)
+mcp__codesearch__add_checklist_items --checklistId "abc123" --items [{"itemText": "Create login endpoint"}]
+
+# Add multiple items at once
+mcp__codesearch__add_checklist_items --checklistId "abc123" --items [
+  {"itemText": "Create login endpoint", "notes": "Use JWT auth"},
+  {"itemText": "Add validation", "relatedFiles": ["/api/validators.cs"]},
+  {"itemText": "Write unit tests"}
+]
 
 # Mark complete
 mcp__codesearch__toggle_checklist_item --itemId "item456"
