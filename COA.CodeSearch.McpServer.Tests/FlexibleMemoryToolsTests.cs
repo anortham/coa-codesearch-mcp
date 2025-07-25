@@ -72,93 +72,12 @@ public class FlexibleMemoryToolsTests : IDisposable
     }
     
     [Fact]
-    public async Task StoreTechnicalDebtAsync_WithFields_ReturnsSuccess()
-    {
-        // Arrange
-        var description = "Fix security vulnerability in login";
-        var status = MemoryStatus.Pending;
-        var priority = MemoryPriority.High;
-        var files = new[] { "Login.cs", "Auth.cs" };
-        var tags = new[] { "security", "urgent" };
-        
-        // Act
-        var result = await _memoryTools.StoreTechnicalDebtAsync(
-            description, status, priority, "security", 8, files, tags);
-        
-        // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.MemoryId);
-        
-        // Verify we can retrieve it
-        var getResult = await _memoryTools.GetMemoryByIdAsync(result.MemoryId!);
-        Assert.True(getResult.Success);
-        Assert.NotNull(getResult.Memory);
-        Assert.Equal(MemoryTypes.TechnicalDebt, getResult.Memory.Type);
-        Assert.Equal(description, getResult.Memory.Content);
-        Assert.Equal(status, getResult.Memory.GetField<string>(MemoryFields.Status));
-        Assert.Equal(priority, getResult.Memory.GetField<string>(MemoryFields.Priority));
-    }
-    
-    [Fact]
-    public async Task StoreQuestionAsync_WithContext_ReturnsSuccess()
-    {
-        // Arrange
-        var question = "How should we handle rate limiting?";
-        var context = "User reported API slowness";
-        var files = new[] { "ApiController.cs" };
-        var tags = new[] { "performance", "api" };
-        
-        // Act
-        var result = await _memoryTools.StoreQuestionAsync(
-            question, context, "open", files, tags);
-        
-        // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.MemoryId);
-        
-        // Verify we can retrieve it
-        var getResult = await _memoryTools.GetMemoryByIdAsync(result.MemoryId!);
-        Assert.True(getResult.Success);
-        Assert.NotNull(getResult.Memory);
-        Assert.Equal(MemoryTypes.Question, getResult.Memory.Type);
-        Assert.Equal(question, getResult.Memory.Content);
-        Assert.Equal("open", getResult.Memory.GetField<string>(MemoryFields.Status));
-        Assert.Equal(context, getResult.Memory.GetField<string>("context"));
-    }
-    
-    [Fact]
-    public async Task StoreDeferredTaskAsync_WithDeferredDate_ReturnsSuccess()
-    {
-        // Arrange
-        var task = "Upgrade to .NET 9";
-        var reason = "Waiting for LTS release";
-        var deferredUntil = DateTime.UtcNow.AddMonths(6);
-        
-        // Act
-        var result = await _memoryTools.StoreDeferredTaskAsync(
-            task, reason, deferredUntil, MemoryPriority.Medium);
-        
-        // Assert
-        Assert.True(result.Success);
-        Assert.NotNull(result.MemoryId);
-        
-        // Verify we can retrieve it
-        var getResult = await _memoryTools.GetMemoryByIdAsync(result.MemoryId!);
-        Assert.True(getResult.Success);
-        Assert.NotNull(getResult.Memory);
-        Assert.Equal(MemoryTypes.DeferredTask, getResult.Memory.Type);
-        Assert.Equal(task, getResult.Memory.Content);
-        Assert.Equal(MemoryStatus.Deferred, getResult.Memory.GetField<string>(MemoryFields.Status));
-        Assert.Equal(reason, getResult.Memory.GetField<string>("reason"));
-    }
-    
-    [Fact]
     public async Task SearchMemoriesAsync_Basic_ReturnsResults()
     {
         // Arrange - Store some test memories
-        await _memoryTools.StoreTechnicalDebtAsync("Auth refactoring", MemoryStatus.Pending);
-        await _memoryTools.StoreQuestionAsync("Rate limiting approach?", null, "open");
-        await _memoryTools.StoreDeferredTaskAsync("Upgrade database", "Waiting for migration window");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.TechnicalDebt, "Auth refactoring");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.Question, "Rate limiting approach?");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.DeferredTask, "Upgrade database");
         
         // Wait for indexing
         await Task.Delay(100);
@@ -182,9 +101,9 @@ public class FlexibleMemoryToolsTests : IDisposable
     public async Task SearchMemoriesAsync_WithTypeFilter_ReturnsFilteredResults()
     {
         // Arrange
-        await _memoryTools.StoreTechnicalDebtAsync("Auth bug fix");
-        await _memoryTools.StoreTechnicalDebtAsync("Performance issue");
-        await _memoryTools.StoreQuestionAsync("Best practices?");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.TechnicalDebt, "Auth bug fix");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.TechnicalDebt, "Performance issue");
+        await _memoryTools.StoreMemoryAsync(MemoryTypes.Question, "Best practices?");
         
         await Task.Delay(100);
         
@@ -201,8 +120,8 @@ public class FlexibleMemoryToolsTests : IDisposable
     public async Task UpdateMemoryAsync_ModifiesMemory_ReturnsSuccess()
     {
         // Arrange
-        var storeResult = await _memoryTools.StoreTechnicalDebtAsync(
-            "Original description", MemoryStatus.Pending);
+        var storeResult = await _memoryTools.StoreMemoryAsync(
+            MemoryTypes.TechnicalDebt, "Original description");
         Assert.True(storeResult.Success);
         
         // Act

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -112,7 +113,12 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
                 try
                 {
                     var operationResult = await ExecuteOperationAsync(operation, workspacePath, cancellationToken);
-                    results.Add(operationResult);
+                    results.Add(new
+                    {
+                        success = true,
+                        operation = operationType,
+                        result = operationResult
+                    });
                 }
                 catch (Exception ex)
                 {
@@ -162,16 +168,16 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
         return operationType switch
         {
-            "search_symbols" => await ExecuteSearchSymbolsAsync(operation, defaultWorkspacePath, cancellationToken),
-            "find_references" => await ExecuteFindReferencesAsync(operation, cancellationToken),
-            "go_to_definition" => await ExecuteGoToDefinitionAsync(operation, cancellationToken),
-            "get_hover_info" => await ExecuteGetHoverInfoAsync(operation, cancellationToken),
-            "get_implementations" => await ExecuteGetImplementationsAsync(operation, cancellationToken),
-            "get_document_symbols" => await ExecuteGetDocumentSymbolsAsync(operation, cancellationToken),
-            "get_diagnostics" => await ExecuteGetDiagnosticsAsync(operation, cancellationToken),
-            "get_call_hierarchy" => await ExecuteGetCallHierarchyAsync(operation, cancellationToken),
-            "text_search" or "fast_text_search" or "textSearch" => await ExecuteTextSearchAsync(operation, defaultWorkspacePath, cancellationToken),
-            "analyze_dependencies" => await ExecuteAnalyzeDependenciesAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.SearchSymbols => await ExecuteSearchSymbolsAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.FindReferences => await ExecuteFindReferencesAsync(operation, cancellationToken),
+            ToolNames.GoToDefinition => await ExecuteGoToDefinitionAsync(operation, cancellationToken),
+            ToolNames.GetHoverInfo => await ExecuteGetHoverInfoAsync(operation, cancellationToken),
+            ToolNames.GetImplementations => await ExecuteGetImplementationsAsync(operation, cancellationToken),
+            ToolNames.GetDocumentSymbols => await ExecuteGetDocumentSymbolsAsync(operation, cancellationToken),
+            ToolNames.GetDiagnostics => await ExecuteGetDiagnosticsAsync(operation, cancellationToken),
+            ToolNames.GetCallHierarchy => await ExecuteGetCallHierarchyAsync(operation, cancellationToken),
+            ToolNames.TextSearch => await ExecuteTextSearchAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.DependencyAnalysis => await ExecuteAnalyzeDependenciesAsync(operation, defaultWorkspacePath, cancellationToken),
             _ => throw new NotSupportedException($"Operation type '{operationType}' not supported in batch operations")
         };
     }
@@ -370,7 +376,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "batch_operations",
+            operation = ToolNames.BatchOperations,
             batch = new
             {
                 totalOperations = analysis.TotalOperations,
@@ -553,10 +559,10 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         // Pattern: Search followed by navigation
         bool hasSearch = opArray.Any(op => 
             op.TryGetProperty("operation", out var opType) && 
-            (opType.GetString() == "search_symbols" || opType.GetString() == "text_search"));
+            (opType.GetString() == ToolNames.SearchSymbols || opType.GetString() == ToolNames.TextSearch));
         bool hasNavigation = opArray.Any(op => 
             op.TryGetProperty("operation", out var opType) && 
-            (opType.GetString() == "go_to_definition" || opType.GetString() == "find_references"));
+            (opType.GetString() == ToolNames.GoToDefinition || opType.GetString() == ToolNames.FindReferences));
 
         if (hasSearch && hasNavigation)
         {
@@ -606,15 +612,15 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         // Rough estimates in milliseconds
         var timeEstimates = new Dictionary<string, int>
         {
-            ["search_symbols"] = 100,
-            ["find_references"] = 200,
-            ["go_to_definition"] = 50,
-            ["get_diagnostics"] = 300,
-            ["analyze_dependencies"] = 500,
-            ["text_search"] = 150,
-            ["get_hover_info"] = 30,
-            ["get_implementations"] = 150,
-            ["get_call_hierarchy"] = 250
+            [ToolNames.SearchSymbols] = 100,
+            [ToolNames.FindReferences] = 200,
+            [ToolNames.GoToDefinition] = 50,
+            [ToolNames.GetDiagnostics] = 300,
+            [ToolNames.DependencyAnalysis] = 500,
+            [ToolNames.TextSearch] = 150,
+            [ToolNames.GetHoverInfo] = 30,
+            [ToolNames.GetImplementations] = 150,
+            [ToolNames.GetCallHierarchy] = 250
         };
 
         var totalMs = operationTypeCounts.Sum(kv => 
@@ -813,13 +819,13 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         }
 
         // Follow up on search results
-        if (analysis.OperationTypeCounts.ContainsKey("search_symbols") || 
-            analysis.OperationTypeCounts.ContainsKey("text_search"))
+        if (analysis.OperationTypeCounts.ContainsKey(ToolNames.SearchSymbols) || 
+            analysis.OperationTypeCounts.ContainsKey(ToolNames.TextSearch))
         {
             actions.Add(new
             {
                 id = "navigate_results",
-                cmd = new { operations = new[] { "go_to_definition", "find_references" }, limit = 5 },
+                cmd = new { operations = new[] { ToolNames.GoToDefinition, ToolNames.FindReferences }, limit = 5 },
                 tokens = 2000,
                 priority = "available"
             });
@@ -831,7 +837,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             actions.Add(new
             {
                 id = "expand_scope",
-                cmd = new { addOperations = new[] { "analyze_dependencies", "get_call_hierarchy" } },
+                cmd = new { addOperations = new[] { ToolNames.DependencyAnalysis, ToolNames.GetCallHierarchy } },
                 tokens = 3000,
                 priority = "available"
             });

@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -249,7 +250,7 @@ public class GetImplementationsToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "get_implementations",
+            operation = ToolNames.GetImplementations,
             symbol = new
             {
                 name = symbol.Name,
@@ -489,7 +490,7 @@ public class GetImplementationsToolV2 : ClaudeOptimizedToolBase
                 cmd = new
                 {
                     symbol = symbol.Name,
-                    operation = "find_references",
+                    operation = ToolNames.FindReferences,
                     scope = "implementations"
                 },
                 tokens = 2000,

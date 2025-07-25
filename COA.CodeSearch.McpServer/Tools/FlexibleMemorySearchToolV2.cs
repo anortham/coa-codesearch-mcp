@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -146,7 +147,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "memory_search",
+            operation = ToolNames.SearchMemories,
             query = new
             {
                 text = query ?? "*",
@@ -365,7 +366,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
             actions.Add(new
             {
                 id = "view_memory",
-                cmd = new { action = "flexible_get_memory", id = firstMemory.Id },
+                cmd = new { action = ToolNames.GetMemory, id = firstMemory.Id },
                 tokens = 500,
                 priority = "available"
             });
@@ -414,7 +415,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
             actions.Add(new
             {
                 id = "archive_old",
-                cmd = new { action = "flexible_archive_memories", daysOld = 90 },
+                cmd = new { action = ToolNames.ArchiveMemories, daysOld = 90 },
                 tokens = 1000,
                 priority = "normal"
             });
@@ -447,7 +448,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
                 id = "summarize_old",
                 cmd = new 
                 { 
-                    action = "flexible_summarize_memories", 
+                    action = ToolNames.SummarizeMemories, 
                     type = typeToSummarize.Key, 
                     daysOld = 30,
                     count = typeToSummarize.Count()

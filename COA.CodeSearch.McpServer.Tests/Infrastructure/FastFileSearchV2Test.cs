@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -111,7 +112,7 @@ public class FastFileSearchV2Test : TestBase
             }
         }
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("operation").GetString().Should().Be("fast_file_search");
+        response.GetProperty("operation").GetString().Should().Be(ToolNames.FileSearch);
         
         // Check query
         var query = response.GetProperty("query");

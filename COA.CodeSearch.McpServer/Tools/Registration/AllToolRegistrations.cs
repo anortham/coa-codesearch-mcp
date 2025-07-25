@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
@@ -73,7 +74,7 @@ public static class AllToolRegistrations
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
     {
         registry.RegisterTool<GoToDefinitionParams>(
-            name: "go_to_definition",
+            name: ToolNames.GoToDefinition,
             description: "Navigate to symbol definitions. Auto-detects language (C# or TypeScript) based on file extension and uses the appropriate analyzer.",
             inputSchema: new
             {
@@ -104,7 +105,7 @@ public static class AllToolRegistrations
     private static void RegisterFindReferences(ToolRegistry registry, FindReferencesToolV2 tool)
     {
         registry.RegisterTool<FindReferencesParams>(
-            name: "find_references",
+            name: ToolNames.FindReferences,
             description: "Find all references to a C# symbol across the codebase using Roslyn analysis. Returns locations where the symbol is used, with smart summarization for large result sets. For TypeScript references, use typescript_find_references.",
             inputSchema: new
             {
@@ -148,7 +149,7 @@ public static class AllToolRegistrations
     private static void RegisterSearchSymbolsV2(ToolRegistry registry, SearchSymbolsToolV2 tool)
     {
         registry.RegisterTool<SearchSymbolsV2Params>(
-            name: "search_symbols",
+            name: ToolNames.SearchSymbols,
             description: "Find C# symbols by name using patterns and wildcards. USE THIS for most symbol searches - just searches by name. Only use advanced_symbol_search if you need to filter by access level (public/private) or modifiers (static/abstract).",
             inputSchema: new
             {
@@ -197,7 +198,7 @@ public static class AllToolRegistrations
     private static void RegisterGetImplementationsV2(ToolRegistry registry, GetImplementationsToolV2 tool)
     {
         registry.RegisterTool<GetImplementationsV2Params>(
-            name: "get_implementations",
+            name: ToolNames.GetImplementations,
             description: "Find all classes that implement an interface or inherit from a base class. Use when exploring polymorphism, understanding inheritance hierarchies, or finding all concrete implementations.",
             inputSchema: new
             {
@@ -237,7 +238,7 @@ public static class AllToolRegistrations
     private static void RegisterGetHoverInfo(ToolRegistry registry, GetHoverInfoTool tool)
     {
         registry.RegisterTool<GetHoverInfoParams>(
-            name: "get_hover_info",
+            name: ToolNames.GetHoverInfo,
             description: "Get type information and documentation for a symbol at a specific location. Use when you need to understand what a symbol is, its signature, or read its documentation without navigating away.",
             inputSchema: new
             {
@@ -268,7 +269,7 @@ public static class AllToolRegistrations
     private static void RegisterGetDocumentSymbols(ToolRegistry registry, GetDocumentSymbolsTool tool)
     {
         registry.RegisterTool<GetDocumentSymbolsParams>(
-            name: "get_document_symbols",
+            name: ToolNames.GetDocumentSymbols,
             description: "Get structural outline of a C# file showing all classes, methods, and properties. Use when you need to understand file organization or quickly see all members in a class.",
             inputSchema: new
             {
@@ -297,7 +298,7 @@ public static class AllToolRegistrations
     private static void RegisterGetDiagnostics(ToolRegistry registry, GetDiagnosticsToolV2 tool)
     {
         registry.RegisterTool<GetDiagnosticsParams>(
-            name: "get_diagnostics",
+            name: ToolNames.GetDiagnostics,
             description: "Check for compilation errors and warnings in C# code. Use when debugging build issues, code quality checks, or before committing changes. Helps identify syntax errors, unused variables, and other issues.",
             inputSchema: new
             {
@@ -337,7 +338,7 @@ public static class AllToolRegistrations
     private static void RegisterGetCallHierarchyV2(ToolRegistry registry, GetCallHierarchyToolV2 tool)
     {
         registry.RegisterTool<GetCallHierarchyV2Params>(
-            name: "get_call_hierarchy",
+            name: ToolNames.GetCallHierarchy,
             description: "Analyze who calls a method and what it calls. Use when understanding code flow, impact analysis before changes, or identifying circular dependencies and complex call chains.",
             inputSchema: new
             {
@@ -386,7 +387,7 @@ public static class AllToolRegistrations
     private static void RegisterRenameSymbol(ToolRegistry registry, RenameSymbolToolV2 tool)
     {
         registry.RegisterTool<RenameSymbolParams>(
-            name: "rename_symbol",
+            name: ToolNames.RenameSymbol,
             description: "Safely rename a symbol throughout the entire codebase with automatic reference updates. Use when refactoring to improve naming or when a symbol name no longer reflects its purpose.",
             inputSchema: new
             {
@@ -432,7 +433,7 @@ public static class AllToolRegistrations
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
     {
         registry.RegisterTool<BatchOperationsV2Params>(
-            name: "batch_operations",
+            name: ToolNames.BatchOperations,
             description: "Execute multiple code analysis operations in parallel for comprehensive insights. Combines results across different analysis types, identifies patterns, and suggests next steps. Faster than running operations sequentially. Supported: search_symbols, find_references, go_to_definition, get_hover_info, get_implementations, get_diagnostics, get_call_hierarchy, text_search, analyze_dependencies.",
             inputSchema: new
             {
@@ -489,7 +490,7 @@ public static class AllToolRegistrations
     private static void RegisterAdvancedSymbolSearch(ToolRegistry registry, AdvancedSymbolSearchTool tool)
     {
         registry.RegisterTool<AdvancedSymbolSearchParams>(
-            name: "advanced_symbol_search",
+            name: ToolNames.AdvancedSymbolSearch,
             description: "ADVANCED: Search C# symbols with semantic filters beyond name matching. Most users should use search_symbols instead. Only use this when you need complex filters like: find public static methods, private fields in specific namespaces, virtual methods returning Task, abstract classes.",
             inputSchema: new
             {
@@ -531,7 +532,7 @@ public static class AllToolRegistrations
     private static void RegisterDependencyAnalysis(ToolRegistry registry, DependencyAnalysisToolV2 tool)
     {
         registry.RegisterTool<DependencyAnalysisParams>(
-            name: "dependency_analysis",
+            name: ToolNames.DependencyAnalysis,
             description: "C# ONLY: Analyze code dependencies to understand coupling and architecture. Analyzes .NET project references and namespace dependencies. Returns full graph for <5000 tokens, otherwise provides insights on circular dependencies, high coupling, and suggested refactorings. Use responseMode='summary' for overview.",
             inputSchema: new
             {
@@ -578,7 +579,7 @@ public static class AllToolRegistrations
     private static void RegisterProjectStructureAnalysis(ToolRegistry registry, ProjectStructureAnalysisToolV2 tool)
     {
         registry.RegisterTool<ProjectStructureAnalysisParams>(
-            name: "project_structure_analysis",
+            name: ToolNames.ProjectStructureAnalysis,
             description: ".NET PROJECTS ONLY: Analyze project structure with metrics on size, complexity, and organization. Analyzes .sln/.csproj files using MSBuildWorkspace. Does not include TypeScript, JavaScript, or frontend code. Shows full details for small projects (<5000 tokens), otherwise provides key metrics, hotspots, and architectural insights. Use responseMode='summary' for overview.",
             inputSchema: new
             {
@@ -734,7 +735,7 @@ public static class AllToolRegistrations
     private static void RegisterFastTextSearchV2(ToolRegistry registry, FastTextSearchToolV2 tool)
     {
         registry.RegisterTool<FastTextSearchV2Params>(
-            name: "text_search",
+            name: ToolNames.TextSearch,
             description: "Search for text content within files across the codebase. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific strings, error messages, configuration values, or any text that appears in code, comments, or documentation.",
             inputSchema: new
             {
@@ -803,7 +804,7 @@ public static class AllToolRegistrations
     private static void RegisterFastFileSearchV2(ToolRegistry registry, FastFileSearchToolV2 tool)
     {
         registry.RegisterTool<FastFileSearchV2Params>(
-            name: "file_search",
+            name: ToolNames.FileSearch,
             description: "Find files by name when you know the filename but not the exact location. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific files, especially with typos or partial names (e.g., find 'UserService.cs' by searching 'UserServ').",
             inputSchema: new
             {
@@ -858,7 +859,7 @@ public static class AllToolRegistrations
     private static void RegisterFastRecentFiles(ToolRegistry registry, FastRecentFilesTool tool)
     {
         registry.RegisterTool<FastRecentFilesParams>(
-            name: "recent_files",
+            name: ToolNames.RecentFiles,
             description: "Find files that were recently changed within a time period. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when resuming work after a break, reviewing recent changes, or finding files that were worked on today/this week.",
             inputSchema: new
             {
@@ -905,7 +906,7 @@ public static class AllToolRegistrations
     private static void RegisterFastFileSizeAnalysis(ToolRegistry registry, FastFileSizeAnalysisTool tool)
     {
         registry.RegisterTool<FastFileSizeAnalysisParams>(
-            name: "file_size_analysis",
+            name: ToolNames.FileSizeAnalysis,
             description: "Analyze files by size - find large files, empty files, or analyze size distributions. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Uses indexed data for instant results across entire codebase.",
             inputSchema: new
             {
@@ -958,7 +959,7 @@ public static class AllToolRegistrations
     private static void RegisterFastSimilarFiles(ToolRegistry registry, FastSimilarFilesTool tool)
     {
         registry.RegisterTool<FastSimilarFilesParams>(
-            name: "similar_files",
+            name: ToolNames.SimilarFiles,
             description: "Find files with similar content using 'More Like This' algorithm - ideal for discovering duplicate code, related implementations, or similar patterns. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows similarity scores and matching terms.",
             inputSchema: new
             {
@@ -1014,7 +1015,7 @@ public static class AllToolRegistrations
     private static void RegisterFastDirectorySearch(ToolRegistry registry, FastDirectorySearchTool tool)
     {
         registry.RegisterTool<FastDirectorySearchParams>(
-            name: "directory_search",
+            name: ToolNames.DirectorySearch,
             description: "Search for directories/folders with fuzzy matching - locate project folders, discover structure, find namespaces. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows file counts and supports typo correction.",
             inputSchema: new
             {
@@ -1061,7 +1062,7 @@ public static class AllToolRegistrations
     private static void RegisterIndexWorkspace(ToolRegistry registry, IndexWorkspaceTool tool)
     {
         registry.RegisterTool<IndexWorkspaceParams>(
-            name: "index_workspace",
+            name: ToolNames.IndexWorkspace,
             description: "REQUIRED FIRST STEP: Build search index to enable text searches. You MUST run this before using text_search, file_search, recent_files, and other indexed search tools - they will fail without it. One-time setup per workspace, then searches are instant.",
             inputSchema: new
             {
@@ -1094,7 +1095,7 @@ public static class AllToolRegistrations
     private static void RegisterSetLogging(ToolRegistry registry, SetLoggingTool tool)
     {
         registry.RegisterTool<SetLoggingParams>(
-            name: "log_diagnostics",
+            name: ToolNames.LogDiagnostics,
             description: "View and manage log files. Logs are written to .codesearch/logs directory. Actions: status, list, cleanup",
             inputSchema: new
             {
@@ -1137,7 +1138,7 @@ public static class AllToolRegistrations
     private static void RegisterGetVersion(ToolRegistry registry, GetVersionTool tool)
     {
         registry.RegisterTool<object>(
-            name: "get_version",
+            name: ToolNames.GetVersion,
             description: "Get the version and build information of the running MCP server. Shows version number, build date, runtime info, and helps identify if running code matches edited code.",
             inputSchema: new
             {
@@ -1156,7 +1157,7 @@ public static class AllToolRegistrations
     private static void RegisterRecallContext(ToolRegistry registry, ClaudeMemoryTools tool)
     {
         registry.RegisterTool<RecallContextParams>(
-            name: "recall_context",
+            name: ToolNames.RecallContext,
             description: "Load relevant project knowledge from previous sessions including architectural decisions, code patterns, and insights. Searches stored memories based on your current work context. Recommended at session start to restore context from past work.",
             inputSchema: new
             {
@@ -1195,7 +1196,7 @@ public static class AllToolRegistrations
     private static void RegisterBackupRestore(ToolRegistry registry, ClaudeMemoryTools tool)
     {
         registry.RegisterTool<BackupMemoriesParams>(
-            name: "backup_memories",
+            name: ToolNames.BackupMemories,
             description: "Export memories to JSON file for version control and team sharing. Creates timestamped, human-readable backups. Use cases: commit to git for team collaboration, backup before major changes, transfer knowledge to new machines. By default backs up only project memories (ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight). Use includeLocal=true to include personal memories.",
             inputSchema: new
             {
@@ -1218,7 +1219,7 @@ public static class AllToolRegistrations
         );
         
         registry.RegisterTool<RestoreMemoriesParams>(
-            name: "restore_memories",
+            name: ToolNames.RestoreMemories,
             description: "Restore memories from JSON backup file. Automatically finds most recent backup if no file specified. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.",
             inputSchema: new
             {

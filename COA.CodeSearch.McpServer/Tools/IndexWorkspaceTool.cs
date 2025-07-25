@@ -342,7 +342,7 @@ public class IndexWorkspaceTool : ITool
         // Default tip if no specific project type detected
         if (!tips.Any())
         {
-            tips.Add("Use fast_text_search_v2 without filePattern to search all file types");
+            tips.Add("Use text_search without filePattern to search all file types");
         }
         
         return new

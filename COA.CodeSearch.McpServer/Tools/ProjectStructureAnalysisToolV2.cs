@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -383,7 +384,7 @@ public class ProjectStructureAnalysisToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "project_structure_analysis",
+            operation = ToolNames.ProjectStructureAnalysis,
             workspace = new
             {
                 path = data.WorkspacePath,

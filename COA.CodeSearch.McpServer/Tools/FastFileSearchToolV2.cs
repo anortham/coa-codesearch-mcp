@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -168,7 +169,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         return new
         {
             success = true,
-            operation = "fast_file_search",
+            operation = ToolNames.FileSearch,
             query = new
             {
                 text = query,
@@ -467,7 +468,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 id = "search_in_files",
                 cmd = new
                 {
-                    operation = "text_search",
+                    operation = ToolNames.TextSearch,
                     files = data.Results.Take(10).Select(r => r.Path).ToList()
                 },
                 tokens = 1500,

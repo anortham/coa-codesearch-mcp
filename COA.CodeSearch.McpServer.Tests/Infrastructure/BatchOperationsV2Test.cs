@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Configuration;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -162,7 +163,7 @@ public class BatchOperationsV2Test : TestBase
             .ReturnsAsync(new 
             { 
                 success = true,
-                operation = "search_symbols",
+                operation = ToolNames.SearchSymbols,
                 summary = new
                 {
                     total = 2,
@@ -193,7 +194,7 @@ public class BatchOperationsV2Test : TestBase
             .ReturnsAsync(new 
             { 
                 success = true,
-                operation = "text_search",
+                operation = ToolNames.TextSearch,
                 summary = new
                 {
                     totalMatches = 1,
@@ -220,7 +221,7 @@ public class BatchOperationsV2Test : TestBase
             .ReturnsAsync(new 
             { 
                 success = true,
-                operation = "search_symbols",
+                operation = ToolNames.SearchSymbols,
                 summary = new { total = 1, topSymbols = new[] { new { name = "TestService", kind = "class", occurrences = 1 } } },
                 insights = new[] { "Found 1 matching symbol" },
                 actions = new object[] { },
@@ -265,7 +266,7 @@ public class BatchOperationsV2Test : TestBase
             .ReturnsAsync(new 
             { 
                 success = true,
-                operation = "find_references",
+                operation = ToolNames.FindReferences,
                 summary = new { total = 2, files = 1 },
                 hotspots = new[] { new { file = "TestCode.cs", occurrences = 2, lines = new[] { 10, 20 } } },
                 insights = new[] { "Found 2 references" },
@@ -328,7 +329,7 @@ public class BatchOperationsV2Test : TestBase
 
         // Check AI-optimized response structure
         response.GetProperty("success").GetBoolean().Should().BeTrue();
-        response.GetProperty("operation").GetString().Should().Be("batch_operations");
+        response.GetProperty("operation").GetString().Should().Be(ToolNames.BatchOperations);
 
         // Check batch summary
         var batch = response.GetProperty("batch");
