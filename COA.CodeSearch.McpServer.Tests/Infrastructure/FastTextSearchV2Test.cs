@@ -32,7 +32,9 @@ public class FastTextSearchV2Test : LuceneTestBase
             null); // IContextAwarenessService is optional
             
         _indexTool = ServiceProvider.GetRequiredService<IndexWorkspaceTool>();
-        _testWorkspacePath = GetTestProjectPath();
+        // Use the directory containing the test project, not the .csproj file path
+        var projectPath = GetTestProjectPath();
+        _testWorkspacePath = Path.GetDirectoryName(projectPath) ?? throw new InvalidOperationException("Could not get directory from project path");
     }
 
     [Fact]
@@ -75,11 +77,9 @@ public class FastTextSearchV2Test : LuceneTestBase
         var query = response.GetProperty("query");
         query.GetProperty("text").GetString().Should().Be("test");
         query.GetProperty("type").GetString().Should().Be("standard");
-        // The tool converts file paths to directory paths for indexing
+        // The workspace should be the directory path we provided
         var actualWorkspace = query.GetProperty("workspace").GetString();
-        actualWorkspace.Should().NotBeNull();
-        // Should be either the original path or its parent directory
-        (actualWorkspace == _testWorkspacePath || actualWorkspace == Path.GetDirectoryName(_testWorkspacePath)).Should().BeTrue();
+        actualWorkspace.Should().Be(_testWorkspacePath);
         
         // Check summary
         var summary = response.GetProperty("summary");
