@@ -31,6 +31,9 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly FileIndexingService _fileIndexingService;
     private readonly IContextAwarenessService? _contextAwarenessService;
+    private readonly IQueryCacheService _queryCacheService;
+    private readonly IFieldSelectorService _fieldSelectorService;
+    private readonly IStreamingResultService _streamingResultService;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -41,6 +44,9 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
         IDetailRequestCache detailCache,
+        IQueryCacheService queryCacheService,
+        IFieldSelectorService fieldSelectorService,
+        IStreamingResultService streamingResultService,
         IContextAwarenessService? contextAwarenessService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
@@ -48,6 +54,9 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _luceneIndexService = luceneIndexService;
         _fileIndexingService = fileIndexingService;
         _contextAwarenessService = contextAwarenessService;
+        _queryCacheService = queryCacheService;
+        _fieldSelectorService = fieldSelectorService;
+        _streamingResultService = streamingResultService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -94,8 +103,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
             var analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
 
-            // Build the query
-            var luceneQuery = BuildQuery(query, searchType, caseSensitive, filePattern, extensions, analyzer);
+            // Build the query with caching for performance
+            var luceneQuery = BuildQueryWithCache(query, searchType, caseSensitive, filePattern, extensions, analyzer);
 
             // Execute search
             var topDocs = searcher.Search(luceneQuery, maxResults);
@@ -119,7 +128,30 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         int? contextLines,
         CancellationToken cancellationToken)
     {
-        var results = new ConcurrentBag<SearchResult>();
+        const int StreamingThreshold = 100; // Use streaming for 100+ results
+        
+        if (topDocs.ScoreDocs.Length >= StreamingThreshold)
+        {
+            return await ProcessSearchResultsStreamingAsync(searcher, topDocs, query, contextLines, cancellationToken);
+        }
+        else
+        {
+            return await ProcessSearchResultsOptimizedAsync(searcher, topDocs, query, contextLines, cancellationToken);
+        }
+    }
+
+    /// <summary>
+    /// Optimized processing for smaller result sets using field selectors
+    /// </summary>
+    private async Task<List<SearchResult>> ProcessSearchResultsOptimizedAsync(
+        IndexSearcher searcher,
+        TopDocs topDocs,
+        string query,
+        int? contextLines,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<SearchResult>(topDocs.ScoreDocs.Length);
+        var fieldSet = _fieldSelectorService.GetFieldSet(FieldSetType.SearchResults);
         
         var parallelOptions = new ParallelOptions 
         { 
@@ -127,9 +159,12 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             MaxDegreeOfParallelism = Environment.ProcessorCount 
         };
         
+        var resultBag = new ConcurrentBag<(SearchResult result, float score)>();
+        
         await Parallel.ForEachAsync(topDocs.ScoreDocs, parallelOptions, async (scoreDoc, ct) =>
         {
-            var doc = searcher.Doc(scoreDoc.Doc);
+            // Use field selector for efficient document loading - PRIMARY OPTIMIZATION
+            var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, fieldSet.Fields);
             var filePath = doc.Get("path");
             
             if (string.IsNullOrEmpty(filePath))
@@ -151,10 +186,88 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 result.Context = await GetFileContextAsync(filePath, query, contextLines.Value, ct);
             }
 
-            results.Add(result);
+            resultBag.Add((result, scoreDoc.Score));
         });
 
+        // Sort by score and return
+        return resultBag.OrderByDescending(r => r.score).Select(r => r.result).ToList();
+    }
+
+    /// <summary>
+    /// Memory-efficient streaming processing for large result sets
+    /// </summary>
+    private async Task<List<SearchResult>> ProcessSearchResultsStreamingAsync(
+        IndexSearcher searcher,
+        TopDocs topDocs,
+        string query,
+        int? contextLines,
+        CancellationToken cancellationToken)
+    {
+        var results = new List<SearchResult>();
+        var fieldSet = _fieldSelectorService.GetFieldSet(FieldSetType.SearchResults);
+        
+        // Create score lookup for efficient score retrieval
+        var scoreMap = topDocs.ScoreDocs.ToDictionary(sd => sd.Doc, sd => sd.Score);
+        
+        var streamingOptions = new StreamingOptions
+        {
+            BatchSize = 50,
+            BatchDelay = TimeSpan.FromMilliseconds(2),
+            MaxResults = topDocs.ScoreDocs.Length
+        };
+
+        // Stream results with field selector optimization
+        await foreach (var batch in _streamingResultService.StreamResultsWithFieldSelectorAsync(
+            searcher, topDocs, (s, docId, fields) => ProcessDocumentWithScore(s, docId, fields, scoreMap), 
+            fieldSet.Fields, streamingOptions, cancellationToken))
+        {
+            // Process each batch
+            foreach (var result in batch.Results)
+            {                
+                // Add context if requested (done in batch to reduce I/O overhead)
+                if (contextLines.HasValue && contextLines.Value > 0)
+                {
+                    result.Context = await GetFileContextAsync(result.FilePath, query, contextLines.Value, cancellationToken);
+                }
+                
+                results.Add(result);
+            }
+            
+            // Log progress for very large result sets
+            if (batch.BatchNumber % 20 == 0)
+            {
+                Logger.LogDebug("Processed streaming batch {BatchNumber}, total results: {Total}", 
+                    batch.BatchNumber, batch.TotalProcessed);
+            }
+        }
+
         return results.OrderByDescending(r => r.Score).ToList();
+    }
+
+    /// <summary>
+    /// Document processor for streaming with score preservation
+    /// </summary>
+    private SearchResult ProcessDocumentWithScore(IndexSearcher searcher, int docId, string[] fieldNames, Dictionary<int, float> scoreMap)
+    {
+        var doc = _fieldSelectorService.LoadDocument(searcher, docId, fieldNames);
+        var filePath = doc.Get("path");
+        
+        if (string.IsNullOrEmpty(filePath))
+        {
+            throw new InvalidOperationException($"Document {docId} has no path field");
+        }
+
+        var result = new SearchResult
+        {
+            FilePath = filePath,
+            FileName = doc.Get("filename") ?? Path.GetFileName(filePath),
+            RelativePath = doc.Get("relativePath") ?? filePath,
+            Extension = doc.Get("extension") ?? Path.GetExtension(filePath),
+            Score = scoreMap.GetValueOrDefault(docId, 0f), // Get actual score from TopDocs
+            Language = doc.Get("language") ?? ""
+        };
+        
+        return result;
     }
 
     private async Task<object> CreateAiOptimizedResponse(
@@ -527,6 +640,15 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return EstimateResponseTokens(results) + 1000; // Add overhead for full structure
     }
 
+    private Query BuildQueryWithCache(string queryText, string searchType, bool caseSensitive, string? filePattern, string[]? extensions, Analyzer analyzer)
+    {
+        // Create a cache key that includes all query parameters
+        var cacheKey = $"{queryText}|{searchType}|{caseSensitive}|{filePattern}|{string.Join(",", extensions ?? Array.Empty<string>())}";
+        
+        return _queryCacheService.GetOrCreateQuery(cacheKey, searchType, () => 
+            BuildQuery(queryText, searchType, caseSensitive, filePattern, extensions, analyzer));
+    }
+
     private Query BuildQuery(string queryText, string searchType, bool caseSensitive, string? filePattern, string[]? extensions, Analyzer analyzer)
     {
         var booleanQuery = new BooleanQuery();
@@ -768,10 +890,11 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             var topDocs = collector.GetTopDocs();
             var extensionCounts = new Dictionary<string, int>();
             
-            // Count extensions
+            // Count extensions using field selector for performance
+            var minimalFields = new[] { "extension" };
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
+                var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, minimalFields);
                 var extension = doc.Get("extension") ?? ".unknown";
                 extensionCounts[extension] = extensionCounts.GetValueOrDefault(extension) + 1;
             }

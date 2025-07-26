@@ -24,12 +24,14 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     public override ToolCategory Category => ToolCategory.Search;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IConfiguration _configuration;
+    private readonly IFieldSelectorService _fieldSelectorService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSearchToolV2(
         ILogger<FastFileSearchToolV2> logger,
         ILuceneIndexService luceneIndexService,
         IConfiguration configuration,
+        IFieldSelectorService fieldSelectorService,
         IResponseSizeEstimator sizeEstimator,
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
@@ -38,6 +40,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     {
         _luceneIndexService = luceneIndexService;
         _configuration = configuration;
+        _fieldSelectorService = fieldSelectorService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -96,7 +99,9 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
 
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
+                // Use field selector to load only required fields for optimal performance
+                var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, 
+                    "path", "filename", "relativePath", "extension", "size", "lastModified", "language");
                 
                 var result = new FileSearchResult
                 {

@@ -19,14 +19,17 @@ public class FastSimilarFilesTool : ITool
     public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastSimilarFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IFieldSelectorService _fieldSelectorService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastSimilarFilesTool(
         ILogger<FastSimilarFilesTool> logger,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        IFieldSelectorService fieldSelectorService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
+        _fieldSelectorService = fieldSelectorService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -83,7 +86,8 @@ public class FastSimilarFilesTool : ITool
             }
 
             var sourceDocId = sourceHits.ScoreDocs[0].Doc;
-            var sourceDoc = searcher.Doc(sourceDocId);
+            // Load only essential fields for source document analysis
+            var sourceDoc = _fieldSelectorService.LoadDocument(searcher, sourceDocId, "filename", "extension", "language");
             
             // Set up MoreLikeThis query
             var mlt = new MoreLikeThis(searcher.IndexReader)
@@ -131,9 +135,12 @@ public class FastSimilarFilesTool : ITool
             var results = new List<object>();
             var topTerms = GetTopTermsFromDocument(mlt, sourceDocId, 10);
             
+            // Define fields needed for similarity results
+            var similarityFields = new[] { "path", "filename", "relativePath", "extension", "language" };
+            
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
+                var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, similarityFields);
                 
                 results.Add(new
                 {

@@ -18,14 +18,17 @@ public class FastDirectorySearchTool : ITool
     public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastDirectorySearchTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IFieldSelectorService _fieldSelectorService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastDirectorySearchTool(
         ILogger<FastDirectorySearchTool> logger,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        IFieldSelectorService fieldSelectorService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
+        _fieldSelectorService = fieldSelectorService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -86,7 +89,7 @@ public class FastDirectorySearchTool : ITool
                 
                 foreach (var scoreDoc in topDocs.ScoreDocs)
                 {
-                    var doc = searcher.Doc(scoreDoc.Doc);
+                    var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, "relativeDirectory", "directory");
                     var relativeDir = doc.Get("relativeDirectory") ?? "";
                     var directory = doc.Get("directory") ?? "";
                     
@@ -146,7 +149,8 @@ public class FastDirectorySearchTool : ITool
                 var results = new List<object>();
                 foreach (var scoreDoc in topDocs.ScoreDocs.Take(maxResults))
                 {
-                    var doc = searcher.Doc(scoreDoc.Doc);
+                    // Use field selector to load only directory-related fields for better performance
+                    var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, FieldSetType.DirectoryListing);
                     
                     results.Add(new
                     {

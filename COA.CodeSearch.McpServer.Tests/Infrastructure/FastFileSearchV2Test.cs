@@ -33,6 +33,7 @@ public class FastFileSearchV2Test : TestBase
             ServiceProvider.GetRequiredService<ILogger<FastFileSearchToolV2>>(),
             _indexService,
             ServiceProvider.GetRequiredService<IConfiguration>(),
+            ServiceProvider.GetRequiredService<IFieldSelectorService>(),
             ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),

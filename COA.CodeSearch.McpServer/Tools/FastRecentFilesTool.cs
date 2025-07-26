@@ -16,14 +16,17 @@ public class FastRecentFilesTool : ITool
     public ToolCategory Category => ToolCategory.Search;
     private readonly ILogger<FastRecentFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IFieldSelectorService _fieldSelectorService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastRecentFilesTool(
         ILogger<FastRecentFilesTool> logger,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        IFieldSelectorService fieldSelectorService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
+        _fieldSelectorService = fieldSelectorService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -99,9 +102,12 @@ public class FastRecentFilesTool : ITool
             var results = new List<object>();
             var totalSize = 0L;
             
+            // Define fields needed for recent files analysis
+            var recentFilesFields = new[] { "path", "filename", "relativePath", "extension", "lastModified", "size", "language" };
+            
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
+                var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, recentFilesFields);
                 var lastModifiedTicks = long.Parse(doc.Get("lastModified") ?? "0");
                 var lastModified = new DateTime(lastModifiedTicks);
                 var size = long.Parse(doc.Get("size") ?? "0");
