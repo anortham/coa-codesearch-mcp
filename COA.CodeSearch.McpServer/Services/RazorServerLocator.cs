@@ -29,6 +29,29 @@ public class RazorServerLocator
     {
         _logger.LogDebug("Searching for Razor Language Server...");
 
+        // 0. Check if embedded mode is forced
+        var forceEmbedded = _configuration.GetValue<bool>("Razor:ForceEmbeddedMode");
+        if (forceEmbedded)
+        {
+            _logger.LogInformation("Embedded Razor mode forced by configuration");
+            return "EMBEDDED_RAZOR_ANALYSIS";
+        }
+
+        // Wrap the entire search in a timeout to prevent hanging
+        try
+        {
+            using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(5)); // 5 second timeout for the entire search
+            return await FindRazorServerInternalAsync(cts.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            _logger.LogWarning("Razor server search timed out, falling back to embedded mode");
+            return "EMBEDDED_RAZOR_ANALYSIS";
+        }
+    }
+
+    private async Task<string?> FindRazorServerInternalAsync(CancellationToken cancellationToken)
+    {
         // 1. Check user configuration first
         var configuredPath = _configuration["Razor:ServerPath"];
         if (!string.IsNullOrEmpty(configuredPath) && File.Exists(configuredPath))
@@ -37,10 +60,14 @@ public class RazorServerLocator
             return configuredPath;
         }
 
+        cancellationToken.ThrowIfCancellationRequested();
+
         // 2. Check VS Code extensions directory (primary location)
         var vsCodePaths = GetVSCodeExtensionPaths();
         foreach (var extensionPath in vsCodePaths)
         {
+            cancellationToken.ThrowIfCancellationRequested();
+            
             var rzlsPath = await FindRzlsInExtensionAsync(extensionPath);
             if (rzlsPath != null)
             {
@@ -48,6 +75,8 @@ public class RazorServerLocator
                 return rzlsPath;
             }
         }
+
+        cancellationToken.ThrowIfCancellationRequested();
 
         // 3. Check if available as dotnet global tool
         var toolPath = await CheckDotnetToolAsync();
