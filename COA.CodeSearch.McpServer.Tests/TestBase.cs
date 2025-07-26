@@ -65,6 +65,7 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IResultTruncator, ResultTruncator>();
         services.AddMemoryCache(); // Required for DetailRequestCache
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
+        services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddHttpClient(); // For TypeScript installer
         
         // Add core services
