@@ -150,4 +150,114 @@ public class PathResolutionService : IPathResolutionService
         var installPath = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
         return installPath;
     }
+    
+    // Safe file system operations implementation
+    
+    public bool DirectoryExists(string path)
+    {
+        try
+        {
+            return Directory.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    public bool FileExists(string path)
+    {
+        try
+        {
+            return File.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+    
+    public string GetFullPath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path);
+        }
+        catch
+        {
+            return path;
+        }
+    }
+    
+    public string GetFileName(string path)
+    {
+        try
+        {
+            return Path.GetFileName(path) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+    
+    public string GetExtension(string path)
+    {
+        try
+        {
+            return Path.GetExtension(path);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+    
+    public string GetDirectoryName(string path)
+    {
+        try
+        {
+            return Path.GetDirectoryName(path) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+    
+    public string GetRelativePath(string relativeTo, string path)
+    {
+        try
+        {
+            return Path.GetRelativePath(relativeTo, path);
+        }
+        catch
+        {
+            return path;
+        }
+    }
+    
+    public IEnumerable<string> EnumerateFiles(string path)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(path);
+        }
+        catch
+        {
+            return Enumerable.Empty<string>();
+        }
+    }
+    
+    public IEnumerable<string> EnumerateDirectories(string path)
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(path);
+        }
+        catch
+        {
+            return Enumerable.Empty<string>();
+        }
+    }
 }

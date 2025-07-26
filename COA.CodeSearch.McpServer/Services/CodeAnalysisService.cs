@@ -208,7 +208,7 @@ public class CodeAnalysisService : IDisposable
             var properties = new Dictionary<string, string>
             {
                 // Build configuration
-                ["Configuration"] = "Release",
+                ["Configuration"] = "Debug",
                 ["Platform"] = "AnyCPU",
                 ["DesignTimeBuild"] = "true",
                 ["BuildingInsideVisualStudio"] = "true",
@@ -476,7 +476,7 @@ public class CodeAnalysisService : IDisposable
             var properties = new Dictionary<string, string>
             {
                 // Build configuration
-                ["Configuration"] = "Release",
+                ["Configuration"] = "Debug",
                 ["Platform"] = "AnyCPU",
                 ["DesignTimeBuild"] = "true",
                 ["BuildingInsideVisualStudio"] = "true",

@@ -10,6 +10,8 @@ public interface ILuceneIndexService : IAsyncDisposable, IDisposable
     Task<IndexSearcher> GetIndexSearcherAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task CommitAsync(string workspacePath, CancellationToken cancellationToken = default);
+    Task ForceMergeAsync(string workspacePath, int maxNumSegments = 1, CancellationToken cancellationToken = default);
+    [Obsolete("Use ForceMergeAsync instead. 'Optimize' is deprecated terminology in Lucene.")]
     Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task<Dictionary<string, string>> GetAllIndexMappingsAsync();
@@ -28,4 +30,11 @@ public interface ILuceneIndexService : IAsyncDisposable, IDisposable
     /// Clean up duplicate indices created due to path normalization issues
     /// </summary>
     Task CleanupDuplicateIndicesAsync();
+    
+    /// <summary>
+    /// Comprehensive index defragmentation for long-running installations
+    /// </summary>
+    Task<IndexDefragmentationResult> DefragmentIndexAsync(string workspacePath, 
+        IndexDefragmentationOptions? options = null, 
+        CancellationToken cancellationToken = default);
 }

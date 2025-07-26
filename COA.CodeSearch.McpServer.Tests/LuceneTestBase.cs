@@ -5,6 +5,7 @@ using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
+using COA.CodeSearch.McpServer.Tests.Helpers;
 using Microsoft.Build.Locator;
 using System.Runtime.CompilerServices;
 
@@ -80,6 +81,17 @@ public abstract class LuceneTestBase : IDisposable
         services.AddSingleton<FileWatcherService>();
         services.AddSingleton<WorkspaceAutoIndexService>();
         services.AddSingleton<LuceneLifecycleService>();
+        
+        // Add performance optimization services
+        services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
+        services.AddSingleton<IStreamingResultService, StreamingResultService>();
+        services.AddSingleton<IQueryCacheService, QueryCacheService>();
+        
+        // Add missing services for FileIndexingService
+        services.AddSingleton<IIndexingMetricsService, MockIndexingMetricsService>();
+        services.AddSingleton<ICircuitBreakerService, MockCircuitBreakerService>();
+        services.AddSingleton<IBatchIndexingService, MockBatchIndexingService>();
+        services.AddSingleton<IErrorHandlingService, MockErrorHandlingService>();
         
         // Add TypeScript services (required for some tests)
         services.AddSingleton<TypeScriptInitializationService>();

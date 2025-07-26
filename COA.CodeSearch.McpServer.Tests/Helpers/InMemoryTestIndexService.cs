@@ -73,6 +73,12 @@ public class InMemoryTestIndexService : ILuceneIndexService
         return Task.CompletedTask;
     }
     
+    public Task ForceMergeAsync(string workspacePath, int maxNumSegments = 1, CancellationToken cancellationToken = default)
+    {
+        // No-op for in-memory implementation
+        return Task.CompletedTask;
+    }
+    
     public Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         if (_indexes.TryGetValue(workspacePath, out var index))
@@ -122,6 +128,35 @@ public class InMemoryTestIndexService : ILuceneIndexService
     public void Dispose()
     {
         DisposeAsync().AsTask().GetAwaiter().GetResult();
+    }
+    
+    public Task<IndexDefragmentationResult> DefragmentIndexAsync(string workspacePath, 
+        IndexDefragmentationOptions? options = null, 
+        CancellationToken cancellationToken = default)
+    {
+        // Mock implementation for testing
+        var result = new IndexDefragmentationResult
+        {
+            StartTime = DateTime.UtcNow,
+            CompletedAt = DateTime.UtcNow.AddSeconds(1),
+            Duration = TimeSpan.FromSeconds(1),
+            Success = true,
+            ActionTaken = DefragmentationAction.Skipped,
+            Reason = "In-memory index does not require defragmentation",
+            InitialFragmentationLevel = 0,
+            FinalFragmentationLevel = 0,
+            FragmentationReduction = 0,
+            InitialSegmentCount = 1,
+            FinalSegmentCount = 1,
+            SegmentReduction = 0,
+            InitialSizeBytes = 1024,
+            FinalSizeBytes = 1024,
+            SizeReductionBytes = 0
+        };
+        
+        result.DefragmentationSteps.Add("Mock defragmentation completed");
+        
+        return Task.FromResult(result);
     }
     
     private class TestableIndexWriter : IndexWriter

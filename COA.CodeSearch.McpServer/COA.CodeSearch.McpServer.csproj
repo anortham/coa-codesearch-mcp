@@ -38,6 +38,7 @@
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net.Misc" Version="4.8.0-beta00017" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     
     <!-- Roslyn for code analysis -->
@@ -66,6 +67,7 @@
     
     <!-- HTTP Client for TypeScript installer -->
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
+    <PackageReference Include="SharpCompress" Version="0.40.0" />
   </ItemGroup>
 
   <!-- Auto-increment version properties -->
@@ -79,10 +81,7 @@
     <PropertyGroup>
       <GitHash Condition="'$(GitHash)' == ''">unknown</GitHash>
     </PropertyGroup>
-    <Exec Command="git rev-parse --short=8 HEAD" 
-          ConsoleToMSBuild="true" 
-          ContinueOnError="true" 
-          Condition="'$(GitHash)' == 'unknown'">
+    <Exec Command="git rev-parse --short=8 HEAD" ConsoleToMSBuild="true" ContinueOnError="true" Condition="'$(GitHash)' == 'unknown'">
       <Output TaskParameter="ConsoleOutput" PropertyName="GitHash" />
     </Exec>
     <PropertyGroup>

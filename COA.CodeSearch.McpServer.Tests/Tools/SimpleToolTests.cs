@@ -71,14 +71,10 @@ public class SimpleToolTests : TestBase
         var mockPathResolution = new Mock<IPathResolutionService>();
         mockPathResolution.Setup(x => x.GetTypeScriptInstallPath())
             .Returns(Path.Combine(Path.GetTempPath(), "typescript-test"));
-        var mockInstaller = new TypeScriptInstaller(
-            Mock.Of<ILogger<TypeScriptInstaller>>(),
-            mockPathResolution.Object,
-            null); // null for httpClientFactory is OK
+        // TypeScript installer removed - now uses global installation
         var mockTsService = new Mock<TypeScriptAnalysisService>(
             Mock.Of<ILogger<TypeScriptAnalysisService>>(),
-            Mock.Of<IConfiguration>(),
-            mockInstaller);
+            Mock.Of<IConfiguration>());
         var tsHoverTool = new TypeScriptHoverInfoTool(
             Mock.Of<ILogger<TypeScriptHoverInfoTool>>(),
             mockTsService.Object);

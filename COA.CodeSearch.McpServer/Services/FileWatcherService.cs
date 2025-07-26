@@ -223,7 +223,7 @@ public class FileWatcherService : BackgroundService
             {
                 try
                 {
-                    await _fileIndexingService.UpdateFileAsync(workspacePath, update.FilePath, cancellationToken);
+                    await _fileIndexingService.ReindexFileAsync(workspacePath, update.FilePath, cancellationToken);
                     _logger.LogInformation("Updated in index: {FilePath}", update.FilePath);
                     
                     // Notify subscribers
