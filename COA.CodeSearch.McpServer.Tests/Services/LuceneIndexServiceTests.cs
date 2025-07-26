@@ -57,7 +57,7 @@ public class LuceneIndexServiceTests : IDisposable
 
         // Act
         var writer = await _service.GetIndexWriterAsync(projectMemoryPath);
-        var physicalPath = _service.GetPhysicalIndexPath(projectMemoryPath);
+        var physicalPath = await _service.GetPhysicalIndexPathAsync(projectMemoryPath);
 
         // Assert
         Assert.NotNull(writer);
@@ -82,7 +82,7 @@ public class LuceneIndexServiceTests : IDisposable
 
         // Act
         var writer = await _service.GetIndexWriterAsync(localMemoryPath);
-        var physicalPath = _service.GetPhysicalIndexPath(localMemoryPath);
+        var physicalPath = await _service.GetPhysicalIndexPathAsync(localMemoryPath);
 
         // Assert
         Assert.NotNull(writer);
@@ -97,7 +97,7 @@ public class LuceneIndexServiceTests : IDisposable
     }
 
     [Fact]
-    public Task GetIndexPath_MemoryPath_CrossPlatform()
+    public async Task GetIndexPath_MemoryPath_CrossPlatform()
     {
         // Test both Windows and Unix-style paths
         var testPaths = new[]
@@ -117,7 +117,7 @@ public class LuceneIndexServiceTests : IDisposable
             }
             
             // Act
-            var physicalPath = _service.GetPhysicalIndexPath(memoryPath);
+            var physicalPath = await _service.GetPhysicalIndexPathAsync(memoryPath);
 
             // Assert
             Assert.Equal(memoryPath, physicalPath);
@@ -125,8 +125,6 @@ public class LuceneIndexServiceTests : IDisposable
             // Verify GetIndexPath was NOT called for memory paths
             _mockPathResolution.Verify(x => x.GetIndexPath(It.IsAny<string>()), Times.Never);
         }
-        
-        return Task.CompletedTask;
     }
 
     [Fact]
@@ -141,7 +139,7 @@ public class LuceneIndexServiceTests : IDisposable
 
         // Act
         var writer = await _service.GetIndexWriterAsync(workspacePath);
-        var physicalPath = _service.GetPhysicalIndexPath(workspacePath);
+        var physicalPath = await _service.GetPhysicalIndexPathAsync(workspacePath);
 
         // Assert
         Assert.NotNull(writer);

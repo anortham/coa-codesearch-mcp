@@ -205,7 +205,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
     }
 
     [Fact]
-    public Task PathResolution_ExpectedBehavior()
+    public async Task PathResolution_ExpectedBehavior()
     {
         // Define expected behavior for PathResolutionService
         
@@ -223,10 +223,10 @@ public class MemorySystemPathIntegrationTests : IDisposable
         // This is where the bug was - it was treating memory paths as workspace paths
         var indexService = _serviceProvider.GetRequiredService<LuceneIndexService>();
         
-        var projectIndexPath = indexService.GetPhysicalIndexPath(projectMemoryPath);
+        var projectIndexPath = await indexService.GetPhysicalIndexPathAsync(projectMemoryPath);
         Assert.Equal(projectMemoryPath, projectIndexPath);
         
-        var localIndexPath = indexService.GetPhysicalIndexPath(localMemoryPath);
+        var localIndexPath = await indexService.GetPhysicalIndexPathAsync(localMemoryPath);
         Assert.Equal(localMemoryPath, localIndexPath);
         
         // Test 4: GetIndexPath with regular workspace should hash it
@@ -236,8 +236,6 @@ public class MemorySystemPathIntegrationTests : IDisposable
         Assert.NotEqual(workspacePath, workspaceIndexPath);
         Assert.Contains("index", workspaceIndexPath);
         Assert.True(workspaceIndexPath.Contains("MyProject") || workspaceIndexPath.Contains("_"));
-        
-        return Task.CompletedTask;
     }
 
     [Fact]
@@ -260,7 +258,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         
         // Ensure the index is properly closed before creating new instances
         var luceneService = _serviceProvider.GetRequiredService<LuceneIndexService>();
-        luceneService.CloseWriter(_pathResolution.GetProjectMemoryPath(), commit: true);
+        await luceneService.CloseWriterAsync(_pathResolution.GetProjectMemoryPath(), commit: true);
         
         // Give time for the index to flush
         await Task.Delay(100);

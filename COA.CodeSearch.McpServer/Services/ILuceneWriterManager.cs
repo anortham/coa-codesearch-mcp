@@ -5,20 +5,20 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Interface for managing Lucene index writers with proper lock handling
 /// </summary>
-public interface ILuceneWriterManager : IDisposable
+public interface ILuceneWriterManager : IAsyncDisposable, IDisposable
 {
     /// <summary>
     /// Get or create an index writer with proper lock handling
     /// </summary>
-    IndexWriter GetOrCreateWriter(string workspacePath, bool forceRecreate = false);
+    Task<IndexWriter> GetOrCreateWriterAsync(string workspacePath, bool forceRecreate = false, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Safely close and commit an index writer
     /// </summary>
-    void CloseWriter(string workspacePath, bool commit = true);
+    Task CloseWriterAsync(string workspacePath, bool commit = true, CancellationToken cancellationToken = default);
     
     /// <summary>
-    /// Clean up old or stuck indexes
+    /// Diagnose stuck indexes and report them (does not automatically clean)
     /// </summary>
-    void CleanupStuckIndexes();
+    Task DiagnoseStuckIndexesAsync();
 }

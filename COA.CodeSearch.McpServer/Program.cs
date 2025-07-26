@@ -227,11 +227,8 @@ static async Task PerformEarlyStartupCleanup()
             builder.AddConsole().SetMinimumLevel(LogLevel.Information));
         var logger = loggerFactory.CreateLogger("Startup");
         
-        // Perform the cleanup
-        LuceneIndexService.CleanupStuckIndexesOnStartup(pathResolution, logger);
-        
-        // Small delay to ensure cleanup completes
-        await Task.Delay(500);
+        // Check for stuck locks and warn (but don't auto-clean)
+        await LuceneIndexService.DiagnoseStuckIndexesOnStartupAsync(pathResolution, logger);
     }
     catch (Exception ex)
     {

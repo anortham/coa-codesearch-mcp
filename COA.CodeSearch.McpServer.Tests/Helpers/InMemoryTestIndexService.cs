@@ -14,7 +14,7 @@ namespace COA.CodeSearch.McpServer.Tests.Helpers;
 /// <summary>
 /// In-memory test implementation of ILuceneIndexService for unit testing
 /// </summary>
-public class InMemoryTestIndexService : ILuceneIndexService, IDisposable
+public class InMemoryTestIndexService : ILuceneIndexService
 {
     private readonly ConcurrentDictionary<string, InMemoryIndex> _indexes = new();
     private readonly StandardAnalyzer _analyzer = new(LuceneVersion.LUCENE_48);
@@ -85,9 +85,9 @@ public class InMemoryTestIndexService : ILuceneIndexService, IDisposable
         return Task.CompletedTask;
     }
     
-    public string GetPhysicalIndexPath(string workspacePath)
+    public Task<string> GetPhysicalIndexPathAsync(string workspacePath)
     {
-        return $"memory://{workspacePath}";
+        return Task.FromResult($"memory://{workspacePath}");
     }
     
     public Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -95,25 +95,33 @@ public class InMemoryTestIndexService : ILuceneIndexService, IDisposable
         return Task.FromResult<Analyzer>(_analyzer);
     }
     
-    public Dictionary<string, string> GetAllIndexMappings()
+    public Task<Dictionary<string, string>> GetAllIndexMappingsAsync()
     {
-        return _indexes.ToDictionary(kvp => kvp.Key, kvp => GetPhysicalIndexPath(kvp.Key));
+        return Task.FromResult(_indexes.ToDictionary(kvp => kvp.Key, kvp => $"memory://{kvp.Key}"));
     }
     
-    public void CleanupStuckIndexes()
+    public Task DiagnoseStuckIndexesAsync()
     {
-        // No-op for in-memory implementation - no file locks to clean
+        // No-op for in-memory implementation - no file locks to diagnose
+        return Task.CompletedTask;
     }
     
-    public void CleanupDuplicateIndices()
+    public Task CleanupDuplicateIndicesAsync()
     {
         // No-op for in-memory implementation - no duplicates in memory
+        return Task.CompletedTask;
+    }
+    
+    public ValueTask DisposeAsync()
+    {
+        _analyzer?.Dispose();
+        _indexes.Clear();
+        return ValueTask.CompletedTask;
     }
     
     public void Dispose()
     {
-        _analyzer?.Dispose();
-        _indexes.Clear();
+        DisposeAsync().AsTask().GetAwaiter().GetResult();
     }
     
     private class TestableIndexWriter : IndexWriter
