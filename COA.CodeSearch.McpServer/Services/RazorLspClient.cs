@@ -849,6 +849,13 @@ public class RazorLspClient : IDisposable
             return;
         }
 
+        // Skip health checks when in embedded mode - no external process to monitor
+        if (_isEmbeddedMode)
+        {
+            _logger.LogTrace("Embedded Razor analyzer is healthy (no external process to monitor)");
+            return;
+        }
+
         try
         {
             // Check if process is still running
@@ -874,6 +881,13 @@ public class RazorLspClient : IDisposable
     /// </summary>
     private async Task RestartServerAsync()
     {
+        // Don't attempt to restart when in embedded mode
+        if (_isEmbeddedMode)
+        {
+            _logger.LogDebug("Restart skipped - running in embedded mode");
+            return;
+        }
+
         try
         {
             _logger.LogInformation("Attempting to restart Razor LSP server...");
