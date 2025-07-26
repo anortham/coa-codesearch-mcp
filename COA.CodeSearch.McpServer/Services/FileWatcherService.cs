@@ -11,9 +11,8 @@ public class FileWatcherService : BackgroundService
     private readonly ILogger<FileWatcherService> _logger;
     private readonly IConfiguration _configuration;
     private readonly FileIndexingService _fileIndexingService;
+    private readonly IPathResolutionService _pathResolution;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
-    // TODO: Fix potential memory leak - items may not be removed from dictionary on exceptions
-    // UPDATE: This has been addressed - testing memory lifecycle service
     private readonly ConcurrentDictionary<string, DateTime> _pendingUpdates = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
     private readonly HashSet<string> _supportedExtensions;
@@ -21,21 +20,26 @@ public class FileWatcherService : BackgroundService
     private readonly int _debounceMilliseconds;
     private readonly int _batchSize;
     private readonly bool _enabled;
-    private readonly List<IFileChangeSubscriber> _subscribers = new();
+    private readonly ConcurrentBag<IFileChangeSubscriber> _subscribers = new();
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
         FileIndexingService fileIndexingService,
+        IPathResolutionService pathResolution,
         IEnumerable<IFileChangeSubscriber>? subscribers = null)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
+        _pathResolution = pathResolution;
         
         if (subscribers != null)
         {
-            _subscribers.AddRange(subscribers);
+            foreach (var subscriber in subscribers)
+            {
+                _subscribers.Add(subscriber);
+            }
         }
 
         // Load configuration
@@ -235,7 +239,7 @@ public class FileWatcherService : BackgroundService
     
     private async Task NotifySubscribersAsync(FileChangeEvent changeEvent, CancellationToken cancellationToken)
     {
-        if (_subscribers.Count == 0)
+        if (_subscribers.IsEmpty)
             return;
         
         try
@@ -386,22 +390,22 @@ public class FileWatcherService : BackgroundService
     private bool ShouldIgnoreFile(string filePath)
     {
         // Always ignore anything in .codesearch directory
-        if (filePath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase))
+        if (IsUnderCodeSearchDirectory(filePath))
         {
             _logger.LogTrace("Ignoring file in {BaseDir} directory: {FilePath}", PathConstants.BaseDirectoryName, filePath);
             return true;
         }
 
         // Check extension
-        var extension = Path.GetExtension(filePath);
+        var extension = GetSafeFileExtension(filePath);
         if (string.IsNullOrEmpty(extension) || !_supportedExtensions.Contains(extension))
             return true;
 
         // Check excluded directories
-        var directory = Path.GetDirectoryName(filePath);
+        var directory = GetSafeDirectoryName(filePath);
         if (!string.IsNullOrEmpty(directory))
         {
-            var parts = directory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var parts = SplitPath(directory);
             if (parts.Any(part => _excludedDirectories.Contains(part)))
                 return true;
         }
@@ -409,18 +413,101 @@ public class FileWatcherService : BackgroundService
         return false;
     }
 
+    private bool IsUnderCodeSearchDirectory(string filePath)
+    {
+        try
+        {
+            var normalizedPath = NormalizePath(filePath);
+            var baseDir = NormalizePath(_pathResolution.GetBasePath());
+            return normalizedPath.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // Fallback to simple string check if path normalization fails
+            return filePath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
+    private string GetSafeFileExtension(string filePath)
+    {
+        try
+        {
+            return Path.GetExtension(filePath);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string GetSafeDirectoryName(string filePath)
+    {
+        try
+        {
+            return Path.GetDirectoryName(filePath) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string[] SplitPath(string path)
+    {
+        try
+        {
+            return path.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            return Array.Empty<string>();
+        }
+    }
+
+    private string NormalizePath(string path)
+    {
+        try
+        {
+            return Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+        }
+        catch
+        {
+            return path;
+        }
+    }
+
     public override void Dispose()
     {
-        // Stop all watchers
-        foreach (var watcher in _watchers.Values)
+        try
         {
-            watcher.EnableRaisingEvents = false;
-            watcher.Dispose();
-        }
-        _watchers.Clear();
+            // Signal shutdown first
+            _changeQueue?.CompleteAdding();
+            
+            // Stop all watchers
+            foreach (var watcher in _watchers.Values)
+            {
+                try
+                {
+                    watcher.EnableRaisingEvents = false;
+                    watcher.Dispose();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error disposing file system watcher");
+                }
+            }
+            _watchers.Clear();
 
-        _changeQueue?.Dispose();
-        base.Dispose();
+            _changeQueue?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during FileWatcherService disposal");
+        }
+        finally
+        {
+            base.Dispose();
+        }
     }
 
     private class FileChangeEvent

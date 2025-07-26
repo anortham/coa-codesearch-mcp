@@ -8,6 +8,8 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using Serilog;
+using Serilog.Events;
 
 // Track server start time for version tool
 // TEST COMMENT: Testing file watcher detection - added at 12:59 PM
@@ -36,6 +38,30 @@ var host = Host.CreateDefaultBuilder(args)
             .AddJsonFile("appsettings.json", optional: true, reloadOnChange: true)
             .AddEnvironmentVariables("MCP_");
     })
+    .UseSerilog((context, services, configuration) =>
+    {
+        // Get path resolution service to determine log directory
+        var pathResolution = new PathResolutionService(context.Configuration);
+        var logDirectory = pathResolution.GetLogsPath();
+        
+        configuration
+            .MinimumLevel.Information()
+            .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
+            .MinimumLevel.Override("System", LogEventLevel.Warning)
+            .MinimumLevel.Override("COA.CodeSearch.McpServer.Services.FileIndexingService", LogEventLevel.Warning)
+            .MinimumLevel.Override("COA.CodeSearch.McpServer.Services.LuceneIndexService", LogEventLevel.Warning)
+            .MinimumLevel.Override("COA.CodeSearch.McpServer.Tests", LogEventLevel.Error)
+            .WriteTo.File(
+                path: Path.Combine(logDirectory, "codesearch-.log"),
+                rollingInterval: RollingInterval.Day,
+                fileSizeLimitBytes: 10_485_760, // 10MB
+                retainedFileCountLimit: 7,
+                shared: true,
+                flushToDiskInterval: TimeSpan.FromSeconds(1),
+                outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"
+            )
+            .Enrich.FromLogContext();
+    }, preserveStaticLogger: false)
     .ConfigureLogging((context, logging) =>
     {
         logging.ClearProviders();
@@ -83,10 +109,6 @@ var host = Host.CreateDefaultBuilder(args)
         // Memory lifecycle configuration
         services.Configure<MemoryLifecycleOptions>(
             context.Configuration.GetSection("MemoryLifecycle"));
-        
-        // File Logging Service - register FIRST so all other services can log to file
-        services.AddSingleton<FileLoggingService>();
-        services.AddHostedService(provider => provider.GetRequiredService<FileLoggingService>());
         
         // Memory lifecycle service
         services.AddSingleton<MemoryLifecycleService>();

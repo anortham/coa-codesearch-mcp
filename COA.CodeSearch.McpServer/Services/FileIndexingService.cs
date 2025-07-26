@@ -15,22 +15,26 @@ public class FileIndexingService
     private readonly ILogger<FileIndexingService> _logger;
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IPathResolutionService _pathResolution;
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
     private const int MaxFileSize = 10 * 1024 * 1024; // 10MB
+    private const int LargeFileThreshold = 1024 * 1024; // 1MB
 
     public FileIndexingService(
         ILogger<FileIndexingService> logger, 
         IConfiguration configuration,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        IPathResolutionService pathResolution)
     {
-        _logger = logger;
-        _configuration = configuration;
-        _luceneIndexService = luceneIndexService;
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
+        _luceneIndexService = luceneIndexService ?? throw new ArgumentNullException(nameof(luceneIndexService));
+        _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
         
         // Initialize supported extensions from configuration or defaults
         var extensions = configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>() 
-            ?? new[] { ".cs", ".razor", ".cshtml", ".json", ".xml", ".md", ".txt", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".html", ".yml", ".yaml", ".csproj", ".sln" };
+            ?? new[] { ".cs", ".razor", ".cshtml", ".json", ".xml", ".md", ".txt", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".html", ".yml", ".yaml", ".csproj", ".sln", ".py", ".pyi" };
         _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
         
         // Initialize excluded directories
@@ -46,29 +50,42 @@ public class FileIndexingService
         
         try
         {
-            // Get all files to index
-            var files = GetFilesToIndex(directoryPath).ToList();
-            _logger.LogInformation("Found {Count} files to index in {Directory}", files.Count, directoryPath);
-            
-            // Process files in parallel
-            var semaphore = new SemaphoreSlim(Environment.ProcessorCount);
-            var tasks = files.Select(async filePath =>
-            {
-                await semaphore.WaitAsync(cancellationToken);
-                try
+            // Process files in parallel with streaming enumeration
+            using var semaphore = new SemaphoreSlim(Environment.ProcessorCount);
+            var errors = new ConcurrentBag<(string file, Exception error)>();
+            await Parallel.ForEachAsync(
+                GetFilesToIndex(directoryPath),
+                new ParallelOptions 
+                { 
+                    MaxDegreeOfParallelism = Environment.ProcessorCount,
+                    CancellationToken = cancellationToken 
+                },
+                async (filePath, ct) =>
                 {
-                    if (await IndexFileOptimizedAsync(indexWriter, filePath, workspacePath, cancellationToken))
+                    await semaphore.WaitAsync(ct);
+                    try
                     {
-                        Interlocked.Increment(ref indexedCount);
+                        if (await IndexFileOptimizedAsync(indexWriter, filePath, workspacePath, ct))
+                        {
+                            Interlocked.Increment(ref indexedCount);
+                        }
                     }
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            });
+                    catch (Exception ex)
+                    {
+                        errors.Add((filePath, ex));
+                        _logger.LogWarning(ex, "Failed to index file: {FilePath}", filePath);
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                });
             
-            await Task.WhenAll(tasks);
+            // Report any errors
+            if (!errors.IsEmpty)
+            {
+                _logger.LogWarning("Failed to index {Count} files out of {Total}", errors.Count, indexedCount + errors.Count);
+            }
             
             // Final commit
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
@@ -90,28 +107,31 @@ public class FileIndexingService
         
         while (directoriesToProcess.TryPop(out var currentDir))
         {
-            if (!System.IO.Directory.Exists(currentDir))
+            if (!SafeDirectoryExists(currentDir))
                 continue;
                 
-            var dirName = Path.GetFileName(currentDir);
+            var dirName = GetSafeFileName(currentDir);
             if (!string.IsNullOrEmpty(dirName) && _excludedDirectories.Contains(dirName))
                 continue;
                 
+            // Skip .codesearch directories
+            if (IsUnderCodeSearchDirectory(currentDir))
+                continue;
+                
             // Yield files from current directory
-            foreach (var file in System.IO.Directory.EnumerateFiles(currentDir))
+            foreach (var file in SafeEnumerateFiles(currentDir))
             {
-                var extension = Path.GetExtension(file);
+                var extension = GetSafeFileExtension(file);
                 if (_supportedExtensions.Contains(extension))
                 {
-                    _logger.LogDebug("Found file to index: {File}", file);
                     yield return file;
                 }
             }
             
             // Add subdirectories to process
-            foreach (var subDir in System.IO.Directory.EnumerateDirectories(currentDir))
+            foreach (var subDir in SafeEnumerateDirectories(currentDir))
             {
-                var subDirName = Path.GetFileName(subDir);
+                var subDirName = GetSafeFileName(subDir);
                 if (!_excludedDirectories.Contains(subDirName))
                 {
                     directoriesToProcess.Push(subDir);
@@ -152,7 +172,7 @@ public class FileIndexingService
 
             // Read file content using memory-mapped files for large files
             string content;
-            if (fileInfo.Length > 1024 * 1024) // 1MB threshold
+            if (fileInfo.Length > LargeFileThreshold)
             {
                 content = await ReadLargeFileAsync(filePath, cancellationToken);
             }
@@ -168,7 +188,6 @@ public class FileIndexingService
             // Update or add document
             indexWriter.UpdateDocument(new Term("id", filePath), doc);
             
-            _logger.LogDebug("Indexed file: {FilePath}", filePath);
             return true;
         }
         catch (Exception ex)
@@ -205,12 +224,12 @@ public class FileIndexingService
     [MethodImpl(MethodImplOptions.AggressiveInlining)]
     private Document CreateDocument(string filePath, FileInfo fileInfo, string content, string workspacePath)
     {
-        var extension = Path.GetExtension(filePath);
-        var fileName = Path.GetFileName(filePath);
-        var relativePath = Path.GetRelativePath(workspacePath, filePath);
-        var directoryPath = Path.GetDirectoryName(filePath) ?? "";
-        var relativeDirectoryPath = Path.GetRelativePath(workspacePath, directoryPath);
-        var directoryName = Path.GetFileName(directoryPath) ?? "";
+        var extension = GetSafeFileExtension(filePath);
+        var fileName = GetSafeFileName(filePath);
+        var relativePath = GetSafeRelativePath(workspacePath, filePath);
+        var directoryPath = GetSafeDirectoryName(filePath);
+        var relativeDirectoryPath = GetSafeRelativePath(workspacePath, directoryPath);
+        var directoryName = GetSafeFileName(directoryPath);
         
         var doc = new Document
         {
@@ -242,22 +261,9 @@ public class FileIndexingService
         return doc;
     }
 
-    public async Task<bool> RemoveFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
+    public Task<bool> RemoveFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
     {
-        try
-        {
-            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken);
-            indexWriter.DeleteDocuments(new Term("id", filePath));
-            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
-            
-            _logger.LogDebug("Removed file from index: {FilePath}", filePath);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error removing file from index: {FilePath}", filePath);
-            return false;
-        }
+        return DeleteFileAsync(workspacePath, filePath, cancellationToken);
     }
 
     public async Task<bool> UpdateFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
@@ -278,7 +284,6 @@ public class FileIndexingService
             // Commit the deletion
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
             
-            _logger.LogDebug("Deleted file from index: {FilePath}", filePath);
             return true;
         }
         catch (Exception ex)
@@ -308,7 +313,109 @@ public class FileIndexingService
             ".md" => "markdown",
             ".csproj" => "msbuild",
             ".sln" => "solution",
+            ".py" => "python",
+            ".pyi" => "python",
             _ => ""
         };
+    }
+
+    // Safe path operation wrappers
+    private bool SafeDirectoryExists(string path)
+    {
+        try
+        {
+            return Directory.Exists(path);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private IEnumerable<string> SafeEnumerateFiles(string path)
+    {
+        try
+        {
+            return Directory.EnumerateFiles(path);
+        }
+        catch
+        {
+            return Enumerable.Empty<string>();
+        }
+    }
+
+    private IEnumerable<string> SafeEnumerateDirectories(string path)
+    {
+        try
+        {
+            return Directory.EnumerateDirectories(path);
+        }
+        catch
+        {
+            return Enumerable.Empty<string>();
+        }
+    }
+
+    private string GetSafeFileName(string path)
+    {
+        try
+        {
+            return Path.GetFileName(path) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string GetSafeFileExtension(string path)
+    {
+        try
+        {
+            return Path.GetExtension(path);
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string GetSafeDirectoryName(string path)
+    {
+        try
+        {
+            return Path.GetDirectoryName(path) ?? string.Empty;
+        }
+        catch
+        {
+            return string.Empty;
+        }
+    }
+
+    private string GetSafeRelativePath(string relativeTo, string path)
+    {
+        try
+        {
+            return Path.GetRelativePath(relativeTo, path);
+        }
+        catch
+        {
+            return path;
+        }
+    }
+
+    private bool IsUnderCodeSearchDirectory(string path)
+    {
+        try
+        {
+            var normalizedPath = Path.GetFullPath(path).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var baseDir = Path.GetFullPath(_pathResolution.GetBasePath()).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return normalizedPath.StartsWith(baseDir, StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            // Fallback to simple string check if path normalization fails
+            return path.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
