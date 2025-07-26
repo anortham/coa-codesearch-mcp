@@ -85,6 +85,8 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
+        services.AddSingleton<MemoryLinkingTools>();
+        services.AddSingleton<ChecklistTools>();
         
         // Memory intelligence services
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();

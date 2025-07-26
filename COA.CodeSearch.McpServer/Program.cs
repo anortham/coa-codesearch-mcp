@@ -157,6 +157,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<RazorVirtualDocumentManager>();
         services.AddSingleton<RazorLspClient>();
         services.AddSingleton<RazorPositionMapper>();
+        services.AddSingleton<EmbeddedRazorAnalyzer>();
         services.AddSingleton<RazorAnalysisService>();
         services.AddSingleton<IRazorAnalysisService>(provider => provider.GetRequiredService<RazorAnalysisService>());
         

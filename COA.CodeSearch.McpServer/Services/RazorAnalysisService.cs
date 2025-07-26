@@ -170,7 +170,7 @@ public class RazorAnalysisService : IRazorAnalysisService
     /// </summary>
     public async Task<string?> GetHoverInfoAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
     {
-        if (_disposed || !IsAvailable)
+        if (_disposed)
         {
             return null;
         }
@@ -180,6 +180,18 @@ public class RazorAnalysisService : IRazorAnalysisService
             if (!IsRazorFile(filePath))
             {
                 _logger.LogWarning("GetHoverInfoAsync called on non-Razor file: {Path}", filePath);
+                return null;
+            }
+
+            // Use embedded analyzer when in embedded mode or LSP server not available
+            if (!IsAvailable || _lspClient.IsEmbeddedMode)
+            {
+                _logger.LogTrace("Using embedded Razor analyzer for hover info: {FilePath} at {Line}:{Column}", filePath, line, column);
+                var embeddedResult = await _lspClient.GetEmbeddedHoverInfoAsync(filePath, line, column);
+                if (embeddedResult != null)
+                {
+                    return embeddedResult.ToJsonString();
+                }
                 return null;
             }
 
@@ -304,6 +316,19 @@ public class RazorAnalysisService : IRazorAnalysisService
             if (!IsRazorFile(filePath))
             {
                 _logger.LogWarning("GetDiagnosticsAsync called on non-Razor file: {Path}", filePath);
+                return Array.Empty<object>();
+            }
+
+            // Use embedded analyzer when in embedded mode or LSP server not available
+            if (!IsAvailable || _lspClient.IsEmbeddedMode)
+            {
+                _logger.LogTrace("Using embedded Razor analyzer for diagnostics: {FilePath}", filePath);
+                var embeddedResult = await _lspClient.GetEmbeddedDiagnosticsAsync(filePath, cancellationToken);
+                if (embeddedResult != null && embeddedResult.GetValueKind() == System.Text.Json.JsonValueKind.Array)
+                {
+                    var resultArray = embeddedResult.AsArray();
+                    return resultArray.Select(item => (object)item.ToJsonString()).ToArray();
+                }
                 return Array.Empty<object>();
             }
 

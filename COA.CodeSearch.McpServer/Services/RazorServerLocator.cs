@@ -57,8 +57,9 @@ public class RazorServerLocator
             return toolPath;
         }
 
-        _logger.LogWarning("Razor Language Server not found. Install VS Code C# extension or configure Razor:ServerPath");
-        return null;
+        // 4. Fall back to embedded NuGet-based analysis (without external LSP server)
+        _logger.LogInformation("External Razor LSP server not found, falling back to embedded Razor analysis using NuGet packages");
+        return "EMBEDDED_RAZOR_ANALYSIS"; // Special marker for embedded mode
     }
 
     /// <summary>

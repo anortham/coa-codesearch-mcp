@@ -17,6 +17,7 @@ public class RazorLspClient : IDisposable
     private readonly ILogger<RazorLspClient> _logger;
     private readonly RazorServerLocator _serverLocator;
     private readonly IMemoryCache _cache;
+    private readonly EmbeddedRazorAnalyzer _embeddedAnalyzer;
     private readonly SemaphoreSlim _requestSemaphore = new(1, 1);
     private readonly CancellationTokenSource _disposeCts = new();
     
@@ -27,13 +28,15 @@ public class RazorLspClient : IDisposable
     private int _nextRequestId = 1;
     private bool _isInitialized;
     private bool _disposed;
+    private bool _isEmbeddedMode;
     private readonly Timer _healthCheckTimer;
 
-    public RazorLspClient(ILogger<RazorLspClient> logger, RazorServerLocator serverLocator, IMemoryCache cache)
+    public RazorLspClient(ILogger<RazorLspClient> logger, RazorServerLocator serverLocator, IMemoryCache cache, EmbeddedRazorAnalyzer embeddedAnalyzer)
     {
         _logger = logger;
         _serverLocator = serverLocator;
         _cache = cache;
+        _embeddedAnalyzer = embeddedAnalyzer;
         
         // Setup health check timer to monitor connection every 30 seconds
         _healthCheckTimer = new Timer(PerformHealthCheck, null, TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
@@ -43,6 +46,39 @@ public class RazorLspClient : IDisposable
     /// Gets whether the Razor LSP server is running and initialized
     /// </summary>
     public bool IsAvailable => _razorProcess != null && !_razorProcess.HasExited && _isInitialized;
+
+    /// <summary>
+    /// Gets whether the client is in embedded mode (using NuGet packages instead of external LSP server)
+    /// </summary>
+    public bool IsEmbeddedMode => _isEmbeddedMode;
+
+    /// <summary>
+    /// Gets diagnostics using embedded analyzer (only available in embedded mode)
+    /// </summary>
+    public async Task<JsonNode?> GetEmbeddedDiagnosticsAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        if (!_isEmbeddedMode)
+        {
+            _logger.LogWarning("GetEmbeddedDiagnosticsAsync called when not in embedded mode");
+            return null;
+        }
+
+        return await _embeddedAnalyzer.GetDiagnosticsAsync(filePath);
+    }
+
+    /// <summary>
+    /// Gets hover info using embedded analyzer (only available in embedded mode)
+    /// </summary>
+    public async Task<JsonNode?> GetEmbeddedHoverInfoAsync(string filePath, int line, int column)
+    {
+        if (!_isEmbeddedMode)
+        {
+            _logger.LogWarning("GetEmbeddedHoverInfoAsync called when not in embedded mode");
+            return null;
+        }
+
+        return await _embeddedAnalyzer.GetHoverInfoAsync(filePath, line, column);
+    }
 
     /// <summary>
     /// Initializes the Razor Language Server process and LSP connection
@@ -69,6 +105,15 @@ public class RazorLspClient : IDisposable
                 _logger.LogWarning("Razor Language Server not found. {Instructions}", 
                     _serverLocator.GetInstallationInstructions());
                 return false;
+            }
+
+            // Check if we should use embedded analysis instead of external LSP server
+            if (serverPath == "EMBEDDED_RAZOR_ANALYSIS")
+            {
+                _logger.LogInformation("Using embedded Razor analysis (NuGet packages) instead of external LSP server");
+                _isEmbeddedMode = true;
+                _isInitialized = true; // Mark as initialized for embedded mode
+                return true;
             }
 
             // Start the Razor server process
@@ -179,6 +224,13 @@ public class RazorLspClient : IDisposable
     /// </summary>
     public async Task<JsonNode?> GetHoverInfoAsync(string filePath, int line, int column, CancellationToken cancellationToken = default)
     {
+        // Use embedded analyzer if in embedded mode
+        if (_isEmbeddedMode)
+        {
+            _logger.LogTrace("Using embedded Razor analyzer for hover info: {FilePath} at {Line}:{Column}", filePath, line, column);
+            return await _embeddedAnalyzer.GetHoverInfoAsync(filePath, line - 1, column - 1); // Convert to 0-based for embedded analyzer
+        }
+
         // Create cache key for hover request
         var cacheKey = $"hover:{filePath}:{line}:{column}";
         
@@ -242,6 +294,13 @@ public class RazorLspClient : IDisposable
     /// </summary>
     public async Task<JsonNode?> GetDocumentSymbolsAsync(string filePath, CancellationToken cancellationToken = default)
     {
+        // Use embedded analyzer if in embedded mode
+        if (_isEmbeddedMode)
+        {
+            _logger.LogTrace("Using embedded Razor analyzer for document symbols: {FilePath}", filePath);
+            return await _embeddedAnalyzer.GetDocumentSymbolsAsync(filePath);
+        }
+
         // Create cache key for document symbols
         var cacheKey = $"symbols:{filePath}";
         
@@ -415,6 +474,14 @@ public class RazorLspClient : IDisposable
     /// </summary>
     public async Task RequestDiagnosticsAsync(string filePath, CancellationToken cancellationToken = default)
     {
+        // Use embedded analyzer if in embedded mode
+        if (_isEmbeddedMode)
+        {
+            _logger.LogTrace("Using embedded Razor analyzer for diagnostics: {FilePath}", filePath);
+            // Embedded analyzer doesn't use request-based diagnostics
+            return;
+        }
+
         var diagnosticParams = new JsonObject
         {
             ["textDocument"] = new JsonObject

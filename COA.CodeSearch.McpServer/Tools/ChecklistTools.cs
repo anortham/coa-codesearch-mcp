@@ -54,13 +54,19 @@ public class ChecklistTools : ITool
             
             var success = await _memoryService.StoreMemoryAsync(checklist);
             
+            if (!success)
+            {
+                _logger.LogError("Failed to store checklist memory. ID: {Id}, Type: {Type}, Title: {Title}", 
+                    checklist.Id, checklist.Type, title);
+            }
+            
             return new CreateChecklistResult
             {
                 Success = success,
                 ChecklistId = success ? checklist.Id : null,
                 Message = success 
                     ? $"Created checklist '{title}' with ID: {checklist.Id}"
-                    : "Failed to create checklist"
+                    : $"Failed to create checklist. Check logs for details."
             };
         }
         catch (Exception ex)
