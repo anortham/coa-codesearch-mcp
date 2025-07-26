@@ -41,7 +41,7 @@ public class SimpleIndexingTest
             
         var pathResolutionService = new PathResolutionService(config);
         var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config, pathResolutionService);
-        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService);
+        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService, pathResolutionService);
         
         // Create test file
         var testFile = Path.Combine(testDir, "test.cs");

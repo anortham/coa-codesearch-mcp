@@ -1,11 +1,10 @@
 using Microsoft.Extensions.Logging;
-using Serilog.Events;
 using COA.CodeSearch.McpServer.Services;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// MCP tool for controlling file-based logging dynamically
+/// MCP tool for viewing and managing log files
 /// </summary>
 public class SetLoggingTool : ITool
 {
@@ -13,16 +12,13 @@ public class SetLoggingTool : ITool
     public string Description => "View and manage log files";
     public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<SetLoggingTool> _logger;
-    private readonly FileLoggingService _fileLoggingService;
     private readonly IPathResolutionService _pathResolution;
 
     public SetLoggingTool(
         ILogger<SetLoggingTool> logger,
-        FileLoggingService fileLoggingService,
         IPathResolutionService pathResolution)
     {
         _logger = logger;
-        _fileLoggingService = fileLoggingService;
         _pathResolution = pathResolution;
     }
 
@@ -65,39 +61,37 @@ public class SetLoggingTool : ITool
 
     private Task<object> GetStatusAsync()
     {
-        var logFiles = _fileLoggingService.GetLogFiles();
+        var logFiles = GetLogFiles();
         
         return Task.FromResult<object>(new
         {
             success = true,
-            isEnabled = _fileLoggingService.IsEnabled,
-            currentLogFile = _fileLoggingService.CurrentLogFile,
-            currentLogLevel = _fileLoggingService.CurrentLogLevel.ToString(),
+            isEnabled = true, // Serilog is always enabled
             logDirectory = _pathResolution.GetLogsPath(),
             logFileCount = logFiles.Count,
-            totalSize = logFiles.Sum(f => f.SizeInBytes),
-            totalSizeFormatted = FormatFileSize(logFiles.Sum(f => f.SizeInBytes))
+            totalSize = logFiles.Sum(f => new FileInfo(f).Length),
+            totalSizeFormatted = FormatFileSize(logFiles.Sum(f => new FileInfo(f).Length)),
+            message = "Logging via Serilog - always enabled, Debug level minimum"
         });
     }
 
     private Task<object> ListLogsAsync()
     {
-        var logFiles = _fileLoggingService.GetLogFiles();
+        var logFiles = GetLogFiles();
         
         return Task.FromResult<object>(new
         {
             success = true,
             logFiles = logFiles.Select(f => new
             {
-                fileName = f.FileName,
-                size = f.FormattedSize,
-                created = f.CreatedAt.ToString("yyyy-MM-dd HH:mm:ss"),
-                lastModified = f.LastModified.ToString("yyyy-MM-dd HH:mm:ss"),
-                isCurrentLog = f.IsCurrentLog,
-                path = f.FilePath
+                fileName = Path.GetFileName(f),
+                size = FormatFileSize(new FileInfo(f).Length),
+                created = new FileInfo(f).CreationTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                lastModified = new FileInfo(f).LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss"),
+                path = f
             }).ToArray(),
             totalCount = logFiles.Count,
-            totalSize = FormatFileSize(logFiles.Sum(f => f.SizeInBytes))
+            totalSize = FormatFileSize(logFiles.Sum(f => new FileInfo(f).Length))
         });
     }
 
@@ -107,7 +101,7 @@ public class SetLoggingTool : ITool
     {
         if (!confirm)
         {
-            var logFiles = _fileLoggingService.GetLogFiles();
+            var logFiles = GetLogFiles();
             var oldFiles = logFiles.Skip(10).ToList();
             
             return Task.FromResult<object>(new
@@ -116,11 +110,11 @@ public class SetLoggingTool : ITool
                 message = "Cleanup requires confirmation",
                 hint = "Set cleanup parameter to true to confirm deletion",
                 filesWouldBeDeleted = oldFiles.Count,
-                sizeWouldBeFreed = FormatFileSize(oldFiles.Sum(f => f.SizeInBytes))
+                sizeWouldBeFreed = FormatFileSize(oldFiles.Sum(f => new FileInfo(f).Length))
             });
         }
 
-        _fileLoggingService.CleanupOldLogs();
+        CleanupOldLogs();
         
         return Task.FromResult<object>(new
         {
@@ -129,7 +123,67 @@ public class SetLoggingTool : ITool
         });
     }
 
-    // Removed ParseLogLevel - configuration-driven now
+    /// <summary>
+    /// Get list of existing log files
+    /// </summary>
+    private List<string> GetLogFiles()
+    {
+        var files = new List<string>();
+        
+        try
+        {
+            var logDirectory = _pathResolution.GetLogsPath();
+            if (Directory.Exists(logDirectory))
+            {
+                files = Directory.GetFiles(logDirectory, "codesearch*.log", SearchOption.TopDirectoryOnly)
+                    .OrderByDescending(f => new FileInfo(f).LastWriteTime)
+                    .Take(20) // Limit to last 20 files
+                    .ToList();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to get log files");
+        }
+
+        return files;
+    }
+
+    /// <summary>
+    /// Delete old log files (keep only the most recent 10 files)
+    /// </summary>
+    private void CleanupOldLogs()
+    {
+        try
+        {
+            var logDirectory = _pathResolution.GetLogsPath();
+            if (Directory.Exists(logDirectory))
+            {
+                var files = Directory.GetFiles(logDirectory, "codesearch*.log", SearchOption.TopDirectoryOnly)
+                    .Select(f => new FileInfo(f))
+                    .OrderByDescending(f => f.LastWriteTime)
+                    .Skip(10)
+                    .ToList();
+
+                foreach (var file in files)
+                {
+                    try
+                    {
+                        file.Delete();
+                        _logger.LogInformation("Deleted old log file: {FileName}", file.Name);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to delete log file: {FileName}", file.Name);
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to cleanup old logs");
+        }
+    }
 
     private static string FormatFileSize(long bytes)
     {

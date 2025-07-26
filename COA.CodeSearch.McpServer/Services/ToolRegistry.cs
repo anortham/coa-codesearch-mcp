@@ -41,7 +41,7 @@ public class ToolRegistry
             throw new InvalidOperationException($"Tool '{name}' is already registered");
         }
 
-        _logger.LogInformation("Registered tool: {ToolName}", name);
+        _logger.LogDebug("Registered tool: {ToolName}", name);
     }
 
     /// <summary>
@@ -91,7 +91,7 @@ public class ToolRegistry
             throw new InvalidParametersException($"Tool '{name}' not found");
         }
 
-        _logger.LogInformation("Executing tool: {ToolName}", name);
+        _logger.LogDebug("Executing tool: {ToolName}", name);
 
         try
         {

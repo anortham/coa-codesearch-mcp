@@ -43,7 +43,8 @@ public class LuceneIndexingUnitTests : IDisposable
         _fileIndexingService = new FileIndexingService(
             _loggerFactory.CreateLogger<FileIndexingService>(),
             _configuration,
-            _luceneIndexService);
+            _luceneIndexService,
+            pathResolutionService);
         
         // Create test files
         File.WriteAllText(Path.Combine(_testDirectory, "test1.cs"), 
