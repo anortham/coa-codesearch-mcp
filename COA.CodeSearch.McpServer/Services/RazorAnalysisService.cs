@@ -18,6 +18,7 @@ public class RazorAnalysisService : IRazorAnalysisService
     private readonly HashSet<string> _openDocuments = new();
     private readonly object _lock = new();
     private bool _disposed;
+    private bool _initialized;
 
     public RazorAnalysisService(
         ILogger<RazorAnalysisService> logger,
@@ -34,7 +35,7 @@ public class RazorAnalysisService : IRazorAnalysisService
     /// <summary>
     /// Gets whether the Razor Language Server is available and running
     /// </summary>
-    public bool IsAvailable => _lspClient.IsAvailable;
+    public bool IsAvailable => _initialized && _lspClient.IsAvailable;
 
     /// <summary>
     /// Initializes the Razor Language Server connection
@@ -46,6 +47,12 @@ public class RazorAnalysisService : IRazorAnalysisService
             return false;
         }
 
+        // Check if already initialized
+        if (_initialized)
+        {
+            return _lspClient.IsAvailable;
+        }
+
         try
         {
             _logger.LogInformation("Initializing Razor Analysis Service...");
@@ -53,6 +60,7 @@ public class RazorAnalysisService : IRazorAnalysisService
             var initialized = await _lspClient.InitializeAsync(cancellationToken);
             if (initialized)
             {
+                _initialized = true;
                 _logger.LogInformation("Razor Analysis Service initialized successfully");
             }
             else
@@ -745,6 +753,7 @@ public class RazorAnalysisService : IRazorAnalysisService
         }
 
         _disposed = true;
+        _initialized = false;
 
         try
         {
