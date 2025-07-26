@@ -72,6 +72,7 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
+        services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
@@ -80,6 +81,8 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<FileIndexingService>();
         
         // Memory services
+        services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         

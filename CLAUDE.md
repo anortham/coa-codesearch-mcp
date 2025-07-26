@@ -41,6 +41,11 @@
 - **NEVER** make assumptions about what properties or methods are available on a type, go look it up and see.
 - **ALWAYS** make use of the codesearch tools, that's what they are for and the best way to test and improve on them is to dogfood them.
 
+### 7. **Commit Changes**
+
+- **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
+- **NEVER** check in broken builds or failing tests
+
 ## 📋 Quick Reference
 
 ### Essential Commands

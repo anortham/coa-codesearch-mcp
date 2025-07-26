@@ -21,49 +21,113 @@ public class InMemoryTestIndexService : ILuceneIndexService
     
     private class InMemoryIndex
     {
-        public List<Document> Documents { get; } = new();
+        public RAMDirectory Directory { get; } = new();
+        public IndexWriter? Writer { get; set; }
+        public DirectoryReader? Reader { get; set; }
+        public IndexSearcher? Searcher { get; set; }
         public object Lock { get; } = new();
+        
+        public void RefreshSearcher()
+        {
+            try
+            {
+                Reader?.Dispose();
+                // IndexSearcher doesn't implement IDisposable in Lucene.NET
+                Searcher = null;
+                
+                if (Writer != null)
+                {
+                    Writer.Commit();
+                    Reader = DirectoryReader.Open(Directory);
+                    Searcher = new IndexSearcher(Reader);
+                }
+            }
+            catch
+            {
+                // Ignore refresh errors in tests
+            }
+        }
+        
+        public void Dispose()
+        {
+            try
+            {
+                // IndexSearcher doesn't implement IDisposable in Lucene.NET
+                Searcher = null;
+                Reader?.Dispose();
+                Writer?.Dispose();
+                Directory?.Dispose();
+            }
+            catch
+            {
+                // Ignore disposal errors in tests
+            }
+        }
     }
     
     public Task<IndexWriter> GetIndexWriterAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         var index = _indexes.GetOrAdd(workspacePath, _ => new InMemoryIndex());
         
-        // Create a RAM-based writer that we can actually use
-        var directory = new RAMDirectory();
-        var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
-        var writer = new TestableIndexWriter(directory, config, index);
-        
-        return Task.FromResult<IndexWriter>(writer);
+        lock (index.Lock)
+        {
+            if (index.Writer == null)
+            {
+                var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
+                index.Writer = new IndexWriter(index.Directory, config);
+            }
+            
+            return Task.FromResult(index.Writer);
+        }
     }
     
     public Task<IndexSearcher> GetIndexSearcherAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         var index = _indexes.GetOrAdd(workspacePath, _ => new InMemoryIndex());
         
-        // Create a searcher that searches our in-memory documents
-        var directory = new RAMDirectory();
-        var writer = new IndexWriter(directory, new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer));
-        
-        // Add all documents to the RAM directory
         lock (index.Lock)
         {
-            foreach (var doc in index.Documents)
+            // Refresh the searcher to see latest changes
+            index.RefreshSearcher();
+            
+            // If still no searcher (empty index), create one
+            if (index.Searcher == null)
             {
-                writer.AddDocument(doc);
+                try
+                {
+                    index.Reader = DirectoryReader.Open(index.Directory);
+                    index.Searcher = new IndexSearcher(index.Reader);
+                }
+                catch (IndexNotFoundException)
+                {
+                    // Index doesn't exist yet, create empty writer first
+                    if (index.Writer == null)
+                    {
+                        var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
+                        index.Writer = new IndexWriter(index.Directory, config);
+                        index.Writer.Commit();
+                    }
+                    
+                    index.Reader = DirectoryReader.Open(index.Directory);
+                    index.Searcher = new IndexSearcher(index.Reader);
+                }
             }
+            
+            return Task.FromResult(index.Searcher);
         }
-        
-        writer.Commit();
-        var reader = DirectoryReader.Open(directory);
-        var searcher = new IndexSearcher(reader);
-        
-        return Task.FromResult(searcher);
     }
     
     public Task CommitAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
-        // No-op for in-memory implementation
+        var index = _indexes.GetOrAdd(workspacePath, _ => new InMemoryIndex());
+        
+        lock (index.Lock)
+        {
+            index.Writer?.Commit();
+            // Refresh searcher after commit so searches see the new data
+            index.RefreshSearcher();
+        }
+        
         return Task.CompletedTask;
     }
     
@@ -85,7 +149,8 @@ public class InMemoryTestIndexService : ILuceneIndexService
         {
             lock (index.Lock)
             {
-                index.Documents.Clear();
+                index.Dispose();
+                _indexes.TryRemove(workspacePath, out _);
             }
         }
         return Task.CompletedTask;
@@ -120,8 +185,12 @@ public class InMemoryTestIndexService : ILuceneIndexService
     
     public ValueTask DisposeAsync()
     {
-        _analyzer?.Dispose();
+        foreach (var index in _indexes.Values)
+        {
+            index.Dispose();
+        }
         _indexes.Clear();
+        _analyzer?.Dispose();
         return ValueTask.CompletedTask;
     }
     
@@ -159,43 +228,4 @@ public class InMemoryTestIndexService : ILuceneIndexService
         return Task.FromResult(result);
     }
     
-    private class TestableIndexWriter : IndexWriter
-    {
-        private readonly InMemoryIndex _index;
-        
-        public TestableIndexWriter(Lucene.Net.Store.Directory d, IndexWriterConfig conf, InMemoryIndex index) 
-            : base(d, conf)
-        {
-            _index = index;
-        }
-        
-        public override void AddDocument(IEnumerable<IIndexableField> doc)
-        {
-            var document = new Document();
-            foreach (var field in doc)
-            {
-                document.Add(field);
-            }
-            
-            lock (_index.Lock)
-            {
-                _index.Documents.Add(document);
-            }
-            
-            // Also add to the real index for searching
-            base.AddDocument(doc);
-        }
-        
-        public override void DeleteDocuments(Term term)
-        {
-            if (term.Field == "id")
-            {
-                lock (_index.Lock)
-                {
-                    _index.Documents.RemoveAll(d => d.Get("id") == term.Text);
-                }
-            }
-            base.DeleteDocuments(term);
-        }
-    }
 }

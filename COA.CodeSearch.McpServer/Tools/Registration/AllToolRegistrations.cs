@@ -64,6 +64,10 @@ public static class AllToolRegistrations
         // TypeScript tools
         TypeScriptToolRegistrations.RegisterTypeScriptTools(registry, serviceProvider);
         
+        // Blazor tools
+        BlazorToolRegistrations.RegisterBlazorTools(registry, serviceProvider);
+        
+        
         // Logging control tool
         RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
         

@@ -18,6 +18,7 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
     private readonly IOptions<MemoryLifecycleOptions> _options;
     private readonly ConcurrentDictionary<string, MemoryConfidenceData> _confidenceCache;
     private readonly ConcurrentDictionary<string, DateTime> _recentPendingResolutions;
+    private readonly Timer _cleanupTimer;
     
     public MemoryLifecycleService(
         ILogger<MemoryLifecycleService> logger,
@@ -29,6 +30,9 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
         _options = options;
         _confidenceCache = new ConcurrentDictionary<string, MemoryConfidenceData>();
         _recentPendingResolutions = new ConcurrentDictionary<string, DateTime>();
+        
+        // Set up periodic cleanup to prevent memory leaks
+        _cleanupTimer = new Timer(CleanupExpiredEntries, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
     }
     
     /// <summary>
@@ -530,6 +534,44 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
             // If we can't determine, err on the side of caution and skip processing
             return true;
         }
+    }
+    
+    /// <summary>
+    /// Periodic cleanup to prevent memory leaks in the recent pending resolutions cache
+    /// </summary>
+    private void CleanupExpiredEntries(object? state)
+    {
+        try
+        {
+            var cutoffTime = DateTime.UtcNow.AddMinutes(-5);
+            var expiredKeys = _recentPendingResolutions
+                .Where(kvp => kvp.Value < cutoffTime)
+                .Select(kvp => kvp.Key)
+                .ToList();
+
+            if (expiredKeys.Any())
+            {
+                foreach (var key in expiredKeys)
+                {
+                    _recentPendingResolutions.TryRemove(key, out _);
+                }
+
+                _logger.LogDebug("Cleaned up {Count} expired pending resolution entries", expiredKeys.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during periodic cleanup of pending resolutions cache");
+        }
+    }
+    
+    /// <summary>
+    /// Dispose resources
+    /// </summary>
+    public override void Dispose()
+    {
+        _cleanupTimer?.Dispose();
+        base.Dispose();
     }
 }
 

@@ -45,7 +45,31 @@ public class FlexibleMemoryToolsTests : IDisposable
         
         // Use in-memory index service
         _indexService = new InMemoryTestIndexService();
-        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object);
+        var errorHandlingMock = new Mock<IErrorHandlingService>();
+        var validationMock = new Mock<IMemoryValidationService>();
+        
+        // Setup validation mock to always return valid
+        validationMock.Setup(v => v.ValidateMemory(It.IsAny<FlexibleMemoryEntry>()))
+            .Returns(new MemoryValidationResult { IsValid = true });
+        validationMock.Setup(v => v.ValidateUpdateRequest(It.IsAny<MemoryUpdateRequest>()))
+            .Returns(new MemoryValidationResult { IsValid = true });
+        
+        // Setup error handling mock to execute the function directly
+        errorHandlingMock.Setup(e => e.ExecuteWithErrorHandlingAsync(
+                It.IsAny<Func<Task<bool>>>(), 
+                It.IsAny<ErrorContext>(), 
+                It.IsAny<ErrorSeverity>(), 
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<Task<bool>>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
+            
+        errorHandlingMock.Setup(e => e.ExecuteWithErrorHandlingAsync(
+                It.IsAny<Func<Task>>(), 
+                It.IsAny<ErrorContext>(), 
+                It.IsAny<ErrorSeverity>(), 
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
+        
+        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object);
         _memoryTools = new FlexibleMemoryTools(_toolsLoggerMock.Object, _memoryService, _pathResolutionMock.Object);
     }
     

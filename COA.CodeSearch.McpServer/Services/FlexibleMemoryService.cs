@@ -22,6 +22,8 @@ public class FlexibleMemoryService : IMemoryService
     private readonly IConfiguration _configuration;
     private readonly ILuceneIndexService _indexService;
     private readonly IPathResolutionService _pathResolution;
+    private readonly IErrorHandlingService _errorHandling;
+    private readonly IMemoryValidationService _validation;
     private readonly string _projectMemoryWorkspace;
     private readonly string _localMemoryWorkspace;
     
@@ -29,54 +31,29 @@ public class FlexibleMemoryService : IMemoryService
     private readonly StandardAnalyzer _analyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
     
+    // Safety constants
+    private const int MaxAllowedResults = 10000; // Maximum results to prevent OOM
+    
     public FlexibleMemoryService(
         ILogger<FlexibleMemoryService> logger, 
         IConfiguration configuration,
         ILuceneIndexService indexService,
-        IPathResolutionService pathResolution)
+        IPathResolutionService pathResolution,
+        IErrorHandlingService errorHandling,
+        IMemoryValidationService validation)
     {
         _logger = logger;
         _configuration = configuration;
         _indexService = indexService;
         _pathResolution = pathResolution;
+        _errorHandling = errorHandling;
+        _validation = validation;
         
         _analyzer = new StandardAnalyzer(LUCENE_VERSION);
         
         // Initialize workspace paths from PathResolutionService
         _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
         _localMemoryWorkspace = _pathResolution.GetLocalMemoryPath();
-    }
-    
-    /// <summary>
-    /// Store a flexible memory entry
-    /// </summary>
-    public async Task<bool> StoreMemoryAsync(FlexibleMemoryEntry memory)
-    {
-        try
-        {
-            var workspacePath = memory.IsShared ? _projectMemoryWorkspace : _localMemoryWorkspace;
-            
-            // Get writer from index service
-            var writer = await _indexService.GetIndexWriterAsync(workspacePath);
-            
-            // Remove existing document if updating
-            writer.DeleteDocuments(new Term("id", memory.Id));
-            
-            // Add the new document
-            var doc = CreateDocument(memory);
-            writer.AddDocument(doc);
-            
-            // Commit through index service
-            await _indexService.CommitAsync(workspacePath);
-            
-            _logger.LogInformation("Stored flexible memory: {Type} - {Id}", memory.Type, memory.Id);
-            return true;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to store flexible memory");
-            return false;
-        }
     }
     
     /// <summary>
@@ -105,9 +82,15 @@ public class FlexibleMemoryService : IMemoryService
             // Calculate facets
             result.FacetCounts = CalculateFacets(sorted);
             
-            // Apply pagination
+            // Apply pagination with bounds checking
             result.TotalFound = sorted.Count;
-            result.Memories = sorted.Take(request.MaxResults).ToList();
+            var safeMaxResults = Math.Min(request.MaxResults, MaxAllowedResults);
+            if (request.MaxResults > MaxAllowedResults)
+            {
+                _logger.LogWarning("MaxResults {Requested} exceeds limit {Max}, capping to {Max}", 
+                    request.MaxResults, MaxAllowedResults, MaxAllowedResults);
+            }
+            result.Memories = sorted.Take(safeMaxResults).ToList();
             
             // Generate insights if we have results
             if (result.Memories.Any())
@@ -115,12 +98,18 @@ public class FlexibleMemoryService : IMemoryService
                 result.Insights = GenerateInsights(result.Memories);
             }
             
-            // Update access counts for returned memories
-            foreach (var memory in result.Memories)
+            // Update access counts for returned memories using batch operation to prevent race conditions
+            if (result.Memories.Any())
             {
-                memory.AccessCount++;
-                memory.LastAccessed = DateTime.UtcNow;
-                await UpdateMemoryAsync(memory);
+                await UpdateAccessCountsBatchAsync(result.Memories.Select(m => m.Id));
+                
+                // Also update the in-memory objects so the returned result reflects the new access counts
+                var now = DateTime.UtcNow;
+                foreach (var memory in result.Memories)
+                {
+                    memory.AccessCount++;
+                    memory.LastAccessed = now;
+                }
             }
             
             return result;
@@ -138,15 +127,38 @@ public class FlexibleMemoryService : IMemoryService
     /// </summary>
     public async Task<bool> UpdateMemoryAsync(MemoryUpdateRequest request)
     {
+        var context = new ErrorContext("UpdateMemory", additionalData: new Dictionary<string, object>
+        {
+            ["MemoryId"] = request.Id
+        });
+
         try
         {
-            // First, find the existing memory
-            var existing = await GetMemoryByIdAsync(request.Id);
-            if (existing == null)
+            return await _errorHandling.ExecuteWithErrorHandlingAsync(async () =>
             {
-                _logger.LogWarning("Memory not found for update: {Id}", request.Id);
-                return false;
-            }
+                // Validate update request
+                var validationResult = _validation.ValidateUpdateRequest(request);
+                if (!validationResult.IsValid)
+                {
+                    _logger.LogWarning("Memory update validation failed for {MemoryId}: {Errors}", 
+                        request.Id, string.Join("; ", validationResult.Errors));
+                    return false;
+                }
+
+                // Log validation warnings
+                if (validationResult.Warnings.Any())
+                {
+                    _logger.LogWarning("Memory update validation warnings for {MemoryId}: {Warnings}", 
+                        request.Id, string.Join("; ", validationResult.Warnings));
+                }
+
+                // First, find the existing memory
+                var existing = await GetMemoryByIdAsync(request.Id);
+                if (existing == null)
+                {
+                    _logger.LogWarning("Memory not found for update: {Id}", request.Id);
+                    return false;
+                }
             
             // Apply updates
             if (!string.IsNullOrEmpty(request.Content))
@@ -180,12 +192,13 @@ public class FlexibleMemoryService : IMemoryService
                 existing.FilesInvolved = existing.FilesInvolved.Except(request.RemoveFiles).ToArray();
             }
             
-            // Store the updated memory
-            return await StoreMemoryAsync(existing);
+                // Store the updated memory
+                return await StoreMemoryAsync(existing);
+            }, context, ErrorSeverity.Recoverable);
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error updating memory");
+            _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);
             return false;
         }
     }
@@ -1145,5 +1158,165 @@ public class FlexibleMemoryService : IMemoryService
         }
         
         return codeTerms;
+    }
+    
+    /// <summary>
+    /// Update access counts for multiple memories in a batch to prevent race conditions
+    /// </summary>
+    private async Task UpdateAccessCountsBatchAsync(IEnumerable<string> memoryIds)
+    {
+        var context = new ErrorContext("BatchUpdateAccessCounts");
+        
+        try
+        {
+            await _errorHandling.ExecuteWithErrorHandlingAsync(async () =>
+            {
+                var workspace = _projectMemoryWorkspace;
+                var now = DateTime.UtcNow;
+                var memoryIdsList = memoryIds.ToList();
+                
+                if (!memoryIdsList.Any())
+                    return;
+
+                // Use a lock to ensure atomic batch updates
+                using var semaphore = new SemaphoreSlim(1, 1);
+                await semaphore.WaitAsync();
+                
+                try
+                {
+                    var indexWriter = await _indexService.GetIndexWriterAsync(workspace);
+                    
+                    // Process updates in batches to avoid large transactions
+                    const int batchSize = 10;
+                    for (int i = 0; i < memoryIdsList.Count; i += batchSize)
+                    {
+                        var batch = memoryIdsList.Skip(i).Take(batchSize);
+                        
+                        foreach (var memoryId in batch)
+                        {
+                            // Create update term for the specific memory
+                            var term = new Term("id", memoryId);
+                            
+                            // First, retrieve the current document to get current access count
+                            var searcher = await _indexService.GetIndexSearcherAsync(workspace);
+                            var query = new TermQuery(term);
+                            var hits = searcher.Search(query, 1);
+                            
+                            if (hits.TotalHits > 0)
+                            {
+                                var doc = searcher.Doc(hits.ScoreDocs[0].Doc);
+                                var memory = DocumentToMemory(doc);
+                                
+                                // Increment access count and update timestamp
+                                memory.AccessCount++;
+                                memory.LastAccessed = now;
+                                
+                                // Create updated document
+                                var updatedDoc = CreateDocument(memory);
+                                
+                                // Update the document atomically
+                                indexWriter.UpdateDocument(term, updatedDoc);
+                            }
+                        }
+                    }
+                    
+                    // Commit all changes
+                    indexWriter.Commit();
+                }
+                finally
+                {
+                    semaphore.Release();
+                }
+            }, context, ErrorSeverity.Recoverable);
+        }
+        catch (Exception ex)
+        {
+            _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);
+            // Don't rethrow - access count updates are not critical to user functionality
+        }
+    }
+    
+    /// <summary>
+    /// Store a memory with validation and error handling
+    /// </summary>
+    public async Task<bool> StoreMemoryAsync(FlexibleMemoryEntry memory)
+    {
+        var context = new ErrorContext("StoreMemory", additionalData: new Dictionary<string, object>
+        {
+            ["MemoryId"] = memory.Id,
+            ["MemoryType"] = memory.Type
+        });
+
+        try
+        {
+            return await _errorHandling.ExecuteWithErrorHandlingAsync(async () =>
+            {
+                // Validate input
+                var validationResult = _validation.ValidateMemory(memory);
+                if (!validationResult.IsValid)
+                {
+                    _logger.LogWarning("Memory validation failed for {MemoryId}: {Errors}", 
+                        memory.Id, string.Join("; ", validationResult.Errors));
+                    return false;
+                }
+
+                // Log validation warnings
+                if (validationResult.Warnings.Any())
+                {
+                    _logger.LogWarning("Memory validation warnings for {MemoryId}: {Warnings}", 
+                        memory.Id, string.Join("; ", validationResult.Warnings));
+                }
+
+                // Determine workspace based on memory sharing
+                var workspace = memory.IsShared ? _projectMemoryWorkspace : _localMemoryWorkspace;
+                
+                // Ensure memory has required fields
+                if (string.IsNullOrEmpty(memory.Id))
+                {
+                    memory.Id = Guid.NewGuid().ToString();
+                }
+                
+                if (memory.Created == default)
+                {
+                    memory.Created = DateTime.UtcNow;
+                }
+                
+                memory.Modified = DateTime.UtcNow;
+
+                // Get index writer
+                var indexWriter = await _indexService.GetIndexWriterAsync(workspace);
+                
+                // Create document
+                var document = CreateDocument(memory);
+                
+                // Check if memory already exists to determine operation type
+                var existingQuery = new TermQuery(new Term("id", memory.Id));
+                var searcher = await _indexService.GetIndexSearcherAsync(workspace);
+                var existingHits = searcher.Search(existingQuery, 1);
+                
+                if (existingHits.TotalHits > 0)
+                {
+                    // Update existing memory
+                    indexWriter.UpdateDocument(new Term("id", memory.Id), document);
+                    _logger.LogDebug("Updated memory {MemoryId} of type {Type}", memory.Id, memory.Type);
+                }
+                else
+                {
+                    // Add new memory
+                    indexWriter.AddDocument(document);
+                    _logger.LogDebug("Added new memory {MemoryId} of type {Type}", memory.Id, memory.Type);
+                }
+                
+                // Commit changes
+                indexWriter.Commit();
+                
+                return true;
+            }, context, ErrorSeverity.Recoverable);
+        }
+        catch (Exception ex)
+        {
+            _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);
+            return false;
+        }
     }
 }

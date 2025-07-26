@@ -134,6 +134,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<JsonMemoryBackupService>();
         
         // Flexible Memory System
+        services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
         services.AddSingleton<FlexibleMemoryTools>();
@@ -150,6 +151,15 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TypeScriptAnalysisService>();
         services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
         services.AddSingleton<TypeScriptTextAnalysisService>();
+        
+        // Razor/Blazor Analysis
+        services.AddSingleton<RazorServerLocator>();
+        services.AddSingleton<RazorVirtualDocumentManager>();
+        services.AddSingleton<RazorLspClient>();
+        services.AddSingleton<RazorPositionMapper>();
+        services.AddSingleton<RazorAnalysisService>();
+        services.AddSingleton<IRazorAnalysisService>(provider => provider.GetRequiredService<RazorAnalysisService>());
+        
         
         // Initialize TypeScript on startup
         services.AddHostedService<TypeScriptInitializationService>();
@@ -193,6 +203,18 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TypeScriptSearchTool>();
         services.AddSingleton<TypeScriptRenameTool>();
         services.AddSingleton<TypeScriptHoverInfoTool>();
+        
+        // Blazor tools
+        services.AddSingleton<BlazorGoToDefinitionTool>();
+        services.AddSingleton<BlazorFindReferencesTool>();
+        services.AddSingleton<BlazorHoverInfoTool>();
+        services.AddSingleton<BlazorRenameSymbolTool>();
+        services.AddSingleton<BlazorGetDocumentSymbolsTool>();
+        services.AddSingleton<BlazorGetDiagnosticsTool>();
+        
+        
+        // Memory caching for performance optimization
+        services.AddMemoryCache();
         
         // Register the MCP server as a hosted service and notification service
         services.AddSingleton<McpServer>();
