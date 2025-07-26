@@ -17,6 +17,18 @@ namespace COA.CodeSearch.McpServer.Services;
 /// Service for managing Roslyn workspaces and code analysis operations.
 /// Provides caching, lifecycle management, and access to compilation and semantic models.
 /// </summary>
+/// <remarks>
+/// This service is thread-safe and manages a cache of Roslyn workspaces with automatic eviction.
+/// Workspaces are cached for performance and reused across multiple analysis operations.
+/// The service handles MSBuild workspace loading, NuGet package restoration, and MEF composition.
+/// 
+/// Key features:
+/// - Automatic workspace caching with LRU eviction
+/// - Configurable maximum workspaces and timeout values
+/// - Automatic NuGet package restoration before loading
+/// - Fallback loading strategy for problematic solutions
+/// - Thread-safe operations using semaphore locking
+/// </remarks>
 public class CodeAnalysisService : IDisposable
 {
     private readonly ILogger<CodeAnalysisService> _logger;
@@ -26,12 +38,20 @@ public class CodeAnalysisService : IDisposable
     private readonly int _maxWorkspaces;
     private readonly TimeSpan _workspaceTimeout;
     private readonly Timer _cleanupTimer;
+    
+    // Thread safety: All public methods that access _workspaces are protected by _workspaceLock
+    // to ensure thread-safe operations. The ConcurrentDictionary provides additional safety
+    // for concurrent reads, while writes are serialized through the semaphore.
 
     /// <summary>
     /// Initializes a new instance of the CodeAnalysisService
     /// </summary>
     /// <param name="logger">Logger for diagnostic output</param>
-    /// <param name="configuration">Configuration for workspace settings</param>
+    /// <param name="configuration">Configuration for workspace settings (McpServer:MaxWorkspaces, McpServer:WorkspaceTimeout)</param>
+    /// <remarks>
+    /// Assumes MSBuildLocator has already been registered by the application startup.
+    /// Starts a background timer for cleaning up expired workspaces every 5 minutes.
+    /// </remarks>
     public CodeAnalysisService(ILogger<CodeAnalysisService> logger, IConfiguration configuration)
     {
         _logger = logger;
@@ -54,14 +74,16 @@ public class CodeAnalysisService : IDisposable
     }
 
     /// <summary>
-    /// Gets or creates a workspace for the specified solution
-    /// </summary>
-    /// <param name="solutionPath">Path to the .sln file</param>
-    /// <param name="cancellationToken">Cancellation token</param>
-    /// <returns>The workspace, or null if loading fails</returns>
-    /// <summary>
     /// Gets all required MEF assemblies for Roslyn workspace composition
     /// </summary>
+    /// <remarks>
+    /// MEF (Managed Extensibility Framework) composition is required for Roslyn to discover
+    /// and load language services, particularly the C# language support. Without proper MEF
+    /// composition, workspace operations will fail with "language 'C#' is not supported" errors.
+    /// This method scans for and loads all Microsoft.CodeAnalysis and Microsoft.Build assemblies
+    /// to ensure complete MEF composition.
+    /// </remarks>
+    /// <returns>Collection of assemblies containing MEF exports for Roslyn</returns>
     private IEnumerable<Assembly> GetMefAssemblies()
     {
         var assemblies = new List<Assembly>();
@@ -127,6 +149,24 @@ public class CodeAnalysisService : IDisposable
         return assemblies.Distinct();
     }
 
+    /// <summary>
+    /// Gets or creates a workspace for the specified solution
+    /// </summary>
+    /// <param name="solutionPath">Path to the .sln file</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>The loaded workspace, or null if loading fails</returns>
+    /// <remarks>
+    /// This method implements caching to avoid reloading the same solution multiple times.
+    /// If the workspace is already cached, it updates the last accessed time and returns it.
+    /// For new workspaces, it performs the following steps:
+    /// 1. Ensures workspace capacity by evicting LRU entries if needed
+    /// 2. Loads MEF assemblies for proper language support
+    /// 3. Configures MSBuild properties for framework and package resolution
+    /// 4. Attempts NuGet package restoration
+    /// 5. Opens the solution with fallback to individual project loading if needed
+    /// 6. Validates the workspace can resolve basic types
+    /// </remarks>
+    /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
     public async Task<Workspace?> GetWorkspaceAsync(string solutionPath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(solutionPath))
@@ -384,6 +424,18 @@ public class CodeAnalysisService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a project from cache or loads it as a standalone project
+    /// </summary>
+    /// <param name="projectPath">Path to the .csproj file</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>The loaded project, or null if loading fails</returns>
+    /// <remarks>
+    /// First searches for the project in all cached workspaces. If not found,
+    /// loads it as a standalone project with the same MEF and MSBuild configuration
+    /// as solution loading. Standalone projects are also cached for reuse.
+    /// </remarks>
+    /// <exception cref="OperationCanceledException">Thrown when the operation is cancelled</exception>
     public async Task<Project?> GetProjectAsync(string projectPath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(projectPath))
@@ -505,6 +557,17 @@ public class CodeAnalysisService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Gets a document from any cached workspace or loads its containing project
+    /// </summary>
+    /// <param name="filePath">Path to the source file</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>The document, or null if not found in any workspace</returns>
+    /// <remarks>
+    /// Searches all cached workspaces for the document. If not found, attempts to
+    /// locate the containing project by walking up the directory tree looking for
+    /// .csproj files, then loads that project to access the document.
+    /// </remarks>
     public async Task<Document?> GetDocumentAsync(string filePath, CancellationToken cancellationToken = default)
     {
         if (!File.Exists(filePath))
@@ -550,6 +613,14 @@ public class CodeAnalysisService : IDisposable
         return null;
     }
 
+    /// <summary>
+    /// Ensures workspace cache capacity by evicting least recently used entries
+    /// </summary>
+    /// <remarks>
+    /// Called before adding new workspaces to ensure we don't exceed the configured
+    /// maximum. Uses LRU (Least Recently Used) eviction strategy based on LastAccessed
+    /// timestamps. Disposed workspaces are properly cleaned up to free resources.
+    /// </remarks>
     private Task EnsureCapacityAsync()
     {
         while (_workspaces.Count >= _maxWorkspaces)
@@ -573,6 +644,14 @@ public class CodeAnalysisService : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Timer callback that removes workspaces that haven't been accessed recently
+    /// </summary>
+    /// <param name="state">Timer state (unused)</param>
+    /// <remarks>
+    /// Runs every 5 minutes to check for workspaces that exceed the configured timeout.
+    /// This prevents memory leaks from long-running services that load many solutions.
+    /// </remarks>
     private void CleanupExpiredWorkspaces(object? state)
     {
         var now = DateTime.UtcNow;
@@ -591,6 +670,18 @@ public class CodeAnalysisService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Updates a solution in its workspace with changes
+    /// </summary>
+    /// <param name="newSolution">The modified solution to apply</param>
+    /// <param name="cancellationToken">Cancellation token (currently unused)</param>
+    /// <returns>A completed task</returns>
+    /// <exception cref="InvalidOperationException">Thrown when workspace not found or changes cannot be applied</exception>
+    /// <remarks>
+    /// Finds the workspace containing the solution and applies the changes using
+    /// TryApplyChanges. This is used for operations like renaming symbols that
+    /// modify the solution structure.
+    /// </remarks>
     public Task UpdateSolutionAsync(Solution newSolution, CancellationToken cancellationToken = default)
     {
         // Find which workspace this solution belongs to
@@ -621,6 +712,14 @@ public class CodeAnalysisService : IDisposable
         return Task.CompletedTask;
     }
 
+    /// <summary>
+    /// Disposes all cached workspaces and releases resources
+    /// </summary>
+    /// <remarks>
+    /// Properly disposes the cleanup timer, all cached workspaces, and the semaphore.
+    /// This should be called when the service is no longer needed to ensure all
+    /// Roslyn resources are properly released.
+    /// </remarks>
     public void Dispose()
     {
         _cleanupTimer?.Dispose();
@@ -634,16 +733,38 @@ public class CodeAnalysisService : IDisposable
         _workspaceLock.Dispose();
     }
 
+    /// <summary>
+    /// Represents a cached workspace entry with access tracking
+    /// </summary>
     private class WorkspaceEntry
     {
+        /// <summary>
+        /// The Roslyn workspace instance
+        /// </summary>
         public required Workspace Workspace { get; init; }
+        
+        /// <summary>
+        /// Path to the solution or project file this workspace represents
+        /// </summary>
         public required string SolutionPath { get; init; }
+        
+        /// <summary>
+        /// Last time this workspace was accessed, used for LRU eviction
+        /// </summary>
         public DateTime LastAccessed { get; set; }
     }
 
     /// <summary>
-    /// Gets the .NET installation directory
+    /// Gets the .NET installation directory for framework resolution
     /// </summary>
+    /// <remarks>
+    /// Attempts to locate the .NET installation in the following order:
+    /// 1. DOTNET_ROOT environment variable
+    /// 2. Program Files\dotnet directory
+    /// 3. Fallback to C:\Program Files\dotnet
+    /// This path is critical for MSBuild to resolve framework assemblies.
+    /// </remarks>
+    /// <returns>Path to the .NET installation directory</returns>
     private string GetDotNetInstallDirectory()
     {
         // Try environment variable first
@@ -668,6 +789,14 @@ public class CodeAnalysisService : IDisposable
     /// <summary>
     /// Gets the reference assembly path for the current framework
     /// </summary>
+    /// <remarks>
+    /// Locates reference assemblies which contain type metadata for compilation:
+    /// 1. Traditional .NET Framework reference assemblies
+    /// 2. .NET Core/5+ targeting packs
+    /// These assemblies are used by the compiler to resolve types but are not
+    /// loaded at runtime. Critical for resolving System types.
+    /// </remarks>
+    /// <returns>Path to reference assemblies or targeting packs</returns>
     private string GetReferenceAssemblyPath()
     {
         var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
@@ -696,6 +825,14 @@ public class CodeAnalysisService : IDisposable
     /// <summary>
     /// Gets the MSBuild extensions path
     /// </summary>
+    /// <remarks>
+    /// Searches for MSBuild in the following locations:
+    /// 1. Visual Studio 2022 installation (all editions)
+    /// 2. .NET SDK installation
+    /// 3. Fallback to Program Files\MSBuild
+    /// This path contains MSBuild targets and tasks required for project evaluation.
+    /// </remarks>
+    /// <returns>Path to MSBuild extensions</returns>
     private string GetMSBuildExtensionsPath()
     {
         // Try VS installation first
@@ -735,6 +872,13 @@ public class CodeAnalysisService : IDisposable
     /// <summary>
     /// Gets the MSBuild SDKs path
     /// </summary>
+    /// <remarks>
+    /// Locates MSBuild SDKs which define project templates and build logic:
+    /// 1. MSBuildSDKsPath environment variable
+    /// 2. Latest .NET SDK's Sdks directory
+    /// SDKs are essential for modern .NET project files that use SDK-style format.
+    /// </remarks>
+    /// <returns>Path to MSBuild SDKs directory</returns>
     private string GetMSBuildSDKsPath()
     {
         // Check environment variable first
@@ -768,6 +912,14 @@ public class CodeAnalysisService : IDisposable
     /// <summary>
     /// Gets the NuGet package root directory
     /// </summary>
+    /// <remarks>
+    /// Determines where NuGet packages are cached:
+    /// 1. NUGET_PACKAGES environment variable
+    /// 2. Default location: %USERPROFILE%\.nuget\packages
+    /// This path is used by MSBuild to resolve package references without
+    /// requiring a full restore operation.
+    /// </remarks>
+    /// <returns>Path to NuGet package cache</returns>
     private string GetNuGetPackageRoot()
     {
         // Check environment variable
@@ -791,6 +943,21 @@ public class CodeAnalysisService : IDisposable
     /// <summary>
     /// Validates that the workspace can resolve basic types
     /// </summary>
+    /// <summary>
+    /// Validates that the workspace can resolve basic types and framework references
+    /// </summary>
+    /// <param name="workspace">The workspace to validate</param>
+    /// <param name="solution">The loaded solution</param>
+    /// <remarks>
+    /// Performs critical validation to ensure the workspace is properly configured:
+    /// - Checks if System.Object can be resolved (indicates framework references work)
+    /// - Validates other critical types like String, Dictionary, and Task
+    /// - Logs detailed diagnostics if resolution fails to aid troubleshooting
+    /// - Reports compilation error counts
+    /// 
+    /// This validation helps detect configuration issues early, particularly with
+    /// framework resolution which is a common source of Roslyn workspace problems.
+    /// </remarks>
     private async Task ValidateWorkspaceAsync(Workspace workspace, Solution solution)
     {
         try
