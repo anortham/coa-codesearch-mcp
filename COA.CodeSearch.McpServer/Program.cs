@@ -165,6 +165,9 @@ var host = Host.CreateDefaultBuilder(args)
         // Initialize TypeScript on startup
         services.AddHostedService<TypeScriptInitializationService>();
         
+        // Initialize Razor on startup
+        services.AddHostedService<RazorInitializationService>();
+        
         // Lucene lifecycle management
         services.AddHostedService<LuceneLifecycleService>();
         
