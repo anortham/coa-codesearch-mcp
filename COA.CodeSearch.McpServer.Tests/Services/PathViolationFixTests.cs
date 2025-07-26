@@ -36,7 +36,7 @@ public class PathViolationFixTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(_mockPathResolution.Object);
         services.AddSingleton(_mockConfiguration.Object);
-        services.AddSingleton<ILogger<TypeScriptInstaller>>(new Mock<ILogger<TypeScriptInstaller>>().Object);
+        // TypeScript installer removed - now uses global installation
         
         _serviceProvider = services.BuildServiceProvider();
     }

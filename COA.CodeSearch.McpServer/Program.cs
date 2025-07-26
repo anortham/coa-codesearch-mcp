@@ -97,6 +97,11 @@ var host = Host.CreateDefaultBuilder(args)
         // Core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
+        services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
+        services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IQueryCacheService, QueryCacheService>();
+        services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
+        services.AddSingleton<IStreamingResultService, StreamingResultService>();
         services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         
@@ -104,6 +109,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
+        services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
+        services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
         services.AddSingleton<FileIndexingService>();
         
         // Memory lifecycle configuration
@@ -140,7 +147,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
         // TypeScript Analysis
-        services.AddSingleton<TypeScriptInstaller>();
         services.AddSingleton<TypeScriptAnalysisService>();
         services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
         services.AddSingleton<TypeScriptTextAnalysisService>();
@@ -173,10 +179,12 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<FastFileSizeAnalysisTool>();
         services.AddSingleton<FastSimilarFilesTool>();
         services.AddSingleton<FastDirectorySearchTool>();
+        services.AddSingleton<StreamingTextSearchTool>();
         services.AddSingleton<IndexWorkspaceTool>();
         services.AddSingleton<ClaudeMemoryTools>();
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
+        services.AddSingleton<IndexHealthCheckTool>();
         
         
         // TypeScript tools

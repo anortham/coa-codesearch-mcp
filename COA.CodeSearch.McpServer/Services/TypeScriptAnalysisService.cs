@@ -32,7 +32,6 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
 {
     private readonly ILogger<TypeScriptAnalysisService> _logger;
     private readonly IConfiguration _configuration;
-    private readonly TypeScriptInstaller _installer;
     private readonly string _nodeExecutable;
     private string? _tsServerPath;
     private Process? _tsServerProcess;
@@ -64,12 +63,10 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
 
     public TypeScriptAnalysisService(
         ILogger<TypeScriptAnalysisService> logger,
-        IConfiguration configuration,
-        TypeScriptInstaller installer)
+        IConfiguration configuration)
     {
         _logger = logger;
         _configuration = configuration;
-        _installer = installer;
         
         // Find Node.js executable
         _nodeExecutable = FindNodeExecutable();
@@ -181,18 +178,19 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
                 }
             }
             
-            // If still not found, try to install
+            // If still not found, check for global TypeScript installation
             if (string.IsNullOrEmpty(_tsServerPath) || !File.Exists(_tsServerPath))
             {
-                _logger.LogInformation("TypeScript not found locally. Attempting automatic installation...");
-                var installedPath = await _installer.GetTsServerPathAsync();
-                if (!string.IsNullOrEmpty(installedPath))
+                _logger.LogInformation("TypeScript not found locally. Checking for global installation...");
+                var globalTsServerPath = await FindGlobalTypeScriptAsync();
+                if (!string.IsNullOrEmpty(globalTsServerPath))
                 {
-                    _tsServerPath = installedPath;
+                    _tsServerPath = globalTsServerPath;
+                    _logger.LogInformation("Found global TypeScript at: {TsServerPath}", _tsServerPath);
                 }
                 else
                 {
-                    _logger.LogError("TypeScript installation failed. Check that npm is available and internet connection is working.");
+                    _logger.LogError("TypeScript not found. Please install TypeScript globally: npm install -g typescript");
                 }
             }
 
@@ -284,6 +282,85 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error finding Node.js executable");
+            return string.Empty;
+        }
+    }
+
+    /// <summary>
+    /// Find npm executable across platforms
+    /// </summary>
+    private string FindNpmExecutable()
+    {
+        try
+        {
+            var npmNames = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) 
+                ? new[] { "npm.cmd", "npm" }  // Prioritize npm.cmd on Windows
+                : new[] { "npm" };
+            
+            var paths = Environment.GetEnvironmentVariable("PATH")?.Split(Path.PathSeparator) ?? Array.Empty<string>();
+            
+            // First check PATH
+            foreach (var dir in paths)
+            {
+                if (string.IsNullOrWhiteSpace(dir)) continue;
+                
+                foreach (var npmName in npmNames)
+                {
+                    try
+                    {
+                        var fullPath = Path.Combine(dir, npmName);
+                        if (File.Exists(fullPath))
+                        {
+                            _logger.LogInformation("DEBUG: Found npm in PATH at: {Path}", fullPath);
+                            return fullPath;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error checking path {Path}/{Npm}", dir, npmName);
+                    }
+                }
+            }
+            
+            // Check common npm installation paths
+            var commonPaths = new List<string>();
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                commonPaths.AddRange(new[]
+                {
+                    @"C:\Program Files\nodejs\npm",
+                    @"C:\Program Files\nodejs\npm.cmd",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "npm"),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "npm", "npm.cmd")
+                });
+            }
+            else
+            {
+                commonPaths.AddRange(new[]
+                {
+                    "/usr/local/bin/npm",
+                    "/usr/bin/npm",
+                    "/opt/homebrew/bin/npm",
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".npm-global", "bin", "npm")
+                });
+            }
+            
+            foreach (var path in commonPaths)
+            {
+                if (File.Exists(path))
+                {
+                    _logger.LogInformation("DEBUG: Found npm at common location: {Path}", path);
+                    return path;
+                }
+            }
+            
+            _logger.LogError("DEBUG: npm executable not found in PATH or common locations");
+            return string.Empty;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DEBUG: Error finding npm executable");
             return string.Empty;
         }
     }
@@ -518,69 +595,6 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
         }
     }
 
-    /// <summary>
-    /// Read an LSP message from the TypeScript server output stream
-    /// NOTE: This method is not used because tsserver uses simple newline-delimited JSON, not LSP protocol
-    /// </summary>
-    [Obsolete("tsserver uses stdio protocol (newline-delimited JSON), not LSP protocol")]
-    private async Task<string?> ReadLspMessageAsync(StreamReader reader, CancellationToken cancellationToken)
-    {
-        var headers = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        
-        // Read headers
-        while (true)
-        {
-            var headerLine = await reader.ReadLineAsync();
-            if (headerLine == null)
-            {
-                _logger.LogWarning("Stream ended while reading LSP headers");
-                return null;
-            }
-            
-            // Empty line indicates end of headers
-            if (string.IsNullOrEmpty(headerLine))
-            {
-                break;
-            }
-            
-            // Parse header
-            var colonIndex = headerLine.IndexOf(':');
-            if (colonIndex > 0)
-            {
-                var name = headerLine.Substring(0, colonIndex).Trim();
-                var value = headerLine.Substring(colonIndex + 1).Trim();
-                headers[name] = value;
-                _logger.LogDebug("LSP Header: {Name}: {Value}", name, value);
-            }
-        }
-        
-        // Get content length
-        if (!headers.TryGetValue("Content-Length", out var contentLengthStr) || 
-            !int.TryParse(contentLengthStr, out var contentLength))
-        {
-            _logger.LogError("Missing or invalid Content-Length header in LSP message");
-            return null;
-        }
-        
-        // Read the content
-        var buffer = new char[contentLength];
-        var totalRead = 0;
-        while (totalRead < contentLength)
-        {
-            var read = await reader.ReadAsync(buffer, totalRead, contentLength - totalRead);
-            if (read == 0)
-            {
-                _logger.LogWarning("Stream ended while reading LSP content. Expected {Expected}, got {Actual}", 
-                    contentLength, totalRead);
-                return null;
-            }
-            totalRead += read;
-        }
-        
-        var content = new string(buffer);
-        _logger.LogDebug("Read LSP message with {Length} bytes", contentLength);
-        return content;
-    }
 
     /// <summary>
     /// Send a notification to the TypeScript server (no response expected)
@@ -1292,6 +1306,253 @@ public class TypeScriptAnalysisService : ITypeScriptAnalysisService, IDisposable
             _logger.LogInformation("No project-specific TypeScript installation found");
             return null;
         });
+    }
+
+    /// <summary>
+    /// Find global TypeScript installation using npm
+    /// </summary>
+    private async Task<string?> FindGlobalTypeScriptAsync()
+    {
+        try
+        {
+            if (string.IsNullOrEmpty(_nodeExecutable))
+            {
+                _logger.LogWarning("Node.js not found - cannot check for global TypeScript");
+                return null;
+            }
+
+            // Check if typescript is installed globally
+            var npmPath = FindNpmExecutable();
+            if (string.IsNullOrEmpty(npmPath))
+            {
+                _logger.LogError("DEBUG: npm executable not found");
+                return null;
+            }
+            
+            var arguments = "list -g typescript --depth=0 --json";
+            
+            _logger.LogInformation("DEBUG: Running npm command: {Command} {Arguments}", npmPath, arguments);
+            
+            ProcessStartInfo checkProcess;
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Use cmd.exe for non-.cmd npm files on Windows
+                checkProcess = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"{npmPath}\" {arguments}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                _logger.LogInformation("DEBUG: Using cmd.exe wrapper: cmd.exe /c \"{0}\" {1}", npmPath, arguments);
+            }
+            else
+            {
+                // Direct execution on Unix-like systems
+                checkProcess = new ProcessStartInfo
+                {
+                    FileName = npmPath,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                _logger.LogInformation("DEBUG: Direct execution: {0} {1}", npmPath, arguments);
+            }
+
+            using var process = Process.Start(checkProcess);
+            if (process == null) 
+            {
+                _logger.LogError("DEBUG: Failed to start npm process");
+                return null;
+            }
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
+            
+            await process.WaitForExitAsync();
+
+            _logger.LogInformation("DEBUG: npm list exit code: {ExitCode}", process.ExitCode);
+            _logger.LogInformation("DEBUG: npm list stdout: {Output}", output);
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogInformation("DEBUG: npm list stderr: {Error}", error);
+            }
+
+            if (process.ExitCode == 0 && !string.IsNullOrWhiteSpace(output))
+            {
+                try
+                {
+                    // Parse npm output to get global modules path
+                    using var doc = JsonDocument.Parse(output);
+                    _logger.LogInformation("DEBUG: Successfully parsed JSON from npm list");
+                    
+                    if (doc.RootElement.TryGetProperty("dependencies", out var deps))
+                    {
+                        _logger.LogInformation("DEBUG: Found dependencies property in npm output");
+                        
+                        if (deps.TryGetProperty("typescript", out var typescript))
+                        {
+                            _logger.LogInformation("DEBUG: Found TypeScript in global dependencies: {TypeScript}", typescript.ToString());
+                            
+                            // TypeScript is installed globally, now find its path
+                            var globalPath = await GetGlobalNpmPathAsync();
+                            _logger.LogInformation("DEBUG: Global npm path result: {GlobalPath}", globalPath ?? "NULL");
+                            
+                            if (!string.IsNullOrEmpty(globalPath))
+                            {
+                                var tsServerPath = Path.Combine(globalPath, "typescript", "lib", "tsserver.js");
+                                _logger.LogInformation("DEBUG: Checking TypeScript path: {TsServerPath}", tsServerPath);
+                                
+                                if (File.Exists(tsServerPath))
+                                {
+                                    _logger.LogInformation("DEBUG: SUCCESS - Found TypeScript tsserver.js at: {TsServerPath}", tsServerPath);
+                                    return tsServerPath;
+                                }
+                                else
+                                {
+                                    _logger.LogError("DEBUG: FAIL - TypeScript tsserver.js not found at expected path: {TsServerPath}", tsServerPath);
+                                }
+                            }
+                            else
+                            {
+                                _logger.LogError("DEBUG: FAIL - Could not determine global npm path");
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogError("DEBUG: FAIL - TypeScript not found in dependencies property");
+                            _logger.LogInformation("DEBUG: Available dependencies: {Dependencies}", deps.ToString());
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogError("DEBUG: FAIL - No dependencies property found in npm output");
+                        _logger.LogInformation("DEBUG: Root element properties: {Properties}", string.Join(", ", doc.RootElement.EnumerateObject().Select(p => p.Name)));
+                    }
+                }
+                catch (JsonException ex)
+                {
+                    _logger.LogError(ex, "DEBUG: FAIL - Failed to parse JSON from npm list output: {Output}", output);
+                }
+            }
+            else
+            {
+                _logger.LogError("DEBUG: FAIL - npm list command failed or returned empty output. ExitCode: {ExitCode}, Output: {Output}", process.ExitCode, output);
+            }
+
+            _logger.LogInformation("TypeScript not found in global npm packages");
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error checking for global TypeScript installation");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Get the global npm modules path
+    /// </summary>
+    private async Task<string?> GetGlobalNpmPathAsync()
+    {
+        try
+        {
+            var npmPath = FindNpmExecutable();
+            if (string.IsNullOrEmpty(npmPath))
+            {
+                _logger.LogError("DEBUG: npm executable not found in GetGlobalNpmPathAsync");
+                return null;
+            }
+            
+            var arguments = "root -g";
+            
+            _logger.LogInformation("DEBUG: Running npm root command: {Command} {Arguments}", npmPath, arguments);
+            
+            ProcessStartInfo pathProcess;
+            
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                // Use cmd.exe for non-.cmd npm files on Windows
+                pathProcess = new ProcessStartInfo
+                {
+                    FileName = "cmd.exe",
+                    Arguments = $"/c \"{npmPath}\" {arguments}",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                _logger.LogInformation("DEBUG: Using cmd.exe wrapper for npm root: cmd.exe /c \"{0}\" {1}", npmPath, arguments);
+            }
+            else
+            {
+                // Direct execution on Unix-like systems
+                pathProcess = new ProcessStartInfo
+                {
+                    FileName = npmPath,
+                    Arguments = arguments,
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    CreateNoWindow = true
+                };
+                
+                _logger.LogInformation("DEBUG: Direct execution for npm root: {0} {1}", npmPath, arguments);
+            }
+
+            using var process = Process.Start(pathProcess);
+            if (process == null) 
+            {
+                _logger.LogError("DEBUG: Failed to start npm root process");
+                return null;
+            }
+
+            var output = await process.StandardOutput.ReadToEndAsync();
+            var error = await process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+
+            _logger.LogInformation("DEBUG: npm root exit code: {ExitCode}", process.ExitCode);
+            _logger.LogInformation("DEBUG: npm root stdout: {Output}", output);
+            if (!string.IsNullOrEmpty(error))
+            {
+                _logger.LogInformation("DEBUG: npm root stderr: {Error}", error);
+            }
+
+            if (process.ExitCode == 0)
+            {
+                var globalPath = output.Trim();
+                _logger.LogInformation("DEBUG: npm root returned path: {GlobalPath}", globalPath);
+                
+                if (Directory.Exists(globalPath))
+                {
+                    _logger.LogInformation("DEBUG: Global path exists, returning: {GlobalPath}", globalPath);
+                    return globalPath; // npm root -g returns the node_modules directory directly
+                }
+                else
+                {
+                    _logger.LogError("DEBUG: Global path does not exist: {GlobalPath}", globalPath);
+                }
+            }
+            else
+            {
+                _logger.LogError("DEBUG: npm root failed with exit code: {ExitCode}", process.ExitCode);
+            }
+
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "DEBUG: Exception in GetGlobalNpmPathAsync");
+            return null;
+        }
     }
 
     public void Dispose()

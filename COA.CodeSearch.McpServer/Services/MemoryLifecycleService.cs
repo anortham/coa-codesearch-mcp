@@ -17,6 +17,7 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
     private readonly IMemoryService _memoryService;
     private readonly IOptions<MemoryLifecycleOptions> _options;
     private readonly ConcurrentDictionary<string, MemoryConfidenceData> _confidenceCache;
+    private readonly ConcurrentDictionary<string, DateTime> _recentPendingResolutions;
     
     public MemoryLifecycleService(
         ILogger<MemoryLifecycleService> logger,
@@ -27,6 +28,7 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
         _memoryService = memoryService;
         _options = options;
         _confidenceCache = new ConcurrentDictionary<string, MemoryConfidenceData>();
+        _recentPendingResolutions = new ConcurrentDictionary<string, DateTime>();
     }
     
     /// <summary>
@@ -82,6 +84,15 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
     /// </summary>
     public async Task OnFileChangedAsync(MemoryLifecycleFileChangeEvent changeEvent)
     {
+        // CRITICAL: Skip processing if the changed file is within .codesearch directory
+        // This prevents infinite loops when storing memories triggers file changes
+        if (IsPathInCodeSearchDirectory(changeEvent.FilePath))
+        {
+            _logger.LogDebug("Skipping file change event for .codesearch directory file: {FilePath}", 
+                changeEvent.FilePath);
+            return;
+        }
+        
         _logger.LogInformation("MemoryLifecycleService: Processing file change: {FilePath} ({ChangeType})", 
             changeEvent.FilePath, changeEvent.ChangeType);
         
@@ -351,6 +362,34 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
     /// </summary>
     private async Task CreatePendingResolutionAsync(FlexibleMemoryEntry memory, MemoryLifecycleFileChangeEvent changeEvent, float confidence)
     {
+        // Prevent creating PendingResolution for another PendingResolution
+        if (memory.Type == "PendingResolution")
+        {
+            _logger.LogDebug("Skipping PendingResolution creation for memory {Id} which is already a PendingResolution", 
+                memory.Id);
+            return;
+        }
+        
+        // Additional safety: Don't create PendingResolution for ResolutionFeedback memories
+        if (memory.Type == "ResolutionFeedback")
+        {
+            _logger.LogDebug("Skipping PendingResolution creation for ResolutionFeedback memory {Id}", 
+                memory.Id);
+            return;
+        }
+        
+        // Circuit breaker: Check if we recently created a PendingResolution for this memory
+        if (_recentPendingResolutions.TryGetValue(memory.Id, out var lastCreated))
+        {
+            var timeSinceLastCreation = DateTime.UtcNow - lastCreated;
+            if (timeSinceLastCreation < TimeSpan.FromMinutes(1))
+            {
+                _logger.LogWarning("Circuit breaker activated: Skipping PendingResolution creation for memory {Id} - " +
+                    "last created {Seconds} seconds ago", memory.Id, timeSinceLastCreation.TotalSeconds);
+                return;
+            }
+        }
+        
         _logger.LogInformation("Creating pending resolution for memory {Id} with confidence {Confidence:F2}", 
             memory.Id, confidence);
         
@@ -375,6 +414,20 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
         pendingResolution.SetField("status", "pending_review");
         
         await _memoryService.StoreMemoryAsync(pendingResolution);
+        
+        // Track this creation in the circuit breaker
+        _recentPendingResolutions[memory.Id] = DateTime.UtcNow;
+        
+        // Clean up old entries (older than 5 minutes) to prevent memory leak
+        var cutoffTime = DateTime.UtcNow.AddMinutes(-5);
+        var oldEntries = _recentPendingResolutions
+            .Where(kvp => kvp.Value < cutoffTime)
+            .Select(kvp => kvp.Key)
+            .ToList();
+        foreach (var key in oldEntries)
+        {
+            _recentPendingResolutions.TryRemove(key, out _);
+        }
     }
     
     /// <summary>
@@ -458,6 +511,24 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
             // TODO: Use this feedback to adjust confidence weights
             _logger.LogInformation("Recorded resolution feedback for memory {MemoryId}: {Correct}", 
                 memoryId, wasCorrect);
+        }
+    }
+    
+    /// <summary>
+    /// Check if a path is within the .codesearch directory
+    /// </summary>
+    private bool IsPathInCodeSearchDirectory(string path)
+    {
+        try
+        {
+            var normalizedPath = Path.GetFullPath(path);
+            return normalizedPath.Contains(PathConstants.BaseDirectoryName, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error checking if path is in .codesearch directory: {Path}", path);
+            // If we can't determine, err on the side of caution and skip processing
+            return true;
         }
     }
 }

@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.IO;
@@ -44,7 +45,10 @@ public class LuceneIndexingUnitTests : IDisposable
             _loggerFactory.CreateLogger<FileIndexingService>(),
             _configuration,
             _luceneIndexService,
-            pathResolutionService);
+            pathResolutionService,
+            new MockIndexingMetricsService(),
+            new MockCircuitBreakerService(),
+            new MockBatchIndexingService());
         
         // Create test files
         File.WriteAllText(Path.Combine(_testDirectory, "test1.cs"), 

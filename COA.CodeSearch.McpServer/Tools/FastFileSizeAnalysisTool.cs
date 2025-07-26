@@ -16,14 +16,17 @@ public class FastFileSizeAnalysisTool : ITool
     public ToolCategory Category => ToolCategory.Analysis;
     private readonly ILogger<FastFileSizeAnalysisTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IFieldSelectorService _fieldSelectorService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSizeAnalysisTool(
         ILogger<FastFileSizeAnalysisTool> logger,
-        ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService,
+        IFieldSelectorService fieldSelectorService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
+        _fieldSelectorService = fieldSelectorService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -122,7 +125,8 @@ public class FastFileSizeAnalysisTool : ITool
             
             foreach (var scoreDoc in topDocs.ScoreDocs.Take(maxResults))
             {
-                var doc = searcher.Doc(scoreDoc.Doc);
+                // Use field selector to load only size analysis fields for better performance
+                var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, FieldSetType.SizeAnalysis);
                 var size = long.Parse(doc.Get("size") ?? "0");
                 totalSize += size;
                 
@@ -193,7 +197,8 @@ public class FastFileSizeAnalysisTool : ITool
 
         foreach (var scoreDoc in topDocs.ScoreDocs)
         {
-            var doc = searcher.Doc(scoreDoc.Doc);
+            // Use field selector to load only size analysis fields for better performance
+            var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, FieldSetType.SizeAnalysis);
             var size = long.Parse(doc.Get("size") ?? "0");
             var extension = doc.Get("extension") ?? "unknown";
             

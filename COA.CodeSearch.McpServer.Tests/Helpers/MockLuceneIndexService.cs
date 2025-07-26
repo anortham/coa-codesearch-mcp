@@ -29,6 +29,31 @@ public static class MockLuceneIndexService
         mockService.Setup(x => x.OptimizeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         
+        // Setup ForceMergeAsync to complete successfully
+        mockService.Setup(x => x.ForceMergeAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
+        
+        // Setup DefragmentIndexAsync to return a mock result
+        mockService.Setup(x => x.DefragmentIndexAsync(It.IsAny<string>(), It.IsAny<IndexDefragmentationOptions>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new IndexDefragmentationResult
+            {
+                StartTime = DateTime.UtcNow,
+                CompletedAt = DateTime.UtcNow.AddSeconds(1),
+                Duration = TimeSpan.FromSeconds(1),
+                Success = true,
+                ActionTaken = DefragmentationAction.Skipped,
+                Reason = "Mock defragmentation",
+                InitialFragmentationLevel = 10,
+                FinalFragmentationLevel = 5,
+                FragmentationReduction = 5,
+                InitialSegmentCount = 3,
+                FinalSegmentCount = 1,
+                SegmentReduction = 2,
+                InitialSizeBytes = 2048,
+                FinalSizeBytes = 1024,
+                SizeReductionBytes = 1024
+            });
+        
         // Setup ClearIndexAsync to complete successfully
         mockService.Setup(x => x.ClearIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);

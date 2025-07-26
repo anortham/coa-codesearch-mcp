@@ -167,6 +167,20 @@ stages:
               version: $(dotnetSdkVersion)
               includePreviewVersions: false
 
+          - task: NodeTool@0
+            displayName: "Install Node.js"
+            inputs:
+              versionSpec: '18.x'
+
+          - powershell: |
+              Write-Host "Installing TypeScript globally for test environment..."
+              npm install -g typescript@latest
+              Write-Host "TypeScript version:"
+              tsc --version
+              Write-Host "npm list typescript (global):"
+              npm list -g typescript --depth=0
+            displayName: "Install TypeScript globally"
+
           - task: DotNetCoreCLI@2
             displayName: "Restore packages"
             inputs:

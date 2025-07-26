@@ -42,6 +42,135 @@ public class MemoryLifecycleServiceTests
         _service = new MemoryLifecycleService(_mockLogger.Object, _mockMemoryService.Object, _options);
     }
     
+    [Fact]
+    public async Task OnFileChangedAsync_ShouldSkipProcessing_WhenFileIsInCodeSearchDirectory()
+    {
+        // Arrange
+        var changeEvent = new MemoryLifecycleFileChangeEvent
+        {
+            FilePath = @"C:\Users\test\.codesearch\project-memory\memories.idx",
+            ChangeType = MemoryLifecycleFileChangeType.Modified,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        // Act
+        await _service.OnFileChangedAsync(changeEvent);
+        
+        // Assert
+        // Should not call SearchMemoriesAsync since we skip processing
+        _mockMemoryService.Verify(
+            x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()), 
+            Times.Never,
+            "Should not search memories when file is in .codesearch directory");
+    }
+    
+    [Fact]
+    public async Task OnFileChangedAsync_ShouldProcessNormally_WhenFileIsNotInCodeSearchDirectory()
+    {
+        // Arrange
+        var changeEvent = new MemoryLifecycleFileChangeEvent
+        {
+            FilePath = @"C:\Users\test\MyProject\MyFile.cs",
+            ChangeType = MemoryLifecycleFileChangeType.Modified,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        var searchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry>()
+        };
+        
+        _mockMemoryService.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ReturnsAsync(searchResult);
+        
+        // Act
+        await _service.OnFileChangedAsync(changeEvent);
+        
+        // Assert
+        _mockMemoryService.Verify(
+            x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()), 
+            Times.Once,
+            "Should search memories when file is not in .codesearch directory");
+    }
+    
+    [Fact]
+    public async Task CreatePendingResolutionAsync_ShouldSkip_WhenMemoryIsPendingResolution()
+    {
+        // Arrange
+        var pendingResolutionMemory = new FlexibleMemoryEntry
+        {
+            Id = "pr-123",
+            Type = "PendingResolution",
+            Content = "Pending resolution for another memory",
+            FilesInvolved = new[] { @"C:\project\test.cs" },
+            Created = DateTime.UtcNow
+        };
+        
+        var changeEvent = new MemoryLifecycleFileChangeEvent
+        {
+            FilePath = @"C:\project\test.cs",
+            ChangeType = MemoryLifecycleFileChangeType.Modified,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        var searchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry> { pendingResolutionMemory }
+        };
+        
+        _mockMemoryService.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ReturnsAsync(searchResult);
+        
+        // Act
+        await _service.OnFileChangedAsync(changeEvent);
+        
+        // Assert - Should never store a new memory
+        _mockMemoryService.Verify(
+            x => x.StoreMemoryAsync(It.IsAny<FlexibleMemoryEntry>()), 
+            Times.Never,
+            "Should not create PendingResolution for a PendingResolution memory");
+    }
+    
+    [Fact]
+    public async Task CircuitBreaker_ShouldPreventRapidPendingResolutions()
+    {
+        // Arrange - a memory that triggers medium confidence (creates PendingResolution)
+        var memory = new FlexibleMemoryEntry
+        {
+            Id = "test-456",
+            Type = "Question",
+            Content = "How does authentication work?",
+            Created = DateTime.UtcNow.AddDays(-10),
+            FilesInvolved = new[] { @"C:\project\auth.cs" }
+        };
+        memory.SetField("status", "pending");
+        
+        var changeEvent = new MemoryLifecycleFileChangeEvent
+        {
+            FilePath = @"C:\project\auth.cs",
+            ChangeType = MemoryLifecycleFileChangeType.Modified,
+            Timestamp = DateTime.UtcNow
+        };
+        
+        var searchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry> { memory }
+        };
+        
+        _mockMemoryService.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ReturnsAsync(searchResult);
+        
+        // Act - Trigger file change twice rapidly
+        await _service.OnFileChangedAsync(changeEvent);
+        await _service.OnFileChangedAsync(changeEvent);
+        
+        // Assert - Should only create one PendingResolution due to circuit breaker
+        _mockMemoryService.Verify(
+            x => x.StoreMemoryAsync(It.Is<FlexibleMemoryEntry>(m => m.Type == "PendingResolution")), 
+            Times.Once,
+            "Circuit breaker should prevent multiple PendingResolutions within 1 minute");
+    }
+    
     [Theory]
     [InlineData("TechnicalDebt", 0.9f)]
     [InlineData("BugReport", 0.85f)]

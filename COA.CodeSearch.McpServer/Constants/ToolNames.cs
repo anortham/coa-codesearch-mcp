@@ -81,4 +81,5 @@ public static class ToolNames
     // System tools
     public const string LogDiagnostics = "log_diagnostics";
     public const string GetVersion = "get_version";
+    public const string IndexHealthCheck = "index_health_check";
 }

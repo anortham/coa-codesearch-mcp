@@ -69,6 +69,9 @@ public static class AllToolRegistrations
         
         // Version information tool
         RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
+        
+        // Index health check tool
+        RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
     }
 
     private static void RegisterGoToDefinition(ToolRegistry registry, GoToDefinitionTool tool)
@@ -1259,6 +1262,49 @@ public static class AllToolRegistrations
     {
         public string[]? Scopes { get; set; }
         public bool? IncludeLocal { get; set; }
+    }
+    
+    private static void RegisterIndexHealthCheck(ToolRegistry registry, IndexHealthCheckTool tool)
+    {
+        registry.RegisterTool<IndexHealthCheckParams>(
+            name: ToolNames.IndexHealthCheck,
+            description: "Perform comprehensive health check of Lucene indexes with detailed metrics, circuit breaker status, and recommendations. Returns status, diagnostics, performance metrics, and actionable recommendations.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    includeMetrics = new 
+                    { 
+                        type = "boolean", 
+                        description = "Include performance metrics in the response", 
+                        @default = true 
+                    },
+                    includeCircuitBreakerStatus = new 
+                    { 
+                        type = "boolean", 
+                        description = "Include circuit breaker status for all operations", 
+                        @default = true 
+                    }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.IncludeMetrics ?? true,
+                    parameters?.IncludeCircuitBreakerStatus ?? true,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class IndexHealthCheckParams
+    {
+        public bool? IncludeMetrics { get; set; }
+        public bool? IncludeCircuitBreakerStatus { get; set; }
     }
     
 }

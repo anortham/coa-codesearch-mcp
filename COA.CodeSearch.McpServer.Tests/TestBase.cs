@@ -88,7 +88,6 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
         // Add TypeScript services (required by GoToDefinitionTool)
-        services.AddSingleton<TypeScriptInstaller>();
         services.AddSingleton<TypeScriptAnalysisService>();
         services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
         services.AddSingleton<TypeScriptGoToDefinitionTool>();

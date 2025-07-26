@@ -91,11 +91,13 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         public DateTime LastAccessed { get; set; }
     }
     
-    private class IndexContext
+    private class IndexContext : IDisposable
     {
         public FSDirectory Directory { get; set; } = null!;
         public IndexWriter? Writer { get; set; }
         public DirectoryReader? Reader { get; set; }
+        public IndexSearcher? CachedSearcher { get; set; }
+        public DateTime SearcherLastRefresh { get; set; }
         public DateTime LastAccessed { get; set; }
         public DateTime LastCommitted { get; set; }
         public string Path { get; set; } = string.Empty;
@@ -106,6 +108,16 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         {
             Path = path;
             Lock = new AsyncLock($"index-{System.IO.Path.GetFileName(path)}");  // Named lock for debugging
+        }
+
+        public void Dispose()
+        {
+            // IndexSearcher doesn't implement IDisposable in Lucene.NET 4.8
+            // It's tied to the DirectoryReader lifecycle
+            CachedSearcher = null;
+            Reader?.Dispose();
+            Writer?.Dispose();
+            Directory?.Dispose();
         }
     }
     
@@ -142,45 +154,16 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 // Check again inside the lock
                 if (!_indexes.TryGetValue(indexPath, out context))
                 {
-                    // Check for stuck locks first
-                    var (isLocked, isStuck) = await IsIndexLockedAsync(indexPath).ConfigureAwait(false);
-                    if (isLocked)
-                    {
-                        if (isStuck)
-                        {
-                            // Check if this is a protected memory index
-                            if (IsProtectedMemoryIndex(indexPath))
-                            {
-                                _logger.LogError("CRITICAL: Memory index at {Path} has a stuck lock. " +
-                                               "This indicates improper disposal! The memory index may be corrupted. " +
-                                               "Manual intervention required: delete the write.lock file and restart.",
-                                               indexPath);
-                                throw new InvalidOperationException($"Memory index at {indexPath} has a stuck lock. " +
-                                                                  "This indicates improper disposal. Please manually delete the write.lock file and restart.");
-                            }
-                            else
-                            {
-                                // For non-memory indexes, use the existing clear strategy
-                                _logger.LogWarning("Index at {Path} has stuck lock. Clearing index for rebuild.", indexPath);
-                                await ClearIndexAsync(indexPath).ConfigureAwait(false);
-                            }
-                        }
-                        else
-                        {
-                            // Lock exists but is recent - another process may be using it
-                            throw new InvalidOperationException($"Index at {indexPath} is currently locked by another process");
-                        }
-                    }
-                    
-                    context = CreateIndexContext(indexPath, forceRecreate);
+                    // Atomic operation: check locks and create context together
+                    context = await CreateIndexContextSafelyAsync(indexPath, forceRecreate, cancellationToken).ConfigureAwait(false);
                     
                     // Try to add to dictionary - handle race condition
                     if (!_indexes.TryAdd(indexPath, context))
                     {
-                        // Another thread beat us, dispose our resources
+                        // Another thread beat us, dispose our resources and use theirs
                         var ourContext = context;
                         context = _indexes[indexPath];
-                        await DisposeContextAsync(ourContext);
+                        await DisposeContextAsync(ourContext).ConfigureAwait(false);
                     }
                     // Success - index created
                 }
@@ -199,6 +182,65 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             context.LastAccessed = DateTime.UtcNow;
             return context.Writer;
         }
+    }
+    
+    /// <summary>
+    /// Safely creates an index context with atomic lock checking and creation
+    /// </summary>
+    /// <param name="indexPath">Path to the index</param>
+    /// <param name="forceRecreate">Whether to force recreation</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Created index context</returns>
+    private async Task<IndexContext> CreateIndexContextSafelyAsync(string indexPath, bool forceRecreate, CancellationToken cancellationToken)
+    {
+        // Get comprehensive lock diagnostics
+        var lockDiagnostics = await GetLockDiagnosticsAsync(indexPath).ConfigureAwait(false);
+        
+        if (lockDiagnostics.IsLocked)
+        {
+            if (lockDiagnostics.IsStuck)
+            {
+                // Check if this is a protected memory index
+                if (IsProtectedMemoryIndex(indexPath))
+                {
+                    _logger.LogError("CRITICAL: Memory index at {Path} has a stuck lock. " +
+                                   "Lock Age: {LockAge}, Process Info: {ProcessInfo}, " +
+                                   "Access Info: {AccessInfo}. " +
+                                   "This indicates improper disposal! The memory index may be corrupted. " +
+                                   "Manual intervention required: delete the write.lock file and restart.",
+                                   indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo, lockDiagnostics.AccessInfo);
+                    throw new InvalidOperationException($"Memory index at {indexPath} has a stuck lock. " +
+                                                      "This indicates improper disposal. Please manually delete the write.lock file and restart.");
+                }
+                else
+                {
+                    // For non-memory indexes, use the existing clear strategy with enhanced logging
+                    _logger.LogWarning("Index at {Path} has stuck lock - clearing for rebuild. " +
+                                     "Lock Age: {LockAge}, Process Info: {ProcessInfo}, " +
+                                     "Access Info: {AccessInfo}",
+                                     indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo, lockDiagnostics.AccessInfo);
+                    await ClearIndexAsync(indexPath).ConfigureAwait(false);
+                }
+            }
+            else
+            {
+                // Lock exists but is recent - another process may be using it
+                _logger.LogWarning("Index at {Path} is currently locked by another process. " +
+                                 "Lock Age: {LockAge}, Process Info: {ProcessInfo}",
+                                 indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo);
+                throw new InvalidOperationException($"Index at {indexPath} is currently locked by another process");
+            }
+        }
+        
+        // Re-check after potential clear operation to prevent race condition
+        var (isStillLocked, _) = await IsIndexLockedAsync(indexPath).ConfigureAwait(false);
+        if (isStillLocked)
+        {
+            throw new InvalidOperationException($"Index at {indexPath} is still locked after attempting to clear stuck lock");
+        }
+        
+        // Now safely create the context
+        return CreateIndexContext(indexPath, forceRecreate);
     }
     
     /// <summary>
@@ -262,6 +304,88 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                     context.Writer = null;
                 }
             }
+        }
+    }
+    
+    /// <summary>
+    /// Enhanced lock diagnostics information
+    /// </summary>
+    public record LockDiagnostics(
+        bool IsLocked,
+        bool IsStuck,
+        TimeSpan LockAge,
+        DateTime? LockCreated,
+        string? ProcessInfo,
+        long? FileSizeBytes,
+        string? AccessInfo
+    );
+    
+    /// <summary>
+    /// Get comprehensive lock diagnostics for an index
+    /// </summary>
+    private async Task<LockDiagnostics> GetLockDiagnosticsAsync(string indexPath)
+    {
+        var lockPath = Path.Combine(indexPath, WriteLockFilename);
+        
+        if (!await FileExistsAsync(lockPath).ConfigureAwait(false))
+        {
+            return new LockDiagnostics(false, false, TimeSpan.Zero, null, null, null, null);
+        }
+        
+        try
+        {
+            var lockFileInfo = new FileInfo(lockPath);
+            var lockAge = DateTime.UtcNow - lockFileInfo.LastWriteTimeUtc;
+            var isStuck = lockAge > _lockTimeout;
+            
+            // Get process information if available
+            string? processInfo = null;
+            try
+            {
+                // Try to determine if another process is holding the file
+                using var stream = File.OpenWrite(lockPath);
+                processInfo = "No active lock holder detected";
+            }
+            catch (IOException ex) when (ex.Message.Contains("being used by another process"))
+            {
+                processInfo = "File is actively locked by another process";
+            }
+            catch (UnauthorizedAccessException)
+            {
+                processInfo = "Access denied - possible permission issue";
+            }
+            catch
+            {
+                processInfo = "Unable to determine lock holder";
+            }
+            
+            // Additional file information
+            var accessInfo = $"Created: {lockFileInfo.CreationTimeUtc:yyyy-MM-dd HH:mm:ss} UTC, " +
+                           $"Modified: {lockFileInfo.LastWriteTimeUtc:yyyy-MM-dd HH:mm:ss} UTC, " +
+                           $"Machine: {Environment.MachineName}, " +
+                           $"Process: {Environment.ProcessId}";
+            
+            return new LockDiagnostics(
+                IsLocked: true,
+                IsStuck: isStuck,
+                LockAge: lockAge,
+                LockCreated: lockFileInfo.CreationTimeUtc,
+                ProcessInfo: processInfo,
+                FileSizeBytes: lockFileInfo.Length,
+                AccessInfo: accessInfo
+            );
+        }
+        catch (Exception ex)
+        {
+            return new LockDiagnostics(
+                IsLocked: true,
+                IsStuck: true,
+                LockAge: TimeSpan.MaxValue,
+                LockCreated: null,
+                ProcessInfo: $"Error reading lock file: {ex.Message}",
+                FileSizeBytes: null,
+                AccessInfo: null
+            );
         }
     }
     
@@ -886,19 +1010,22 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             
             if (await FileExistsAsync(lockPath).ConfigureAwait(false))
             {
-                var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
+                var lockDiagnostics = await GetLockDiagnosticsAsync(indexDir).ConfigureAwait(false);
                 
-                if (lockAge > _lockTimeout)
+                if (lockDiagnostics.IsStuck)
                 {
                     // Get the hash from the directory name
                     var hashPath = Path.GetFileName(indexDir);
                     var originalPath = await GetOriginalPathAsync(hashPath).ConfigureAwait(false);
                     var pathInfo = originalPath != null ? $" (original: {originalPath})" : "";
                     
-                    _logger.LogError("CRITICAL: Found stuck lock at {Path}{PathInfo}, age: {Age}. " +
+                    _logger.LogError("CRITICAL: Found stuck lock at {Path}{PathInfo}. " +
+                                   "Lock Age: {LockAge}, Process Info: {ProcessInfo}, " +
+                                   "Access Info: {AccessInfo}, File Size: {FileSize} bytes. " +
                                    "This indicates improper disposal of index writers! " +
                                    "Manual intervention required: delete the write.lock file after ensuring no processes are using the index.",
-                                   lockPath, pathInfo, lockAge);
+                                   lockPath, pathInfo, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo, 
+                                   lockDiagnostics.AccessInfo, lockDiagnostics.FileSizeBytes);
                 }
             }
         }
@@ -1087,7 +1214,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     /// <summary>
-    /// Get index searcher asynchronously
+    /// Get index searcher asynchronously with caching for performance
     /// </summary>
     public async Task<IndexSearcher> GetIndexSearcherAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
@@ -1117,48 +1244,70 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         
         using (await context.Lock.LockAsync(cancellationToken).ConfigureAwait(false))
         {
+            var now = DateTime.UtcNow;
+            var refreshInterval = TimeSpan.FromMinutes(1); // Refresh searcher every minute for NRT
+            
             // Check if we need to refresh the reader
-            if (context.Reader == null || !context.Reader.IsCurrent())
+            bool needsRefresh = context.Reader == null || !context.Reader.IsCurrent() ||
+                               (now - context.SearcherLastRefresh) > refreshInterval;
+            
+            if (needsRefresh)
             {
-                context.Reader?.Dispose();
+                // Clear old searcher reference (IndexSearcher doesn't implement IDisposable)
+                context.CachedSearcher = null;
                 
-                // If writer exists, get reader from it; otherwise open directory reader
-                if (context.Writer != null)
+                // Refresh reader if needed
+                if (context.Reader == null || !context.Reader.IsCurrent())
                 {
-                    try
+                    context.Reader?.Dispose();
+                    
+                    // If writer exists, get reader from it; otherwise open directory reader
+                    if (context.Writer != null)
                     {
-                        context.Reader = context.Writer.GetReader(applyAllDeletes: true);
+                        try
+                        {
+                            context.Reader = context.Writer.GetReader(applyAllDeletes: true);
+                        }
+                        catch (ObjectDisposedException)
+                        {
+                            // Writer disposed, fall through to open directory reader
+                            context.Writer = null;
+                        }
                     }
-                    catch (ObjectDisposedException)
+                    
+                    if (context.Writer == null)
                     {
-                        // Writer disposed, fall through to open directory reader
-                        context.Writer = null;
+                        context.Reader = DirectoryReader.Open(context.Directory);
                     }
                 }
-                else
+                
+                if (context.Reader == null)
                 {
-                    context.Reader = DirectoryReader.Open(context.Directory);
+                    throw new InvalidOperationException($"Failed to create or refresh index reader for workspace: {workspacePath}");
                 }
+                
+                // Create new cached searcher
+                context.CachedSearcher = new IndexSearcher(context.Reader);
+                context.SearcherLastRefresh = now;
+                
+                _logger.LogDebug("Refreshed searcher for workspace: {WorkspacePath}", workspacePath);
             }
             
-            context.LastAccessed = DateTime.UtcNow;
-            if (context.Reader == null)
-            {
-                throw new InvalidOperationException($"Failed to create or refresh index reader for workspace: {workspacePath}");
-            }
-            return new IndexSearcher(context.Reader);
+            context.LastAccessed = now;
+            return context.CachedSearcher!;
         }
     }
     
     /// <summary>
-    /// Get analyzer asynchronously
+    /// Get analyzer asynchronously - returns shared instance for performance
     /// </summary>
     public Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         
-        // Create a new analyzer instance to avoid sharing issues
-        return Task.FromResult<Analyzer>(new StandardAnalyzer(Version));
+        // Return shared analyzer instance for better performance
+        // StandardAnalyzer is thread-safe for reading operations
+        return Task.FromResult<Analyzer>(_analyzer);
     }
     
     /// <summary>
@@ -1204,21 +1353,148 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     /// <summary>
-    /// Optimize index asynchronously (merge segments for better performance)
+    /// Force merge index segments asynchronously (merge segments for better performance)
     /// </summary>
-    public async Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default)
+    public async Task ForceMergeAsync(string workspacePath, int maxNumSegments = 1, CancellationToken cancellationToken = default)
     {
         ThrowIfDisposed();
         
         var writer = await GetIndexWriterAsync(workspacePath, cancellationToken);
         
-        // ForceMerge is the modern equivalent of Optimize
-        writer.ForceMerge(1); // Merge down to a single segment
+        writer.ForceMerge(maxNumSegments); // Merge down to specified number of segments
         await CommitAsync(workspacePath, cancellationToken);
         
-        _logger.LogInformation("Optimized index at {Path}", await GetIndexPathAsync(workspacePath).ConfigureAwait(false));
+        _logger.LogInformation("Force merged index to {Segments} segments at {Path}", 
+            maxNumSegments, await GetIndexPathAsync(workspacePath).ConfigureAwait(false));
     }
     
+    /// <summary>
+    /// Optimize index asynchronously (merge segments for better performance)
+    /// </summary>
+    [Obsolete("Use ForceMergeAsync instead. 'Optimize' is deprecated terminology in Lucene.")]
+    public async Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        await ForceMergeAsync(workspacePath, 1, cancellationToken);
+    }
+    
+    /// <summary>
+    /// Comprehensive index defragmentation for long-running installations.
+    /// This goes beyond simple ForceMerge to provide full maintenance:
+    /// - Analyzes fragmentation levels
+    /// - Performs incremental or full defragmentation based on metrics
+    /// - Reports space savings and performance improvements
+    /// - Safe for production use with progress reporting
+    /// </summary>
+    public async Task<IndexDefragmentationResult> DefragmentIndexAsync(string workspacePath, 
+        IndexDefragmentationOptions? options = null, 
+        CancellationToken cancellationToken = default)
+    {
+        ThrowIfDisposed();
+        options ??= new IndexDefragmentationOptions();
+        
+        var indexPath = await GetIndexPathAsync(workspacePath).ConfigureAwait(false);
+        var startTime = DateTime.UtcNow;
+        var result = new IndexDefragmentationResult { StartTime = startTime };
+        
+        _logger.LogInformation("Starting comprehensive index defragmentation for workspace: {WorkspacePath}", workspacePath);
+        
+        try
+        {
+            // Phase 1: Analyze current index state
+            var analysisResult = await AnalyzeIndexFragmentationAsync(workspacePath, cancellationToken).ConfigureAwait(false);
+            result.InitialFragmentationLevel = analysisResult.FragmentationPercentage;
+            result.InitialSegmentCount = analysisResult.SegmentCount;
+            result.InitialSizeBytes = analysisResult.SizeBytes;
+            
+            _logger.LogInformation("Index analysis complete - Fragmentation: {Fragmentation:F1}%, Segments: {Segments}, Size: {SizeMB:F2} MB",
+                analysisResult.FragmentationPercentage, analysisResult.SegmentCount, analysisResult.SizeBytes / 1024.0 / 1024.0);
+            
+            // Determine if defragmentation is needed
+            if (analysisResult.FragmentationPercentage < options.MinFragmentationThreshold)
+            {
+                result.ActionTaken = DefragmentationAction.Skipped;
+                result.Reason = $"Fragmentation level {analysisResult.FragmentationPercentage:F1}% below threshold {options.MinFragmentationThreshold}%";
+                _logger.LogInformation("Defragmentation skipped: {Reason}", result.Reason);
+                return result;
+            }
+            
+            // Phase 2: Create backup if requested
+            if (options.CreateBackup)
+            {
+                result.BackupPath = await CreateIndexBackupAsync(workspacePath, cancellationToken).ConfigureAwait(false);
+                _logger.LogInformation("Index backup created at: {BackupPath}", result.BackupPath);
+            }
+            
+            // Phase 3: Perform defragmentation based on severity
+            if (analysisResult.FragmentationPercentage >= options.FullDefragmentationThreshold)
+            {
+                // Full defragmentation for severely fragmented indexes
+                await PerformFullDefragmentationAsync(workspacePath, options, result, cancellationToken).ConfigureAwait(false);
+                result.ActionTaken = DefragmentationAction.FullDefragmentation;
+            }
+            else
+            {
+                // Incremental defragmentation for moderately fragmented indexes  
+                await PerformIncrementalDefragmentationAsync(workspacePath, options, result, cancellationToken).ConfigureAwait(false);
+                result.ActionTaken = DefragmentationAction.IncrementalDefragmentation;
+            }
+            
+            // Phase 4: Post-defragmentation analysis
+            var finalAnalysis = await AnalyzeIndexFragmentationAsync(workspacePath, cancellationToken).ConfigureAwait(false);
+            result.FinalFragmentationLevel = finalAnalysis.FragmentationPercentage;
+            result.FinalSegmentCount = finalAnalysis.SegmentCount;
+            result.FinalSizeBytes = finalAnalysis.SizeBytes;
+            
+            // Calculate improvements
+            result.FragmentationReduction = result.InitialFragmentationLevel - result.FinalFragmentationLevel;
+            result.SegmentReduction = result.InitialSegmentCount - result.FinalSegmentCount;
+            result.SizeReductionBytes = result.InitialSizeBytes - result.FinalSizeBytes;
+            result.CompletedAt = DateTime.UtcNow;
+            result.Duration = result.CompletedAt - result.StartTime;
+            result.Success = true;
+            
+            _logger.LogInformation("Defragmentation completed successfully - " +
+                "Fragmentation: {InitialFrag:F1}% → {FinalFrag:F1}% (-{FragReduction:F1}%), " +
+                "Segments: {InitialSegs} → {FinalSegs} (-{SegReduction}), " +
+                "Size: {InitialMB:F2} → {FinalMB:F2} MB ({SizeReductionMB:+F2} MB), " +
+                "Duration: {Duration}",
+                result.InitialFragmentationLevel, result.FinalFragmentationLevel, result.FragmentationReduction,
+                result.InitialSegmentCount, result.FinalSegmentCount, result.SegmentReduction,
+                result.InitialSizeBytes / 1024.0 / 1024.0, result.FinalSizeBytes / 1024.0 / 1024.0,
+                result.SizeReductionBytes / 1024.0 / 1024.0, result.Duration);
+                
+            return result;
+        }
+        catch (Exception ex)
+        {
+            result.Success = false;
+            result.Error = ex.Message;
+            result.Exception = ex;
+            result.CompletedAt = DateTime.UtcNow;
+            result.Duration = result.CompletedAt - result.StartTime;
+            
+            _logger.LogError(ex, "Index defragmentation failed for workspace: {WorkspacePath}", workspacePath);
+            
+            // If we created a backup and defragmentation failed, offer to restore
+            if (!string.IsNullOrEmpty(result.BackupPath) && options.RestoreOnFailure)
+            {
+                try
+                {
+                    await RestoreIndexFromBackupAsync(workspacePath, result.BackupPath, cancellationToken).ConfigureAwait(false);
+                    result.BackupRestored = true;
+                    _logger.LogInformation("Index restored from backup due to defragmentation failure");
+                }
+                catch (Exception restoreEx)
+                {
+                    _logger.LogError(restoreEx, "Failed to restore index from backup");
+                    result.RestoreError = restoreEx.Message;
+                }
+            }
+            
+            return result;
+        }
+    }
+
     /// <summary>
     /// Clear index asynchronously
     /// </summary>
@@ -1253,6 +1529,84 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     #region Health Check
     
     /// <summary>
+    /// Represents the corruption status of a Lucene index
+    /// </summary>
+    public record IndexCorruptionStatus(bool IsCorrupted, string Details, Exception? Exception = null);
+    
+    /// <summary>
+    /// Checks a specific index for corruption using Lucene.NET's CheckIndex utility
+    /// </summary>
+    /// <param name="indexPath">Path to the index directory</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Corruption status with details</returns>
+    private async Task<IndexCorruptionStatus> CheckIndexCorruptionAsync(string indexPath, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            return await Task.Run(() =>
+            {
+                try
+                {
+                    using var directory = FSDirectory.Open(indexPath);
+                    
+                    // Skip corruption check if index doesn't exist
+                    if (!DirectoryReader.IndexExists(directory))
+                    {
+                        return new IndexCorruptionStatus(false, "Index does not exist");
+                    }
+                    
+                    // Use CheckIndex to validate index integrity
+                    var checkIndex = new CheckIndex(directory);
+                    
+                    // Perform the check (this can be expensive for large indexes)
+                    var status = checkIndex.DoCheckIndex();
+                    
+                    // Check if any issues were found
+                    if (!status.Clean)
+                    {
+                        var issues = new List<string>();
+                        
+                        if (status.MissingSegments) issues.Add("missing segments");
+                        if (status.NumBadSegments > 0) issues.Add($"{status.NumBadSegments} bad segments");
+                        if (status.TotLoseDocCount > 0) issues.Add($"{status.TotLoseDocCount} lost documents");
+                        
+                        var details = $"Index corruption detected: {string.Join(", ", issues)}";
+                        
+                        return new IndexCorruptionStatus(true, details);
+                    }
+                    
+                    return new IndexCorruptionStatus(false, "Index is clean and healthy");
+                }
+                catch (IndexFormatTooOldException ex)
+                {
+                    return new IndexCorruptionStatus(true, $"Index format too old: {ex.Message}", ex);
+                }
+                catch (IndexFormatTooNewException ex)
+                {
+                    return new IndexCorruptionStatus(true, $"Index format too new: {ex.Message}", ex);
+                }
+                catch (CorruptIndexException ex)
+                {
+                    return new IndexCorruptionStatus(true, $"Index corruption exception: {ex.Message}", ex);
+                }
+                catch (Exception ex)
+                {
+                    // For other exceptions, we can't determine corruption status
+                    return new IndexCorruptionStatus(false, $"Unable to check corruption: {ex.Message}", ex);
+                }
+            }, cancellationToken).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            return new IndexCorruptionStatus(false, "Corruption check was cancelled");
+        }
+        catch (Exception ex)
+        {
+            return new IndexCorruptionStatus(false, $"Corruption check failed: {ex.Message}", ex);
+        }
+    }
+    
+    /// <summary>
     /// Performs a comprehensive health check of the Lucene index service
     /// </summary>
     public async Task<IndexHealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken = default)
@@ -1275,36 +1629,60 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             if (localMemoryExists) healthyIndexes++;
             else unhealthyIndexes++;
             
-            // Check all registered indexes
+            // Check all registered indexes for locks and corruption
+            var corruptedIndexes = 0;
             foreach (var kvp in _indexes)
             {
+                var indexName = Path.GetFileName(kvp.Key);
                 var (isLocked, isStuck) = await IsIndexLockedAsync(kvp.Key).ConfigureAwait(false);
+                
                 if (isStuck)
                 {
                     stuckLocks++;
-                    data[$"index_{Path.GetFileName(kvp.Key)}"] = "stuck_lock";
+                    data[$"index_{indexName}"] = "stuck_lock";
+                    unhealthyIndexes++;
                 }
                 else if (isLocked)
                 {
-                    data[$"index_{Path.GetFileName(kvp.Key)}"] = "locked";
+                    data[$"index_{indexName}"] = "locked";
+                    // Locked indexes are still considered healthy if not stuck
+                    healthyIndexes++;
                 }
                 else
                 {
-                    data[$"index_{Path.GetFileName(kvp.Key)}"] = "healthy";
-                    healthyIndexes++;
+                    // Check for corruption when index is not locked
+                    var corruptionStatus = await CheckIndexCorruptionAsync(kvp.Key, cancellationToken).ConfigureAwait(false);
+                    if (corruptionStatus.IsCorrupted)
+                    {
+                        corruptedIndexes++;
+                        data[$"index_{indexName}"] = "corrupted";
+                        data[$"index_{indexName}_corruption_details"] = corruptionStatus.Details;
+                        unhealthyIndexes++;
+                    }
+                    else
+                    {
+                        data[$"index_{indexName}"] = "healthy";
+                        healthyIndexes++;
+                    }
                 }
             }
+            
+            data["corruptedIndexes"] = corruptedIndexes;
             
             data["totalIndexes"] = _indexes.Count + 2; // Include memory indexes
             data["healthyIndexes"] = healthyIndexes;
             data["unhealthyIndexes"] = unhealthyIndexes;
             data["stuckLocks"] = stuckLocks;
             
-            if (stuckLocks > 0)
+            if (stuckLocks > 0 || corruptedIndexes > 0)
             {
+                var issues = new List<string>();
+                if (stuckLocks > 0) issues.Add($"{stuckLocks} stuck locks");
+                if (corruptedIndexes > 0) issues.Add($"{corruptedIndexes} corrupted indexes");
+                
                 return new IndexHealthCheckResult(
                     IndexHealthCheckResult.HealthStatus.Unhealthy, 
-                    $"Found {stuckLocks} stuck locks", 
+                    $"Critical issues found: {string.Join(", ", issues)}", 
                     data: data);
             }
             else if (unhealthyIndexes > 0)
@@ -1362,4 +1740,268 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     #endregion
+    
+    #region Index Defragmentation Support Methods
+    
+    /// <summary>
+    /// Analyzes index fragmentation and provides metrics
+    /// </summary>
+    private async Task<IndexFragmentationAnalysis> AnalyzeIndexFragmentationAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var indexPath = await GetIndexPathAsync(workspacePath).ConfigureAwait(false);
+        var analysis = new IndexFragmentationAnalysis();
+        
+        using (await _writerLock.LockAsync(cancellationToken).ConfigureAwait(false))
+        {
+            if (_indexes.TryGetValue(indexPath, out var context))
+            {
+                using (await context.Lock.LockAsync(cancellationToken).ConfigureAwait(false))
+                {
+                    try
+                    {
+                        var directory = context.Directory;
+                        
+                        // Get basic index info
+                        using var reader = DirectoryReader.Open(directory);
+                        analysis.SegmentCount = reader.Leaves.Count;
+                        analysis.DocumentCount = reader.NumDocs;
+                        analysis.DeletedDocumentCount = reader.NumDeletedDocs;
+                        
+                        // Calculate size
+                        var files = directory.ListAll();
+                        long totalSize = 0;
+                        foreach (var file in files)
+                        {
+                            totalSize += directory.FileLength(file);
+                        }
+                        analysis.SizeBytes = totalSize;
+                        
+                        // Calculate fragmentation percentage
+                        // More segments = more fragmentation
+                        // More deleted docs = more fragmentation
+                        var segmentFragmentation = Math.Min(100.0, (analysis.SegmentCount - 1) * 10.0); // 1 segment = 0%, 10+ segments = 90%
+                        var deletionFragmentation = analysis.DocumentCount > 0 
+                            ? (analysis.DeletedDocumentCount / (double)(analysis.DocumentCount + analysis.DeletedDocumentCount)) * 100.0
+                            : 0.0;
+                        
+                        analysis.FragmentationPercentage = Math.Max(segmentFragmentation, deletionFragmentation);
+                        
+                        _logger.LogDebug("Index fragmentation analysis - Segments: {Segments}, Docs: {Docs}, Deleted: {Deleted}, " +
+                            "Size: {SizeKB} KB, Fragmentation: {Fragmentation:F1}%",
+                            analysis.SegmentCount, analysis.DocumentCount, analysis.DeletedDocumentCount,
+                            analysis.SizeBytes / 1024, analysis.FragmentationPercentage);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to analyze index fragmentation for {IndexPath}", indexPath);
+                        throw;
+                    }
+                }
+            }
+            else
+            {
+                throw new InvalidOperationException($"Index not found: {indexPath}");
+            }
+        }
+        
+        return analysis;
+    }
+    
+    /// <summary>
+    /// Performs full defragmentation (complete rebuild and optimization)
+    /// </summary>
+    private async Task PerformFullDefragmentationAsync(string workspacePath, IndexDefragmentationOptions options, 
+        IndexDefragmentationResult result, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Performing FULL defragmentation for workspace: {WorkspacePath}", workspacePath);
+        
+        // Force merge to 1 segment for maximum optimization
+        await ForceMergeAsync(workspacePath, 1, cancellationToken).ConfigureAwait(false);
+        
+        // Additional cleanup steps for full defragmentation
+        var writer = await GetIndexWriterAsync(workspacePath, cancellationToken).ConfigureAwait(false);
+        
+        // Force merge deletes (clean up deleted documents)
+        writer.ForceMergeDeletes();
+        
+        // Commit all changes
+        await CommitAsync(workspacePath, cancellationToken).ConfigureAwait(false);
+        
+        result.DefragmentationSteps.Add("Full segment merge to 1 segment");
+        result.DefragmentationSteps.Add("Forced merge of deleted documents");
+        result.DefragmentationSteps.Add("Index commit");
+    }
+    
+    /// <summary>
+    /// Performs incremental defragmentation (targeted optimization)
+    /// </summary>
+    private async Task PerformIncrementalDefragmentationAsync(string workspacePath, IndexDefragmentationOptions options,
+        IndexDefragmentationResult result, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Performing INCREMENTAL defragmentation for workspace: {WorkspacePath}", workspacePath);
+        
+        // Merge to a reasonable number of segments (not just 1)
+        var targetSegments = Math.Max(2, options.TargetSegmentCount);
+        await ForceMergeAsync(workspacePath, targetSegments, cancellationToken).ConfigureAwait(false);
+        
+        result.DefragmentationSteps.Add($"Incremental segment merge to {targetSegments} segments");
+        result.DefragmentationSteps.Add("Index commit");
+    }
+    
+    /// <summary>
+    /// Creates a backup of the index before defragmentation
+    /// </summary>
+    private async Task<string> CreateIndexBackupAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var indexPath = await GetIndexPathAsync(workspacePath).ConfigureAwait(false);
+        var backupPath = indexPath + "_backup_" + DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
+        
+        _logger.LogInformation("Creating index backup from {Source} to {Backup}", indexPath, backupPath);
+        
+        await Task.Run(() =>
+        {
+            if (System.IO.Directory.Exists(backupPath))
+            {
+                System.IO.Directory.Delete(backupPath, true);
+            }
+            
+            System.IO.Directory.CreateDirectory(backupPath);
+            
+            // Copy all index files
+            foreach (var file in System.IO.Directory.GetFiles(indexPath))
+            {
+                var fileName = Path.GetFileName(file);
+                var destFile = Path.Combine(backupPath, fileName);
+                File.Copy(file, destFile, true);
+            }
+        }, cancellationToken).ConfigureAwait(false);
+        
+        return backupPath;
+    }
+    
+    /// <summary>
+    /// Restores index from backup if defragmentation fails
+    /// </summary>
+    private async Task RestoreIndexFromBackupAsync(string workspacePath, string backupPath, CancellationToken cancellationToken)
+    {
+        var indexPath = await GetIndexPathAsync(workspacePath).ConfigureAwait(false);
+        
+        _logger.LogWarning("Restoring index from backup {Backup} to {Index}", backupPath, indexPath);
+        
+        // Close any existing writers/readers for this index
+        await CloseWriterAsync(workspacePath, true, cancellationToken).ConfigureAwait(false);
+        
+        await Task.Run(() =>
+        {
+            // Remove corrupted index
+            if (System.IO.Directory.Exists(indexPath))
+            {
+                System.IO.Directory.Delete(indexPath, true);
+            }
+            
+            System.IO.Directory.CreateDirectory(indexPath);
+            
+            // Restore from backup
+            foreach (var file in System.IO.Directory.GetFiles(backupPath))
+            {
+                var fileName = Path.GetFileName(file);
+                var destFile = Path.Combine(indexPath, fileName);
+                File.Copy(file, destFile, true);
+            }
+        }, cancellationToken).ConfigureAwait(false);
+    }
+    
+    #endregion
+}
+
+/// <summary>
+/// Options for controlling index defragmentation behavior
+/// </summary>
+public class IndexDefragmentationOptions
+{
+    /// <summary>
+    /// Minimum fragmentation percentage to trigger defragmentation (default: 20%)
+    /// </summary>
+    public double MinFragmentationThreshold { get; set; } = 20.0;
+    
+    /// <summary>
+    /// Fragmentation percentage threshold for full defragmentation (default: 60%)
+    /// Above this threshold, perform full defragmentation; below this, perform incremental
+    /// </summary>
+    public double FullDefragmentationThreshold { get; set; } = 60.0;
+    
+    /// <summary>
+    /// Target number of segments for incremental defragmentation (default: 5)
+    /// </summary>
+    public int TargetSegmentCount { get; set; } = 5;
+    
+    /// <summary>
+    /// Whether to create a backup before defragmentation (default: true)
+    /// </summary>
+    public bool CreateBackup { get; set; } = true;
+    
+    /// <summary>
+    /// Whether to restore from backup if defragmentation fails (default: true)
+    /// </summary>
+    public bool RestoreOnFailure { get; set; } = true;
+}
+
+/// <summary>
+/// Result of index defragmentation operation
+/// </summary>
+public class IndexDefragmentationResult
+{
+    public DateTime StartTime { get; set; }
+    public DateTime CompletedAt { get; set; }
+    public TimeSpan Duration { get; set; }
+    public bool Success { get; set; }
+    public string? Error { get; set; }
+    public Exception? Exception { get; set; }
+    
+    // Fragmentation metrics
+    public double InitialFragmentationLevel { get; set; }
+    public double FinalFragmentationLevel { get; set; }
+    public double FragmentationReduction { get; set; }
+    
+    // Segment metrics  
+    public int InitialSegmentCount { get; set; }
+    public int FinalSegmentCount { get; set; }
+    public int SegmentReduction { get; set; }
+    
+    // Size metrics
+    public long InitialSizeBytes { get; set; }
+    public long FinalSizeBytes { get; set; }
+    public long SizeReductionBytes { get; set; }
+    
+    // Operation details
+    public DefragmentationAction ActionTaken { get; set; }
+    public string? Reason { get; set; }
+    public List<string> DefragmentationSteps { get; set; } = new();
+    
+    // Backup/restore info
+    public string? BackupPath { get; set; }
+    public bool BackupRestored { get; set; }
+    public string? RestoreError { get; set; }
+}
+
+/// <summary>
+/// Type of defragmentation action performed
+/// </summary>
+public enum DefragmentationAction
+{
+    Skipped,
+    IncrementalDefragmentation,
+    FullDefragmentation
+}
+
+/// <summary>
+/// Index fragmentation analysis results
+/// </summary>
+public class IndexFragmentationAnalysis
+{
+    public int SegmentCount { get; set; }
+    public int DocumentCount { get; set; }
+    public int DeletedDocumentCount { get; set; }
+    public long SizeBytes { get; set; }
+    public double FragmentationPercentage { get; set; }
 }

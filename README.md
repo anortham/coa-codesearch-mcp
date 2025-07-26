@@ -20,6 +20,7 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 
 - .NET 9.0 SDK or later
 - Node.js/npm (for TypeScript support)
+- **TypeScript globally installed**: `npm install -g typescript` (required for TypeScript tools)
 - Visual Studio 2022 or Build Tools (for MSBuild)
 
 ## 🚀 Quick Start
