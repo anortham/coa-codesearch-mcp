@@ -230,7 +230,7 @@ public class CodeAnalysisService : IDisposable
                     try
                     {
                         // Check if dotnet is available and run restore
-                        var restoreProcess = new System.Diagnostics.Process
+                        using (var restoreProcess = new System.Diagnostics.Process
                         {
                             StartInfo = new System.Diagnostics.ProcessStartInfo
                             {
@@ -242,29 +242,47 @@ public class CodeAnalysisService : IDisposable
                                 RedirectStandardError = true,
                                 CreateNoWindow = true
                             }
-                        };
-                        
-                        restoreProcess.Start();
-                        await restoreProcess.WaitForExitAsync(cancellationToken);
-                        
-                        // Log restore result
-                        var restoreLogPath = @"C:\temp\mcp-workspace-debug.log";
-                        try
+                        })
                         {
-                            System.IO.File.AppendAllText(restoreLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] NuGet restore exit code: {restoreProcess.ExitCode}\n");
+                            restoreProcess.Start();
+                            
+                            // Read output streams to prevent deadlock
+                            var outputTask = restoreProcess.StandardOutput.ReadToEndAsync();
+                            var errorTask = restoreProcess.StandardError.ReadToEndAsync();
+                            
+                            // Wait with timeout (5 minutes max for restore)
+                            using (var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken))
+                            {
+                                cts.CancelAfter(TimeSpan.FromMinutes(5));
+                                try
+                                {
+                                    await restoreProcess.WaitForExitAsync(cts.Token);
+                                }
+                                catch (OperationCanceledException)
+                                {
+                                    _logger.LogWarning("NuGet restore timed out after 5 minutes");
+                                    try { restoreProcess.Kill(); } catch { }
+                                    throw;
+                                }
+                            }
+                            
+                            var output = await outputTask;
+                            var error = await errorTask;
+                            
+                            if (restoreProcess.ExitCode != 0)
+                            {
+                                _logger.LogWarning("NuGet restore failed with exit code {ExitCode}. Error: {Error}", 
+                                    restoreProcess.ExitCode, error);
+                            }
+                            else
+                            {
+                                _logger.LogDebug("NuGet restore completed successfully");
+                            }
                         }
-                        catch { }
                     }
                     catch (Exception ex)
                     {
                         _logger.LogWarning(ex, "Failed to restore NuGet packages, continuing anyway");
-                        
-                        var restoreLogPath = @"C:\temp\mcp-workspace-debug.log";
-                        try
-                        {
-                            System.IO.File.AppendAllText(restoreLogPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] NuGet restore failed: {ex.Message}\n");
-                        }
-                        catch { }
                     }
                 }
                 
@@ -275,19 +293,18 @@ public class CodeAnalysisService : IDisposable
                 // Validate the workspace
                 await ValidateWorkspaceAsync(workspace, solution);
                 
-                // Temporary debug logging to file
-                var logPath = Path.Combine(Path.GetTempPath(), "mcp-workspace-debug.log");
-                try
+                // Log solution details through proper logging
+                _logger.LogDebug("Loaded solution: {SolutionPath} with {ProjectCount} projects", 
+                    solutionPath, solution.Projects.Count());
+                
+                if (_logger.IsEnabled(LogLevel.Debug))
                 {
-                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Loaded solution: {solutionPath}\n");
-                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Project count: {solution.Projects.Count()}\n");
-                    
                     foreach (var project in solution.Projects)
                     {
-                        System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Project: {project.Name} at {project.FilePath}\n");
+                        _logger.LogDebug("  Project: {ProjectName} at {ProjectPath}", 
+                            project.Name, project.FilePath);
                     }
                 }
-                catch { }
                 
                 // If no projects loaded, try loading individual projects as fallback
                 if (!solution.Projects.Any())
@@ -300,11 +317,7 @@ public class CodeAnalysisService : IDisposable
                     {
                         var csprojFiles = Directory.GetFiles(fallbackSolutionDir, "*.csproj", SearchOption.AllDirectories);
                         
-                        try
-                        {
-                            System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback: Found {csprojFiles.Length} .csproj files\n");
-                        }
-                        catch { }
+                        _logger.LogDebug("Fallback: Found {ProjectCount} .csproj files", csprojFiles.Length);
                         
                         // Try to load each project individually
                         foreach (var csprojPath in csprojFiles.Take(4)) // Limit to 4 projects to avoid issues
@@ -314,21 +327,14 @@ public class CodeAnalysisService : IDisposable
                                 _logger.LogInformation("Attempting to load project: {ProjectPath}", csprojPath);
                                 var project = await workspace.OpenProjectAsync(csprojPath, cancellationToken: cancellationToken);
                                 
-                                try
-                                {
-                                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback loaded: {project.Name}\n");
-                                }
-                                catch { }
+                                _logger.LogDebug("Fallback loaded project: {ProjectName}", project.Name);
                             }
                             catch (Exception ex)
                             {
                                 _logger.LogWarning(ex, "Failed to load project: {ProjectPath}", csprojPath);
                                 
-                                try
-                                {
-                                    System.IO.File.AppendAllText(logPath, $"[{DateTime.Now:yyyy-MM-dd HH:mm:ss}] Fallback failed: {csprojPath} - {ex.Message}\n");
-                                }
-                                catch { }
+                                _logger.LogDebug("Fallback failed to load {ProjectPath}: {Error}", 
+                                    csprojPath, ex.Message);
                             }
                         }
                         
@@ -353,9 +359,21 @@ public class CodeAnalysisService : IDisposable
 
                 return workspace;
             }
+            catch (FileNotFoundException ex)
+            {
+                _logger.LogError(ex, "Solution file not found: {SolutionPath}", solutionPath);
+                workspace.Dispose();
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Invalid solution format or MSBuild configuration issue: {SolutionPath}", solutionPath);
+                workspace.Dispose();
+                return null;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load solution: {SolutionPath}", solutionPath);
+                _logger.LogError(ex, "Unexpected error loading solution: {SolutionPath}", solutionPath);
                 workspace.Dispose();
                 return null;
             }
@@ -462,9 +480,21 @@ public class CodeAnalysisService : IDisposable
 
                 return project;
             }
+            catch (FileNotFoundException ex)
+            {
+                _logger.LogError(ex, "Project file not found: {ProjectPath}", projectPath);
+                workspace.Dispose();
+                return null;
+            }
+            catch (InvalidOperationException ex)
+            {
+                _logger.LogError(ex, "Invalid project format or MSBuild configuration issue: {ProjectPath}", projectPath);
+                workspace.Dispose();
+                return null;
+            }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to load project: {ProjectPath}", projectPath);
+                _logger.LogError(ex, "Unexpected error loading project: {ProjectPath}", projectPath);
                 workspace.Dispose();
                 return null;
             }
