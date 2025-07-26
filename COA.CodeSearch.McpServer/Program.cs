@@ -16,7 +16,7 @@ Program.ServerStartTime = DateTime.UtcNow;
 
 // Register MSBuild before anything else
 SetupMSBuildEnvironment();
-MSBuildLocator.RegisterDefaults();
+RegisterMSBuild();
 
 // Handle command line arguments
 if (args.Length > 0 && (args[0] == "--help" || args[0] == "-h"))
@@ -207,6 +207,46 @@ static void SetupMSBuildEnvironment()
     Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", "false");
     Environment.SetEnvironmentVariable("ROSLYN_COMPILER_LOCATION", "");
     Environment.SetEnvironmentVariable("ROSLYN_ANALYZERS_ENABLED", "false");
+}
+
+static void RegisterMSBuild()
+{
+    if (!MSBuildLocator.IsRegistered)
+    {
+        try
+        {
+            // Find all available MSBuild instances
+            var instances = MSBuildLocator.QueryVisualStudioInstances()
+                .OrderByDescending(instance => instance.Version)
+                .ToList();
+            
+            if (instances.Any())
+            {
+                var selected = instances.First();
+                Console.Error.WriteLine($"Registering MSBuild: {selected.Name} {selected.Version} at {selected.MSBuildPath}");
+                MSBuildLocator.RegisterInstance(selected);
+            }
+            else
+            {
+                Console.Error.WriteLine("No MSBuild instances found, using defaults");
+                MSBuildLocator.RegisterDefaults();
+            }
+        }
+        catch (Exception ex)
+        {
+            Console.Error.WriteLine($"Failed to register MSBuild: {ex.Message}");
+            // Try to register defaults as fallback
+            try
+            {
+                MSBuildLocator.RegisterDefaults();
+            }
+            catch
+            {
+                // If all else fails, continue without MSBuild
+                Console.Error.WriteLine("WARNING: MSBuild registration failed completely");
+            }
+        }
+    }
 }
 
 static async Task PerformEarlyStartupCleanup()
