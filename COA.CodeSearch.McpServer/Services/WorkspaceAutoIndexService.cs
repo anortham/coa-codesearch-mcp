@@ -52,7 +52,7 @@ public class WorkspaceAutoIndexService : BackgroundService
             }
 
             // Get all previously indexed workspaces
-            var indexMappings = luceneService.GetAllIndexMappings();
+            var indexMappings = await luceneService.GetAllIndexMappingsAsync();
             
             if (indexMappings.Count == 0)
             {

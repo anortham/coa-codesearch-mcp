@@ -33,9 +33,9 @@ public static class MockLuceneIndexService
         mockService.Setup(x => x.ClearIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         
-        // Setup GetPhysicalIndexPath to return a test path
-        mockService.Setup(x => x.GetPhysicalIndexPath(It.IsAny<string>()))
-            .Returns<string>(workspace => Path.Combine(Path.GetTempPath(), "mock_index", workspace));
+        // Setup GetPhysicalIndexPathAsync to return a test path
+        mockService.Setup(x => x.GetPhysicalIndexPathAsync(It.IsAny<string>()))
+            .ReturnsAsync<string, ILuceneIndexService, string>(workspace => Path.Combine(Path.GetTempPath(), "mock_index", workspace));
         
         return mockService;
     }
@@ -48,12 +48,13 @@ public static class MockLuceneIndexService
         var mockManager = new Mock<ILuceneWriterManager>();
         var mockWriter = new Mock<IndexWriter>();
         
-        // Setup GetOrCreateWriter to return a mock writer
-        mockManager.Setup(x => x.GetOrCreateWriter(It.IsAny<string>(), It.IsAny<bool>()))
-            .Returns(mockWriter.Object);
+        // Setup GetOrCreateWriterAsync to return a mock writer
+        mockManager.Setup(x => x.GetOrCreateWriterAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(mockWriter.Object);
         
-        // Setup CloseWriter to complete successfully
-        mockManager.Setup(x => x.CloseWriter(It.IsAny<string>(), It.IsAny<bool>()));
+        // Setup CloseWriterAsync to complete successfully
+        mockManager.Setup(x => x.CloseWriterAsync(It.IsAny<string>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+            .Returns(Task.CompletedTask);
         
         // DisposeAllWriters doesn't exist on the interface - remove this setup
         

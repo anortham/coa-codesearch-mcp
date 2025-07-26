@@ -4,7 +4,7 @@ using Lucene.Net.Search;
 
 namespace COA.CodeSearch.McpServer.Services;
 
-public interface ILuceneIndexService : IDisposable
+public interface ILuceneIndexService : IAsyncDisposable, IDisposable
 {
     Task<IndexWriter> GetIndexWriterAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task<IndexSearcher> GetIndexSearcherAsync(string workspacePath, CancellationToken cancellationToken = default);
@@ -12,20 +12,20 @@ public interface ILuceneIndexService : IDisposable
     Task CommitAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task OptimizeAsync(string workspacePath, CancellationToken cancellationToken = default);
     Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
-    Dictionary<string, string> GetAllIndexMappings();
+    Task<Dictionary<string, string>> GetAllIndexMappingsAsync();
     
     /// <summary>
     /// Get the physical index path for a workspace - single source of truth for path resolution
     /// </summary>
-    string GetPhysicalIndexPath(string workspacePath);
+    Task<string> GetPhysicalIndexPathAsync(string workspacePath);
     
     /// <summary>
-    /// Clean up stuck index locks from previous sessions
+    /// Diagnose stuck index locks from previous sessions (does not automatically clean)
     /// </summary>
-    void CleanupStuckIndexes();
+    Task DiagnoseStuckIndexesAsync();
     
     /// <summary>
     /// Clean up duplicate indices created due to path normalization issues
     /// </summary>
-    void CleanupDuplicateIndices();
+    Task CleanupDuplicateIndicesAsync();
 }
