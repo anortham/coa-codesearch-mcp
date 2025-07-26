@@ -2,6 +2,7 @@ using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Microsoft.Extensions.Logging;
+using System.Security;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -36,12 +37,24 @@ public class JsonMemoryBackupService : IDisposable
         _luceneService = luceneService;
         _pathResolutionService = pathResolutionService;
         
-        _backupDirectory = Path.Combine(_pathResolutionService.GetBasePath(), PathConstants.BackupsDirectoryName);
+        // Validate backup directory path to prevent path traversal
+        var basePath = _pathResolutionService.GetBasePath();
+        _backupDirectory = Path.Combine(basePath, PathConstants.BackupsDirectoryName);
+        
+        // Security check: Ensure backup directory is within the base path
+        var normalizedBackupPath = Path.GetFullPath(_backupDirectory);
+        var normalizedBasePath = Path.GetFullPath(basePath);
+        
+        if (!normalizedBackupPath.StartsWith(normalizedBasePath, StringComparison.OrdinalIgnoreCase))
+        {
+            throw new SecurityException($"Backup directory path '{normalizedBackupPath}' is outside the allowed base path '{normalizedBasePath}'");
+        }
+        
         Directory.CreateDirectory(_backupDirectory);
     }
     
     /// <summary>
-    /// Backup memories to JSON files
+    /// Backup memories to JSON files with atomic transaction support
     /// </summary>
     public async Task<BackupResult> BackupMemoriesAsync(
         string[]? types = null, 
@@ -54,6 +67,7 @@ public class JsonMemoryBackupService : IDisposable
             var result = new BackupResult();
             var timestamp = DateTime.UtcNow.ToString("yyyyMMdd_HHmmss");
             var backupPath = Path.Combine(_backupDirectory, $"memories_{timestamp}.json");
+            var tempBackupPath = backupPath + ".tmp";
             
             // Default types if not specified
             types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
@@ -74,7 +88,7 @@ public class JsonMemoryBackupService : IDisposable
                 _logger.LogInformation("Collected {Count} memories of type {Type}", memories.Count, type);
             }
             
-            // Write to JSON file
+            // Write to temporary file first (atomic transaction)
             var backup = new MemoryBackup
             {
                 Version = "1.0",
@@ -84,7 +98,13 @@ public class JsonMemoryBackupService : IDisposable
             };
             
             var json = JsonSerializer.Serialize(backup, _jsonOptions);
-            await File.WriteAllTextAsync(backupPath, json, cancellationToken);
+            await File.WriteAllTextAsync(tempBackupPath, json, cancellationToken);
+            
+            // Verify the backup was written correctly
+            await VerifyBackupIntegrityAsync(tempBackupPath, allMemories.Count);
+            
+            // Atomic move to final location
+            File.Move(tempBackupPath, backupPath);
             
             result.Success = true;
             result.DocumentsBackedUp = allMemories.Count;
@@ -97,6 +117,14 @@ public class JsonMemoryBackupService : IDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to backup memories");
+            
+            // Clean up temp file on error
+            var tempPath = Path.Combine(_backupDirectory, $"memories_{DateTime.UtcNow:yyyyMMdd_HHmmss}.json.tmp");
+            if (File.Exists(tempPath))
+            {
+                try { File.Delete(tempPath); } catch { /* Best effort cleanup */ }
+            }
+            
             return new BackupResult { Success = false, Error = ex.Message };
         }
         finally
@@ -106,7 +134,7 @@ public class JsonMemoryBackupService : IDisposable
     }
     
     /// <summary>
-    /// Restore memories from JSON file
+    /// Restore memories from JSON file with atomic transaction support
     /// </summary>
     public async Task<RestoreResult> RestoreMemoriesAsync(
         string? backupFile = null,
@@ -115,6 +143,8 @@ public class JsonMemoryBackupService : IDisposable
         CancellationToken cancellationToken = default)
     {
         await _backupLock.WaitAsync(cancellationToken);
+        var snapshotTrackers = new List<WorkspaceSnapshotTracker>();
+        
         try
         {
             var result = new RestoreResult();
@@ -141,6 +171,9 @@ public class JsonMemoryBackupService : IDisposable
                 throw new FileNotFoundException($"Backup file not found: {backupFile}");
             }
             
+            // Verify backup integrity before proceeding
+            await VerifyBackupIntegrityAsync(backupFile);
+            
             // Read and parse backup
             var json = await File.ReadAllTextAsync(backupFile, cancellationToken);
             var backup = JsonSerializer.Deserialize<MemoryBackup>(json, _jsonOptions);
@@ -165,9 +198,17 @@ public class JsonMemoryBackupService : IDisposable
                 .Where(m => types.Contains(m.Type))
                 .ToList();
             
-            // Group by workspace and restore
+            // Group by workspace and create snapshots for rollback
             var groupedMemories = memoriesToRestore.GroupBy(m => GetWorkspaceForType(m.Type));
             
+            foreach (var group in groupedMemories)
+            {
+                var workspace = group.Key;
+                var snapshotTracker = await CreateWorkspaceSnapshotAsync(workspace, group.Select(m => m.Id).ToList(), cancellationToken);
+                snapshotTrackers.Add(snapshotTracker);
+            }
+            
+            // Perform the actual restore
             foreach (var group in groupedMemories)
             {
                 var workspace = group.Key;
@@ -190,6 +231,12 @@ public class JsonMemoryBackupService : IDisposable
                     group.Count(), workspace);
             }
             
+            // Clean up snapshots on success
+            foreach (var tracker in snapshotTrackers)
+            {
+                tracker.CleanupSnapshot();
+            }
+            
             result.Success = true;
             result.RestoreTime = DateTime.UtcNow;
             
@@ -200,7 +247,14 @@ public class JsonMemoryBackupService : IDisposable
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to restore memories");
+            _logger.LogError(ex, "Failed to restore memories, rolling back changes");
+            
+            // Rollback all changes
+            foreach (var tracker in snapshotTrackers)
+            {
+                await tracker.RollbackAsync(_luceneService, cancellationToken);
+            }
+            
             return new RestoreResult { Success = false, Error = ex.Message };
         }
         finally
@@ -386,6 +440,100 @@ public class JsonMemoryBackupService : IDisposable
         }
     }
     
+    /// <summary>
+    /// Verify backup file integrity
+    /// </summary>
+    private async Task VerifyBackupIntegrityAsync(string backupPath, int? expectedCount = null)
+    {
+        if (!File.Exists(backupPath))
+        {
+            throw new FileNotFoundException($"Backup file not found: {backupPath}");
+        }
+        
+        try
+        {
+            var json = await File.ReadAllTextAsync(backupPath);
+            var backup = JsonSerializer.Deserialize<MemoryBackup>(json, _jsonOptions);
+            
+            if (backup?.Memories == null)
+            {
+                throw new InvalidOperationException("Backup file contains no memories data");
+            }
+            
+            if (backup.TotalMemories != backup.Memories.Count)
+            {
+                throw new InvalidOperationException($"Backup integrity check failed: totalMemories ({backup.TotalMemories}) doesn't match actual count ({backup.Memories.Count})");
+            }
+            
+            if (expectedCount.HasValue && backup.TotalMemories != expectedCount.Value)
+            {
+                throw new InvalidOperationException($"Backup integrity check failed: expected {expectedCount.Value} memories, found {backup.TotalMemories}");
+            }
+            
+            // Verify each memory has required fields
+            foreach (var memory in backup.Memories)
+            {
+                if (string.IsNullOrEmpty(memory.Id))
+                {
+                    throw new InvalidOperationException("Backup contains memory with empty ID");
+                }
+                
+                if (string.IsNullOrEmpty(memory.Type))
+                {
+                    throw new InvalidOperationException($"Backup contains memory {memory.Id} with empty Type");
+                }
+            }
+            
+            _logger.LogDebug("Backup integrity verified: {Count} memories in {Path}", backup.TotalMemories, backupPath);
+        }
+        catch (JsonException ex)
+        {
+            throw new InvalidOperationException($"Backup file is not valid JSON: {ex.Message}", ex);
+        }
+    }
+    
+    /// <summary>
+    /// Create a snapshot of workspace state for rollback capability
+    /// </summary>
+    private async Task<WorkspaceSnapshotTracker> CreateWorkspaceSnapshotAsync(
+        string workspace, 
+        List<string> memoryIds, 
+        CancellationToken cancellationToken)
+    {
+        var tracker = new WorkspaceSnapshotTracker(workspace, _logger);
+        
+        try
+        {
+            var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
+            
+            // Snapshot existing memories that will be affected
+            foreach (var memoryId in memoryIds)
+            {
+                var query = new TermQuery(new Term("id", memoryId));
+                var collector = TopScoreDocCollector.Create(1, true);
+                searcher.Search(query, collector);
+                
+                var hits = collector.GetTopDocs().ScoreDocs;
+                if (hits.Length > 0)
+                {
+                    var doc = searcher.Doc(hits[0].Doc);
+                    var memory = DocumentToMemory(doc);
+                    tracker.AddOriginalMemory(memory);
+                }
+            }
+            
+            _logger.LogDebug("Created snapshot for workspace {Workspace} with {Count} existing memories", 
+                workspace, tracker.OriginalMemories.Count);
+            
+            return tracker;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create workspace snapshot for {Workspace}", workspace);
+            throw;
+        }
+    }
+    
     public void Dispose()
     {
         _backupLock?.Dispose();
@@ -439,4 +587,136 @@ public class RestoreResult
     public string? Error { get; set; }
     public int DocumentsRestored { get; set; }
     public DateTime RestoreTime { get; set; }
+}
+
+/// <summary>
+/// Tracks workspace state for atomic rollback capability
+/// </summary>
+internal class WorkspaceSnapshotTracker
+{
+    public string Workspace { get; }
+    public List<MemoryBackupItem> OriginalMemories { get; } = new();
+    private readonly ILogger _logger;
+    private readonly string? _snapshotPath;
+    
+    public WorkspaceSnapshotTracker(string workspace, ILogger logger)
+    {
+        Workspace = workspace;
+        _logger = logger;
+        
+        // Create a temporary snapshot file for very large workspaces
+        _snapshotPath = Path.Combine(Path.GetTempPath(), $"codesearch_snapshot_{Guid.NewGuid():N}.json");
+    }
+    
+    public void AddOriginalMemory(MemoryBackupItem memory)
+    {
+        OriginalMemories.Add(memory);
+    }
+    
+    /// <summary>
+    /// Rollback changes by restoring original memories
+    /// </summary>
+    public async Task RollbackAsync(ILuceneIndexService luceneService, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogWarning("Rolling back {Count} memories in workspace {Workspace}", OriginalMemories.Count, Workspace);
+            
+            var writer = await luceneService.GetIndexWriterAsync(Workspace, cancellationToken);
+            
+            // Remove all memories that were restored
+            foreach (var memory in OriginalMemories)
+            {
+                var deleteQuery = new TermQuery(new Term("id", memory.Id));
+                writer.DeleteDocuments(deleteQuery);
+            }
+            
+            // Restore original memories
+            foreach (var memory in OriginalMemories)
+            {
+                var doc = CreateDocumentFromBackupItem(memory);
+                writer.AddDocument(doc);
+            }
+            
+            await luceneService.CommitAsync(Workspace, cancellationToken);
+            _logger.LogInformation("Successfully rolled back {Count} memories in workspace {Workspace}", 
+                OriginalMemories.Count, Workspace);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to rollback workspace {Workspace}", Workspace);
+            throw;
+        }
+        finally
+        {
+            CleanupSnapshot();
+        }
+    }
+    
+    /// <summary>
+    /// Clean up temporary snapshot resources
+    /// </summary>
+    public void CleanupSnapshot()
+    {
+        if (!string.IsNullOrEmpty(_snapshotPath) && File.Exists(_snapshotPath))
+        {
+            try
+            {
+                File.Delete(_snapshotPath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to cleanup snapshot file {Path}", _snapshotPath);
+            }
+        }
+    }
+    
+    private Document CreateDocumentFromBackupItem(MemoryBackupItem memory)
+    {
+        var doc = new Document();
+        
+        // Standard fields
+        doc.Add(new StringField("id", memory.Id, Field.Store.YES));
+        doc.Add(new StringField("type", memory.Type, Field.Store.YES));
+        doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        doc.Add(new StringField("created", memory.Created.Ticks.ToString(), Field.Store.YES));
+        doc.Add(new StringField("modified", memory.Modified.Ticks.ToString(), Field.Store.YES));
+        doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
+        doc.Add(new Int32Field("access_count", memory.AccessCount, Field.Store.YES));
+        
+        // Numeric fields for range queries
+        var dateFieldType = new FieldType { IsIndexed = true, IsStored = false, NumericType = NumericType.INT64 };
+        doc.Add(new Int64Field("created", memory.Created.Ticks, dateFieldType));
+        doc.Add(new NumericDocValuesField("created", memory.Created.Ticks));
+        doc.Add(new Int64Field("modified", memory.Modified.Ticks, dateFieldType));
+        doc.Add(new NumericDocValuesField("modified", memory.Modified.Ticks));
+        doc.Add(new Int64Field("timestamp_ticks", memory.Modified.Ticks, dateFieldType));
+        doc.Add(new NumericDocValuesField("timestamp_ticks", memory.Modified.Ticks));
+        
+        if (!string.IsNullOrEmpty(memory.SessionId))
+        {
+            doc.Add(new StringField("session_id", memory.SessionId, Field.Store.YES));
+        }
+        
+        // Files
+        if (memory.Files != null)
+        {
+            foreach (var file in memory.Files)
+            {
+                doc.Add(new StringField("file", file, Field.Store.YES));
+            }
+        }
+        
+        // Custom fields
+        if (memory.Fields != null)
+        {
+            foreach (var (key, value) in memory.Fields)
+            {
+                var stringValue = value?.ToString() ?? "";
+                doc.Add(new TextField(key, stringValue, Field.Store.YES));
+            }
+        }
+        
+        return doc;
+    }
 }

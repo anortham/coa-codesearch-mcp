@@ -48,9 +48,12 @@ public class MemorySystemPathIntegrationTests : IDisposable
         
         // Register services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
+        services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<MemoryLinkingTools>();
@@ -314,9 +317,12 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<IConfiguration>(configuration);
         services.AddLogging(builder => builder.AddConsole());
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
+        services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         
         return services.BuildServiceProvider();

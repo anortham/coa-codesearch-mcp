@@ -33,7 +33,31 @@ public class FlexibleMemoryQueryTests
         _pathResolutionMock.Setup(x => x.GetLocalMemoryPath())
             .Returns(Path.Combine(Path.GetTempPath(), "test-local-memory"));
         
-        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object);
+        var errorHandlingMock = new Mock<IErrorHandlingService>();
+        var validationMock = new Mock<IMemoryValidationService>();
+        
+        // Setup validation mock to always return valid
+        validationMock.Setup(v => v.ValidateMemory(It.IsAny<FlexibleMemoryEntry>()))
+            .Returns(new MemoryValidationResult { IsValid = true });
+        validationMock.Setup(v => v.ValidateUpdateRequest(It.IsAny<MemoryUpdateRequest>()))
+            .Returns(new MemoryValidationResult { IsValid = true });
+        
+        // Setup error handling mock to execute the function directly
+        errorHandlingMock.Setup(e => e.ExecuteWithErrorHandlingAsync(
+                It.IsAny<Func<Task<bool>>>(), 
+                It.IsAny<ErrorContext>(), 
+                It.IsAny<ErrorSeverity>(), 
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<Task<bool>>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
+            
+        errorHandlingMock.Setup(e => e.ExecuteWithErrorHandlingAsync(
+                It.IsAny<Func<Task>>(), 
+                It.IsAny<ErrorContext>(), 
+                It.IsAny<ErrorSeverity>(), 
+                It.IsAny<CancellationToken>()))
+            .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
+        
+        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object);
     }
     
     [Fact]
