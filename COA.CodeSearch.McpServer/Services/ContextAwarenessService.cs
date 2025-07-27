@@ -110,7 +110,7 @@ public class ContextAwarenessService : IContextAwarenessService
             CurrentFile = _currentFile,
             RecentFiles = GetRecentFiles(),
             RecentQueries = GetRecentQueries(),
-            ProjectInfo = _projectContext ?? await DetectProjectContextAsync(),
+            ProjectInfo = _projectContext ?? await DetectProjectContextAsync().ConfigureAwait(false),
             Timestamp = DateTime.UtcNow
         };
         
@@ -118,7 +118,7 @@ public class ContextAwarenessService : IContextAwarenessService
         context.ContextKeywords = ExtractContextKeywords(context);
         
         // Get active working memory topics (this would integrate with working memory)
-        context.ActiveWorkingMemoryTopics = await GetActiveWorkingMemoryTopicsAsync();
+        context.ActiveWorkingMemoryTopics = await GetActiveWorkingMemoryTopicsAsync().ConfigureAwait(false);
         
         _logger.LogDebug("Generated search context with {FileCount} recent files, {QueryCount} recent queries, {KeywordCount} keywords",
             context.RecentFiles.Length, context.RecentQueries.Length, context.ContextKeywords.Length);
