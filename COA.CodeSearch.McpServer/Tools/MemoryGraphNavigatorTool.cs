@@ -56,7 +56,7 @@ public class MemoryGraphNavigatorTool : ClaudeOptimizedToolBase
             // Handle detail requests
             if (detailRequest != null && DetailCache != null)
             {
-                var cachedData = DetailCache.GetDetailData<object>(detailRequest.DetailRequestToken);
+                var cachedData = DetailCache.GetDetailData<object>(detailRequest.DetailRequestToken!);
                 if (cachedData != null)
                 {
                     return cachedData;

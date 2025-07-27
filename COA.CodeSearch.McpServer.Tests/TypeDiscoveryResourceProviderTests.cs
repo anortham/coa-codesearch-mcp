@@ -55,7 +55,7 @@ public class TypeDiscoveryResourceProviderTests
         Assert.Equal("application/json", content.MimeType);
         
         // Verify JSON is valid and contains expected structure
-        var jsonDoc = JsonDocument.Parse(content.Text);
+        var jsonDoc = JsonDocument.Parse(content.Text!);
         var root = jsonDoc.RootElement;
         
         Assert.True(root.TryGetProperty("description", out _));
@@ -84,7 +84,7 @@ public class TypeDiscoveryResourceProviderTests
         Assert.NotNull(result);
         var content = result.Contents[0];
         
-        var jsonDoc = JsonDocument.Parse(content.Text);
+        var jsonDoc = JsonDocument.Parse(content.Text!);
         var types = jsonDoc.RootElement.GetProperty("types");
         
         Assert.Equal(5, types.GetArrayLength()); // TechnicalDebt, ArchitecturalDecision, etc.
@@ -136,7 +136,7 @@ public class TypeDiscoveryResourceProviderTests
         // Assert
         Assert.False(_provider.CanHandle("invalid://uri"));
         Assert.False(_provider.CanHandle("codesearch-workspace://context"));
-        Assert.False(_provider.CanHandle(null));
+        Assert.False(_provider.CanHandle(null!));
         Assert.False(_provider.CanHandle(""));
     }
     
@@ -153,7 +153,7 @@ public class TypeDiscoveryResourceProviderTests
         Assert.NotNull(result);
         var content = result.Contents[0];
         
-        var jsonDoc = JsonDocument.Parse(content.Text);
+        var jsonDoc = JsonDocument.Parse(content.Text!);
         var formats = jsonDoc.RootElement.GetProperty("formats");
         
         Assert.True(formats.GetArrayLength() > 0);
