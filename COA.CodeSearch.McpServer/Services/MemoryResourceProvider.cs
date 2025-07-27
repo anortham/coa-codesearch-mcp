@@ -28,6 +28,7 @@ public class MemoryResourceProvider : IResourceProvider
     /// <inheritdoc />
     public async Task<List<Resource>> ListResourcesAsync(CancellationToken cancellationToken = default)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         var resources = new List<Resource>();
 
         try
@@ -181,6 +182,7 @@ public class MemoryResourceProvider : IResourceProvider
 
     private async Task HandleDashboardResource(ReadResourceResult result, CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         // This would typically call the memory dashboard functionality
         // For now, create a simple dashboard structure
         var dashboard = new
@@ -213,6 +215,7 @@ public class MemoryResourceProvider : IResourceProvider
 
     private async Task<object> GetAllMemoriesAsync(CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         // This would call the memory service to get all memories
         // For now, return a placeholder structure
         return new
@@ -225,6 +228,7 @@ public class MemoryResourceProvider : IResourceProvider
 
     private async Task<object> GetMemoriesByTypeAsync(CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         // This would call the memory service to get memories grouped by type
         return new
         {
@@ -240,6 +244,7 @@ public class MemoryResourceProvider : IResourceProvider
 
     private async Task<object> GetMemoryTimelineAsync(CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         // This would call the memory service to get chronological timeline
         return new
         {
@@ -250,6 +255,7 @@ public class MemoryResourceProvider : IResourceProvider
 
     private async Task<object> GetMemoriesBySpecificTypeAsync(string type, CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         // This would call the memory service to get memories of a specific type
         return new
         {

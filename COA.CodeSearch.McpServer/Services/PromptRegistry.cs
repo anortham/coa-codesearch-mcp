@@ -20,6 +20,8 @@ public class PromptRegistry : IPromptRegistry
     /// <inheritdoc />
     public async Task<List<Prompt>> ListPromptsAsync(CancellationToken cancellationToken = default)
     {
+        await Task.CompletedTask; // Satisfy async requirement
+        
         var prompts = new List<Prompt>();
 
         foreach (var template in _templates.Values)

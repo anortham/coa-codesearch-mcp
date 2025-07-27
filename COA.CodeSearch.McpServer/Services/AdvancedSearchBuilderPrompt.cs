@@ -42,6 +42,8 @@ public class AdvancedSearchBuilderPrompt : BasePromptTemplate
 
     public override async Task<GetPromptResult> RenderAsync(Dictionary<string, object>? arguments = null, CancellationToken cancellationToken = default)
     {
+        await Task.CompletedTask; // Satisfy async requirement
+        
         var workspacePath = GetRequiredArgument<string>(arguments, "workspace_path");
         var searchType = GetOptionalArgument<string>(arguments, "search_type", "text");
         var initialQuery = GetOptionalArgument<string>(arguments, "initial_query", "");
