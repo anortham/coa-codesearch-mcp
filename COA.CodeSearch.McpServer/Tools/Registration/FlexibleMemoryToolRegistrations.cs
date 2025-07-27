@@ -211,7 +211,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                 {
                     id = new { type = "string", description = "Memory ID to update" },
                     content = new { type = "string", description = "New content (optional)" },
-                    fieldUpdates = new { type = "object", description = "Field updates (null values remove fields)" },
+                    fieldUpdates = new { type = "object", additionalProperties = true, description = "Field updates (null values remove fields)" },
                     addFiles = new { type = "array", items = new { type = "string" }, description = "Files to add" },
                     removeFiles = new { type = "array", items = new { type = "string" }, description = "Files to remove" }
                 },
