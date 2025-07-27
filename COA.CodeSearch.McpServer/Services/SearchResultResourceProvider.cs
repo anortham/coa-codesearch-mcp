@@ -58,7 +58,20 @@ public class SearchResultResourceProvider : IResourceProvider
 
         try
         {
-            var id = ExtractIdFromUri(uri);
+            // Check if this is a paginated request
+            var pageNumber = 1;
+            var pageSize = 50;
+            var parts = uri.Split('/');
+            var id = parts[2]; // Extract base ID
+
+            if (parts.Length > 3 && parts[3].StartsWith("page"))
+            {
+                if (int.TryParse(parts[3].Substring(4), out var page))
+                {
+                    pageNumber = page;
+                }
+            }
+
             if (string.IsNullOrEmpty(id) || !_searchResults.TryGetValue(id, out var data))
             {
                 _logger.LogWarning("Search result not found: {Uri}", uri);
@@ -68,19 +81,58 @@ public class SearchResultResourceProvider : IResourceProvider
             // Update last accessed time
             data.LastAccessed = DateTime.UtcNow;
 
+            // Handle pagination
+            object responseData;
+            if (data.Results is System.Collections.IList list)
+            {
+                var totalResults = list.Count;
+                var totalPages = (int)Math.Ceiling(totalResults / (double)pageSize);
+                var skip = (pageNumber - 1) * pageSize;
+                var take = Math.Min(pageSize, totalResults - skip);
+
+                var pagedResults = new List<object>();
+                for (int i = skip; i < skip + take && i < totalResults; i++)
+                {
+                    pagedResults.Add(list[i]);
+                }
+
+                responseData = new
+                {
+                    query = data.Query,
+                    metadata = data.Metadata,
+                    results = pagedResults,
+                    pagination = new
+                    {
+                        currentPage = pageNumber,
+                        pageSize = pageSize,
+                        totalPages = totalPages,
+                        totalResults = totalResults,
+                        hasNextPage = pageNumber < totalPages,
+                        hasPreviousPage = pageNumber > 1,
+                        nextPageUri = pageNumber < totalPages ? $"{Scheme}://{id}/page{pageNumber + 1}" : null,
+                        previousPageUri = pageNumber > 1 ? $"{Scheme}://{id}/page{pageNumber - 1}" : null
+                    }
+                };
+            }
+            else
+            {
+                // Non-paginated response
+                responseData = data;
+            }
+
             var result = new ReadResourceResult();
             result.Contents.Add(new ResourceContent
             {
                 Uri = uri,
                 MimeType = "application/json",
-                Text = JsonSerializer.Serialize(data, new JsonSerializerOptions
+                Text = JsonSerializer.Serialize(responseData, new JsonSerializerOptions
                 {
                     WriteIndented = true,
                     PropertyNamingPolicy = JsonNamingPolicy.CamelCase
                 })
             });
 
-            _logger.LogDebug("Retrieved search result {Id} for query '{Query}'", id, data.Query);
+            _logger.LogDebug("Retrieved search result {Id} for query '{Query}' (page {Page})", id, data.Query, pageNumber);
             return Task.FromResult<ReadResourceResult?>(result);
         }
         catch (Exception ex)

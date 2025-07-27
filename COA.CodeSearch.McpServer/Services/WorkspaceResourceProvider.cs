@@ -415,6 +415,7 @@ public class WorkspaceResourceProvider : IResourceProvider
 
     private async Task<object> GetWorkspaceLanguagesAsync(string workspacePath, CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
         var languageStats = new Dictionary<string, LanguageStats>();
         var files = Directory.GetFiles(workspacePath, "*", SearchOption.AllDirectories);
 
