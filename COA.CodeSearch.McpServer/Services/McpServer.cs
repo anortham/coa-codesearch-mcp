@@ -1,6 +1,7 @@
 using COA.Mcp.Protocol;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
@@ -16,6 +17,9 @@ public class McpServer : BackgroundService, INotificationService
     private readonly JsonSerializerOptions _jsonOptions;
     private StreamWriter? _writer;
     private readonly SemaphoreSlim _writerLock = new(1, 1);
+    
+    // Track active requests for cancellation support
+    private readonly ConcurrentDictionary<object, CancellationTokenSource> _activeRequests = new();
 
     public McpServer(
         ILogger<McpServer> logger,
@@ -60,12 +64,10 @@ public class McpServer : BackgroundService, INotificationService
                 }
                 catch (JsonException ex)
                 {
-                    _logger.LogError(ex, "Invalid JSON received: {Line}", line);
-                    // Send parse error response
+                    _logger.LogError(ex, "Failed to parse JSON-RPC request: {Line}", line);
                     var errorResponse = new JsonRpcResponse
                     {
-                        JsonRpc = "2.0",
-                        Id = null!, // JSON-RPC 2.0 spec requires null id for parse errors
+                        Id = null!,
                         Error = new JsonRpcError
                         {
                             Code = JsonRpcErrorCodes.ParseError,
@@ -78,6 +80,13 @@ public class McpServer : BackgroundService, INotificationService
                 }
 
                 if (request == null) continue;
+
+                // Handle notifications/cancelled specially
+                if (request.Method == "notifications/cancelled" && request.Id == null)
+                {
+                    await HandleCancellationNotificationAsync(request);
+                    continue;
+                }
 
                 var response = await HandleRequestAsync(request, stoppingToken);
                 if (response != null)
@@ -98,20 +107,70 @@ public class McpServer : BackgroundService, INotificationService
             }
         }
 
+        // Cancel all active requests
+        foreach (var cts in _activeRequests.Values)
+        {
+            cts.Cancel();
+            cts.Dispose();
+        }
+        _activeRequests.Clear();
+
         _logger.LogInformation("COA CodeSearch MCP Server stopped");
+    }
+
+    private Task HandleCancellationNotificationAsync(JsonRpcRequest notification)
+    {
+        try
+        {
+            // Extract the request ID from the params
+            if (notification.Params is JsonElement paramsElement && 
+                paramsElement.TryGetProperty("requestId", out var requestIdElement))
+            {
+                object? requestId = requestIdElement.ValueKind switch
+                {
+                    JsonValueKind.String => requestIdElement.GetString(),
+                    JsonValueKind.Number => requestIdElement.GetInt64(),
+                    _ => null
+                };
+
+                if (requestId != null && _activeRequests.TryRemove(requestId, out var cts))
+                {
+                    _logger.LogDebug("Cancelling request {RequestId}", requestId);
+                    cts.Cancel();
+                    cts.Dispose();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling cancellation notification");
+        }
+        
+        return Task.CompletedTask;
     }
 
     private async Task<JsonRpcResponse?> HandleRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken)
     {
+        CancellationTokenSource? requestCts = null;
+        CancellationToken requestToken = cancellationToken;
+
         try
         {
+            // For requests with IDs, create a cancellation token that can be cancelled
+            if (request.Id != null && request.Method == "tools/call")
+            {
+                requestCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                requestToken = requestCts.Token;
+                _activeRequests[request.Id] = requestCts;
+            }
+
             object? result = request.Method switch
             {
                 "initialize" => HandleInitialize(request),
                 "initialized" => null, // No response needed
                 "notifications/initialized" => null, // MCP client sends this as notification
                 "tools/list" => HandleToolsList(),
-                "tools/call" => await HandleToolsCallAsync(request, cancellationToken),
+                "tools/call" => await HandleToolsCallAsync(request, requestToken),
                 _ => throw new NotSupportedException($"Method '{request.Method}' is not supported")
             };
 
@@ -125,12 +184,29 @@ public class McpServer : BackgroundService, INotificationService
                 Result = result
             };
         }
+        catch (OperationCanceledException)
+        {
+            _logger.LogInformation("Request {RequestId} was cancelled", request.Id);
+            if (request.Id == null)
+                return null;
+
+            return new JsonRpcResponse
+            {
+                JsonRpc = "2.0",
+                Id = request.Id,
+                Error = new JsonRpcError
+                {
+                    Code = JsonRpcErrorCodes.OperationCancelled,
+                    Message = "Operation cancelled",
+                    Data = "The operation was cancelled by the client"
+                }
+            };
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error handling request {Method}", request.Method);
-
             if (request.Id == null)
-                return null; // Can't send error for notification
+                return null; // Notifications don't get error responses
 
             return new JsonRpcResponse
             {
@@ -139,27 +215,27 @@ public class McpServer : BackgroundService, INotificationService
                 Error = CreateError(ex)
             };
         }
+        finally
+        {
+            // Clean up the cancellation token for this request
+            if (request.Id != null && requestCts != null)
+            {
+                _activeRequests.TryRemove(request.Id, out _);
+                requestCts.Dispose();
+            }
+        }
     }
 
     private InitializeResult HandleInitialize(JsonRpcRequest request)
     {
-        InitializeRequest? initRequest = null;
-        if (request.Params is JsonElement paramsElement)
-        {
-            initRequest = JsonSerializer.Deserialize<InitializeRequest>(paramsElement.GetRawText(), _jsonOptions);
-        }
-        
-        _logger.LogInformation("Client connected: {Name} {Version}", 
-            initRequest?.ClientInfo?.Name ?? "Unknown",
-            initRequest?.ClientInfo?.Version ?? "Unknown");
-
+        _logger.LogInformation("Initialize request received");
         return new InitializeResult
         {
             ProtocolVersion = "2024-11-05",
             ServerInfo = new Implementation
             {
                 Name = "COA CodeSearch MCP Server",
-                Version = "2.0.0"
+                Version = GetType().Assembly.GetName().Version?.ToString() ?? "1.0.0"
             },
             Capabilities = new ServerCapabilities
             {
@@ -178,24 +254,17 @@ public class McpServer : BackgroundService, INotificationService
 
     private async Task<CallToolResult> HandleToolsCallAsync(JsonRpcRequest request, CancellationToken cancellationToken)
     {
-        CallToolRequest? callRequest = null;
-        if (request.Params is JsonElement paramsElement)
-        {
-            callRequest = JsonSerializer.Deserialize<CallToolRequest>(paramsElement.GetRawText(), _jsonOptions);
-        }
-        if (callRequest == null)
-        {
-            throw new InvalidParametersException("Invalid tool call parameters");
-        }
+        var callRequest = JsonSerializer.Deserialize<CallToolRequest>(
+            JsonSerializer.Serialize(request.Params, _jsonOptions), 
+            _jsonOptions);
 
-        JsonElement? arguments = null;
-        if (callRequest.Arguments is JsonElement argElement)
+        if (callRequest == null)
+            throw new ArgumentException("Invalid tool call request");
+
+        // Convert arguments to JsonElement for the tool registry
+        JsonElement arguments = default;
+        if (callRequest.Arguments != null)
         {
-            arguments = argElement;
-        }
-        else if (callRequest.Arguments != null)
-        {
-            // Convert non-JsonElement arguments to JsonElement
             var json = JsonSerializer.Serialize(callRequest.Arguments, _jsonOptions);
             arguments = JsonSerializer.Deserialize<JsonElement>(json, _jsonOptions);
         }
