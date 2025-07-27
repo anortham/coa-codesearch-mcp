@@ -62,10 +62,14 @@ public class FlexibleMemoryTools : ITool
                     "Failed to store memory"
             };
         }
-        catch (InvalidParametersException)
+        catch (InvalidParametersException ipe)
         {
-            // Let validation exceptions propagate for proper MCP error handling
-            throw;
+            // Extract validation error details for the user
+            return new StoreMemoryResult
+            {
+                Success = false,
+                Message = ipe.Message
+            };
         }
         catch (Exception ex)
         {
@@ -144,10 +148,14 @@ public class FlexibleMemoryTools : ITool
                     "Failed to store working memory"
             };
         }
-        catch (InvalidParametersException)
+        catch (InvalidParametersException ipe)
         {
-            // Let validation exceptions propagate for proper MCP error handling
-            throw;
+            // Extract validation error details for the user
+            return new StoreMemoryResult
+            {
+                Success = false,
+                Message = ipe.Message
+            };
         }
         catch (Exception ex)
         {
