@@ -25,51 +25,59 @@ public class RazorInitializationService : IHostedService
 
     public async Task StartAsync(CancellationToken cancellationToken)
     {
-        _logger.LogInformation("Checking if Razor initialization is needed...");
-        
-        // Check configuration first
-        var skipRazor = _configuration.GetValue<bool>("Razor:SkipInitialization");
-        if (skipRazor)
-        {
-            _logger.LogInformation("Razor initialization skipped by configuration");
-            return;
-        }
-        
-        // Check if any Razor files exist in common locations
-        var hasRazorFiles = await CheckForRazorFilesAsync(cancellationToken);
-        
-        if (!hasRazorFiles)
-        {
-            _logger.LogInformation("No Razor (.razor) files detected - skipping Razor initialization");
-            return;
-        }
-        
-        _logger.LogInformation("Razor files detected - initializing Razor services...");
-        
         try
         {
-            // Add a timeout to prevent hanging during initialization
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            cts.CancelAfter(TimeSpan.FromSeconds(15)); // 15 second timeout
+            _logger.LogInformation("Checking if Razor initialization is needed...");
             
-            var success = await _razorService.InitializeAsync(cts.Token);
+            // Check configuration first
+            var skipRazor = _configuration.GetValue<bool>("Razor:SkipInitialization");
+            if (skipRazor)
+            {
+                _logger.LogInformation("Razor initialization skipped by configuration");
+                return;
+            }
             
-            if (success)
+            // Check if any Razor files exist in common locations
+            var hasRazorFiles = await CheckForRazorFilesAsync(cancellationToken);
+            
+            if (!hasRazorFiles)
             {
-                _logger.LogInformation("Razor services initialized successfully");
+                _logger.LogInformation("No Razor (.razor) files detected - skipping Razor initialization");
+                return;
             }
-            else
+            
+            _logger.LogInformation("Razor files detected - initializing Razor services...");
+            
+            try
             {
-                _logger.LogWarning("Razor services initialization failed - Razor features will be unavailable");
+                // Add a timeout to prevent hanging during initialization
+                using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+                cts.CancelAfter(TimeSpan.FromSeconds(15)); // 15 second timeout
+                
+                var success = await _razorService.InitializeAsync(cts.Token);
+                
+                if (success)
+                {
+                    _logger.LogInformation("Razor services initialized successfully");
+                }
+                else
+                {
+                    _logger.LogWarning("Razor services initialization failed - Razor features will be unavailable");
+                }
             }
-        }
-        catch (OperationCanceledException)
-        {
-            _logger.LogWarning("Razor services initialization timed out - falling back to embedded mode");
+            catch (OperationCanceledException)
+            {
+                _logger.LogWarning("Razor services initialization timed out - falling back to embedded mode");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error initializing Razor services");
+            }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error initializing Razor services");
+            // Never let this hosted service crash the entire application
+            _logger.LogError(ex, "Critical error in Razor initialization service - continuing without Razor");
         }
     }
 
