@@ -1,9 +1,11 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tests.Helpers;
 using Lucene.Net.Store;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
 using Xunit;
 using Xunit.Abstractions;
@@ -204,7 +206,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Act - Index the directory (this will test the backpressure implementation)
         var startTime = DateTime.UtcNow;
@@ -255,7 +257,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Monitor memory before and during indexing
         var initialMemory = GC.GetTotalMemory(forceFullCollection: true);
@@ -306,7 +308,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Act - Index multiple times to stress resource management
         for (int iteration = 0; iteration < 3; iteration++)
@@ -356,7 +358,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Create a valid index first
         await fileIndexingService.IndexDirectoryAsync(corruptionTestDir, corruptionTestDir);
@@ -392,7 +394,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // First, index some files to establish baseline
         var initialIndexedCount = await fileIndexingService.IndexDirectoryAsync(_testDirectory, _testDirectory);
@@ -572,7 +574,7 @@ public class ConcurrentIndexingIntegrationTests : IDisposable
         var indexService = new LuceneIndexService(_luceneLogger, _configuration, _pathResolution);
         _indexServices.Add(indexService);
         
-        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileIndexingService = new FileIndexingService(_fileIndexingLogger, _configuration, indexService, _pathResolution, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Create a valid index with actual content
         var testFile = Path.Combine(_testDirectory, "health_test.cs");
