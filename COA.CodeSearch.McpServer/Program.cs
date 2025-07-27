@@ -105,6 +105,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
         services.AddSingleton<ConfigurationValidationService>();
         services.AddSingleton<ToolRegistry>();
+        services.AddSingleton<ToolUsageAnalyticsService>();
         
         // Resource services for MCP Resources capability
         services.AddSingleton<IResourceRegistry, ResourceRegistry>();
@@ -113,10 +114,18 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<MemoryResourceProvider>();
         services.AddSingleton<TypeDiscoveryResourceProvider>();
         services.AddSingleton<WorkflowStateResourceProvider>();
+        services.AddSingleton<ToolDiscoveryResourceProvider>();
+        services.AddSingleton<AiAgentOnboardingResourceProvider>();
         
         // Prompt services for MCP Prompts capability
         services.AddSingleton<IPromptRegistry, PromptRegistry>();
         services.AddSingleton<AdvancedSearchBuilderPrompt>();
+        services.AddSingleton<RefactoringAssistantPrompt>();
+        services.AddSingleton<TechnicalDebtAnalyzerPrompt>();
+        services.AddSingleton<ArchitectureDocumenterPrompt>();
+        services.AddSingleton<CodeReviewAssistantPrompt>();
+        services.AddSingleton<TestCoverageImproverPrompt>();
+        services.AddSingleton<PromptTemplateResourceProvider>();
         
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
@@ -183,6 +192,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<GetVersionTool>();
         services.AddSingleton<IndexHealthCheckTool>();
         services.AddSingleton<SystemHealthCheckTool>();
+        services.AddSingleton<SearchAssistantTool>();
+        services.AddSingleton<PatternDetectorTool>();
+        services.AddSingleton<MemoryGraphNavigatorTool>();
+        services.AddSingleton<ToolUsageAnalyticsTool>();
         
         
         
@@ -269,12 +282,20 @@ using (var scope = host.Services.CreateScope())
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<MemoryResourceProvider>());
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<TypeDiscoveryResourceProvider>());
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<WorkflowStateResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<ToolDiscoveryResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<PromptTemplateResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<AiAgentOnboardingResourceProvider>());
     logger.LogInformation("Resource provider registration complete");
     
     // Register prompt templates for MCP Prompts capability
     var promptRegistry = scope.ServiceProvider.GetRequiredService<IPromptRegistry>();
     logger.LogInformation("Registering prompt templates...");
     promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<AdvancedSearchBuilderPrompt>());
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<RefactoringAssistantPrompt>());
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<TechnicalDebtAnalyzerPrompt>());
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<ArchitectureDocumenterPrompt>());
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<CodeReviewAssistantPrompt>());
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<TestCoverageImproverPrompt>());
     logger.LogInformation("Prompt template registration complete");
 }
 

@@ -60,4 +60,10 @@ public static class ToolNames
     public const string GetVersion = "get_version";
     public const string IndexHealthCheck = "index_health_check";
     public const string SystemHealthCheck = "system_health_check";
+    public const string ToolUsageAnalytics = "tool_usage_analytics";
+    
+    // AI-optimized tools (Phase 3)
+    public const string SearchAssistant = "search_assistant";
+    public const string PatternDetector = "pattern_detector";
+    public const string MemoryGraphNavigator = "memory_graph_navigator";
 }
