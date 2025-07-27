@@ -109,6 +109,7 @@ public class McpServer : BackgroundService, INotificationService
             {
                 "initialize" => HandleInitialize(request),
                 "initialized" => null, // No response needed
+                "notifications/initialized" => null, // MCP client sends this as notification
                 "tools/list" => HandleToolsList(),
                 "tools/call" => await HandleToolsCallAsync(request, cancellationToken),
                 _ => throw new NotSupportedException($"Method '{request.Method}' is not supported")

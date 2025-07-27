@@ -185,7 +185,11 @@ public class MemoryValidationService : IMemoryValidationService
 
             if (ReservedFieldNames.Contains(field.Key))
             {
-                result.Errors.Add($"Custom field name '{field.Key}' is reserved and cannot be used");
+                var alternatives = GetAlternativesForField(field.Key);
+                var errorMessage = $"RESERVED_FIELD: '{field.Key}' is reserved. " +
+                                 $"Alternatives: {string.Join(", ", alternatives.Select(a => $"'{a}'"))}. " +
+                                 $"(Reserved fields include: {string.Join(", ", ReservedFieldNames.Take(8).Select(f => $"'{f}'"))}...)";
+                result.Errors.Add(errorMessage);
                 result.IsValid = false;
                 continue;
             }
@@ -314,5 +318,20 @@ public class MemoryValidationService : IMemoryValidationService
                filePath.Contains("\\\\") ||
                filePath.Contains("%2e%2e") ||
                filePath.Contains("%252e%252e");
+    }
+
+    private static List<string> GetAlternativesForField(string fieldName)
+    {
+        return fieldName.ToLower() switch
+        {
+            "priority" => new() { "importance", "urgency", "priorityLevel", "rank", "severity" },
+            "status" => new() { "state", "phase", "stage", "condition", "progress" },
+            "tags" => new() { "labels", "categories", "keywords", "topics", "markers" },
+            "author" => new() { "creator", "owner", "assignee", "responsible", "createdBy" },
+            "type" => new() { "kind", "category", "classification", "variant" },
+            "version" => new() { "revision", "iteration", "release", "build" },
+            "workspace" => new() { "project", "context", "environment", "scope" },
+            _ => new() { $"custom_{fieldName}", $"{fieldName}Value", $"my{char.ToUpper(fieldName[0])}{fieldName.Substring(1)}" }
+        };
     }
 }

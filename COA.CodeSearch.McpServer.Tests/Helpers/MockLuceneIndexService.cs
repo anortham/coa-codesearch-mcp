@@ -25,9 +25,6 @@ public static class MockLuceneIndexService
         mockService.Setup(x => x.CommitAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .Returns(Task.CompletedTask);
         
-        // Setup OptimizeAsync to complete successfully
-        mockService.Setup(x => x.OptimizeAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-            .Returns(Task.CompletedTask);
         
         // Setup ForceMergeAsync to complete successfully
         mockService.Setup(x => x.ForceMergeAsync(It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))

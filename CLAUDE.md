@@ -26,8 +26,9 @@
 
 ### 4. **Path Resolution**
 
-- **ALWAYS** use `IPathResolutionService` for ALL file/directory operations
-- **NEVER** use `Path.Combine()` or `Directory.CreateDirectory()` directly
+- **ALWAYS** use `IPathResolutionService` for ALL path computation
+- **NEVER** use `Path.Combine()` for building .codesearch paths manually
+- PathResolutionService computes paths; services create directories when needed
 - See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md)
 
 ### 5. **Editing Code**
@@ -140,7 +141,7 @@ private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
 | `LuceneIndexService`        | Fast text indexing and search             |
 | `FlexibleMemoryService`     | Memory storage with custom fields         |
 | `JsonMemoryBackupService`   | JSON-based memory backup/restore          |
-| `PathResolutionService`     | SINGLE source of truth for all paths      |
+| `PathResolutionService`     | Path computation and resolution service    |
 | `FileIndexingService`       | File content extraction and indexing      |
 | `QueryCacheService`         | Query result caching for performance      |
 

@@ -57,15 +57,15 @@ Controls response size and token limits to prevent overwhelming AI assistants:
     "EnablePagination": true,         // Enable result pagination
     "EnableTokenUsageLogging": true,  // Log token usage
     "ToolSpecificLimits": {           // Override limits for specific tools
-      "RenameSymbolTool": 15000,
-      "ProjectStructureAnalysisTool": 10000,
-      "BatchOperationsTool": 25000
+      "text_search": 15000,
+      "file_search": 10000,
+      "batch_operations": 25000
     },
     "ToolSpecificResultLimits": {     // Result count limits per tool
-      "FindReferencesTool": 100,
-      "SearchSymbolsTool": 100,
-      "FastTextSearchTool": 50,
-      "ProjectStructureAnalysisTool": 20
+      "text_search": 100,
+      "file_search": 100,
+      "recent_files": 50,
+      "directory_search": 20
     }
   }
 }
@@ -76,6 +76,7 @@ Controls response size and token limits to prevent overwhelming AI assistants:
 ```json
 {
   "Lucene": {
+    "IndexBasePath": ".codesearch",   // Base path for all indexes and data
     "StuckLockTimeoutMinutes": 15,    // Timeout for stuck index locks
     "MaintenanceIntervalMinutes": 30, // Index maintenance interval
     "EnablePeriodicMaintenance": true, // Enable automatic maintenance
@@ -106,7 +107,7 @@ Controls response size and token limits to prevent overwhelming AI assistants:
 
 ```json
 {
-  "ClaudeMemory": {
+  "Memory": {
     "BasePath": ".codesearch",        // Base directory for memory storage
     "ProjectMemoryPath": "project-memory", // Shared memory location
     "LocalMemoryPath": "local-memory",     // Personal memory location
@@ -239,7 +240,7 @@ CODESEARCH__TypeScript__RequestTimeout=00:01:00
 
 ## Security Considerations
 
-1. **Path Configuration**: The `ClaudeMemory.BasePath` is relative to the current working directory by default. Use absolute paths for production deployments.
+1. **Path Configuration**: The `Memory.BasePath` is relative to the current working directory by default. Use absolute paths for production deployments.
 
 2. **File Access**: The server has access to all files in the indexed workspace. Ensure proper file system permissions.
 

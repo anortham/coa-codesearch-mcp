@@ -264,11 +264,10 @@ Here's how I would ideally interact with the rename tool:
 
 ```typescript
 // 1. Initial request - I just want to understand the scope
-const result = await rename_symbol({
-  filePath: "ICmsService.cs",
-  line: 10,
-  column: 15,
-  newName: "IContentManagementService"
+const result = await text_search({
+  query: "ICmsService",
+  workspacePath: "/project/path",
+  mode: "summary"
   // No need to specify mode - it auto-selects based on size
 });
 
@@ -278,28 +277,29 @@ console.log(result.data.overview.keyInsights);
 // ["Most changes in Controllers/", "12 classes affected", ...]
 
 // 3. I want to see the most important changes first
-const hotspots = await rename_symbol_details({
-  ...result.nextActions.recommended[0].command
+const hotspots = await batch_operations({
+  operations: [
+    {
+      operation: "text_search",
+      query: "ICmsService",
+      workspacePath: "/project/path",
+      filePattern: "Controllers/*.cs"
+    }
+  ],
+  mode: "summary"
 });
 
 // 4. Based on what I see, I might want specific categories
-const controllerDetails = await rename_symbol_details({
-  detailLevel: "smart_batch",
-  criteria: {
-    categories: ["controllers"],
-    includeContext: true,
-    maxTokens: 8000
-  }
+const controllerDetails = await text_search({
+  query: "ICmsService",
+  workspacePath: "/project/path",
+  filePattern: "Controllers/*.cs",
+  contextLines: 3,
+  maxResults: 50
 });
 
-// 5. Finally, I can make an informed decision
-if (shouldProceed) {
-  await rename_symbol({
-    ...originalParams,
-    preview: false,  // Actually apply the changes
-    confirmationToken: result.confirmationToken
-  });
-}
+// 5. Use search results to identify files that need changes
+// (Note: MCP server provides search/analysis, not direct code modification)
 ```
 
 ## Key Improvements for Claude

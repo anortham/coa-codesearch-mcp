@@ -1273,9 +1273,10 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 var validationResult = _validation.ValidateMemory(memory);
                 if (!validationResult.IsValid)
                 {
+                    var errorMessage = string.Join("; ", validationResult.Errors);
                     _logger.LogWarning("Memory validation failed for {MemoryId}: {Errors}", 
-                        memory.Id, string.Join("; ", validationResult.Errors));
-                    return false;
+                        memory.Id, errorMessage);
+                    throw new COA.Mcp.Protocol.InvalidParametersException(errorMessage);
                 }
 
                 // Log validation warnings
