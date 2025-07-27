@@ -31,8 +31,4 @@ public static class PathConstants
     // Hash settings
     public const int WorkspaceHashLength = 16;
     public const int MaxSafeWorkspaceName = 30;
-    
-    // TypeScript installer paths
-    public const string TypeScriptInstallerDirectory = "COA.CodeSearch.McpServer";
-    public const string TypeScriptSubDirectory = "typescript";
 }

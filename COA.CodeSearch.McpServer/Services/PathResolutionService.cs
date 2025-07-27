@@ -144,12 +144,6 @@ public class PathResolutionService : IPathResolutionService
         return indexRoot;
     }
     
-    public string GetTypeScriptInstallPath()
-    {
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var installPath = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
-        return installPath;
-    }
     
     // Safe file system operations implementation
     

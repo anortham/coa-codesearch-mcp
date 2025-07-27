@@ -178,18 +178,6 @@ public class PathResolutionServiceConstantsTests : IDisposable
         // PathResolutionService should only resolve paths, not create directories
     }
 
-    [Fact]
-    public void GetTypeScriptInstallPath_ReturnsCorrectPath()
-    {
-        // Act
-        var tsInstallPath = _service.GetTypeScriptInstallPath();
-        
-        // Assert
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var expected = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory, PathConstants.TypeScriptSubDirectory);
-        Assert.Equal(expected, tsInstallPath);
-        // PathResolutionService should only resolve paths, not create directories
-    }
 
     public void Dispose()
     {
@@ -198,19 +186,6 @@ public class PathResolutionServiceConstantsTests : IDisposable
             Directory.Delete(_testBasePath, true);
         }
         
-        // Clean up TypeScript install directory created during tests
-        var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-        var tsPath = Path.Combine(appData, PathConstants.TypeScriptInstallerDirectory);
-        if (Directory.Exists(tsPath) && Directory.GetFiles(tsPath).Length == 0 && Directory.GetDirectories(tsPath).Length == 1)
-        {
-            try
-            {
-                Directory.Delete(tsPath, true);
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-        }
+        // Clean up any test directories created during tests
     }
 }

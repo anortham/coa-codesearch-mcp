@@ -88,7 +88,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IResultTruncator, ResultTruncator>();
         services.AddMemoryCache(); // Required for DetailRequestCache
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
-        services.AddHttpClient(); // For TypeScript installer
+        services.AddHttpClient(); // For HTTP operations
         
         // Core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
