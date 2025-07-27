@@ -192,13 +192,7 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
 - wildcard: Pattern matching with * and ?
 - phrase: Exact phrase in quotes
 - regex: Full regex support with capturing groups",
-                        examples = new {
-                            standard = "getUserName",
-                            fuzzy = "getUserNam~",
-                            wildcard = "get*Name",
-                            phrase = "\"get user name\"",
-                            regex = "get\\w+Name"
-                        },
+                        examples = new[] { "getUserName", "getUserNam~", "get*Name", "\"get user name\"", "get\\w+Name" },
                         @default = "standard" 
                     },
                     responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
@@ -278,13 +272,7 @@ Not for: Text content searches (use text_search), directory searches (use direct
 - wildcard: Pattern matching (User*.cs finds UserService.cs)
 - exact: Exact filename match
 - regex: Regular expressions (^User.*\.cs$)",
-                        examples = new {
-                            standard = "UserService",
-                            fuzzy = "UserSrvc~",
-                            wildcard = "User*.cs",
-                            exact = "UserService.cs",
-                            regex = "^User.*Service\\.cs$"
-                        },
+                        examples = new[] { "UserService", "UserSrvc~", "User*.cs", "UserService.cs", "^User.*Service\\.cs$" },
                         @default = "standard" 
                     },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
@@ -543,13 +531,7 @@ Not for: File searches (use file_search), text content searches (use text_search
 - wildcard: Pattern matching (User* finds UserService/)
 - exact: Exact directory name match
 - regex: Regular expressions (^src/.*/models$)",
-                        examples = new {
-                            standard = "Services",
-                            fuzzy = "Servces~",
-                            wildcard = "User*",
-                            exact = "Services",
-                            regex = "^src/.*/models$"
-                        },
+                        examples = new[] { "Services", "Servces~", "User*", "Services", "^src/.*/models$" },
                         @default = "standard" 
                     },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 30 },
