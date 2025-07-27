@@ -17,6 +17,7 @@ public class JsonMemoryBackupService : IDisposable
     private readonly ILogger<JsonMemoryBackupService> _logger;
     private readonly ILuceneIndexService _luceneService;
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly string _backupDirectory;
     private readonly SemaphoreSlim _backupLock = new(1, 1);
     
@@ -31,11 +32,13 @@ public class JsonMemoryBackupService : IDisposable
     public JsonMemoryBackupService(
         ILogger<JsonMemoryBackupService> logger,
         ILuceneIndexService luceneService,
-        IPathResolutionService pathResolutionService)
+        IPathResolutionService pathResolutionService,
+        ICircuitBreakerService circuitBreakerService)
     {
         _logger = logger;
         _luceneService = luceneService;
         _pathResolutionService = pathResolutionService;
+        _circuitBreakerService = circuitBreakerService;
         
         // Validate backup directory path to prevent path traversal
         var basePath = _pathResolutionService.GetBasePath();
@@ -98,13 +101,21 @@ public class JsonMemoryBackupService : IDisposable
             };
             
             var json = JsonSerializer.Serialize(backup, _jsonOptions);
-            await File.WriteAllTextAsync(tempBackupPath, json, cancellationToken);
+            
+            // Write backup file with circuit breaker protection
+            await _circuitBreakerService.ExecuteAsync("BackupFileWrite", async () =>
+            {
+                await File.WriteAllTextAsync(tempBackupPath, json, cancellationToken);
+            }, cancellationToken);
             
             // Verify the backup was written correctly
             await VerifyBackupIntegrityAsync(tempBackupPath, allMemories.Count);
             
-            // Atomic move to final location
-            File.Move(tempBackupPath, backupPath);
+            // Atomic move to final location with circuit breaker protection
+            await _circuitBreakerService.ExecuteAsync("BackupFileMove", async () =>
+            {
+                await Task.Run(() => File.Move(tempBackupPath, backupPath), cancellationToken);
+            }, cancellationToken);
             
             result.Success = true;
             result.DocumentsBackedUp = allMemories.Count;
@@ -174,8 +185,11 @@ public class JsonMemoryBackupService : IDisposable
             // Verify backup integrity before proceeding
             await VerifyBackupIntegrityAsync(backupFile);
             
-            // Read and parse backup
-            var json = await File.ReadAllTextAsync(backupFile, cancellationToken);
+            // Read and parse backup with circuit breaker protection
+            var json = await _circuitBreakerService.ExecuteAsync("BackupFileRead", async () =>
+            {
+                return await File.ReadAllTextAsync(backupFile, cancellationToken);
+            }, cancellationToken);
             var backup = JsonSerializer.Deserialize<MemoryBackup>(json, _jsonOptions);
             
             if (backup?.Memories == null)
