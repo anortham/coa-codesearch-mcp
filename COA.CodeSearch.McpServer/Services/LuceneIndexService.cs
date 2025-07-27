@@ -310,12 +310,15 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         
         if (lockDiagnostics.IsLocked)
         {
-            if (lockDiagnostics.IsStuck)
+            // Determine if we should clear the lock
+            bool shouldClearLock = lockDiagnostics.IsStuck || IsOrphanedLock(lockDiagnostics);
+            
+            if (shouldClearLock)
             {
                 // Check if this is a protected memory index
                 if (IsProtectedMemoryIndex(indexPath))
                 {
-                    _logger.LogError("CRITICAL: Memory index at {Path} has a stuck lock. " +
+                    _logger.LogError("CRITICAL: Memory index at {Path} has a stuck/orphaned lock. " +
                                    "Lock Age: {LockAge}, Process Info: {ProcessInfo}, " +
                                    "Access Info: {AccessInfo}. " +
                                    "This indicates improper disposal! The memory index may be corrupted. " +
@@ -326,20 +329,21 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 }
                 else
                 {
-                    // For non-memory indexes, use the existing clear strategy with enhanced logging
-                    _logger.LogWarning("Index at {Path} has stuck lock - clearing for rebuild. " +
+                    // For non-memory indexes, clear orphaned or stuck locks
+                    var lockType = lockDiagnostics.IsStuck ? "stuck" : "orphaned";
+                    _logger.LogWarning("Index at {Path} has {LockType} lock - clearing for safe access. " +
                                      "Lock Age: {LockAge}, Process Info: {ProcessInfo}, " +
                                      "Access Info: {AccessInfo}",
-                                     indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo, lockDiagnostics.AccessInfo);
+                                     indexPath, lockType, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo, lockDiagnostics.AccessInfo);
                     await ClearIndexAsync(indexPath).ConfigureAwait(false);
                 }
             }
             else
             {
-                // Lock exists but is recent - another process may be using it
-                _logger.LogWarning("Index at {Path} is currently locked by another process. " +
-                                 "Lock Age: {LockAge}, Process Info: {ProcessInfo}",
-                                 indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo);
+                // Lock exists and appears to be actively held
+                _logger.LogError("Index at {Path} is currently locked by an active process. " +
+                               "Lock Age: {LockAge}, Process Info: {ProcessInfo}",
+                               indexPath, lockDiagnostics.LockAge, lockDiagnostics.ProcessInfo);
                 throw new InvalidOperationException($"Index at {indexPath} is currently locked by another process");
             }
         }
@@ -348,7 +352,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         var (isStillLocked, _) = await IsIndexLockedAsync(indexPath).ConfigureAwait(false);
         if (isStillLocked)
         {
-            throw new InvalidOperationException($"Index at {indexPath} is still locked after attempting to clear stuck lock");
+            throw new InvalidOperationException($"Index at {indexPath} is still locked after attempting to clear");
         }
         
         // Now safely create the context
@@ -889,6 +893,22 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         return message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
                message.Contains("access is denied", StringComparison.OrdinalIgnoreCase) ||
                message.Contains("sharing violation", StringComparison.OrdinalIgnoreCase);
+    }
+    
+    /// <summary>
+    /// Determines if a lock is orphaned (no active holder but not old enough to be stuck)
+    /// </summary>
+    private bool IsOrphanedLock(LockDiagnostics diagnostics)
+    {
+        // A lock is considered orphaned if:
+        // 1. It's locked
+        // 2. No active process is holding it
+        // 3. It's older than 1 minute (to avoid race conditions)
+        // 4. But not yet considered "stuck" (< 15 minutes)
+        return diagnostics.IsLocked && 
+               !diagnostics.IsStuck &&
+               diagnostics.LockAge > TimeSpan.FromMinutes(1) &&
+               diagnostics.ProcessInfo?.Contains("No active lock holder detected", StringComparison.OrdinalIgnoreCase) == true;
     }
     
     private async Task<IndexMetadata> LoadMetadataAsync(string metadataPath)
