@@ -112,6 +112,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<SearchResultResourceProvider>();
         services.AddSingleton<MemoryResourceProvider>();
         
+        // Prompt services for MCP Prompts capability
+        services.AddSingleton<IPromptRegistry, PromptRegistry>();
+        services.AddSingleton<AdvancedSearchBuilderPrompt>();
+        
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
@@ -262,6 +266,12 @@ using (var scope = host.Services.CreateScope())
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<SearchResultResourceProvider>());
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<MemoryResourceProvider>());
     logger.LogInformation("Resource provider registration complete");
+    
+    // Register prompt templates for MCP Prompts capability
+    var promptRegistry = scope.ServiceProvider.GetRequiredService<IPromptRegistry>();
+    logger.LogInformation("Registering prompt templates...");
+    promptRegistry.RegisterPrompt(scope.ServiceProvider.GetRequiredService<AdvancedSearchBuilderPrompt>());
+    logger.LogInformation("Prompt template registration complete");
 }
 
 await host.RunAsync();
