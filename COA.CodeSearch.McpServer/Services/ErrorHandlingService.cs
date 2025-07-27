@@ -195,6 +195,9 @@ public class ErrorHandlingService : IErrorHandlingService
     {
         return exception switch
         {
+            // MCP protocol validation errors - should propagate to client
+            COA.Mcp.Protocol.InvalidParametersException => ErrorSeverity.Expected,
+            
             // Expected/recoverable file system errors
             UnauthorizedAccessException => ErrorSeverity.Expected,
             DirectoryNotFoundException => ErrorSeverity.Expected,
