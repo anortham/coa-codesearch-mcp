@@ -43,7 +43,17 @@ public static class ChecklistToolRegistrations
                     description = new { type = "string", description = "Optional description of what this checklist is for" },
                     isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
                     sessionId = new { type = "string", description = "Optional session ID for tracking" },
-                    customFields = new { type = "object", additionalProperties = true, description = "Optional custom fields as JSON object" }
+                    customFields = new { 
+                        type = "object", 
+                        additionalProperties = true, 
+                        description = "Optional custom fields as JSON object",
+                        examples = new object[]
+                        {
+                            new { project = "user-auth", sprint = "sprint-24", estimatedHours = 8 },
+                            new { priority = "urgent", department = "security", reviewer = "alice" },
+                            new { deadline = "2024-02-01", complexity = "high", tags = new[] { "refactoring", "performance" } }
+                        }
+                    }
                 },
                 required = new[] { "title" }
             },
@@ -84,7 +94,17 @@ public static class ChecklistToolRegistrations
                                 itemText = new { type = "string", description = "Text/description of the checklist item" },
                                 notes = new { type = "string", description = "Optional notes or additional details" },
                                 relatedFiles = new { type = "array", items = new { type = "string" }, description = "Files related to this item" },
-                                customFields = new { type = "object", additionalProperties = true, description = "Optional custom fields as JSON object" }
+                                customFields = new { 
+                                    type = "object", 
+                                    additionalProperties = true, 
+                                    description = "Optional custom fields as JSON object",
+                                    examples = new object[]
+                                    {
+                                        new { assignee = "john", estimatedTime = "2h", priority = "medium" },
+                                        new { dueDate = "2024-01-30", complexity = "low", component = "frontend" },
+                                        new { blockedBy = "task-123", dependencies = new[] { "api-fix", "db-migration" } }
+                                    }
+                                }
                             },
                             required = new[] { "itemText" }
                         }

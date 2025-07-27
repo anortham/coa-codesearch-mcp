@@ -64,6 +64,9 @@ public static class AllToolRegistrations
         
         // Tool usage analytics
         RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>());
+        
+        // Workflow discovery
+        RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
@@ -168,7 +171,8 @@ Not for: File name searches (use file_search), directory searches (use directory
                 type = "object",
                 properties = new
                 {
-                    searchQuery = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
+                    query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
+                    searchQuery = new { type = "string", description = "[DEPRECATED] Use 'query' instead. Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
                     workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories." },
                     filePattern = new { 
                         type = "string", 
@@ -205,11 +209,18 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
                     },
                     responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
-                required = new[] { "searchQuery", "workspacePath" }
+                required = new[] { "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                // Validate that at least one query parameter is provided
+                var query = parameters.GetQuery();
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    throw new InvalidParametersException("Either 'query' or 'searchQuery' parameter is required");
+                }
                 
                 var mode = ResponseMode.Summary;  // Default to summary for AI optimization
                 if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
@@ -223,7 +234,7 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
                 }
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.SearchQuery, "searchQuery"),
+                    query,
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.FilePattern,
                     parameters.Extensions,
@@ -242,7 +253,8 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
     
     private class FastTextSearchV2Params
     {
-        public string? SearchQuery { get; set; }
+        public string? Query { get; set; }
+        public string? SearchQuery { get; set; } // Backward compatibility
         public string? WorkspacePath { get; set; }
         public string? FilePattern { get; set; }
         public string[]? Extensions { get; set; }
@@ -251,6 +263,8 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
         public bool? CaseSensitive { get; set; }
         public string? SearchType { get; set; }
         public string? ResponseMode { get; set; }
+        
+        public string? GetQuery() => Query ?? SearchQuery;
     }
     
 
@@ -269,7 +283,8 @@ Not for: Text content searches (use text_search), directory searches (use direct
                 type = "object",
                 properties = new
                 {
-                    nameQuery = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
+                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
+                    nameQuery = new { type = "string", description = "[DEPRECATED] Use 'query' instead. File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
                     searchType = new { 
                         type = "string",
@@ -287,11 +302,18 @@ Not for: Text content searches (use text_search), directory searches (use direct
                     includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false },
                     responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
-                required = new[] { "nameQuery", "workspacePath" }
+                required = new[] { "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                // Validate that at least one query parameter is provided
+                var query = parameters.GetQuery();
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    throw new InvalidParametersException("Either 'query' or 'nameQuery' parameter is required");
+                }
                 
                 var mode = parameters.ResponseMode?.ToLowerInvariant() switch
                 {
@@ -300,7 +322,7 @@ Not for: Text content searches (use text_search), directory searches (use direct
                 };
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.NameQuery, "nameQuery"),
+                    query,
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.SearchType ?? "standard",
                     parameters.MaxResults ?? 50,
@@ -317,12 +339,15 @@ Not for: Text content searches (use text_search), directory searches (use direct
 
     private class FastFileSearchV2Params
     {
-        public string? NameQuery { get; set; }
+        public string? Query { get; set; }
+        public string? NameQuery { get; set; } // Backward compatibility
         public string? WorkspacePath { get; set; }
         public string? SearchType { get; set; }
         public int? MaxResults { get; set; }
         public bool? IncludeDirectories { get; set; }
         public string? ResponseMode { get; set; }
+        
+        public string? GetQuery() => Query ?? NameQuery;
     }
     
     private static void RegisterFastRecentFiles(ToolRegistry registry, FastRecentFilesTool tool)
@@ -528,7 +553,8 @@ Not for: File searches (use file_search), text content searches (use text_search
                 type = "object",
                 properties = new
                 {
-                    directoryQuery = new { type = "string", description = "Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
+                    query = new { type = "string", description = "Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
+                    directoryQuery = new { type = "string", description = "[DEPRECATED] Use 'query' instead. Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
                     searchType = new { 
                         type = "string",
@@ -546,14 +572,21 @@ Not for: File searches (use file_search), text content searches (use text_search
                     includeFileCount = new { type = "boolean", description = "Include file count per directory", @default = true },
                     groupByDirectory = new { type = "boolean", description = "Group results by unique directories", @default = true }
                 },
-                required = new[] { "directoryQuery", "workspacePath" }
+                required = new[] { "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
+                // Validate that at least one query parameter is provided
+                var query = parameters.GetQuery();
+                if (string.IsNullOrWhiteSpace(query))
+                {
+                    throw new InvalidParametersException("Either 'query' or 'directoryQuery' parameter is required");
+                }
+                
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.DirectoryQuery, "directoryQuery"),
+                    query,
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.SearchType ?? "standard",
                     parameters.MaxResults ?? 30,
@@ -568,12 +601,15 @@ Not for: File searches (use file_search), text content searches (use text_search
     
     private class FastDirectorySearchParams
     {
-        public string? DirectoryQuery { get; set; }
+        public string? Query { get; set; }
+        public string? DirectoryQuery { get; set; } // Backward compatibility
         public string? WorkspacePath { get; set; }
         public string? SearchType { get; set; }
         public int? MaxResults { get; set; }
         public bool? IncludeFileCount { get; set; }
         public bool? GroupByDirectory { get; set; }
+        
+        public string? GetQuery() => Query ?? DirectoryQuery;
     }
     
     private static void RegisterIndexWorkspace(ToolRegistry registry, IndexWorkspaceTool tool)
@@ -1267,6 +1303,38 @@ AI-optimized: Provides intelligent recommendations and workflow optimization sug
         public string? Action { get; set; }
         public string? ToolName { get; set; }
         public string? ResponseMode { get; set; }
+    }
+
+    private static void RegisterWorkflowDiscovery(ToolRegistry registry, WorkflowDiscoveryTool tool)
+    {
+        registry.RegisterTool<WorkflowDiscoveryParams>(
+            name: ToolNames.WorkflowDiscovery,
+            description: @"Discover workflow dependencies and suggested tool chains.
+Provides AI agents with proactive understanding of tool prerequisites and common workflows.
+Returns: Workflow information with dependencies, steps, and use cases.
+Use cases: Understanding tool dependencies, discovering workflow patterns, getting guidance on tool chains.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    toolName = new { type = "string", description = "Get workflow information for a specific tool (optional)" },
+                    goal = new { type = "string", description = "Get workflows for a specific goal like 'search code' or 'analyze patterns' (optional)" }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.GetWorkflowsAsync(parameters?.ToolName, parameters?.Goal);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class WorkflowDiscoveryParams
+    {
+        public string? ToolName { get; set; }
+        public string? Goal { get; set; }
     }
 
 }

@@ -73,7 +73,17 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
                     sessionId = new { type = "string", description = "Optional session ID" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (importance, urgency, category, etc.)" }
+                    fields = new { 
+                        type = "object", 
+                        additionalProperties = true, 
+                        description = "Custom fields as JSON object (importance, urgency, category, etc.)",
+                        examples = new object[]
+                        {
+                            new { priority = "high", category = "security", effort = "days" },
+                            new { importance = "critical", impact = "high", urgency = "immediate" },
+                            new { complexity = "medium", owner = "backend-team", deadline = "2024-02-15" }
+                        }
+                    }
                 },
                 required = new[] { "memoryType", "content" }
             },
@@ -108,7 +118,17 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     expiresIn = new { type = "string", description = "Expiration time: 'end-of-session' (default), '1h', '4h', '24h', '7d', etc." },
                     sessionId = new { type = "string", description = "Optional session ID (auto-generated if not provided)" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (importance, urgency, category, etc.)" }
+                    fields = new { 
+                        type = "object", 
+                        additionalProperties = true, 
+                        description = "Custom fields as JSON object (importance, urgency, category, etc.)",
+                        examples = new object[]
+                        {
+                            new { importance = "reminder", urgency = "low" },
+                            new { context = "debugging", session = "investigation-2024-01" },
+                            new { reminder = "check tomorrow", priority = "medium" }
+                        }
+                    }
                 },
                 required = new[] { "content" }
             },

@@ -20,10 +20,22 @@ public class UnifiedToolResponse<T>
     public string Mode { get; set; } = "summary";
 
     /// <summary>
+    /// Format of the response: 'structured', 'markdown', or 'mixed'
+    /// </summary>
+    [JsonPropertyName("format")]
+    public string Format { get; set; } = "structured";
+
+    /// <summary>
     /// The actual data returned by the tool
     /// </summary>
     [JsonPropertyName("data")]
     public T? Data { get; set; }
+
+    /// <summary>
+    /// Optional markdown representation for display
+    /// </summary>
+    [JsonPropertyName("display")]
+    public string? Display { get; set; }
 
     /// <summary>
     /// Metadata about the response
@@ -46,13 +58,51 @@ public class UnifiedToolResponse<T>
     /// <summary>
     /// Creates a successful response
     /// </summary>
-    public static UnifiedToolResponse<T> CreateSuccess(T data, UnifiedResponseMetadata? metadata = null, string mode = "summary")
+    public static UnifiedToolResponse<T> CreateSuccess(T data, UnifiedResponseMetadata? metadata = null, string mode = "summary", string format = "structured", string? display = null)
     {
         return new UnifiedToolResponse<T>
         {
             Success = true,
             Mode = mode,
+            Format = format,
             Data = data,
+            Display = display,
+            Metadata = metadata,
+            Error = null,
+            Recovery = null
+        };
+    }
+
+    /// <summary>
+    /// Creates a successful response with both structured data and markdown display
+    /// </summary>
+    public static UnifiedToolResponse<T> CreateMixed(T data, string display, UnifiedResponseMetadata? metadata = null, string mode = "summary")
+    {
+        return new UnifiedToolResponse<T>
+        {
+            Success = true,
+            Mode = mode,
+            Format = "mixed",
+            Data = data,
+            Display = display,
+            Metadata = metadata,
+            Error = null,
+            Recovery = null
+        };
+    }
+
+    /// <summary>
+    /// Creates a markdown-only response
+    /// </summary>
+    public static UnifiedToolResponse<string> CreateMarkdown(string markdown, UnifiedResponseMetadata? metadata = null, string mode = "summary")
+    {
+        return new UnifiedToolResponse<string>
+        {
+            Success = true,
+            Mode = mode,
+            Format = "markdown",
+            Data = markdown,
+            Display = markdown,
             Metadata = metadata,
             Error = null,
             Recovery = null
@@ -158,4 +208,14 @@ public static class ErrorCodes
     public const string INTERNAL_ERROR = "INTERNAL_ERROR";
     public const string TIMEOUT = "TIMEOUT";
     public const string CIRCUIT_BREAKER_OPEN = "CIRCUIT_BREAKER_OPEN";
+}
+
+/// <summary>
+/// Response format types
+/// </summary>
+public static class ResponseFormats
+{
+    public const string Structured = "structured";
+    public const string Markdown = "markdown";
+    public const string Mixed = "mixed";
 }

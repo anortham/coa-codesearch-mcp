@@ -1181,6 +1181,292 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     /// <summary>
+    /// Smart startup cleanup with tiered safety approach.
+    /// TIER 1: Auto-clean test artifacts and recent workspace locks (low risk)
+    /// TIER 2: Auto-clean older workspace locks with safety checks (medium risk)  
+    /// TIER 3: Diagnose-only memory locks (high risk - manual intervention required)
+    /// </summary>
+    public static async Task SmartStartupCleanupAsync(IPathResolutionService pathResolution, ILogger logger)
+    {
+        var testArtifactMinAge = TimeSpan.FromMinutes(1);     // Very aggressive for test artifacts
+        var workspaceMinAge = TimeSpan.FromMinutes(15);       // Conservative for workspace locks
+        var diagnosticMinAge = TimeSpan.FromMinutes(LOCK_TIMEOUT_MINUTES); // Memory locks - diagnose only
+        
+        logger.LogInformation("STARTUP: Smart cleanup - Tiered approach to stuck write.lock files");
+        
+        var cleanupStats = new
+        {
+            TestArtifactsRemoved = 0,
+            WorkspaceLocksRemoved = 0,
+            MemoryLocksFound = 0,
+            Errors = new List<string>()
+        };
+        
+        // TIER 1: SAFE AUTO-CLEANUP - Test artifacts
+        try
+        {
+            var testCleanupCount = await CleanupTestArtifactsAsync(pathResolution, logger, testArtifactMinAge);
+            cleanupStats = cleanupStats with { TestArtifactsRemoved = testCleanupCount };
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TIER 1 CLEANUP: Failed to clean test artifacts");
+            cleanupStats.Errors.Add($"Test artifacts: {ex.Message}");
+        }
+        
+        // TIER 2: CONSERVATIVE AUTO-CLEANUP - Workspace indexes  
+        try
+        {
+            var workspaceCleanupCount = await CleanupWorkspaceIndexesAsync(pathResolution, logger, workspaceMinAge);
+            cleanupStats = cleanupStats with { WorkspaceLocksRemoved = workspaceCleanupCount };
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TIER 2 CLEANUP: Failed to clean workspace locks");
+            cleanupStats.Errors.Add($"Workspace locks: {ex.Message}");
+        }
+        
+        // TIER 3: DIAGNOSTIC ONLY - Memory indexes (no auto-cleanup)
+        try
+        {
+            var memoryDiagnosticCount = await DiagnoseMemoryIndexLocksAsync(pathResolution, logger, diagnosticMinAge);
+            cleanupStats = cleanupStats with { MemoryLocksFound = memoryDiagnosticCount };
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "TIER 3 DIAGNOSTIC: Failed to diagnose memory locks");
+            cleanupStats.Errors.Add($"Memory diagnostics: {ex.Message}");
+        }
+        
+        // Summary
+        if (cleanupStats.TestArtifactsRemoved > 0 || cleanupStats.WorkspaceLocksRemoved > 0 || cleanupStats.MemoryLocksFound > 0)
+        {
+            logger.LogInformation("STARTUP CLEANUP SUMMARY: Test artifacts removed: {TestCount}, " +
+                                 "Workspace locks removed: {WorkspaceCount}, Memory locks found: {MemoryCount}",
+                                 cleanupStats.TestArtifactsRemoved, cleanupStats.WorkspaceLocksRemoved, cleanupStats.MemoryLocksFound);
+        }
+        else
+        {
+            logger.LogInformation("STARTUP CLEANUP: No stuck locks found - system is clean");
+        }
+        
+        if (cleanupStats.Errors.Count > 0)
+        {
+            logger.LogWarning("STARTUP CLEANUP: {ErrorCount} errors during cleanup: {Errors}", 
+                             cleanupStats.Errors.Count, string.Join("; ", cleanupStats.Errors));
+        }
+    }
+    
+    /// <summary>
+    /// TIER 1: Clean up test artifacts - very safe, aggressive cleanup
+    /// </summary>
+    private static async Task<int> CleanupTestArtifactsAsync(IPathResolutionService pathResolution, ILogger logger, TimeSpan minAge)
+    {
+        var cleanupCount = 0;
+        
+        logger.LogDebug("TIER 1: Cleaning test artifacts older than {MinAge}", minAge);
+        
+        var basePath = Path.GetDirectoryName(pathResolution.GetIndexRootPath()) ?? Environment.CurrentDirectory;
+        
+        try
+        {
+            var testLockFiles = await Task.Run(() => 
+                System.IO.Directory.GetFiles(basePath, "write.lock", SearchOption.AllDirectories)
+                    .Where(f => IsTestArtifact(f))
+                    .ToList());
+            
+            foreach (var lockFile in testLockFiles)
+            {
+                try
+                {
+                    var lockAge = DateTime.UtcNow - File.GetLastWriteTimeUtc(lockFile);
+                    if (lockAge > minAge)
+                    {
+                        File.Delete(lockFile);
+                        cleanupCount++;
+                        logger.LogDebug("TIER 1: Removed test artifact lock: {Path} (age: {Age})", lockFile, lockAge);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    logger.LogDebug("TIER 1: Could not remove test lock {Path}: {Error}", lockFile, ex.Message);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug("TIER 1: Error scanning for test artifacts: {Error}", ex.Message);
+        }
+        
+        if (cleanupCount > 0)
+        {
+            logger.LogInformation("TIER 1: Cleaned {Count} test artifact locks", cleanupCount);
+        }
+        
+        return cleanupCount;
+    }
+    
+    /// <summary>
+    /// TIER 2: Clean up workspace indexes with safety checks
+    /// </summary>
+    private static async Task<int> CleanupWorkspaceIndexesAsync(IPathResolutionService pathResolution, ILogger logger, TimeSpan minAge)
+    {
+        const string WriteLockFilename = "write.lock";
+        var cleanupCount = 0;
+        
+        logger.LogDebug("TIER 2: Cleaning workspace locks older than {MinAge}", minAge);
+        
+        var indexRoot = pathResolution.GetIndexRootPath();
+        if (!await DirectoryExistsAsync(indexRoot).ConfigureAwait(false))
+        {
+            return 0;
+        }
+        
+        foreach (var indexDir in System.IO.Directory.GetDirectories(indexRoot))
+        {
+            var lockPath = Path.Combine(indexDir, WriteLockFilename);
+            
+            if (!await FileExistsAsync(lockPath).ConfigureAwait(false))
+            {
+                continue;
+            }
+            
+            try
+            {
+                var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
+                
+                if (lockAge > minAge)
+                {
+                    // Safety checks before deletion
+                    if (await IsSafeToRemoveLockAsync(lockPath, logger))
+                    {
+                        File.Delete(lockPath);
+                        cleanupCount++;
+                        logger.LogInformation("TIER 2: Removed stuck workspace lock: {Path} (age: {Age})", lockPath, lockAge);
+                    }
+                    else
+                    {
+                        logger.LogWarning("TIER 2: Skipped unsafe lock removal: {Path} (age: {Age})", lockPath, lockAge);
+                    }
+                }
+                else
+                {
+                    logger.LogDebug("TIER 2: Found recent workspace lock: {Path} (age: {Age}) - keeping", lockPath, lockAge);
+                }
+            }
+            catch (Exception ex)
+            {
+                logger.LogWarning("TIER 2: Could not process workspace lock {Path}: {Error}", lockPath, ex.Message);
+            }
+        }
+        
+        if (cleanupCount > 0)
+        {
+            logger.LogInformation("TIER 2: Cleaned {Count} workspace locks", cleanupCount);
+        }
+        
+        return cleanupCount;
+    }
+    
+    /// <summary>
+    /// TIER 3: Diagnose memory locks only - never auto-remove
+    /// </summary>
+    private static async Task<int> DiagnoseMemoryIndexLocksAsync(IPathResolutionService pathResolution, ILogger logger, TimeSpan minAge)
+    {
+        const string WriteLockFilename = "write.lock";
+        var foundCount = 0;
+        
+        logger.LogDebug("TIER 3: Diagnosing memory locks (no auto-cleanup)");
+        
+        var memoryPaths = new[]
+        {
+            pathResolution.GetProjectMemoryPath(),
+            pathResolution.GetLocalMemoryPath()
+        };
+        
+        foreach (var memoryPath in memoryPaths)
+        {
+            if (!await DirectoryExistsAsync(memoryPath).ConfigureAwait(false))
+            {
+                continue;
+            }
+            
+            var lockPath = Path.Combine(memoryPath, WriteLockFilename);
+            
+            if (await FileExistsAsync(lockPath).ConfigureAwait(false))
+            {
+                foundCount++;
+                var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
+                var memoryType = Path.GetFileName(memoryPath);
+                
+                if (lockAge > minAge)
+                {
+                    logger.LogError("TIER 3: CRITICAL - Found stuck {MemoryType} memory lock, age: {Age}. " +
+                                  "This indicates improper disposal! The memory index may be corrupted. " +
+                                  "MANUAL INTERVENTION REQUIRED: Exit Claude Code and delete {LockPath}",
+                                  memoryType, lockAge, lockPath);
+                }
+                else
+                {
+                    logger.LogDebug("TIER 3: Found recent {MemoryType} memory lock ({Age}) - likely in use", memoryType, lockAge);
+                }
+            }
+        }
+        
+        return foundCount;
+    }
+    
+    /// <summary>
+    /// Helper: Check if a lock file is from test artifacts
+    /// </summary>
+    private static bool IsTestArtifact(string lockPath)
+    {
+        var normalizedPath = lockPath.Replace('\\', '/').ToLowerInvariant();
+        return normalizedPath.Contains("/bin/debug/") ||
+               normalizedPath.Contains("/bin/release/") ||
+               normalizedPath.Contains("/testprojects/") ||
+               normalizedPath.Contains("test") && normalizedPath.Contains(".codesearch");
+    }
+    
+    /// <summary>
+    /// Helper: Safety checks before removing a workspace lock
+    /// </summary>
+    private static async Task<bool> IsSafeToRemoveLockAsync(string lockPath, ILogger logger)
+    {
+        try
+        {
+            // Check 1: File is not currently being written to
+            var initialSize = new FileInfo(lockPath).Length;
+            await Task.Delay(100); // Brief pause
+            var currentSize = new FileInfo(lockPath).Length;
+            
+            if (initialSize != currentSize)
+            {
+                logger.LogDebug("SAFETY CHECK: Lock file {Path} is growing - likely in use", lockPath);
+                return false;
+            }
+            
+            // Check 2: Try to get exclusive access briefly
+            try
+            {
+                using var fs = File.Open(lockPath, FileMode.Open, FileAccess.Read, FileShare.None);
+                // If we can get exclusive access, it's probably safe
+                return true;
+            }
+            catch (IOException)
+            {
+                logger.LogDebug("SAFETY CHECK: Lock file {Path} is in use by another process", lockPath);
+                return false;
+            }
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug("SAFETY CHECK: Could not verify safety for {Path}: {Error}", lockPath, ex.Message);
+            return false; // Err on the side of caution
+        }
+    }
+    
+    /// <summary>
     /// Diagnose stuck write.lock files from workspace indexes and memory indexes.
     /// This method only reports stuck locks but does NOT remove them automatically.
     /// </summary>
