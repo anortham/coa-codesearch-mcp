@@ -22,6 +22,12 @@ All code analysis tools now provide AI-optimized responses with:
   - [similar_files](#similar_files)
   - [directory_search](#directory_search)
   - [batch_operations](#batch_operations)
+- [Advanced AI Tools](#advanced-ai-tools)
+  - [search_assistant](#search_assistant) 🤖
+  - [pattern_detector](#pattern_detector) 🔍
+  - [memory_graph_navigator](#memory_graph_navigator) 🗺️
+  - [workflow_discovery](#workflow_discovery) ⚡ **NEW**
+  - [tool_usage_analytics](#tool_usage_analytics) 📊
 - [Memory System](#memory-system)
   - [recall_context](#recall_context)
   - [flexible_store_memory](#flexible_store_memory)
@@ -52,6 +58,7 @@ All code analysis tools now provide AI-optimized responses with:
   - [list_checklists](#list_checklists)
 - [Utilities](#utilities)
   - [index_health_check](#index_health_check)
+  - [system_health_check](#system_health_check)
   - [log_diagnostics](#log_diagnostics)
   - [get_version](#get_version)
 
@@ -406,6 +413,375 @@ batch_operations --operations [
 - Provides cross-operation insights
 - Great for comprehensive codebase analysis
 
+## Advanced AI Tools
+
+### search_assistant
+
+🤖 Orchestrates multi-step search operations with AI guidance and maintains context across searches.
+
+**Parameters:**
+- `goal` (string, required): The search objective (e.g., "Find all error handling patterns")
+- `workspacePath` (string, required): Path to workspace
+- `previousContext` (string, optional): Resource URI from previous search to build upon
+- `constraints` (object, optional): Search constraints
+  - `fileTypes` (array, optional): File types to include [".cs", ".ts", ".js"]
+  - `excludePaths` (array, optional): Paths to exclude
+  - `maxResults` (integer, optional): Maximum results per operation (default: 50)
+- `responseMode` (string, optional): "summary" or "full" (default: "summary")
+
+**Example:**
+```
+search_assistant --goal "Find all authentication patterns and vulnerabilities" --workspacePath "C:/project"
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "strategy": {
+    "searchApproach": "Multi-phase authentication analysis",
+    "operations": ["text_search", "pattern_detector", "similar_files"],
+    "rationale": "Comprehensive security-focused search strategy"
+  },
+  "findings": {
+    "summary": "Found 23 authentication-related patterns across 15 files",
+    "patterns": [
+      {"type": "JWT_implementation", "locations": 8, "risk": "medium"},
+      {"type": "password_validation", "locations": 5, "risk": "low"}
+    ],
+    "hotspots": [
+      {"file": "AuthService.cs", "concerns": ["weak_validation", "jwt_expiry"]}
+    ]
+  },
+  "insights": [
+    "Authentication logic is centralized but lacks consistent error handling",
+    "Consider implementing OAuth2 for better security"
+  ],
+  "nextSteps": [
+    "Review JWT token expiry settings in AuthService.cs",
+    "Audit password validation rules for security compliance"
+  ],
+  "resourceUri": "codesearch-search-assistant://session_abc123"
+}
+```
+
+**Tips:**
+- Automatically creates search strategies based on goals
+- Maintains context between related searches
+- Provides security-focused insights for authentication queries
+- Returns resource URIs for continuing exploration
+
+### pattern_detector
+
+🔍 Analyzes codebase for architectural patterns, anti-patterns, security issues, and performance problems with severity classification.
+
+**Parameters:**
+- `workspacePath` (string, required): Directory path to analyze
+- `patternTypes` (array, required): Types to detect ["architecture", "security", "performance", "testing"]
+- `depth` (string, optional): "shallow" or "deep" analysis (default: "shallow")
+- `createMemories` (boolean, optional): Auto-create memories for significant findings (default: false)
+- `responseMode` (string, optional): "summary" or "full" (default: "summary")
+
+**Example:**
+```
+pattern_detector --workspacePath "C:/project" --patternTypes ["security", "performance"] --depth "deep"
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "mode": "summary",
+  "analysisType": "deep",
+  "summary": {
+    "patternsDetected": 47,
+    "antiPatternsFound": 12,
+    "severityBreakdown": {
+      "critical": 2,
+      "high": 8,
+      "medium": 15,
+      "low": 22
+    }
+  },
+  "findings": {
+    "security": [
+      {
+        "pattern": "SQL_injection_risk",
+        "severity": "critical",
+        "locations": ["UserRepository.cs:45", "OrderService.cs:123"],
+        "description": "Direct string concatenation in SQL queries",
+        "remediation": "Use parameterized queries or ORM"
+      }
+    ],
+    "performance": [
+      {
+        "pattern": "N+1_query_problem", 
+        "severity": "high",
+        "locations": ["ProductService.cs:67"],
+        "description": "Database queries in loops",
+        "remediation": "Use eager loading or batch queries"
+      }
+    ]
+  },
+  "recommendations": {
+    "immediate": [
+      "Fix critical SQL injection vulnerabilities",
+      "Implement input validation"
+    ],
+    "longTerm": [
+      "Consider implementing query optimization patterns",
+      "Add performance monitoring"
+    ]
+  },
+  "metrics": {
+    "codeQualityScore": 72,
+    "securityScore": 45,
+    "performanceScore": 68
+  }
+}
+```
+
+**Tips:**
+- Provides severity-based prioritization
+- Includes specific remediation guidance
+- Supports both quick scans and deep analysis
+- Can automatically create memories for tracking issues
+
+### memory_graph_navigator
+
+🗺️ Explores memory relationships visually with graph insights and discovers knowledge connections.
+
+**Parameters:**
+- `startPoint` (string, required): Memory ID or search query to start from
+- `depth` (integer, optional): Maximum relationship traversal depth 1-5 (default: 2)
+- `filterTypes` (array, optional): Filter by memory types ["TechnicalDebt", "ArchitecturalDecision"]
+- `includeOrphans` (boolean, optional): Include memories with no relationships (default: false)
+- `responseMode` (string, optional): "summary" or "full" (default: "summary")
+
+**Example:**
+```
+memory_graph_navigator --startPoint "authentication patterns" --depth 3 --filterTypes ["ArchitecturalDecision", "SecurityRule"]
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "mode": "summary",
+  "graphSummary": {
+    "totalNodes": 15,
+    "totalEdges": 23,
+    "clusters": 3,
+    "orphans": 2
+  },
+  "clusters": [
+    {
+      "theme": "Authentication Architecture",
+      "nodes": 8,
+      "keyMemories": [
+        {"id": "auth001", "type": "ArchitecturalDecision", "title": "JWT vs Sessions"},
+        {"id": "sec003", "type": "SecurityRule", "title": "Password Policy"}
+      ],
+      "strength": "high"
+    }
+  ],
+  "relationships": [
+    {
+      "source": "auth001",
+      "target": "sec003", 
+      "type": "implements",
+      "strength": 0.85
+    }
+  ],
+  "insights": [
+    "Authentication decisions form a tightly connected cluster",
+    "Security rules are well-linked to architectural decisions",
+    "Consider linking orphaned performance memories"
+  ],
+  "explorationPaths": [
+    "Follow security patterns to performance implications",
+    "Explore testing strategies for authentication"
+  ]
+}
+```
+
+**Recovery for Empty State:**
+When no memories match the start point, provides actionable guidance:
+```json
+{
+  "success": false,
+  "emptyState": true,
+  "message": "No memories found for 'authentication patterns'",
+  "suggestions": [
+    "Create a memory first using store_memory tool",
+    "Search for existing memories using search_memories tool",
+    "Try a broader search term like 'auth' or 'security'"
+  ],
+  "exampleCommands": [
+    "store_memory --type 'ArchitecturalDecision' --content 'Authentication approach decision'",
+    "search_memories --query 'auth' --types ['ArchitecturalDecision']"
+  ]
+}
+```
+
+### workflow_discovery
+
+⚡ **NEW** - Discovers tool dependencies and provides suggested workflows for AI agents to understand tool chains and prerequisites.
+
+**Parameters:**
+- `toolName` (string, optional): Get workflow for specific tool
+- `goal` (string, optional): Get workflows for specific goal like "search code" or "analyze patterns"
+
+**Examples:**
+```
+# Discover workflows for a goal
+workflow_discovery --goal "search code"
+
+# Get workflow for specific tool
+workflow_discovery --toolName "text_search"
+
+# Get all available workflows
+workflow_discovery
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "workflows": [
+    {
+      "name": "Text Search Workflow",
+      "description": "Search for text content within files",
+      "category": "Search",
+      "steps": [
+        {
+          "tool": "index_workspace",
+          "required": true,
+          "description": "Create search index for the workspace",
+          "estimatedTime": "10-60 seconds",
+          "parameters": {"workspacePath": "{workspace_path}"}
+        },
+        {
+          "tool": "text_search",
+          "required": true,
+          "description": "Search for text patterns",
+          "parameters": {
+            "query": "{search_term}",
+            "workspacePath": "{workspace_path}"
+          }
+        }
+      ],
+      "useCases": [
+        "Find code patterns",
+        "Search for error messages", 
+        "Locate TODO comments",
+        "Find configuration values"
+      ]
+    },
+    {
+      "name": "Memory Management Workflow",
+      "description": "Store and retrieve project knowledge",
+      "category": "Memory",
+      "steps": [
+        {
+          "tool": "store_memory",
+          "required": true,
+          "description": "Store important findings or decisions",
+          "parameters": {
+            "memoryType": "{type}",
+            "content": "{description}"
+          }
+        },
+        {
+          "tool": "search_memories",
+          "required": false,
+          "description": "Find related memories",
+          "parameters": {"query": "{search_term}"}
+        }
+      ],
+      "useCases": [
+        "Track architectural decisions",
+        "Document technical debt",
+        "Store code patterns",
+        "Maintain project insights"
+      ]
+    }
+  ]
+}
+```
+
+**Workflow Categories:**
+- **Search**: Text and file discovery workflows
+- **Analysis**: Code pattern and quality analysis
+- **Memory**: Knowledge storage and retrieval
+- **Batch**: Multi-operation workflows
+
+**Tips:**
+- Use at session start to understand available workflows
+- Essential for AI agents to learn tool dependencies
+- Provides estimated timing for planning operations
+- Shows real-world use cases for each workflow
+
+### tool_usage_analytics
+
+📊 Provides insights into tool performance, usage patterns, error analysis, and optimization recommendations.
+
+**Parameters:**
+- `action` (string, optional): "summary", "detailed", "tool_specific", "export", "reset" (default: "summary")
+- `toolName` (string, optional): Name of specific tool to analyze (required for "tool_specific" action)
+- `responseMode` (string, optional): "summary" or "full" (default: "summary")
+
+**Examples:**
+```
+# Get high-level analytics overview
+tool_usage_analytics --action "summary"
+
+# Get detailed analytics for specific tool
+tool_usage_analytics --action "tool_specific" --toolName "text_search"
+
+# Export all analytics data
+tool_usage_analytics --action "export"
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "timeRange": "last 30 days",
+  "summary": {
+    "totalToolCalls": 1247,
+    "uniqueTools": 23,
+    "averageResponseTime": "145ms",
+    "errorRate": "2.3%"
+  },
+  "topTools": [
+    {"name": "text_search", "calls": 234, "avgTime": "89ms", "errorRate": "1.2%"},
+    {"name": "search_memories", "calls": 189, "avgTime": "67ms", "errorRate": "0.5%"},
+    {"name": "index_workspace", "calls": 45, "avgTime": "12.3s", "errorRate": "4.4%"}
+  ],
+  "performance": {
+    "fastestTools": ["search_memories", "file_search"],
+    "slowestTools": ["index_workspace", "pattern_detector"],
+    "mostReliable": ["search_memories", "get_memory"]
+  },
+  "recommendations": [
+    "Consider caching for frequently used text_search queries",
+    "Monitor index_workspace for timeout issues",
+    "Optimize pattern_detector for large codebases"
+  ],
+  "trends": {
+    "usage": "increasing",
+    "performance": "stable",
+    "reliability": "improving"
+  }
+}
+```
+
+**Tips:**
+- Monitor tool performance for optimization opportunities  
+- Identify frequently used tools for caching strategies
+- Track error patterns to improve reliability
+- Export data for external analysis tools
 
 ## Memory System
 
@@ -994,10 +1370,11 @@ Perform comprehensive health check of Lucene indexes with detailed metrics and r
 **Parameters:**
 - `includeMetrics` (boolean, optional): Include performance metrics (default: true)
 - `includeCircuitBreakerStatus` (boolean, optional): Include circuit breaker status (default: true)
+- `includeAutoRepair` (boolean, optional): Automatically repair corrupted indexes (default: false)
 
 **Example:**
 ```
-index_health_check
+index_health_check --includeAutoRepair true
 ```
 
 **Returns:**
@@ -1007,9 +1384,15 @@ index_health_check
   "status": "healthy",
   "diagnostics": {
     "indexCount": 3,
-    "totalSize": "156.2 MB",
+    "totalSize": "156.2 MB", 
     "healthyIndexes": 3,
-    "corruptIndexes": 0
+    "corruptIndexes": 0,
+    "circuitBreakerStatus": "closed"
+  },
+  "performanceMetrics": {
+    "averageSearchTime": "15ms",
+    "indexingThroughput": "1250 files/minute",
+    "memoryUsage": "125MB"
   },
   "recommendations": [
     "All indexes are healthy",
@@ -1017,6 +1400,58 @@ index_health_check
   ]
 }
 ```
+
+### system_health_check
+
+Perform comprehensive system health check covering all major services and components with overall assessment.
+
+**Parameters:**
+- `includeIndexHealth` (boolean, optional): Include index health status (default: true)
+- `includeMemoryPressure` (boolean, optional): Include memory pressure monitoring (default: true)
+- `includeSystemMetrics` (boolean, optional): Include system performance metrics (default: true)
+- `includeConfiguration` (boolean, optional): Include configuration validation (default: false)
+
+**Example:**
+```
+system_health_check --includeConfiguration true
+```
+
+**Returns:**
+```json
+{
+  "success": true,
+  "overallStatus": "healthy",
+  "systemMetrics": {
+    "uptime": "2h 45m",
+    "memoryUsage": "145MB",
+    "cpuUsage": "12%",
+    "diskUsage": "245MB"
+  },
+  "componentHealth": {
+    "luceneIndexes": "healthy",
+    "memorySystem": "healthy", 
+    "cacheServices": "healthy",
+    "circuitBreakers": "operational"
+  },
+  "memoryPressure": {
+    "level": "normal",
+    "gcPressure": "low",
+    "largeObjectHeap": "stable"
+  },
+  "recommendations": [
+    "System operating within normal parameters",
+    "Memory usage is optimal",
+    "Consider cache warm-up for better initial performance"
+  ],
+  "alerts": []
+}
+```
+
+**Tips:**
+- Use for comprehensive system monitoring
+- Provides actionable recommendations
+- Identifies potential issues before they impact performance
+- Includes memory pressure analysis for large codebases
 
 ### log_diagnostics
 
@@ -1220,3 +1655,124 @@ Progress notification format:
 6. **Follow recommendations**: Tools provide actionable next steps
 7. **Batch when possible**: Use batch_operations for multiple queries
 8. **Preview destructive ops**: Always preview renames before applying
+
+## AI UX Optimizations (NEW)
+
+The CodeSearch MCP Server has been specifically optimized for AI agent workflows based on comprehensive AI UX review. Key improvements include:
+
+### Parameter Standardization
+
+All search tools now use consistent parameter naming for better AI agent experience:
+
+- **Unified Query Parameter**: All search operations use `query` instead of tool-specific names
+- **Backward Compatibility**: Legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`) still supported
+- **Runtime Validation**: Clear error messages when required parameters are missing
+
+**Before:**
+```json
+// Inconsistent parameter names caused confusion
+{"operation": "text_search", "searchQuery": "authentication"}
+{"operation": "file_search", "nameQuery": "AuthService"}
+{"operation": "directory_search", "directoryQuery": "Services"}
+```
+
+**After:**
+```json
+// Consistent parameter naming across all tools
+{"operation": "text_search", "query": "authentication"}
+{"operation": "file_search", "query": "AuthService"}  
+{"operation": "directory_search", "query": "Services"}
+```
+
+### Response Format Consistency
+
+Enhanced `UnifiedToolResponse` provides predictable response structure:
+
+```json
+{
+  "success": true,
+  "format": "structured|markdown|mixed",
+  "display": "Optional human-readable representation",
+  "data": { /* Structured data */ },
+  "metadata": {
+    "estimatedTokens": 3200,
+    "detailRequestToken": "cache_token",
+    "resourceUri": "codesearch://session_123"
+  }
+}
+```
+
+**Benefits for AI Agents:**
+- Predictable parsing strategies
+- Token estimation for context management
+- Progressive disclosure through detail tokens
+- Resource URIs for stateful exploration
+
+### Enhanced Error Handling
+
+Tools now provide actionable recovery guidance instead of generic error messages:
+
+**Before:**
+```json
+{"success": false, "error": "Index not found"}
+```
+
+**After:**
+```json
+{
+  "success": false,
+  "errorCode": "INDEX_NOT_FOUND",
+  "message": "No search index found for workspace",
+  "recovery": {
+    "steps": [
+      "Run index_workspace with workspacePath='C:/project'",
+      "Wait for indexing to complete (typically 10-60 seconds)",
+      "Retry your search"
+    ],
+    "suggestedActions": [
+      {
+        "tool": "index_workspace",
+        "params": {"workspacePath": "C:/project"},
+        "description": "Create search index for this workspace"
+      }
+    ]
+  }
+}
+```
+
+### Workflow Discovery System
+
+The new `workflow_discovery` tool provides proactive guidance for AI agents:
+
+- **Tool Dependencies**: Shows prerequisite relationships between tools
+- **Workflow Templates**: Pre-defined workflows for common scenarios
+- **Estimated Timing**: Helps AI agents plan operations
+- **Use Case Examples**: Real-world applications for each workflow
+
+### Memory System Enhancements
+
+Improved memory system with AI-friendly features:
+
+- **Reserved Field Detection**: Clear alternatives when using reserved field names
+- **Relationship Management**: Visual graph navigation with empty state handling  
+- **Template System**: Structured memory creation for consistent data
+- **Context Awareness**: Smart suggestions based on current work
+
+### Token Efficiency Features
+
+- **Automatic Mode Switching**: Responses auto-switch to summary mode at 5,000 tokens
+- **Progressive Disclosure**: Request details without re-running expensive operations
+- **Token Estimation**: All responses include estimated token counts
+- **Smart Summarization**: AI-optimized summaries with key insights
+
+### AI Agent Onboarding
+
+These optimizations make the MCP server ideal for AI agents by:
+
+1. **Reducing Cognitive Load**: Consistent patterns across all tools
+2. **Enabling Learning**: Clear error recovery and workflow guidance
+3. **Supporting Context Management**: Token awareness and progressive disclosure
+4. **Providing Actionable Insights**: Every response includes next steps
+5. **Maintaining State**: Resource URIs for continued exploration
+
+The system has been tested extensively with AI agents and provides a seamless experience for complex multi-step operations while maintaining full backward compatibility with existing integrations.

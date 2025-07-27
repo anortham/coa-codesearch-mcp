@@ -9,6 +9,9 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 - **AI-Optimized Architecture**: Pattern matching and content analysis for AI assistants
 - **Progressive Disclosure**: Intelligent summarization with drill-down capabilities
 - **Real-time Updates**: File watchers automatically update indexes on changes
+- **🆕 Parameter Standardization**: Consistent `query` parameter across all search tools
+- **🆕 Workflow Discovery**: Proactive tool guidance and dependency mapping
+- **🆕 Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
 
 ### Performance
 - Startup: < 500ms (simplified architecture)
@@ -84,9 +87,17 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 - `view_checklist` - View with progress
 - `list_checklists` - List all checklists
 
+### Advanced Tools
+- `search_assistant` - Orchestrate multi-step search operations with AI guidance
+- `pattern_detector` - Analyze code for patterns and anti-patterns with severity levels
+- `memory_graph_navigator` - Explore memory relationships visually with graph insights
+- `tool_usage_analytics` - View tool performance and usage patterns
+- `workflow_discovery` - 🆕 Discover tool dependencies and suggested workflows for AI agents
+
 ### Utilities
 - `batch_operations` - Execute multiple search operations in parallel
 - `index_health_check` - Check index status and performance
+- `system_health_check` - Comprehensive system health monitoring
 - `log_diagnostics` - Manage debug logs
 - `get_version` - Get server version info
 
@@ -132,18 +143,34 @@ index_workspace --workspacePath "C:/YourProject"
 
 # Load previous context  
 recall_context "what I was working on"
+
+# NEW: Discover available workflows
+workflow_discovery --goal "getting started"
 ```
 
 ### Daily Usage
 ```bash
-# Search for code patterns
+# Search for code patterns (NEW: standardized 'query' parameter)
 text_search --query "authentication" --workspacePath "C:/YourProject"
+
+# File search (unified parameter naming - backward compatible)  
+file_search --query "AuthService" --workspacePath "C:/YourProject"
+
+# Directory search (standardized parameter names)
+directory_search --query "Services" --workspacePath "C:/YourProject"
 
 # Find similar implementations
 similar_files --sourcePath "AuthService.cs" --workspacePath "C:/YourProject"
 
-# Analyze recent changes
+# Analyze recent changes with time filters
 recent_files --timeFrame "24h" --workspacePath "C:/YourProject"
+
+# NEW: Multi-step search with AI guidance
+search_assistant --goal "Find all error handling patterns" --workspacePath "C:/YourProject"
+
+# NEW: Discover tool workflows and dependencies
+workflow_discovery --goal "search code"
+workflow_discovery --toolName "text_search"
 ```
 
 ### Memory System
@@ -153,27 +180,91 @@ store_memory --type "ArchitecturalDecision" \
   --content "Using JWT for authentication" \
   --files ["AuthService.cs"]
 
-# Track technical debt  
+# Track technical debt with custom fields
 store_memory --type "TechnicalDebt" \
   --content "UserService needs refactoring" \
-  --fields '{"priority": "high"}'
+  --fields '{"priority": "high", "effort": "days"}'
 
-# Search memories
+# Search memories with AI-powered understanding
 search_memories --query "authentication decisions"
 
-# Backup for version control
+# NEW: Navigate memory relationships visually
+memory_graph_navigator --startPoint "authentication patterns"
+
+# NEW: Find similar memories
+find_similar_memories --memoryId "memory_123"
+
+# Backup for version control (team sharing enabled)
 backup_memories  # Creates JSON in .codesearch/backups/
+```
+
+### Advanced Workflows
+```bash
+# Pattern analysis with severity levels
+pattern_detector --workspacePath "C:/YourProject" \
+  --patternTypes ["architecture", "security", "performance"]
+
+# Parallel operations for comprehensive analysis
+batch_operations --operations '[
+  {"operation": "text_search", "query": "TODO"},
+  {"operation": "file_search", "query": "*.cs"},
+  {"operation": "recent_files", "timeFrame": "7d"}
+]' --workspacePath "C:/YourProject"
+
+# AI-guided multi-step search with context preservation
+search_assistant --goal "Understand authentication implementation" \
+  --workspacePath "C:/YourProject"
+```
+
+## 🚀 AI Agent Optimizations
+
+This MCP server is specifically optimized for AI agent workflows:
+
+- **🧠 Progressive Disclosure**: Automatic token-aware response summarization
+- **🔄 Response Format Consistency**: Unified envelope format across all tools
+- **📊 Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
+- **🗺️ Workflow Discovery**: Proactive tool guidance and dependency mapping
+- **⚡ Parameter Standardization**: Consistent `query` parameter across search tools
+- **🔗 Resource URIs**: Stateful exploration with persistent context
+
+### AI-Friendly Features
+
+```json
+// Example response with AI optimizations
+{
+  "success": true,
+  "format": "structured",
+  "mode": "summary",
+  "autoModeSwitch": true,
+  "data": { /* Intelligent summary */ },
+  "nextActions": {
+    "recommended": ["Follow-up actions"],
+    "available": ["Additional options"]
+  },
+  "metadata": {
+    "detailRequestToken": "cache_token",
+    "estimatedTokens": 3200,
+    "resourceUri": "codesearch://session_abc123"
+  }
+}
 ```
 
 ## 🐛 Troubleshooting
 
 **Stuck indexes**
 - Delete `.codesearch/index/*/write.lock` files
+- Use `index_health_check` for automated diagnostics
 
 **Debug logging**
 ```bash
 log_diagnostics --action status
 log_diagnostics --action cleanup --cleanup true
+```
+
+**Performance monitoring**
+```bash
+system_health_check  # Comprehensive system status
+tool_usage_analytics --action summary  # Tool performance insights
 ```
 
 ## 📄 License
