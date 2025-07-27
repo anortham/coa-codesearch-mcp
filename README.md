@@ -249,6 +249,42 @@ This MCP server is specifically optimized for AI agent workflows:
 }
 ```
 
+## 🤖 Claude Code Usage Best Practices
+
+### Recommended Global CLAUDE.md Settings
+
+For optimal Claude Code experience across ALL your projects, add these patterns to your global `~/.claude/CLAUDE.md`:
+
+```markdown
+## MCP Tool Usage Best Practices
+
+### CoA CodeSearch MCP Server - Efficient Tool Usage
+- **ALWAYS use MCP tools directly** for search operations
+- **DON'T use Task tool** for simple content searches or file finding
+- **DO use text_search with contextLines** for code snippets and context
+- **Trust summary mode insights** - hotspots and actions often contain what you need
+- **Use batch_operations** for multiple related searches, not Task tool
+
+### Common Anti-Patterns to Avoid
+❌ Task tool for text search → ✅ mcp__codesearch__text_search with contextLines  
+❌ Task tool for file finding → ✅ mcp__codesearch__file_search  
+❌ Ignoring summary insights → ✅ Use hotspots and actionable suggestions  
+❌ Multiple separate tools → ✅ mcp__codesearch__batch_operations  
+
+### Efficient Search Patterns
+1. **Index first**: `mcp__codesearch__index_workspace` (required once per session)
+2. **Search content**: `text_search --query "pattern" --contextLines 3`
+3. **Explore results**: Use hotspots and insights from summary mode
+4. **Drill down**: Use provided actions or `responseMode: "full"` only when needed
+
+### Memory System Workflow  
+1. **Start sessions**: `recall_context --query "what I'm working on"`
+2. **Store findings**: `store_memory --type "TechnicalDebt" --content "..."`  
+3. **Find related**: `search_memories --query "authentication"`
+```
+
+Copy this guidance to your global configuration for consistent tool usage across all projects.
+
 ## 🐛 Troubleshooting
 
 **Stuck indexes**

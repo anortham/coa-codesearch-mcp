@@ -377,6 +377,22 @@ public class ToolDiscoveryResourceProvider : IResourceProvider
                 "Combine search_assistant with pattern_detector for thorough analysis",
                 "Store important findings as memories for future reference",
                 "Use memory_graph_navigator to understand relationships"
+            },
+            AntiPatterns = new[]
+            {
+                "❌ DON'T use Task tool for simple text searches - use text_search with contextLines instead",
+                "❌ DON'T ignore summary mode insights - hotspots and actions often contain what you need",
+                "❌ DON'T use Task tool for file finding - use file_search directly",
+                "❌ DON'T run multiple separate searches - use batch_operations for efficiency",
+                "❌ DON'T jump to full response mode immediately - summary mode provides actionable insights"
+            },
+            EfficientPatterns = new[]
+            {
+                "✅ text_search + contextLines for code snippets with surrounding context",
+                "✅ batch_operations for multiple related searches in parallel", 
+                "✅ Trust summary mode hotspots - they guide you to the right files",
+                "✅ Use provided actions from search results for next steps",
+                "✅ search_assistant for complex multi-step analysis, not simple content retrieval"
             }
         };
 
