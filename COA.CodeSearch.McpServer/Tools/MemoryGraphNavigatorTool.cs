@@ -91,10 +91,51 @@ public class MemoryGraphNavigatorTool : ClaudeOptimizedToolBase
             var startMemory = await ResolveStartPointAsync(startPoint);
             if (startMemory == null)
             {
+                // Provide helpful empty state guidance as recommended by AI UX review
                 return UnifiedToolResponse<object>.CreateError(
-                    "NOT_FOUND",
-                    $"Could not find memory or memories for start point: {startPoint}",
-                    _errorRecoveryService.GetValidationErrorRecovery("startPoint", "valid memory ID or search terms"));
+                    "EMPTY_STATE",
+                    $"No memories found for '{startPoint}'. The memory graph navigator needs existing memories to explore relationships.",
+                    new RecoveryInfo
+                    {
+                        Steps = new List<string>
+                        {
+                            "Create a memory first using store_memory tool",
+                            "Search for existing memories using search_memories tool",
+                            "Try a broader search term if you were looking for specific content",
+                            "Use recall_context to load relevant project knowledge"
+                        },
+                        SuggestedActions = new List<SuggestedAction>
+                        {
+                            new SuggestedAction
+                            {
+                                Tool = "store_memory",
+                                Params = new Dictionary<string, object> 
+                                { 
+                                    ["memoryType"] = "ProjectInsight",
+                                    ["content"] = $"Initial memory about {startPoint}"
+                                },
+                                Description = "Create a memory related to your search term"
+                            },
+                            new SuggestedAction
+                            {
+                                Tool = "search_memories",
+                                Params = new Dictionary<string, object> 
+                                { 
+                                    ["query"] = "*"
+                                },
+                                Description = "See all existing memories"
+                            },
+                            new SuggestedAction
+                            {
+                                Tool = "recall_context",
+                                Params = new Dictionary<string, object> 
+                                { 
+                                    ["query"] = startPoint
+                                },
+                                Description = "Load relevant project knowledge"
+                            }
+                        }
+                    });
             }
 
             // Step 2: Build the graph starting from the resolved memory

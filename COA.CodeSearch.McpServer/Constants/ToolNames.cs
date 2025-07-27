@@ -66,4 +66,5 @@ public static class ToolNames
     public const string SearchAssistant = "search_assistant";
     public const string PatternDetector = "pattern_detector";
     public const string MemoryGraphNavigator = "memory_graph_navigator";
+    public const string WorkflowDiscovery = "workflow_discovery";
 }

@@ -196,6 +196,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<PatternDetectorTool>();
         services.AddSingleton<MemoryGraphNavigatorTool>();
         services.AddSingleton<ToolUsageAnalyticsTool>();
+        services.AddSingleton<WorkflowDiscoveryTool>();
         
         
         
@@ -322,8 +323,8 @@ static async Task PerformEarlyStartupCleanup()
             builder.AddConsole().SetMinimumLevel(LogLevel.Information));
         var logger = loggerFactory.CreateLogger("Startup");
         
-        // Check for stuck locks and warn (but don't auto-clean)
-        await LuceneIndexService.DiagnoseStuckIndexesOnStartupAsync(pathResolution, logger);
+        // Smart tiered cleanup for stuck locks (auto-clean safe ones, diagnose risky ones)
+        await LuceneIndexService.SmartStartupCleanupAsync(pathResolution, logger);
     }
     catch (Exception ex)
     {
