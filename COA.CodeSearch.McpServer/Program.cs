@@ -102,6 +102,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();
         services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
+        services.AddSingleton<ConfigurationValidationService>();
         services.AddSingleton<ToolRegistry>();
         
         // Lucene services
@@ -188,13 +189,62 @@ var host = Host.CreateDefaultBuilder(args)
     })
     .Build();
 
-// Register all tools before starting the host
+// Validate configuration and register tools before starting the host
 using (var scope = host.Services.CreateScope())
 {
-    var toolRegistry = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     
-    logger.LogInformation("Registering tools before server startup...");
+    // Validate configuration first
+    logger.LogInformation("Validating configuration before server startup...");
+    var configValidator = scope.ServiceProvider.GetRequiredService<ConfigurationValidationService>();
+    var validationResult = await configValidator.ValidateAllAsync();
+    
+    if (!validationResult.IsValid)
+    {
+        logger.LogCritical("Configuration validation FAILED - server cannot start safely");
+        foreach (var error in validationResult.Errors)
+        {
+            logger.LogCritical("CONFIG ERROR: {Error}", error);
+        }
+        
+        Console.Error.WriteLine("\n❌ CONFIGURATION VALIDATION FAILED");
+        Console.Error.WriteLine("The server cannot start due to configuration errors:");
+        foreach (var error in validationResult.Errors)
+        {
+            Console.Error.WriteLine($"  • {error}");
+        }
+        
+        if (validationResult.Warnings.Count > 0)
+        {
+            Console.Error.WriteLine("\nAdditional warnings:");
+            foreach (var warning in validationResult.Warnings)
+            {
+                Console.Error.WriteLine($"  ⚠ {warning}");
+            }
+        }
+        
+        Console.Error.WriteLine("\nPlease fix the configuration errors and restart the server.");
+        return 1; // Exit with error code
+    }
+    
+    if (validationResult.HasWarnings)
+    {
+        logger.LogWarning("Configuration has warnings but is valid - server will start");
+        Console.Error.WriteLine("\n⚠ CONFIGURATION WARNINGS:");
+        foreach (var warning in validationResult.Warnings)
+        {
+            Console.Error.WriteLine($"  • {warning}");
+        }
+        Console.Error.WriteLine("");
+    }
+    else
+    {
+        logger.LogInformation("✅ Configuration validation passed - all settings are valid");
+    }
+    
+    // Register tools after configuration validation passes
+    var toolRegistry = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
+    logger.LogInformation("Registering tools after successful configuration validation...");
     AllToolRegistrations.RegisterAll(toolRegistry, scope.ServiceProvider);
     logger.LogInformation("Tool registration complete");
 }
