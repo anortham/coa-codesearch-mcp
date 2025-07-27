@@ -27,6 +27,9 @@ public class Phase4PromptValidationTests
         // Check that it derives from BasePromptTemplate
         Assert.True(typeof(BasePromptTemplate).IsAssignableFrom(promptType), 
             $"{promptType.Name} should inherit from BasePromptTemplate");
+            
+        // Verify that the expected name follows kebab-case convention
+        Assert.Contains("-", expectedName);
     }
 
     [Fact]

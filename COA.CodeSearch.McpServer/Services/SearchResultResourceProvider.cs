@@ -93,7 +93,7 @@ public class SearchResultResourceProvider : IResourceProvider
                 var pagedResults = new List<object>();
                 for (int i = skip; i < skip + take && i < totalResults; i++)
                 {
-                    pagedResults.Add(list[i]);
+                    pagedResults.Add(list[i]!);
                 }
 
                 responseData = new

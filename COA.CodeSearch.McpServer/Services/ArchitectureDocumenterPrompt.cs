@@ -218,7 +218,7 @@ public class ArchitectureDocumenterPrompt : BasePromptTemplate
     /// <summary>
     /// Simple template variable substitution supporting {{variable}} and {{#if variable}} blocks.
     /// </summary>
-    private string SubstituteVariables(string template, Dictionary<string, object>? arguments = null)
+    private new string SubstituteVariables(string template, Dictionary<string, object>? arguments = null)
     {
         if (string.IsNullOrEmpty(template) || arguments == null)
         {

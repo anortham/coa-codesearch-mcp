@@ -75,7 +75,7 @@ public class WorkflowStateResourceProviderTests
         Assert.Equal("application/json", content.MimeType);
 
         // Parse and verify the JSON content
-        var json = JsonDocument.Parse(content.Text);
+        var json = JsonDocument.Parse(content.Text!);
         Assert.Equal(goal, json.RootElement.GetProperty("goal").GetString());
         Assert.Equal("active", json.RootElement.GetProperty("status").GetString());
         Assert.Equal(0, json.RootElement.GetProperty("stepCount").GetInt32());
@@ -102,7 +102,7 @@ public class WorkflowStateResourceProviderTests
         var result = await _provider.ReadResourceAsync(uri);
         Assert.NotNull(result);
 
-        var json = JsonDocument.Parse(result.Contents[0].Text);
+        var json = JsonDocument.Parse(result.Contents[0].Text!);
         Assert.Equal(1, json.RootElement.GetProperty("stepCount").GetInt32());
         
         var steps = json.RootElement.GetProperty("steps");
@@ -132,7 +132,7 @@ public class WorkflowStateResourceProviderTests
 
         // Assert
         Assert.NotNull(result);
-        var json = JsonDocument.Parse(result.Contents[0].Text);
+        var json = JsonDocument.Parse(result.Contents[0].Text!);
         
         Assert.Equal(goal, json.RootElement.GetProperty("goal").GetString());
         Assert.Equal("text_search", json.RootElement.GetProperty("lastOperation").GetString());
@@ -210,7 +210,7 @@ public class WorkflowStateResourceProviderTests
 
         // Assert
         Assert.NotNull(result);
-        var json = JsonDocument.Parse(result.Contents[0].Text);
+        var json = JsonDocument.Parse(result.Contents[0].Text!);
         
         var insights = json.RootElement.GetProperty("accumulatedInsights");
         Assert.Equal(3, insights.GetArrayLength()); // All unique insights

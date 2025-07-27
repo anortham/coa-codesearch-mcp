@@ -31,9 +31,9 @@ public class PromptTemplateResourceProvider : IResourceProvider
         };
     }
 
-    public async Task<List<Resource>> ListResourcesAsync(CancellationToken cancellationToken = default)
+    public Task<List<Resource>> ListResourcesAsync(CancellationToken cancellationToken = default)
     {
-        return new List<Resource>
+        return Task.FromResult(new List<Resource>
         {
             new Resource
             {
@@ -84,7 +84,7 @@ public class PromptTemplateResourceProvider : IResourceProvider
                 Description = "How prompt templates integrate with other tools",
                 MimeType = "application/json"
             }
-        };
+        });
     }
 
     public async Task<ReadResourceResult?> ReadResourceAsync(string uri, CancellationToken cancellationToken = default)
@@ -152,7 +152,7 @@ public class PromptTemplateResourceProvider : IResourceProvider
             {
                 p.Name,
                 p.Description,
-                Arguments = p.Arguments.Select(a => new
+                Arguments = p.Arguments?.Select(a => new
                 {
                     a.Name,
                     a.Description,
