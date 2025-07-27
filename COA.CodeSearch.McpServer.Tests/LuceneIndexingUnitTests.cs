@@ -1,7 +1,9 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.IO;
 using System.Threading.Tasks;
 using Xunit;
@@ -48,7 +50,9 @@ public class LuceneIndexingUnitTests : IDisposable
             pathResolutionService,
             new MockIndexingMetricsService(),
             new MockCircuitBreakerService(),
-            new MockBatchIndexingService());
+            new MockBatchIndexingService(),
+            new MockMemoryPressureService(),
+            Options.Create(new MemoryLimitsConfiguration()));
         
         // Create test files
         File.WriteAllText(Path.Combine(_testDirectory, "test1.cs"), 

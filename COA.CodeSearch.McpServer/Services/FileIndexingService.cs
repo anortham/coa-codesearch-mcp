@@ -2,6 +2,8 @@ using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
+using COA.CodeSearch.McpServer.Models;
 using System.Buffers;
 using System.Collections.Concurrent;
 using System.IO.MemoryMappedFiles;
@@ -19,12 +21,10 @@ public class FileIndexingService
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IBatchIndexingService _batchIndexingService;
+    private readonly IMemoryPressureService _memoryPressureService;
+    private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
-    
-    // File size limits for indexing performance and memory management
-    private const int MaxFileSize = 10 * 1024 * 1024; // 10MB - Above this size, files are too large to be useful for code search and can cause memory pressure
-    private const int LargeFileThreshold = 1024 * 1024; // 1MB - Above this size, we use memory-mapped files instead of loading into memory to prevent LOH allocation
 
     public FileIndexingService(
         ILogger<FileIndexingService> logger, 
@@ -33,7 +33,9 @@ public class FileIndexingService
         IPathResolutionService pathResolution,
         IIndexingMetricsService metricsService,
         ICircuitBreakerService circuitBreakerService,
-        IBatchIndexingService batchIndexingService)
+        IBatchIndexingService batchIndexingService,
+        IMemoryPressureService memoryPressureService,
+        IOptions<MemoryLimitsConfiguration> memoryLimits)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -42,6 +44,8 @@ public class FileIndexingService
         _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _circuitBreakerService = circuitBreakerService ?? throw new ArgumentNullException(nameof(circuitBreakerService));
         _batchIndexingService = batchIndexingService ?? throw new ArgumentNullException(nameof(batchIndexingService));
+        _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
+        _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
         
         // Initialize supported extensions from configuration or defaults
         var extensions = configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>() 
@@ -68,9 +72,17 @@ public class FileIndexingService
         
         try
         {
-            // Configure backpressure limits based on system resources
-            var maxConcurrency = Math.Min(Environment.ProcessorCount, 8); // Cap at 8 for memory usage
-            var maxQueueSize = maxConcurrency * 10; // 10x buffer for smooth operation
+            // Check for memory pressure before starting intensive operation
+            if (_memoryPressureService.ShouldThrottleOperation("directory_indexing"))
+            {
+                _logger.LogWarning("Directory indexing throttled due to memory pressure");
+                return 0;
+            }
+            
+            // Configure backpressure limits based on system resources and memory pressure
+            var baseConcurrency = Math.Min(Environment.ProcessorCount, _memoryLimits.MaxIndexingConcurrency);
+            var maxConcurrency = _memoryPressureService.GetRecommendedConcurrency(baseConcurrency);
+            var maxQueueSize = Math.Min(_memoryLimits.MaxIndexingQueueSize, maxConcurrency * 10); // 10x buffer for smooth operation
             
             var errors = new ConcurrentBag<(string file, Exception error)>();
             
@@ -138,6 +150,9 @@ public class FileIndexingService
             // Final commit
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken).ConfigureAwait(false);
             
+            // Trigger memory cleanup if needed after intensive operation
+            await _memoryPressureService.TriggerMemoryCleanupIfNeededAsync().ConfigureAwait(false);
+            
             _logger.LogInformation("Indexed {Count} files from directory: {Directory}", indexedCount, directoryPath);
             return indexedCount;
         }
@@ -161,9 +176,17 @@ public class FileIndexingService
         {
             _logger.LogInformation("Starting batch indexing of directory: {Directory}", directoryPath);
             
-            // Configure backpressure limits based on system resources  
-            var maxConcurrency = Math.Min(Environment.ProcessorCount, 8); // Cap at 8 for memory usage
-            var maxQueueSize = maxConcurrency * 10; // 10x buffer for smooth operation
+            // Check for memory pressure before starting intensive operation
+            if (_memoryPressureService.ShouldThrottleOperation("batch_indexing"))
+            {
+                _logger.LogWarning("Batch indexing throttled due to memory pressure");
+                return 0;
+            }
+            
+            // Configure backpressure limits based on system resources and memory pressure  
+            var baseConcurrency = Math.Min(Environment.ProcessorCount, _memoryLimits.MaxIndexingConcurrency);
+            var maxConcurrency = _memoryPressureService.GetRecommendedConcurrency(baseConcurrency);
+            var maxQueueSize = Math.Min(_memoryLimits.MaxIndexingQueueSize, maxConcurrency * 10); // 10x buffer for smooth operation
             
             var errors = new ConcurrentBag<(string file, Exception error)>();
             
@@ -230,6 +253,9 @@ public class FileIndexingService
             {
                 _logger.LogWarning("Failed to batch index {Count} files out of {Total}", errors.Count, indexedCount + errors.Count);
             }
+            
+            // Trigger memory cleanup if needed after intensive operation
+            await _memoryPressureService.TriggerMemoryCleanupIfNeededAsync().ConfigureAwait(false);
             
             _logger.LogInformation("Batch indexed {Count} files from directory: {Directory}", indexedCount, directoryPath);
             return indexedCount;
@@ -337,6 +363,13 @@ public class FileIndexingService
 
     public async Task<bool> IndexFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
     {
+        // Check memory pressure before indexing
+        if (_memoryPressureService.ShouldThrottleOperation("file_indexing"))
+        {
+            _logger.LogDebug("File indexing throttled due to memory pressure: {FilePath}", filePath);
+            return false;
+        }
+        
         try
         {
             return await _circuitBreakerService.ExecuteAsync(
@@ -376,7 +409,7 @@ public class FileIndexingService
         
         try
         {
-            if (fileInfo.Length > MaxFileSize)
+            if (fileInfo.Length > _memoryLimits.MaxFileSize)
             {
                 error = $"File too large to index ({fileInfo.Length} bytes)";
                 _logger.LogWarning("File too large to index: {FilePath} ({Size} bytes)", filePath, fileInfo.Length);
@@ -385,7 +418,7 @@ public class FileIndexingService
 
             // Read file content using memory-mapped files for large files
             string content;
-            if (fileInfo.Length > LargeFileThreshold)
+            if (fileInfo.Length > _memoryLimits.LargeFileThreshold)
             {
                 content = await ReadLargeFileAsync(filePath, cancellationToken);
             }
@@ -430,7 +463,7 @@ public class FileIndexingService
         
         try
         {
-            if (fileInfo.Length > MaxFileSize)
+            if (fileInfo.Length > _memoryLimits.MaxFileSize)
             {
                 error = $"File too large to index ({fileInfo.Length} bytes)";
                 _logger.LogWarning("File too large to batch index: {FilePath} ({Size} bytes)", filePath, fileInfo.Length);
@@ -439,7 +472,7 @@ public class FileIndexingService
 
             // Read file content using memory-mapped files for large files
             string content;
-            if (fileInfo.Length > LargeFileThreshold)
+            if (fileInfo.Length > _memoryLimits.LargeFileThreshold)
             {
                 content = await ReadLargeFileAsync(filePath, cancellationToken);
             }

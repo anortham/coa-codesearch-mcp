@@ -374,11 +374,15 @@ public class ClaudeMemoryService : IDisposable
     
     public void Dispose()
     {
-        // Commit any pending changes
+        // Commit any pending changes using async-safe pattern
         try
         {
-            _indexService.CommitAsync(_projectMemoryWorkspace).Wait();
-            _indexService.CommitAsync(_localMemoryWorkspace).Wait();
+            // Use Task.Run to prevent deadlocks in synchronous disposal context
+            Task.Run(async () =>
+            {
+                await _indexService.CommitAsync(_projectMemoryWorkspace).ConfigureAwait(false);
+                await _indexService.CommitAsync(_localMemoryWorkspace).ConfigureAwait(false);
+            }).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {

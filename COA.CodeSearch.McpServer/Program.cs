@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Infrastructure;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tools.Registration;
@@ -82,6 +83,8 @@ var host = Host.CreateDefaultBuilder(args)
         // Configuration
         services.Configure<ResponseLimitOptions>(
             context.Configuration.GetSection("ResponseLimits"));
+        services.Configure<MemoryLimitsConfiguration>(
+            context.Configuration.GetSection("MemoryLimits"));
         
         // Infrastructure services
         services.AddSingleton<IResponseSizeEstimator, ResponseSizeEstimator>();
@@ -98,6 +101,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();
+        services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
         services.AddSingleton<ToolRegistry>();
         
         // Lucene services
@@ -164,6 +168,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<SetLoggingTool>();
         services.AddSingleton<GetVersionTool>();
         services.AddSingleton<IndexHealthCheckTool>();
+        services.AddSingleton<SystemHealthCheckTool>();
         
         
         

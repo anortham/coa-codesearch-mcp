@@ -53,6 +53,9 @@ public static class AllToolRegistrations
         
         // Index health check tool
         RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
+        
+        // System health check tool
+        RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
@@ -699,5 +702,64 @@ public static class AllToolRegistrations
         public bool? IncludeMetrics { get; set; }
         public bool? IncludeCircuitBreakerStatus { get; set; }
         public bool? IncludeAutoRepair { get; set; }
+    }
+
+    private static void RegisterSystemHealthCheck(ToolRegistry registry, SystemHealthCheckTool tool)
+    {
+        registry.RegisterTool<SystemHealthCheckParams>(
+            name: ToolNames.SystemHealthCheck,
+            description: "Perform comprehensive system health check covering all major services and components. Includes memory pressure, index health, circuit breakers, system metrics, and configuration validation with overall assessment and recommendations.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    includeIndexHealth = new 
+                    { 
+                        type = "boolean", 
+                        description = "Include index health status in the response", 
+                        @default = true 
+                    },
+                    includeMemoryPressure = new 
+                    { 
+                        type = "boolean", 
+                        description = "Include memory pressure monitoring data", 
+                        @default = true 
+                    },
+                    includeSystemMetrics = new 
+                    { 
+                        type = "boolean", 
+                        description = "Include system performance metrics", 
+                        @default = true 
+                    },
+                    includeConfiguration = new
+                    {
+                        type = "boolean",
+                        description = "Include configuration status and validation",
+                        @default = false
+                    }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.IncludeIndexHealth ?? true,
+                    parameters?.IncludeMemoryPressure ?? true,
+                    parameters?.IncludeSystemMetrics ?? true,
+                    parameters?.IncludeConfiguration ?? false,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class SystemHealthCheckParams
+    {
+        public bool? IncludeIndexHealth { get; set; }
+        public bool? IncludeMemoryPressure { get; set; }
+        public bool? IncludeSystemMetrics { get; set; }
+        public bool? IncludeConfiguration { get; set; }
     }
 }

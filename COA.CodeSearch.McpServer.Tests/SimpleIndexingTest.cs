@@ -1,7 +1,9 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tests.Helpers;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.IO;
 using System.Threading.Tasks;
 using Xunit;
@@ -42,7 +44,7 @@ public class SimpleIndexingTest
             
         var pathResolutionService = new PathResolutionService(config);
         var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config, pathResolutionService);
-        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService, pathResolutionService, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService());
+        var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService, pathResolutionService, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Create test file
         var testFile = Path.Combine(testDir, "test.cs");
