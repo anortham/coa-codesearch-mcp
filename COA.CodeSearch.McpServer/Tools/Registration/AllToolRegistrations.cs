@@ -696,7 +696,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                 properties = new
                 {
                     query = new { type = "string", description = "What you're currently working on or want to learn about" },
-                    scopeFilter = new { type = "string", @enum = new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "WorkSession", "LocalInsight" }, description = "Filter by type: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight, WorkSession, LocalInsight (optional)" },
+                    scopeFilter = new { type = "string", description = "Filter by type: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight, WorkSession, LocalInsight" },
                     maxResults = new { type = "integer", description = "Maximum number of results to return (default: 10)", @default = 10 }
                 },
                 required = new[] { "query" }
