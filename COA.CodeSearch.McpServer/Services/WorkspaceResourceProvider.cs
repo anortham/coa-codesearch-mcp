@@ -136,6 +136,8 @@ public class WorkspaceResourceProvider : IResourceProvider
 
     private async Task<ReadResourceResult> ReadDirectoryAsync(string path, CancellationToken cancellationToken)
     {
+        await Task.CompletedTask; // Satisfy async requirement
+        
         var result = new ReadResourceResult();
         var content = new List<object>();
 
