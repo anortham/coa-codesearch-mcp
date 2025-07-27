@@ -69,6 +69,13 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         try
         {
+            // Validate search request
+            if (!ValidateSearchRequest(request, out var validationErrors))
+            {
+                _logger.LogWarning("Invalid search request: {Errors}", string.Join("; ", validationErrors));
+                result.Memories = new List<FlexibleMemoryEntry>();
+                return result;
+            }
             // Search both project and local memories
             var projectResults = await SearchIndexAsync(_projectMemoryWorkspace, request, true);
             var localResults = await SearchIndexAsync(_localMemoryWorkspace, request, false);
@@ -1339,5 +1346,96 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         _batchUpdateSemaphore?.Dispose();
         _analyzer?.Dispose();
         GC.SuppressFinalize(this);
+    }
+    
+    /// <summary>
+    /// Validate search request parameters
+    /// </summary>
+    private bool ValidateSearchRequest(FlexibleMemorySearchRequest request, out List<string> errors)
+    {
+        errors = new List<string>();
+        
+        // Validate query length
+        if (!string.IsNullOrEmpty(request.Query) && request.Query.Length > 1000)
+        {
+            errors.Add("Query string exceeds maximum length of 1000 characters");
+        }
+        
+        // Validate MaxResults
+        if (request.MaxResults <= 0)
+        {
+            errors.Add("MaxResults must be greater than 0");
+        }
+        
+        // Validate date range
+        if (request.DateRange != null)
+        {
+            request.DateRange.ParseRelativeTime();
+            if (request.DateRange.From.HasValue && request.DateRange.To.HasValue && 
+                request.DateRange.From.Value > request.DateRange.To.Value)
+            {
+                errors.Add("Date range From date must be before To date");
+            }
+        }
+        
+        // Validate OrderBy field
+        var allowedOrderByFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "created", "modified", "type", "score", "accesscount", "lastaccessed"
+        };
+        
+        if (!string.IsNullOrEmpty(request.OrderBy) && !allowedOrderByFields.Contains(request.OrderBy))
+        {
+            // Check if it's a valid extended field name (alphanumeric with underscores)
+            if (!System.Text.RegularExpressions.Regex.IsMatch(request.OrderBy, @"^[a-zA-Z0-9_]+$"))
+            {
+                errors.Add($"Invalid OrderBy field: {request.OrderBy}");
+            }
+        }
+        
+        // Validate memory types - includes all types from MemoryTypes class
+        var allowedMemoryTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            // Existing types (for backwards compatibility)
+            "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight",
+            "WorkSession", "ConversationSummary", "PersonalContext", "TemporaryNote",
+            
+            // New flexible types
+            "TechnicalDebt", "DeferredTask", "Question", "Assumption", "Experiment",
+            "Learning", "Blocker", "Idea", "CodeReview", "BugReport", "GitCommit",
+            "PerformanceIssue", "Refactoring", "Documentation", "Dependency",
+            "Configuration", "WorkingMemory", "Checklist", "ChecklistItem",
+            
+            // Additional types that were in use
+            "PerformanceOptimization", "BugFix", "FeatureIdea", "SecurityConcern",
+            "DocumentationTodo", "RefactoringNote", "TestingNote", "DeploymentNote",
+            "ConfigurationNote", "DependencyNote", "TeamNote", "PersonalNote",
+            "CustomType", "LocalInsight"
+        };
+        
+        if (request.Types != null)
+        {
+            foreach (var type in request.Types)
+            {
+                if (!allowedMemoryTypes.Contains(type))
+                {
+                    errors.Add($"Invalid memory type: {type}");
+                }
+            }
+        }
+        
+        // Validate facet field names
+        if (request.Facets != null)
+        {
+            foreach (var facetKey in request.Facets.Keys)
+            {
+                if (!System.Text.RegularExpressions.Regex.IsMatch(facetKey, @"^[a-zA-Z0-9_]+$"))
+                {
+                    errors.Add($"Invalid facet field name: {facetKey}");
+                }
+            }
+        }
+        
+        return errors.Count == 0;
     }
 }
