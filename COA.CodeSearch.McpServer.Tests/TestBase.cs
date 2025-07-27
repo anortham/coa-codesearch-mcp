@@ -6,26 +6,14 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tools.Registration;
-using Microsoft.Build.Locator;
 using System.Runtime.CompilerServices;
-using System.Reflection;
 
 namespace COA.CodeSearch.McpServer.Tests;
 
 public abstract class TestBase : IDisposable
 {
     protected readonly IServiceProvider ServiceProvider;
-    protected readonly CodeAnalysisService WorkspaceService;
     protected readonly ILogger<TestBase> Logger;
-    
-    static TestBase()
-    {
-        // Register MSBuild once for all tests
-        if (!MSBuildLocator.IsRegistered)
-        {
-            MSBuildLocator.RegisterDefaults();
-        }
-    }
     
     protected TestBase()
     {
@@ -43,9 +31,6 @@ public abstract class TestBase : IDisposable
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
-                ["McpServer:MaxWorkspaces"] = "5",
-                ["McpServer:WorkspaceTimeout"] = "00:30:00",
-                ["McpServer:ParallelismDegree"] = "4",
                 ["ResponseLimits:MaxTokens"] = "20000",
                 ["ResponseLimits:SafetyMargin"] = "0.8",
                 ["ResponseLimits:DefaultMaxResults"] = "50",
@@ -66,13 +51,12 @@ public abstract class TestBase : IDisposable
         services.AddMemoryCache(); // Required for DetailRequestCache
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
-        services.AddHttpClient(); // For TypeScript installer
         
         // Add core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
-        services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
+        services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
         
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
@@ -92,34 +76,17 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
-        // Add TypeScript services (required by GoToDefinitionTool)
-        services.AddSingleton<TypeScriptAnalysisService>();
-        services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
-        services.AddSingleton<TypeScriptGoToDefinitionTool>();
-        
-        // Add tools required by BatchOperationsTool
-        services.AddSingleton<GoToDefinitionTool>();
-        services.AddSingleton<FindReferencesTool>();
-        services.AddSingleton<GetDiagnosticsToolV2>();
-        services.AddSingleton<GetHoverInfoTool>();
-        services.AddSingleton<GetDocumentSymbolsTool>();
-        services.AddSingleton<DependencyAnalysisToolV2>();
+        // Text search tools
+        services.AddSingleton<FastTextSearchToolV2>();
+        services.AddSingleton<FastFileSearchToolV2>();
+        services.AddSingleton<FastRecentFilesTool>();
+        services.AddSingleton<FastFileSizeAnalysisTool>();
+        services.AddSingleton<FastSimilarFilesTool>();
+        services.AddSingleton<FastDirectorySearchTool>();
+        services.AddSingleton<IndexWorkspaceTool>();
         
         ServiceProvider = services.BuildServiceProvider();
-        WorkspaceService = ServiceProvider.GetRequiredService<CodeAnalysisService>();
         Logger = ServiceProvider.GetRequiredService<ILogger<TestBase>>();
-        
-        // Preload the test workspace
-        var testProjectPath = GetTestProjectPath();
-        try
-        {
-            var loadTask = WorkspaceService.GetProjectAsync(testProjectPath);
-            loadTask.Wait(TimeSpan.FromSeconds(10));
-        }
-        catch (Exception ex)
-        {
-            Logger.LogWarning("Failed to preload test workspace: {Error}", ex.Message);
-        }
     }
     
     protected string GetTestDataPath([CallerFilePath] string? sourceFilePath = null)
@@ -132,76 +99,58 @@ public abstract class TestBase : IDisposable
     {
         // Get the source directory from compile-time path
         var sourceDirectory = Path.GetDirectoryName(GetTestDataPath()) ?? throw new InvalidOperationException();
-        var testProjectPath = Path.GetFullPath(Path.Combine(sourceDirectory, "TestProjects", "TestProject1", "TestProject1.csproj"));
+        var testProjectPath = Path.GetFullPath(Path.Combine(sourceDirectory, "TestProjects", "TestProject1"));
         
-        if (!File.Exists(testProjectPath))
+        if (!Directory.Exists(testProjectPath))
         {
-            throw new FileNotFoundException($"Test project not found at: {testProjectPath}");
+            Directory.CreateDirectory(testProjectPath);
         }
         
         return testProjectPath;
     }
     
-    protected string GetTestCodePath()
-    {
-        var projectPath = GetTestProjectPath();
-        var projectDir = Path.GetDirectoryName(projectPath) ?? throw new InvalidOperationException();
-        var codePath = Path.Combine(projectDir, "TestCode.cs");
-        
-        if (!File.Exists(codePath))
-        {
-            throw new FileNotFoundException($"Test code file not found at: {codePath}");
-        }
-        
-        return codePath;
-    }
-    
-    protected async Task<string> CreateTestProjectAsync(string projectName, string code)
+    protected async Task<string> CreateTestFileAsync(string fileName, string content)
     {
         var testDataPath = GetTestDataPath();
-        var projectPath = Path.Combine(testDataPath, projectName);
-        
-        // Clean up if exists
-        if (Directory.Exists(projectPath))
+        if (!Directory.Exists(testDataPath))
         {
-            Directory.Delete(projectPath, true);
+            Directory.CreateDirectory(testDataPath);
         }
         
-        Directory.CreateDirectory(projectPath);
+        var filePath = Path.Combine(testDataPath, fileName);
+        await File.WriteAllTextAsync(filePath, content);
+        return filePath;
+    }
+    
+    protected async Task<string> CreateTestDirectoryAsync(string dirName, Dictionary<string, string> files)
+    {
+        var testDataPath = GetTestDataPath();
+        var dirPath = Path.Combine(testDataPath, dirName);
         
-        // Create project file
-        var csprojContent = @"<Project Sdk=""Microsoft.NET.Sdk"">
-  <PropertyGroup>
-    <TargetFramework>net8.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
-    <GenerateTargetFrameworkAttribute>false</GenerateTargetFrameworkAttribute>
-  </PropertyGroup>
-</Project>";
+        // Clean up if exists
+        if (Directory.Exists(dirPath))
+        {
+            Directory.Delete(dirPath, true);
+        }
         
-        var csprojPath = Path.Combine(projectPath, $"{projectName}.csproj");
-        await File.WriteAllTextAsync(csprojPath, csprojContent);
+        Directory.CreateDirectory(dirPath);
         
-        // Create code file
-        var codePath = Path.Combine(projectPath, "Program.cs");
-        await File.WriteAllTextAsync(codePath, code);
+        foreach (var (fileName, content) in files)
+        {
+            var filePath = Path.Combine(dirPath, fileName);
+            var fileDir = Path.GetDirectoryName(filePath);
+            if (!string.IsNullOrEmpty(fileDir) && !Directory.Exists(fileDir))
+            {
+                Directory.CreateDirectory(fileDir);
+            }
+            await File.WriteAllTextAsync(filePath, content);
+        }
         
-        // Create a simple global.json to ensure consistent SDK
-        var globalJsonContent = @"{
-  ""sdk"": {
-    ""version"": ""8.0.100"",
-    ""rollForward"": ""latestFeature""
-  }
-}";
-        await File.WriteAllTextAsync(Path.Combine(projectPath, "global.json"), globalJsonContent);
-        
-        return csprojPath;
+        return dirPath;
     }
     
     public void Dispose()
     {
-        WorkspaceService?.Dispose();
-        
         if (ServiceProvider is IDisposable disposable)
         {
             disposable.Dispose();

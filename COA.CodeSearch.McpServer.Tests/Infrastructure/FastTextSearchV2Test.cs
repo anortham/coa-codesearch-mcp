@@ -35,9 +35,8 @@ public class FastTextSearchV2Test : LuceneTestBase
             null); // IContextAwarenessService is optional
             
         _indexTool = ServiceProvider.GetRequiredService<IndexWorkspaceTool>();
-        // Use the directory containing the test project, not the .csproj file path
-        var projectPath = GetTestProjectPath();
-        _testWorkspacePath = Path.GetDirectoryName(projectPath) ?? throw new InvalidOperationException("Could not get directory from project path");
+        // Use the test project path as workspace
+        _testWorkspacePath = GetTestProjectPath();
     }
 
     [Fact]

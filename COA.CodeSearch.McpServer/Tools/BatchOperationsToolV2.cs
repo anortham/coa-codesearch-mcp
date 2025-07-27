@@ -11,31 +11,23 @@ using Microsoft.Extensions.Options;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// AI-optimized version of BatchOperationsTool with structured response format
+/// AI-optimized batch operations for text search and file analysis tools
 /// </summary>
 public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 {
     public override string ToolName => "batch_operations_v2";
-    public override string Description => "AI-optimized batch operations";
+    public override string Description => "AI-optimized batch operations for text search and file analysis";
     public override ToolCategory Category => ToolCategory.Batch;
     private readonly IConfiguration _configuration;
     private readonly INotificationService? _notificationService;
     
-    // V2 tools
-    private readonly SearchSymbolsToolV2 _searchSymbolsToolV2;
-    private readonly FindReferencesToolV2 _findReferencesToolV2;
-    private readonly GetImplementationsToolV2 _getImplementationsToolV2;
-    private readonly GetCallHierarchyToolV2 _getCallHierarchyToolV2;
+    // Available tools for batch operations
     private readonly FastTextSearchToolV2 _fastTextSearchToolV2;
-    
-    // V1 tools (no V2 available yet)
-    private readonly GoToDefinitionTool _goToDefinitionTool;
-    private readonly GetHoverInfoTool _getHoverInfoTool;
-    private readonly GetDocumentSymbolsTool _getDocumentSymbolsTool;
-    
-    // Already V2 (registered without _v2 suffix)
-    private readonly GetDiagnosticsToolV2 _getDiagnosticsToolV2;
-    private readonly DependencyAnalysisToolV2 _dependencyAnalysisToolV2;
+    private readonly FastFileSearchToolV2 _fastFileSearchToolV2;
+    private readonly FastRecentFilesTool _fastRecentFilesTool;
+    private readonly FastFileSizeAnalysisTool _fastFileSizeAnalysisTool;
+    private readonly FastSimilarFilesTool _fastSimilarFilesTool;
+    private readonly FastDirectorySearchTool _fastDirectorySearchTool;
 
     public BatchOperationsToolV2(
         ILogger<BatchOperationsToolV2> logger,
@@ -45,33 +37,22 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         IOptions<ResponseLimitOptions> options,
         IDetailRequestCache detailCache,
         INotificationService? notificationService,
-        // V2 tools
-        SearchSymbolsToolV2 searchSymbolsToolV2,
-        FindReferencesToolV2 findReferencesToolV2,
-        GetImplementationsToolV2 getImplementationsToolV2,
-        GetCallHierarchyToolV2 getCallHierarchyToolV2,
         FastTextSearchToolV2 fastTextSearchToolV2,
-        // V1 tools
-        GoToDefinitionTool goToDefinitionTool,
-        GetHoverInfoTool getHoverInfoTool,
-        GetDocumentSymbolsTool getDocumentSymbolsTool,
-        // Already V2
-        GetDiagnosticsToolV2 getDiagnosticsToolV2,
-        DependencyAnalysisToolV2 dependencyAnalysisToolV2)
+        FastFileSearchToolV2 fastFileSearchToolV2,
+        FastRecentFilesTool fastRecentFilesTool,
+        FastFileSizeAnalysisTool fastFileSizeAnalysisTool,
+        FastSimilarFilesTool fastSimilarFilesTool,
+        FastDirectorySearchTool fastDirectorySearchTool)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _configuration = configuration;
         _notificationService = notificationService;
-        _searchSymbolsToolV2 = searchSymbolsToolV2;
-        _findReferencesToolV2 = findReferencesToolV2;
-        _getImplementationsToolV2 = getImplementationsToolV2;
-        _getCallHierarchyToolV2 = getCallHierarchyToolV2;
         _fastTextSearchToolV2 = fastTextSearchToolV2;
-        _goToDefinitionTool = goToDefinitionTool;
-        _getHoverInfoTool = getHoverInfoTool;
-        _getDocumentSymbolsTool = getDocumentSymbolsTool;
-        _getDiagnosticsToolV2 = getDiagnosticsToolV2;
-        _dependencyAnalysisToolV2 = dependencyAnalysisToolV2;
+        _fastFileSearchToolV2 = fastFileSearchToolV2;
+        _fastRecentFilesTool = fastRecentFilesTool;
+        _fastFileSizeAnalysisTool = fastFileSizeAnalysisTool;
+        _fastSimilarFilesTool = fastSimilarFilesTool;
+        _fastDirectorySearchTool = fastDirectorySearchTool;
     }
 
     public async Task<object> ExecuteAsync(
@@ -168,16 +149,12 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
         return operationType switch
         {
-            ToolNames.SearchSymbols => await ExecuteSearchSymbolsAsync(operation, defaultWorkspacePath, cancellationToken),
-            ToolNames.FindReferences => await ExecuteFindReferencesAsync(operation, cancellationToken),
-            ToolNames.GoToDefinition => await ExecuteGoToDefinitionAsync(operation, cancellationToken),
-            ToolNames.GetHoverInfo => await ExecuteGetHoverInfoAsync(operation, cancellationToken),
-            ToolNames.GetImplementations => await ExecuteGetImplementationsAsync(operation, cancellationToken),
-            ToolNames.GetDocumentSymbols => await ExecuteGetDocumentSymbolsAsync(operation, cancellationToken),
-            ToolNames.GetDiagnostics => await ExecuteGetDiagnosticsAsync(operation, cancellationToken),
-            ToolNames.GetCallHierarchy => await ExecuteGetCallHierarchyAsync(operation, cancellationToken),
             ToolNames.TextSearch => await ExecuteTextSearchAsync(operation, defaultWorkspacePath, cancellationToken),
-            ToolNames.DependencyAnalysis => await ExecuteAnalyzeDependenciesAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.FileSearch => await ExecuteFileSearchAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.RecentFiles => await ExecuteRecentFilesAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.FileSizeAnalysis => await ExecuteFileSizeAnalysisAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.SimilarFiles => await ExecuteSimilarFilesAsync(operation, defaultWorkspacePath, cancellationToken),
+            ToolNames.DirectorySearch => await ExecuteDirectorySearchAsync(operation, defaultWorkspacePath, cancellationToken),
             _ => throw new NotSupportedException($"Operation type '{operationType}' not supported in batch operations")
         };
     }
@@ -205,100 +182,6 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     // Individual operation execution methods
     
-    private async Task<object> ExecuteSearchSymbolsAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
-    {
-        if (!operation.TryGetProperty("searchPattern", out var searchPatternProp))
-        {
-            throw new InvalidOperationException("search_symbols operation requires 'searchPattern'");
-        }
-
-        return await _searchSymbolsToolV2.ExecuteAsync(
-            searchPatternProp.GetString()!,
-            GetWorkspacePath(operation, defaultWorkspacePath),
-            operation.TryGetProperty("kinds", out var k) && k.ValueKind == JsonValueKind.Array
-                ? k.EnumerateArray().Select(e => e.GetString()!).ToArray()
-                : null,
-            operation.TryGetProperty("fuzzy", out var f) && f.GetBoolean(),
-            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 100,
-            ResponseMode.Summary, // Always use summary mode in batch operations
-            null,
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteFindReferencesAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _findReferencesToolV2.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.GetProperty("line").GetInt32(),
-            operation.GetProperty("column").GetInt32(),
-            operation.TryGetProperty("includeDeclaration", out var id) && id.GetBoolean(),
-            ResponseMode.Summary,
-            null,
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGoToDefinitionAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _goToDefinitionTool.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.GetProperty("line").GetInt32(),
-            operation.GetProperty("column").GetInt32(),
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGetHoverInfoAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _getHoverInfoTool.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.GetProperty("line").GetInt32(),
-            operation.GetProperty("column").GetInt32(),
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGetImplementationsAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _getImplementationsToolV2.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.GetProperty("line").GetInt32(),
-            operation.GetProperty("column").GetInt32(),
-            ResponseMode.Summary,
-            null,
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGetDocumentSymbolsAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _getDocumentSymbolsTool.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.TryGetProperty("includeMembers", out var im) && im.GetBoolean(),
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGetDiagnosticsAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _getDiagnosticsToolV2.ExecuteAsync(
-            operation.GetProperty("path").GetString()!,
-            operation.TryGetProperty("severities", out var s) && s.ValueKind == JsonValueKind.Array
-                ? s.EnumerateArray().Select(e => e.GetString()!).ToArray()
-                : null,
-            ResponseMode.Summary,
-            null,
-            cancellationToken);
-    }
-
-    private async Task<object> ExecuteGetCallHierarchyAsync(JsonElement operation, CancellationToken cancellationToken)
-    {
-        return await _getCallHierarchyToolV2.ExecuteAsync(
-            operation.GetProperty("filePath").GetString()!,
-            operation.GetProperty("line").GetInt32(),
-            operation.GetProperty("column").GetInt32(),
-            operation.TryGetProperty("direction", out var dir) ? dir.GetString() ?? "both" : "both",
-            operation.TryGetProperty("maxDepth", out var md) ? md.GetInt32() : 2,
-            ResponseMode.Summary,
-            null,
-            cancellationToken);
-    }
-
     private async Task<object> ExecuteTextSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
         if (!operation.TryGetProperty("query", out var queryProp))
@@ -322,17 +205,90 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             cancellationToken);
     }
 
-    private async Task<object> ExecuteAnalyzeDependenciesAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    private async Task<object> ExecuteFileSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        return await _dependencyAnalysisToolV2.ExecuteAsync(
-            operation.GetProperty("symbol").GetString()!,
+        if (!operation.TryGetProperty("query", out var queryProp))
+        {
+            throw new InvalidOperationException("file_search operation requires 'query'");
+        }
+
+        return await _fastFileSearchToolV2.ExecuteAsync(
+            queryProp.GetString()!,
             GetWorkspacePath(operation, defaultWorkspacePath),
-            operation.TryGetProperty("direction", out var dd) ? dd.GetString() ?? "both" : "both",
-            operation.TryGetProperty("depth", out var dp) ? dp.GetInt32() : 3,
-            operation.TryGetProperty("includeTests", out var it) && it.GetBoolean(),
-            operation.TryGetProperty("includeExternalDependencies", out var ied) && ied.GetBoolean(),
+            operation.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 50,
+            operation.TryGetProperty("includeDirectories", out var id) && id.GetBoolean(),
             ResponseMode.Summary,
             null,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteRecentFilesAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        return await _fastRecentFilesTool.ExecuteAsync(
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("timeFrame", out var tf) ? tf.GetString() ?? "24h" : "24h",
+            operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
+            operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 50,
+            operation.TryGetProperty("includeSize", out var is_) ? is_.GetBoolean() : true,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteFileSizeAnalysisAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        return await _fastFileSizeAnalysisTool.ExecuteAsync(
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("mode", out var mode) ? mode.GetString() ?? "largest" : "largest",
+            operation.TryGetProperty("minSize", out var minS) ? minS.GetInt64() : null,
+            operation.TryGetProperty("maxSize", out var maxS) ? maxS.GetInt64() : null,
+            operation.TryGetProperty("filePattern", out var fp) ? fp.GetString() : null,
+            operation.TryGetProperty("extensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 50,
+            operation.TryGetProperty("includeAnalysis", out var ia) ? ia.GetBoolean() : true,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteSimilarFilesAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        if (!operation.TryGetProperty("sourceFilePath", out var sourceFilePathProp))
+        {
+            throw new InvalidOperationException("similar_files operation requires 'sourceFilePath'");
+        }
+
+        return await _fastSimilarFilesTool.ExecuteAsync(
+            sourceFilePathProp.GetString()!,
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 10,
+            operation.TryGetProperty("minTermFreq", out var mtf) ? mtf.GetInt32() : 2,
+            operation.TryGetProperty("minDocFreq", out var mdf) ? mdf.GetInt32() : 2,
+            operation.TryGetProperty("minWordLength", out var minWL) ? minWL.GetInt32() : 4,
+            operation.TryGetProperty("maxWordLength", out var maxWL) ? maxWL.GetInt32() : 30,
+            operation.TryGetProperty("excludeExtensions", out var ext) && ext.ValueKind == JsonValueKind.Array
+                ? ext.EnumerateArray().Select(e => e.GetString()!).ToArray()
+                : null,
+            operation.TryGetProperty("includeScore", out var is_) ? is_.GetBoolean() : true,
+            cancellationToken);
+    }
+
+    private async Task<object> ExecuteDirectorySearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
+    {
+        if (!operation.TryGetProperty("query", out var queryProp))
+        {
+            throw new InvalidOperationException("directory_search operation requires 'query'");
+        }
+
+        return await _fastDirectorySearchTool.ExecuteAsync(
+            queryProp.GetString()!,
+            GetWorkspacePath(operation, defaultWorkspacePath),
+            operation.TryGetProperty("searchType", out var st) ? st.GetString() ?? "standard" : "standard",
+            operation.TryGetProperty("maxResults", out var mr) ? mr.GetInt32() : 30,
+            operation.TryGetProperty("includeFileCount", out var ifc) ? ifc.GetBoolean() : true,
+            operation.TryGetProperty("groupByDirectory", out var gbd) ? gbd.GetBoolean() : true,
             cancellationToken);
     }
 
@@ -398,17 +354,12 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             analysis = new
             {
                 patterns = analysis.Patterns.Take(3).ToList(),
-                hotspots = (analysis.FileReferences.Any() || analysis.SymbolReferences.Any()) ? new
+                hotspots = analysis.FileReferences.Any() ? new
                 {
                     byFile = analysis.FileReferences
                         .OrderByDescending(kv => kv.Value)
                         .Take(5)
                         .Select(kv => new { file = kv.Key, operations = kv.Value })
-                        .ToList(),
-                    bySymbol = analysis.SymbolReferences
-                        .OrderByDescending(kv => kv.Value)
-                        .Take(5)
-                        .Select(kv => new { symbol = kv.Key, operations = kv.Value })
                         .ToList()
                 } : null,
                 correlations = analysis.Correlations.Take(3).ToList()
@@ -457,7 +408,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
                 analysis.ErrorSummary[error]++;
             }
 
-            // Extract file and symbol references
+            // Extract file references
             if (success && opResult.TryGetProperty("result", out var resultData))
             {
                 ExtractReferences(resultData, operationType, analysis);
@@ -483,46 +434,41 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private void ExtractReferences(JsonElement resultData, string operationType, BatchAnalysis analysis)
     {
-        // Extract file references
+        // Extract file references from search results
         if (resultData.ValueKind == JsonValueKind.Object)
         {
-            // Check for file path in various common locations
-            string? filePath = null;
-            if (resultData.TryGetProperty("filePath", out var fp))
-                filePath = fp.GetString();
-            else if (resultData.TryGetProperty("location", out var loc) && loc.TryGetProperty("filePath", out var locFp))
-                filePath = locFp.GetString();
-            else if (resultData.TryGetProperty("locations", out var locs) && locs.ValueKind == JsonValueKind.Array && locs.GetArrayLength() > 0)
+            // Check for files array in search results
+            if (resultData.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
             {
-                var firstLoc = locs[0];
-                if (firstLoc.TryGetProperty("filePath", out var firstFp))
-                    filePath = firstFp.GetString();
+                foreach (var file in files.EnumerateArray())
+                {
+                    string? filePath = null;
+                    if (file.ValueKind == JsonValueKind.String)
+                    {
+                        filePath = file.GetString();
+                    }
+                    else if (file.ValueKind == JsonValueKind.Object && file.TryGetProperty("path", out var path))
+                    {
+                        filePath = path.GetString();
+                    }
+
+                    if (!string.IsNullOrEmpty(filePath))
+                    {
+                        if (!analysis.FileReferences.ContainsKey(filePath))
+                            analysis.FileReferences[filePath] = 0;
+                        analysis.FileReferences[filePath]++;
+                    }
+                }
             }
 
-            if (!string.IsNullOrEmpty(filePath))
+            // Check for totalMatches or similar count properties
+            if (resultData.TryGetProperty("totalMatches", out var totalMatches))
             {
-                if (!analysis.FileReferences.ContainsKey(filePath))
-                    analysis.FileReferences[filePath] = 0;
-                analysis.FileReferences[filePath]++;
+                analysis.TotalResultItems += totalMatches.GetInt32();
             }
-
-            // Extract symbol references
-            string? symbolName = null;
-            if (resultData.TryGetProperty("symbol", out var sym))
+            else if (resultData.TryGetProperty("count", out var count))
             {
-                if (sym.ValueKind == JsonValueKind.String)
-                    symbolName = sym.GetString();
-                else if (sym.ValueKind == JsonValueKind.Object && sym.TryGetProperty("name", out var symName))
-                    symbolName = symName.GetString();
-            }
-            else if (resultData.TryGetProperty("name", out var name))
-                symbolName = name.GetString();
-
-            if (!string.IsNullOrEmpty(symbolName))
-            {
-                if (!analysis.SymbolReferences.ContainsKey(symbolName))
-                    analysis.SymbolReferences[symbolName] = 0;
-                analysis.SymbolReferences[symbolName]++;
+                analysis.TotalResultItems += count.GetInt32();
             }
         }
         else if (resultData.ValueKind == JsonValueKind.Array)
@@ -536,95 +482,65 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     {
         var opArray = operations.EnumerateArray().ToList();
 
-        // Pattern: Multiple operations on same file
-        var fileGroups = new Dictionary<string, int>();
-        foreach (var op in opArray)
+        // Pattern: Multiple search operations
+        var searchOps = analysis.OperationTypeCounts.Where(kv => 
+            kv.Key.Contains("search", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value);
+        if (searchOps > 2)
         {
-            if (op.TryGetProperty("filePath", out var fp))
-            {
-                var filePath = fp.GetString() ?? "";
-                if (!fileGroups.ContainsKey(filePath))
-                    fileGroups[filePath] = 0;
-                fileGroups[filePath]++;
-            }
+            analysis.Patterns.Add($"Comprehensive search strategy: {searchOps} search operations");
         }
 
-        var multiFileOps = fileGroups.Where(kv => kv.Value > 2).ToList();
-        if (multiFileOps.Any())
+        // Pattern: File analysis workflow
+        var fileAnalysisOps = analysis.OperationTypeCounts.Where(kv => 
+            kv.Key.Contains("file", StringComparison.OrdinalIgnoreCase) || 
+            kv.Key.Contains("recent", StringComparison.OrdinalIgnoreCase) ||
+            kv.Key.Contains("similar", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value);
+        if (fileAnalysisOps > 1)
         {
-            var topFile = multiFileOps.OrderByDescending(kv => kv.Value).First();
-            analysis.Patterns.Add($"Focused analysis: {topFile.Value} operations on {Path.GetFileName(topFile.Key)}");
+            analysis.Patterns.Add($"File discovery and analysis workflow");
         }
 
-        // Pattern: Search followed by navigation
-        bool hasSearch = opArray.Any(op => 
-            op.TryGetProperty("operation", out var opType) && 
-            (opType.GetString() == ToolNames.SearchSymbols || opType.GetString() == ToolNames.TextSearch));
-        bool hasNavigation = opArray.Any(op => 
-            op.TryGetProperty("operation", out var opType) && 
-            (opType.GetString() == ToolNames.GoToDefinition || opType.GetString() == ToolNames.FindReferences));
-
-        if (hasSearch && hasNavigation)
+        // Pattern: Size and structure analysis
+        if (analysis.OperationTypeCounts.ContainsKey(ToolNames.FileSizeAnalysis) && 
+            analysis.OperationTypeCounts.ContainsKey(ToolNames.DirectorySearch))
         {
-            analysis.Patterns.Add("Search and navigate pattern detected");
-        }
-
-        // Pattern: Diagnostic analysis
-        var diagnosticCount = analysis.OperationTypeCounts.GetValueOrDefault("get_diagnostics", 0);
-        if (diagnosticCount > 0)
-        {
-            analysis.Patterns.Add($"Code quality check across {diagnosticCount} targets");
-        }
-
-        // Pattern: Dependency exploration
-        if (analysis.OperationTypeCounts.ContainsKey("analyze_dependencies"))
-        {
-            analysis.Patterns.Add("Architectural dependency analysis");
+            analysis.Patterns.Add("Project structure analysis pattern");
         }
     }
 
     private void FindCorrelations(BatchAnalysis analysis)
     {
-        // Correlation: Files with multiple operation types
-        var fileOperationTypes = new Dictionary<string, HashSet<string>>();
-        
-        // This would require more detailed tracking during extraction
-        // For now, provide basic correlations
-        
-        if (analysis.FileReferences.Count > 5 && analysis.OperationTypeCounts.Count > 3)
+        if (analysis.FileReferences.Count > 5 && analysis.OperationTypeCounts.Count > 2)
         {
-            analysis.Correlations.Add("Multiple operation types across multiple files - comprehensive analysis");
+            analysis.Correlations.Add("Multiple search types across many files - comprehensive discovery");
         }
 
         if (analysis.FailureCount > 0 && analysis.FailureCount < analysis.TotalOperations / 2)
         {
-            analysis.Correlations.Add($"Partial failures ({analysis.FailureCount}/{analysis.TotalOperations}) - some targets may be invalid");
+            analysis.Correlations.Add($"Partial failures ({analysis.FailureCount}/{analysis.TotalOperations}) - some search targets may be invalid");
         }
 
-        if (analysis.SymbolReferences.Count > 10)
+        if (analysis.TotalResultItems > 100)
         {
-            analysis.Correlations.Add("Wide symbol coverage - exploring interconnected code");
+            analysis.Correlations.Add("High result volume - consider refining search criteria");
         }
     }
 
     private string EstimateExecutionTime(Dictionary<string, int> operationTypeCounts)
     {
-        // Rough estimates in milliseconds
+        // Rough estimates in milliseconds for text search operations
         var timeEstimates = new Dictionary<string, int>
         {
-            [ToolNames.SearchSymbols] = 100,
-            [ToolNames.FindReferences] = 200,
-            [ToolNames.GoToDefinition] = 50,
-            [ToolNames.GetDiagnostics] = 300,
-            [ToolNames.DependencyAnalysis] = 500,
-            [ToolNames.TextSearch] = 150,
-            [ToolNames.GetHoverInfo] = 30,
-            [ToolNames.GetImplementations] = 150,
-            [ToolNames.GetCallHierarchy] = 250
+            [ToolNames.TextSearch] = 50,
+            [ToolNames.FileSearch] = 30,
+            [ToolNames.RecentFiles] = 25,
+            [ToolNames.FileSizeAnalysis] = 40,
+            [ToolNames.SimilarFiles] = 100,
+            [ToolNames.DirectorySearch] = 20
         };
 
         var totalMs = operationTypeCounts.Sum(kv => 
-            timeEstimates.GetValueOrDefault(kv.Key, 100) * kv.Value);
+            timeEstimates.GetValueOrDefault(kv.Key, 50) * kv.Value);
 
         if (totalMs < 1000)
             return $"{totalMs}ms";
@@ -686,22 +602,30 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         // Create operation-specific summaries
         return opType switch
         {
-            "find_references" => new 
+            ToolNames.TextSearch => new 
             { 
-                found = resultData.TryGetProperty("references", out var refs) ? refs.GetArrayLength() : 0 
+                matches = resultData.TryGetProperty("totalMatches", out var tm) ? tm.GetInt32() : 0,
+                files = resultData.TryGetProperty("files", out var files) ? files.GetArrayLength() : 0
             },
-            "search_symbols" => new 
+            ToolNames.FileSearch => new 
             { 
-                found = resultData.TryGetProperty("symbols", out var syms) ? syms.GetArrayLength() : 0 
+                found = resultData.TryGetProperty("files", out var files) ? files.GetArrayLength() : 0 
             },
-            "text_search" => new 
+            ToolNames.RecentFiles => new 
             { 
-                matches = resultData.TryGetProperty("totalMatches", out var tm) ? tm.GetInt32() : 0 
+                found = resultData.TryGetProperty("files", out var files) ? files.GetArrayLength() : 0 
             },
-            "get_diagnostics" => new 
+            ToolNames.FileSizeAnalysis => new 
             { 
-                errors = resultData.TryGetProperty("errorCount", out var ec) ? ec.GetInt32() : 0,
-                warnings = resultData.TryGetProperty("warningCount", out var wc) ? wc.GetInt32() : 0
+                analyzed = resultData.TryGetProperty("totalFiles", out var tf) ? tf.GetInt32() : 0 
+            },
+            ToolNames.SimilarFiles => new 
+            { 
+                found = resultData.TryGetProperty("similarFiles", out var sf) ? sf.GetArrayLength() : 0 
+            },
+            ToolNames.DirectorySearch => new 
+            { 
+                found = resultData.TryGetProperty("directories", out var dirs) ? dirs.GetArrayLength() : 0 
             },
             _ => new { hasResult = true }
         };
@@ -748,11 +672,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         // File hotspot insight
         if (analysis.FileReferences.Any())
         {
-            var topFile = analysis.FileReferences.OrderByDescending(kv => kv.Value).First();
-            if (topFile.Value > 2)
-            {
-                insights.Add($"File focus: {Path.GetFileName(topFile.Key)} ({topFile.Value} operations)");
-            }
+            var fileCount = analysis.FileReferences.Count;
+            var totalFileOps = analysis.FileReferences.Sum(kv => kv.Value);
+            insights.Add($"Discovered {fileCount} files across {totalFileOps} operations");
         }
 
         // Pattern insights
@@ -764,23 +686,10 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         // Performance insight
         insights.Add($"Estimated execution time: {analysis.EstimatedExecutionTime}");
 
-        // Correlation insights
-        if (analysis.Correlations.Any())
-        {
-            insights.Add(analysis.Correlations.First());
-        }
-        
         // Ensure we always have at least one insight
         if (insights.Count == 0)
         {
-            if (analysis.TotalOperations == 0)
-            {
-                insights.Add("No operations were executed");
-            }
-            else
-            {
-                insights.Add($"Batch execution completed: {analysis.TotalOperations} operations processed");
-            }
+            insights.Add($"Batch execution completed: {analysis.TotalOperations} search operations processed");
         }
 
         return insights;
@@ -802,82 +711,52 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             });
         }
 
-        // Deep dive into hotspots
-        if (analysis.FileReferences.Any())
-        {
-            var topFile = analysis.FileReferences.OrderByDescending(kv => kv.Value).First();
-            if (topFile.Value > 3)
-            {
-                actions.Add(new
-                {
-                    id = "analyze_hotspot",
-                    cmd = new { file = topFile.Key, operations = new[] { "get_document_symbols", "get_diagnostics" } },
-                    tokens = 1500,
-                    priority = "recommended"
-                });
-            }
-        }
-
-        // Follow up on search results
-        if (analysis.OperationTypeCounts.ContainsKey(ToolNames.SearchSymbols) || 
-            analysis.OperationTypeCounts.ContainsKey(ToolNames.TextSearch))
+        // Expand search scope
+        if (analysis.TotalResultItems < 10 && analysis.OperationTypeCounts.ContainsKey(ToolNames.TextSearch))
         {
             actions.Add(new
             {
-                id = "navigate_results",
-                cmd = new { operations = new[] { ToolNames.GoToDefinition, ToolNames.FindReferences }, limit = 5 },
+                id = "expand_search",
+                cmd = new { broaderTerms = true, includeComments = true },
+                tokens = 1500,
+                priority = "recommended"
+            });
+        }
+
+        // Analyze discovered files
+        if (analysis.FileReferences.Count > 5)
+        {
+            actions.Add(new
+            {
+                id = "analyze_files",
+                cmd = new { operations = new[] { ToolNames.FileSizeAnalysis, ToolNames.SimilarFiles } },
                 tokens = 2000,
                 priority = "available"
             });
         }
 
-        // Expand analysis
-        if (analysis.TotalOperations < 10)
+        // Refine search criteria
+        if (analysis.TotalResultItems > 100)
         {
             actions.Add(new
             {
-                id = "expand_scope",
-                cmd = new { addOperations = new[] { ToolNames.DependencyAnalysis, ToolNames.GetCallHierarchy } },
-                tokens = 3000,
-                priority = "available"
+                id = "refine_search",
+                cmd = new { addFilters = true, reduceScope = true },
+                tokens = 1000,
+                priority = "recommended"
             });
         }
 
-        // Export detailed results
-        if (analysis.TotalOperations > 5)
-        {
-            actions.Add(new
-            {
-                id = "export_detailed",
-                cmd = new { format = "markdown", includeMetrics = true },
-                tokens = analysis.TotalOperations * 100,
-                priority = "available"
-            });
-        }
-        
         // Ensure we always have at least one action
         if (actions.Count == 0)
         {
-            if (analysis.TotalOperations > 0)
+            actions.Add(new
             {
-                actions.Add(new
-                {
-                    id = "view_summary",
-                    cmd = new { showDetails = true },
-                    tokens = 1000,
-                    priority = "available"
-                });
-            }
-            else
-            {
-                actions.Add(new
-                {
-                    id = "setup_operations",
-                    cmd = new { operations = new[] { "get_diagnostics", "find_references" } },
-                    tokens = 1500,
-                    priority = "recommended"
-                });
-            }
+                id = "view_results",
+                cmd = new { showDetails = true },
+                tokens = 1000,
+                priority = "available"
+            });
         }
 
         return actions;
@@ -886,15 +765,15 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     private int EstimateResponseTokens(BatchAnalysis analysis)
     {
         // Base tokens for structure
-        var baseTokens = 300;
+        var baseTokens = 200;
         
-        // Per operation tokens
-        var perOpTokens = 100;
+        // Per operation tokens (reduced for simpler operations)
+        var perOpTokens = 80;
         
-        // Additional tokens for complexity
-        var complexityTokens = (analysis.FileReferences.Count + analysis.SymbolReferences.Count) * 20;
+        // Additional tokens for file references
+        var fileTokens = analysis.FileReferences.Count * 15;
         
-        return baseTokens + (analysis.TotalOperations * perOpTokens) + complexityTokens;
+        return baseTokens + (analysis.TotalOperations * perOpTokens) + fileTokens;
     }
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
@@ -924,12 +803,11 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         public double SuccessRate { get; set; }
         public string EstimatedExecutionTime { get; set; } = "0ms";
         public int TotalResultItems { get; set; }
-        public int AverageTokensPerOperation => TotalOperations > 0 ? 200 : 0; // Rough estimate
+        public int AverageTokensPerOperation => TotalOperations > 0 ? 150 : 0; // Reduced for simpler operations
         
         public Dictionary<string, int> OperationTypeCounts { get; set; } = new();
         public Dictionary<string, int> ErrorSummary { get; set; } = new();
         public Dictionary<string, int> FileReferences { get; set; } = new();
-        public Dictionary<string, int> SymbolReferences { get; set; } = new();
         public List<string> Patterns { get; set; } = new();
         public List<string> Correlations { get; set; } = new();
     }
