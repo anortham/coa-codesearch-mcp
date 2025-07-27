@@ -35,7 +35,7 @@ The server uses `appsettings.json` for configuration. You can also override sett
     "EnableDiagnostics": true,        // Enable detailed diagnostic information
     "ParallelismDegree": 4,           // Number of parallel operations allowed
     "CacheSettings": {
-      "MaxCachedWorkspaces": 5,       // Maximum cached Roslyn workspaces
+      "MaxCachedWorkspaces": 5,       // Maximum cached search indexes
       "WorkspaceEvictionTime": "00:30:00", // Cache eviction timeout
       "EnableSemanticModelCache": true // Cache semantic models for performance
     }

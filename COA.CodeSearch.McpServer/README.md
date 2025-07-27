@@ -1,13 +1,13 @@
 # COA CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server that provides Language Server Protocol (LSP)-like capabilities for navigating and searching codebases across multiple languages. Uses Roslyn for C# analysis and is being expanded to support Blazor/Razor files and other file types.
+A high-performance Model Context Protocol (MCP) server for blazing-fast code search and intelligent memory management. Built with .NET 9.0, featuring Lucene-powered millisecond search and AI-optimized architecture for pattern matching and content analysis.
 
 ## Features
 
 - **Go to Definition**: Navigate to symbol definitions
 - **Find References**: Find all references to a symbol
 - **Search Symbols**: Search for symbols by name pattern with wildcard and fuzzy matching support
-- **Roslyn-powered**: Leverages Microsoft's Roslyn compiler platform for accurate C# code analysis
+- **AI-Optimized Architecture**: Pattern matching and content analysis for AI assistants
 - **Workspace caching**: Efficient caching with LRU eviction for better performance
 - **MSBuild integration**: Loads and analyzes complete .NET solutions and projects
 
@@ -106,7 +106,7 @@ The server can be configured using `appsettings.json`:
   "Logging": {
     "LogLevel": {
       "Default": "Information",
-      "COA.Roslyn": "Debug"
+      "COA.CodeSearch": "Debug"
     }
   },
   "McpServer": {
@@ -144,7 +144,7 @@ Adjust the `MaxWorkspaces` setting in `appsettings.json` to limit cached workspa
 COA.CodeSearch.McpServer/
 ├── Program.cs                     # Entry point and MCP server setup
 ├── Services/
-│   └── RoslynWorkspaceService.cs  # Manages Roslyn workspaces
+│   └── LuceneIndexService.cs      # Manages search indexes
 ├── Tools/
 │   ├── GoToDefinitionTool.cs      # Navigate to definitions
 │   ├── FindReferencesTool.cs      # Find all references
@@ -158,7 +158,7 @@ COA.CodeSearch.McpServer/
 ### Adding New Tools
 
 1. Create a new tool class in the `Tools` folder
-2. Implement the tool logic using Roslyn APIs
+2. Implement the tool logic using search and memory APIs
 3. Register the tool in `Program.cs`
 4. Add tests in the test project
 
