@@ -496,13 +496,27 @@ public class RazorLspClient : IDisposable
 
     private async Task<JsonNode?> SendInitializeRequestAsync(CancellationToken cancellationToken)
     {
+        // Get the current working directory as the workspace root
+        var workspaceRoot = Directory.GetCurrentDirectory();
+        var rootUri = $"file:///{workspaceRoot.Replace('\\', '/')}";
+        
         var initializeParams = new JsonObject
         {
             ["processId"] = Environment.ProcessId,
+            ["rootPath"] = workspaceRoot,
+            ["rootUri"] = rootUri,
             ["clientInfo"] = new JsonObject
             {
                 ["name"] = "COA CodeSearch MCP Server",
                 ["version"] = "1.0.0"
+            },
+            ["workspaceFolders"] = new JsonArray
+            {
+                new JsonObject
+                {
+                    ["uri"] = rootUri,
+                    ["name"] = Path.GetFileName(workspaceRoot) ?? "workspace"
+                }
             },
             ["capabilities"] = new JsonObject
             {
