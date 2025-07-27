@@ -1,11 +1,12 @@
 using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
+using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
-/// Resource provider that exposes indexed workspace files as browsable resources.
-/// Allows clients to discover and read files that have been indexed by CodeSearch.
+/// Resource provider that exposes indexed workspace files as browsable resources
+/// and provides rich context about workspaces for AI agents.
 /// </summary>
 public class WorkspaceResourceProvider : IResourceProvider
 {
@@ -51,6 +52,39 @@ public class WorkspaceResourceProvider : IResourceProvider
                     MimeType = "application/json"
                 });
 
+                // Add workspace context resources
+                resources.Add(new Resource
+                {
+                    Uri = $"{Scheme}://{Uri.EscapeDataString(workspacePath)}/context/overview",
+                    Name = $"Context: {workspaceName} Overview",
+                    Description = $"Workspace overview including file counts, languages, and structure",
+                    MimeType = "application/json"
+                });
+
+                resources.Add(new Resource
+                {
+                    Uri = $"{Scheme}://{Uri.EscapeDataString(workspacePath)}/context/languages",
+                    Name = $"Context: {workspaceName} Languages",
+                    Description = $"Programming languages used in the workspace with statistics",
+                    MimeType = "application/json"
+                });
+
+                resources.Add(new Resource
+                {
+                    Uri = $"{Scheme}://{Uri.EscapeDataString(workspacePath)}/context/dependencies",
+                    Name = $"Context: {workspaceName} Dependencies",
+                    Description = $"Project dependencies and package information",
+                    MimeType = "application/json"
+                });
+
+                resources.Add(new Resource
+                {
+                    Uri = $"{Scheme}://{Uri.EscapeDataString(workspacePath)}/context/recent-changes",
+                    Name = $"Context: {workspaceName} Recent Changes",
+                    Description = $"Recently modified files and areas of active development",
+                    MimeType = "application/json"
+                });
+
                 // Add directories as resources
                 if (Directory.Exists(workspacePath))
                 {
@@ -93,6 +127,12 @@ public class WorkspaceResourceProvider : IResourceProvider
         try
         {
             // Extract path from URI
+            // Check if this is a context resource
+            if (uri.Contains("/context/"))
+            {
+                return await ReadContextResourceAsync(uri, cancellationToken);
+            }
+
             var path = ExtractPathFromUri(uri);
             if (string.IsNullOrEmpty(path))
             {
@@ -268,5 +308,289 @@ public class WorkspaceResourceProvider : IResourceProvider
             ".yml" or ".yaml" => "text/yaml",
             _ => "text/plain"
         };
+    }
+
+    private async Task<ReadResourceResult> ReadContextResourceAsync(string uri, CancellationToken cancellationToken)
+    {
+        var result = new ReadResourceResult();
+
+        try
+        {
+            // Extract workspace path and context type from URI
+            var parts = uri.Split("/context/");
+            if (parts.Length != 2)
+            {
+                _logger.LogWarning("Invalid context resource URI format: {Uri}", uri);
+                return result;
+            }
+
+            var workspacePathEncoded = parts[0].Replace($"{Scheme}://", "");
+            var contextType = parts[1];
+            var workspacePath = Uri.UnescapeDataString(workspacePathEncoded);
+
+            if (!Directory.Exists(workspacePath))
+            {
+                _logger.LogWarning("Workspace path does not exist: {Path}", workspacePath);
+                return result;
+            }
+
+            object? contextData = contextType switch
+            {
+                "overview" => await GetWorkspaceOverviewAsync(workspacePath, cancellationToken),
+                "languages" => await GetWorkspaceLanguagesAsync(workspacePath, cancellationToken),
+                "dependencies" => await GetWorkspaceDependenciesAsync(workspacePath, cancellationToken),
+                "recent-changes" => await GetRecentChangesAsync(workspacePath, cancellationToken),
+                _ => null
+            };
+
+            if (contextData == null)
+            {
+                _logger.LogWarning("Unknown context type: {ContextType}", contextType);
+                return result;
+            }
+
+            result.Contents.Add(new ResourceContent
+            {
+                Uri = uri,
+                MimeType = "application/json",
+                Text = JsonSerializer.Serialize(contextData, new JsonSerializerOptions
+                {
+                    WriteIndented = true,
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+                })
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error reading context resource: {Uri}", uri);
+        }
+
+        return result;
+    }
+
+    private async Task<object> GetWorkspaceOverviewAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var files = Directory.GetFiles(workspacePath, "*", SearchOption.AllDirectories);
+        var languages = new Dictionary<string, int>();
+        var totalSize = 0L;
+        var fileCount = 0;
+
+        foreach (var file in files)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            var extension = Path.GetExtension(file).ToLowerInvariant();
+            if (ShouldIncludeFile(file))
+            {
+                fileCount++;
+                var fileInfo = new FileInfo(file);
+                totalSize += fileInfo.Length;
+
+                if (!string.IsNullOrEmpty(extension))
+                {
+                    languages[extension] = languages.GetValueOrDefault(extension, 0) + 1;
+                }
+            }
+        }
+
+        var directories = Directory.GetDirectories(workspacePath, "*", SearchOption.AllDirectories)
+            .Where(d => ShouldIncludeDirectory(Path.GetFileName(d)))
+            .Count();
+
+        return new
+        {
+            workspacePath = workspacePath,
+            workspaceName = Path.GetFileName(workspacePath),
+            fileCount = fileCount,
+            directoryCount = directories,
+            totalSizeBytes = totalSize,
+            totalSizeMB = totalSize / (1024.0 * 1024.0),
+            languages = languages.OrderByDescending(kvp => kvp.Value).ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+            primaryLanguage = languages.OrderByDescending(kvp => kvp.Value).FirstOrDefault().Key ?? "unknown",
+            indexed = (await _indexService.GetAllIndexMappingsAsync()).ContainsKey(workspacePath),
+            lastScanned = DateTime.UtcNow
+        };
+    }
+
+    private async Task<object> GetWorkspaceLanguagesAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var languageStats = new Dictionary<string, LanguageStats>();
+        var files = Directory.GetFiles(workspacePath, "*", SearchOption.AllDirectories);
+
+        foreach (var file in files)
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            var extension = Path.GetExtension(file).ToLowerInvariant();
+            if (ShouldIncludeFile(file))
+            {
+                var language = GetLanguageFromExtension(extension);
+                if (!languageStats.ContainsKey(language))
+                {
+                    languageStats[language] = new LanguageStats { Language = language };
+                }
+
+                var stats = languageStats[language];
+                stats.FileCount++;
+                stats.TotalBytes += new FileInfo(file).Length;
+                stats.Extensions.Add(extension);
+            }
+        }
+
+        return new
+        {
+            languages = languageStats.Values.OrderByDescending(l => l.FileCount).ToList(),
+            totalLanguages = languageStats.Count,
+            primaryLanguage = languageStats.Values.OrderByDescending(l => l.FileCount).FirstOrDefault()?.Language ?? "unknown"
+        };
+    }
+
+    private async Task<object> GetWorkspaceDependenciesAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var dependencies = new List<object>();
+
+        // Check for .NET projects
+        var csprojFiles = Directory.GetFiles(workspacePath, "*.csproj", SearchOption.AllDirectories);
+        if (csprojFiles.Any())
+        {
+            dependencies.Add(new
+            {
+                type = ".NET",
+                projectFiles = csprojFiles.Select(Path.GetFileName).ToList(),
+                count = csprojFiles.Length
+            });
+        }
+
+        // Check for Node.js projects
+        var packageJsonFiles = Directory.GetFiles(workspacePath, "package.json", SearchOption.AllDirectories);
+        if (packageJsonFiles.Any())
+        {
+            dependencies.Add(new
+            {
+                type = "Node.js",
+                projectFiles = packageJsonFiles.Select(Path.GetFileName).ToList(),
+                count = packageJsonFiles.Length
+            });
+        }
+
+        // Check for Python projects
+        var requirementsFiles = Directory.GetFiles(workspacePath, "requirements.txt", SearchOption.AllDirectories);
+        if (requirementsFiles.Any())
+        {
+            dependencies.Add(new
+            {
+                type = "Python",
+                projectFiles = requirementsFiles.Select(Path.GetFileName).ToList(),
+                count = requirementsFiles.Length
+            });
+        }
+
+        await Task.CompletedTask;
+
+        return new
+        {
+            workspacePath = workspacePath,
+            dependencies = dependencies,
+            hasMultipleProjectTypes = dependencies.Count > 1
+        };
+    }
+
+    private async Task<object> GetRecentChangesAsync(string workspacePath, CancellationToken cancellationToken)
+    {
+        var recentFiles = new List<object>();
+        var cutoffTime = DateTime.UtcNow.AddDays(-7);
+        var files = Directory.GetFiles(workspacePath, "*", SearchOption.AllDirectories);
+
+        foreach (var file in files.Take(1000)) // Limit to prevent overwhelming
+        {
+            if (cancellationToken.IsCancellationRequested)
+                break;
+
+            if (ShouldIncludeFile(file))
+            {
+                var fileInfo = new FileInfo(file);
+                if (fileInfo.LastWriteTimeUtc >= cutoffTime)
+                {
+                    recentFiles.Add(new
+                    {
+                        path = file,
+                        relativePath = Path.GetRelativePath(workspacePath, file),
+                        lastModified = fileInfo.LastWriteTimeUtc,
+                        sizeBytes = fileInfo.Length,
+                        extension = fileInfo.Extension
+                    });
+                }
+            }
+        }
+
+        var orderedFiles = recentFiles
+            .OrderByDescending(f => ((dynamic)f).lastModified)
+            .Take(50)
+            .ToList();
+
+        var hotspots = orderedFiles
+            .GroupBy(f => Path.GetDirectoryName(((dynamic)f).relativePath))
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .Select(g => new { directory = g.Key, changeCount = g.Count() })
+            .ToList();
+
+        await Task.CompletedTask;
+
+        return new
+        {
+            workspacePath = workspacePath,
+            timeRange = "last7days",
+            totalChangedFiles = recentFiles.Count,
+            recentFiles = orderedFiles,
+            hotspots = hotspots
+        };
+    }
+
+    private string GetLanguageFromExtension(string extension)
+    {
+        return extension.ToLowerInvariant() switch
+        {
+            ".cs" => "C#",
+            ".js" => "JavaScript",
+            ".ts" => "TypeScript",
+            ".py" => "Python",
+            ".java" => "Java",
+            ".cpp" or ".cc" or ".cxx" => "C++",
+            ".c" => "C",
+            ".h" or ".hpp" => "C/C++ Header",
+            ".go" => "Go",
+            ".rs" => "Rust",
+            ".rb" => "Ruby",
+            ".php" => "PHP",
+            ".swift" => "Swift",
+            ".kt" => "Kotlin",
+            ".scala" => "Scala",
+            ".r" => "R",
+            ".m" => "Objective-C",
+            ".lua" => "Lua",
+            ".pl" => "Perl",
+            ".sh" => "Shell",
+            ".ps1" => "PowerShell",
+            ".md" => "Markdown",
+            ".json" => "JSON",
+            ".xml" => "XML",
+            ".yml" or ".yaml" => "YAML",
+            ".html" => "HTML",
+            ".css" => "CSS",
+            ".scss" or ".sass" => "SASS/SCSS",
+            ".sql" => "SQL",
+            _ => "Other"
+        };
+    }
+
+    private class LanguageStats
+    {
+        public string Language { get; set; } = "";
+        public int FileCount { get; set; }
+        public long TotalBytes { get; set; }
+        public HashSet<string> Extensions { get; set; } = new();
     }
 }
