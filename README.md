@@ -1,27 +1,24 @@
 # CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server for blazing-fast code search and navigation across multiple languages. Built with .NET 9.0, featuring Roslyn-based C# analysis, TypeScript support via tsserver, and Lucene-powered millisecond search.
+A high-performance Model Context Protocol (MCP) server for blazing-fast code search and intelligent memory management. Built with .NET 9.0, featuring Lucene-powered millisecond search and AI-optimized architecture for pattern matching and content analysis.
 
 ## 🚀 Features
 
-- **Multi-language Support**: C# (Roslyn) and TypeScript/JavaScript (tsserver)
-- **Blazing Fast Search**: Lucene indexing enables instant search across millions of lines
+- **Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **Smart Memory System**: Persistent architectural knowledge and decision tracking
-- **Progressive Disclosure**: AI-optimized responses with automatic summarization
+- **AI-Optimized Architecture**: Pattern matching and content analysis for AI assistants
+- **Progressive Disclosure**: Intelligent summarization with drill-down capabilities
 - **Real-time Updates**: File watchers automatically update indexes on changes
 
 ### Performance
-- Startup: < 100ms (with AOT)
-- Text search: < 50ms indexed
-- Go to definition: < 50ms cached
-- Memory usage: < 500MB typical
+- Startup: < 500ms (simplified architecture)
+- Text search: < 10ms indexed
+- File search: < 50ms
+- Memory usage: < 200MB typical
 
 ## 📋 Prerequisites
 
 - .NET 9.0 SDK or later
-- Node.js/npm (for TypeScript support)
-- **TypeScript globally installed**: `npm install -g typescript` (required for TypeScript tools)
-- Visual Studio 2022 or Build Tools (for MSBuild)
 
 ## 🚀 Quick Start
 
@@ -45,35 +42,14 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 
 ## 🛠️ Available Tools
 
-### Search & Navigation
+### Text Search & Analysis
 - `index_workspace` - Build search index (required for fast search tools)
-- `text_search` - Search text across codebase
+- `text_search` - Search text across codebase with advanced filters
 - `file_search` - Find files by name with fuzzy matching
-- `directory_search` - Find directories
+- `directory_search` - Find directories with pattern matching
 - `recent_files` - Find recently modified files
 - `similar_files` - Find files with similar content
-- `file_size_analysis` - Analyze file sizes
-
-### C# Analysis
-- `search_symbols` - Find C# symbols by name
-- `advanced_symbol_search` - Search with semantic filters
-- `go_to_definition` - Navigate to definitions
-- `find_references` - Find all usages
-- `get_implementations` - Find interface implementations
-- `get_call_hierarchy` - Analyze call chains
-- `get_hover_info` - Get type information
-- `get_document_symbols` - Get file structure
-- `get_diagnostics` - Find compilation errors
-- `dependency_analysis` - Analyze dependencies
-- `project_structure_analysis` - Analyze solution structure
-- `rename_symbol` - Safely rename symbols
-
-### TypeScript Support
-- `search_typescript` - Find TypeScript symbols
-- `typescript_go_to_definition` - Navigate to definitions
-- `typescript_find_references` - Find all usages
-- `typescript_rename_symbol` - Rename across codebase
-- `typescript_hover_info` - Get type information
+- `file_size_analysis` - Analyze file sizes and distributions
 
 ### Memory System
 - `recall_context` - Load relevant context (use at session start!)
@@ -109,7 +85,8 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 - `list_checklists` - List all checklists
 
 ### Utilities
-- `batch_operations` - Execute multiple operations in parallel
+- `batch_operations` - Execute multiple search operations in parallel
+- `index_health_check` - Check index status and performance
 - `log_diagnostics` - Manage debug logs
 - `get_version` - Get server version info
 
@@ -159,14 +136,14 @@ recall_context "what I was working on"
 
 ### Daily Usage
 ```bash
-# Search for code
+# Search for code patterns
 text_search --query "authentication" --workspacePath "C:/YourProject"
 
-# Navigate to definition
-go_to_definition --filePath "Auth.cs" --line 25 --column 15
+# Find similar implementations
+similar_files --sourceFilePath "AuthService.cs" --workspacePath "C:/YourProject"
 
-# Find all usages
-find_references --filePath "IUserService.cs" --line 10 --column 15
+# Analyze recent changes
+recent_files --timeFrame "24h" --workspacePath "C:/YourProject"
 ```
 
 ### Memory System
@@ -190,12 +167,6 @@ backup_memories  # Creates JSON in .codesearch/backups/
 
 ## 🐛 Troubleshooting
 
-**TypeScript tools failing**
-- Install Node.js from https://nodejs.org/
-
-**MSBuild not found**
-- Install Visual Studio 2022 or Build Tools
-
 **Stuck indexes**
 - Delete `.codesearch/index/*/write.lock` files
 
@@ -211,4 +182,4 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## 🙏 Acknowledgments
 
-Built with [Roslyn](https://github.com/dotnet/roslyn), [Lucene.NET](https://lucenenet.apache.org/), [TypeScript](https://github.com/microsoft/TypeScript), and implements [Model Context Protocol](https://modelcontextprotocol.io/).
+Built with [Lucene.NET](https://lucenenet.apache.org/) and implements [Model Context Protocol](https://modelcontextprotocol.io/). Optimized for AI assistant workflows with pattern matching and intelligent memory management.

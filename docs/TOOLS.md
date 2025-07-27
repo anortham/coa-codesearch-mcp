@@ -13,29 +13,15 @@ All code analysis tools now provide AI-optimized responses with:
 
 ## Table of Contents
 
-- [Search & Navigation (Core Tools)](#search--navigation-core-tools)
-  - [go_to_definition](#go_to_definition)
-  - [find_references](#find_references)
-  - [search_symbols](#search_symbols)
-  - [get_implementations](#get_implementations)
-- [Fast Search Tools (Lucene-powered)](#fast-search-tools-lucene-powered)
+- [Text Search & Analysis (Core Tools)](#text-search--analysis-core-tools)
   - [index_workspace](#index_workspace) 🏗️
-  - [fast_text_search](#fast_text_search)
-  - [fast_file_search](#fast_file_search)
-  - [fast_recent_files](#fast_recent_files)
-  - [fast_file_size_analysis](#fast_file_size_analysis)
-  - [fast_similar_files](#fast_similar_files)
-  - [fast_directory_search](#fast_directory_search)
-- [Code Analysis](#code-analysis)
-  - [get_hover_info](#get_hover_info)
-  - [get_document_symbols](#get_document_symbols)
-  - [get_diagnostics](#get_diagnostics)
-  - [get_call_hierarchy](#get_call_hierarchy)
-  - [rename_symbol](#rename_symbol)
+  - [text_search](#text_search)
+  - [file_search](#file_search)
+  - [recent_files](#recent_files)
+  - [file_size_analysis](#file_size_analysis)
+  - [similar_files](#similar_files)
+  - [directory_search](#directory_search)
   - [batch_operations](#batch_operations)
-  - [advanced_symbol_search](#advanced_symbol_search)
-  - [dependency_analysis](#dependency_analysis)
-  - [project_structure_analysis](#project_structure_analysis)
 - [Memory System](#memory-system)
   - [recall_context](#recall_context)
   - [flexible_store_memory](#flexible_store_memory)
@@ -64,203 +50,13 @@ All code analysis tools now provide AI-optimized responses with:
   - [update_checklist_item](#update_checklist_item)
   - [view_checklist](#view_checklist)
   - [list_checklists](#list_checklists)
-- [TypeScript-specific](#typescript-specific)
-  - [search_typescript](#search_typescript)
-  - [typescript_go_to_definition](#typescript_go_to_definition)
-  - [typescript_find_references](#typescript_find_references)
-  - [typescript_rename_symbol](#typescript_rename_symbol)
-  - [typescript_hover_info](#typescript_hover_info)
 - [Utilities](#utilities)
-  - [set_logging](#set_logging)
+  - [index_health_check](#index_health_check)
+  - [log_diagnostics](#log_diagnostics)
   - [get_version](#get_version)
 
-## Search & Navigation (Core Tools)
+## Text Search & Analysis (Core Tools)
 
-### go_to_definition
-
-Navigate to the definition of a symbol at a specific position. Auto-detects language (C# or TypeScript) based on file extension.
-
-**Parameters:**
-- `filePath` (string, required): The absolute path to the file
-- `line` (integer, required): The line number (1-based)
-- `column` (integer, required): The column number (1-based)
-
-**Example:**
-```
-go_to_definition --filePath "C:/project/UserService.cs" --line 25 --column 15
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "locations": [
-    {
-      "filePath": "C:/project/Models/User.cs",
-      "line": 10,
-      "column": 14,
-      "preview": "public class User",
-      "symbolName": "User",
-      "kind": "Class"
-    }
-  ]
-}
-```
-
-**Tips:**
-- Automatically delegates to TypeScript for .ts/.js files
-- Returns multiple locations for partial classes
-- ~50ms response time for cached workspaces
-
-### find_references
-
-Find all references to a C# symbol. For TypeScript references, use typescript_find_references. Provides AI-optimized intelligent summaries and insights.
-
-**Parameters:**
-- `filePath` (string, required): The absolute path to the file
-- `line` (integer, required): The line number (1-based)
-- `column` (integer, required): The column number (1-based)
-- `includeDeclaration` (boolean, optional): Include the declaration (default: true)
-- `responseMode` (string, optional): "full" or "summary" (auto-switches for large results)
-
-**Example:**
-```
-find_references --filePath "C:/project/Models/User.cs" --line 10 --column 14
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "full",
-  "references": [
-    {
-      "filePath": "C:/project/UserService.cs",
-      "line": 25,
-      "column": 15,
-      "preview": "var user = new User();",
-      "kind": "ObjectCreation"
-    }
-  ],
-  "totalCount": 47,
-  "estimatedTokens": 3500
-}
-```
-
-**Summary Mode Example:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "autoModeSwitch": true,
-  "data": {
-    "totalReferences": 47,
-    "fileCount": 12,
-    "summary": "UserService is heavily referenced across the codebase",
-    "insights": [
-      "Primary usage in Controllers (65% of references)",
-      "Consider interface segregation - only 3 methods actually used"
-    ],
-    "distribution": {
-      "Controllers": 31,
-      "Services": 12,
-      "Tests": 4
-    },
-    "hotspots": [
-      {"file": "UserController.cs", "count": 15, "percentage": 31.9}
-    ],
-    "nextActions": [
-      "Review UserController.cs for potential service injection optimization"
-    ]
-  }
-}
-```
-
-**Tips:**
-- Auto-switches to summary mode if results exceed 5000 tokens
-- Use `responseMode: "summary"` for large codebases
-- Includes semantic understanding (not just text matching)
-- Provides actionable insights and recommendations
-
-### search_symbols
-
-Search for C# symbols by name pattern with AI-optimized insights. Supports wildcards and fuzzy matching.
-
-**Parameters:**
-- `workspacePath` (string, required): Path to solution or project
-- `pattern` (string, required): Search pattern (supports wildcards)
-- `fuzzy` (boolean, optional): Use fuzzy matching (default: false)
-- `kinds` (array, optional): Filter by symbol types ["class", "interface", "method", etc.]
-- `maxResults` (integer, optional): Maximum results (default: 100)
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-search_symbols --workspacePath "C:/project/MyApp.sln" --pattern "*Service" --responseMode "summary"
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "totalSymbols": 15,
-    "distribution": {
-      "class": 10,
-      "interface": 5
-    },
-    "insights": [
-      "Service layer well-defined with consistent naming",
-      "Consider extracting common interface for services"
-    ],
-    "hotspots": [
-      {"namespace": "MyApp.Services", "count": 12}
-    ]
-  }
-}
-```
-
-**Tips:**
-- AI-optimized with pattern analysis
-- Use fuzzy matching for typo tolerance
-- C# only - use `search_typescript` for TypeScript
-
-### get_implementations
-
-Find all implementations of an interface or abstract class with AI-optimized insights (C# only).
-
-**Parameters:**
-- `filePath` (string, required): Path to the source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-get_implementations --filePath "C:/project/IUserService.cs" --line 5 --column 18
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "interface": "IUserService",
-    "implementationCount": 3,
-    "insights": [
-      "Multiple implementations suggest strategy pattern",
-      "Consider dependency injection for flexibility"
-    ],
-    "distribution": {
-      "byProject": {"Core": 2, "Tests": 1}
-    }
-  }
-}
-```
-
-## Fast Search Tools (Lucene-powered)
 
 ### index_workspace
 
@@ -296,7 +92,7 @@ index_workspace --workspacePath "C:/project" --forceRebuild false
 - Auto-reindexes on startup if configured
 - File watcher updates index automatically
 
-### fast_text_search
+### text_search
 
 Blazing fast text search across entire codebase with AI-optimized insights. Searches millions of lines in <50ms.
 
@@ -345,7 +141,7 @@ fast_text_search --query "authentication" --workspacePath "C:/project" --respons
 - Use filePattern for faster searches in specific areas
 - Provides insights on code organization
 
-### fast_file_search
+### file_search
 
 Find files by name with fuzzy matching, typo correction, and AI-optimized insights.
 
@@ -391,7 +187,7 @@ fast_file_search --query "UserServce~" --workspacePath "C:/project" --searchType
 - Wildcard support: User*.cs
 - Provides directory organization insights
 
-### fast_recent_files
+### recent_files
 
 Find recently changed files in the last 30min/24h/7d/etc.
 
@@ -433,7 +229,7 @@ fast_recent_files --workspacePath "C:/project" --timeFrame "4h" --extensions [".
 - Shows friendly "time ago" format
 - Instant results from index
 
-### fast_file_size_analysis
+### file_size_analysis
 
 Analyze files by size - find large files, empty files, or size distributions.
 
@@ -479,7 +275,7 @@ fast_file_size_analysis --workspacePath "C:/project" --mode "largest" --maxResul
 }
 ```
 
-### fast_similar_files
+### similar_files
 
 Find files with similar content using "More Like This" algorithm.
 
@@ -525,7 +321,7 @@ fast_similar_files --sourceFilePath "C:/project/UserService.cs" --workspacePath 
 - Shows why files are similar
 - Adjust term frequencies for precision
 
-### fast_directory_search
+### directory_search
 
 Search for directories/folders with fuzzy matching.
 
@@ -559,210 +355,6 @@ fast_directory_search --query "Servces~" --workspacePath "C:/project" --searchTy
 }
 ```
 
-## Code Analysis
-
-### get_hover_info
-
-Get detailed type information and documentation (like IDE hover tooltips).
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-
-**Example:**
-```
-get_hover_info --filePath "C:/project/UserService.cs" --line 25 --column 20
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "info": {
-    "symbolName": "CreateUserAsync",
-    "type": "Task<User>",
-    "documentation": "Creates a new user in the system",
-    "signature": "public async Task<User> CreateUserAsync(UserDto dto)",
-    "namespace": "MyApp.Services"
-  }
-}
-```
-
-**Tips:**
-- Works for both C# and TypeScript
-- Shows XML documentation when available
-- Includes parameter information
-
-### get_document_symbols
-
-Get complete outline of all symbols in a file (C# only).
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `includeMembers` (boolean, optional): Include class members (default: true)
-
-**Example:**
-```
-get_document_symbols --filePath "C:/project/UserService.cs"
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "symbols": [
-    {
-      "name": "UserService",
-      "kind": "Class",
-      "line": 10,
-      "children": [
-        {
-          "name": "CreateUserAsync",
-          "kind": "Method",
-          "line": 25,
-          "modifiers": ["public", "async"]
-        }
-      ]
-    }
-  ]
-}
-```
-
-### get_diagnostics
-
-Check for compilation errors and warnings with AI-optimized priority recommendations (C# only).
-
-**Parameters:**
-- `path` (string, required): File, project, or solution path
-- `severities` (array, optional): Filter by ["Error", "Warning", "Info"]
-- `includeSuppressions` (boolean, optional): Include suppressed diagnostics
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-get_diagnostics --path "C:/project/MyApp.sln" --severities ["Error", "Warning"]
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "totalDiagnostics": 15,
-    "bySeverity": {
-      "Error": 2,
-      "Warning": 13
-    },
-    "insights": [
-      "2 critical errors blocking compilation",
-      "Most warnings are nullable reference types"
-    ],
-    "priorities": [
-      "Fix CS0246 in UserService.cs - missing namespace",
-      "Address CS8618 warnings by initializing properties"
-    ],
-    "hotspots": [
-      {"file": "UserService.cs", "count": 5}
-    ]
-  }
-}
-```
-
-### get_call_hierarchy
-
-Trace method call chains with circular dependency detection and AI-optimized insights (C# only).
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-- `direction` (string, optional): "incoming", "outgoing", or "both"
-- `maxDepth` (integer, optional): Maximum depth to traverse (default: 2)
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-get_call_hierarchy --filePath "C:/project/UserService.cs" --line 25 --column 20 --direction "both"
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "method": "CreateUserAsync",
-    "callStats": {
-      "incomingPaths": 5,
-      "outgoingCalls": 8,
-      "maxDepth": 3
-    },
-    "insights": [
-      "Method is a central orchestration point",
-      "Circular dependency detected: CreateUser -> ValidateUser -> CreateUser"
-    ],
-    "criticalPaths": [
-      "AuthController.RegisterUser -> UserService.CreateUserAsync -> Database.SaveUser"
-    ],
-    "recommendations": [
-      "Consider breaking circular dependency with events",
-      "High fan-out suggests need for decomposition"
-    ]
-  }
-}
-```
-
-### rename_symbol
-
-Safely rename symbols across entire codebase with AI-powered risk assessment (C# only).
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-- `newName` (string, required): New name for the symbol
-- `preview` (boolean, optional): Preview without applying (default: true)
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-rename_symbol --filePath "C:/project/User.cs" --line 10 --column 14 --newName "Customer" --preview true
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "operation": "rename_symbol",
-  "symbol": {
-    "old": "User",
-    "new": "Customer",
-    "type": "class",
-    "scope": "public"
-  },
-  "impact": {
-    "refs": 47,
-    "files": 15,
-    "risk": "medium"
-  },
-  "preview": true,
-  "hotspots": [
-    {"file": "UserService.cs", "refs": 12}
-  ],
-  "actions": [
-    {"id": "review_hotspots", "priority": "recommended"},
-    {"id": "apply", "priority": "normal"}
-  ]
-}
-```
-
-**Tips:**
-- AI assesses risk based on scope and usage
-- Always preview first
-- Uses Roslyn refactoring engine
-- Provides impact analysis before applying
 
 ### batch_operations
 
@@ -814,129 +406,6 @@ batch_operations --operations [
 - Provides cross-operation insights
 - Great for comprehensive codebase analysis
 
-### advanced_symbol_search
-
-Search C# symbols with semantic filters.
-
-**Parameters:**
-- `workspacePath` (string, required): Path to workspace
-- `query` (string, required): Search query
-- `filters` (object, optional): Advanced filters
-  - `accessibility`: ["public", "private", "internal"]
-  - `modifiers`: ["static", "abstract", "virtual"]
-  - `symbolKinds`: ["Class", "Interface", "Method"]
-  - `namespaces`: ["MyApp.Services"]
-  - `hasAttributes`: ["Authorize", "Obsolete"]
-  - `returnType`: "Task<*>"
-
-**Example:**
-```
-advanced_symbol_search --workspacePath "C:/project" --query "Service" --filters {
-  "accessibility": ["public"],
-  "symbolKinds": ["Class"],
-  "modifiers": ["abstract"]
-}
-```
-
-### dependency_analysis
-
-Analyze code dependencies with circular dependency detection and architectural insights (C# only).
-
-**Parameters:**
-- `symbol` (string, required): Symbol to analyze
-- `workspacePath` (string, required): Path to workspace
-- `direction` (string, optional): "incoming", "outgoing", or "both"
-- `depth` (integer, optional): Analysis depth (default: 3)
-- `includeExternalDependencies` (boolean, optional): Include external deps
-- `includeTests` (boolean, optional): Include test projects
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-dependency_analysis --symbol "UserService" --workspacePath "C:/project" --direction "both"
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "symbol": "UserService",
-    "metrics": {
-      "directDependencies": 5,
-      "transitiveDependencies": 15,
-      "couplingScore": 0.72
-    },
-    "insights": [
-      "High coupling score indicates tight dependencies",
-      "Circular dependency creates maintenance risk"
-    ],
-    "circularDependencies": [
-      "UserService -> AuthService -> UserService"
-    ],
-    "refactoringOpportunities": [
-      "Extract IUserService interface to reduce coupling",
-      "Use events to break circular dependency"
-    ],
-    "architecturalPatterns": [
-      "Repository pattern partially implemented",
-      "Consider full CQRS for complex operations"
-    ]
-  }
-}
-```
-
-### project_structure_analysis
-
-Analyze .NET project structure with architectural insights and complexity metrics (.NET only).
-
-**Parameters:**
-- `workspacePath` (string, required): Path to solution/project
-- `includeFiles` (boolean, optional): Include file listings
-- `includeMetrics` (boolean, optional): Include code metrics
-- `includeNuGetPackages` (boolean, optional): Include packages
-- `responseMode` (string, optional): "full" or "summary"
-
-**Example:**
-```
-project_structure_analysis --workspacePath "C:/project/MyApp.sln" --responseMode "summary"
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "mode": "summary",
-  "data": {
-    "overview": {
-      "totalProjects": 8,
-      "totalFiles": 1250,
-      "totalLinesOfCode": 125000
-    },
-    "insights": [
-      "Well-structured layered architecture detected",
-      "Core project has 36% of codebase - consider splitting"
-    ],
-    "architecturalPatterns": [
-      "Clean Architecture with clear separation",
-      "Repository pattern consistently used"
-    ],
-    "hotspots": [
-      {"project": "MyApp.Core", "complexity": "high", "loc": 45000}
-    ],
-    "metrics": {
-      "averageComplexity": 3.2,
-      "highComplexityMethods": 15,
-      "testCoverage": "estimated 65%"
-    },
-    "recommendations": [
-      "Split Core project into domain-specific modules",
-      "Add integration test project"
-    ]
-  }
-}
-```
 
 ## Memory System
 
@@ -1515,195 +984,69 @@ List all available checklists.
 list_checklists --onlyShared true
 ```
 
-## TypeScript-specific
 
-### search_typescript
+## Utilities
 
-Search for TypeScript symbols.
+### index_health_check
+
+Perform comprehensive health check of Lucene indexes with detailed metrics and recommendations.
 
 **Parameters:**
-- `symbolName` (string, required): Symbol name to search
-- `workspacePath` (string, required): Path to workspace
-- `mode` (string, optional): "definition", "references", or "both"
-- `maxResults` (integer, optional): Maximum results (default: 50)
+- `includeMetrics` (boolean, optional): Include performance metrics (default: true)
+- `includeCircuitBreakerStatus` (boolean, optional): Include circuit breaker status (default: true)
 
 **Example:**
 ```
-search_typescript --symbolName "UserComponent" --workspacePath "C:/project" --mode "both"
+index_health_check
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "results": [
-    {
-      "name": "UserComponent",
-      "kind": "class",
-      "filePath": "C:/project/components/UserComponent.tsx",
-      "line": 15,
-      "column": 7
-    }
+  "status": "healthy",
+  "diagnostics": {
+    "indexCount": 3,
+    "totalSize": "156.2 MB",
+    "healthyIndexes": 3,
+    "corruptIndexes": 0
+  },
+  "recommendations": [
+    "All indexes are healthy",
+    "Consider optimization for improved search performance"
   ]
 }
 ```
 
-### typescript_go_to_definition
+### log_diagnostics
 
-Navigate to TypeScript definitions using tsserver.
+View and manage log files with actions for status, list, and cleanup.
 
 **Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
+- `action` (string, required): "status", "list", "cleanup"
+- `cleanup` (boolean, optional): For cleanup action, confirm deletion of old logs
 
 **Example:**
 ```
-typescript_go_to_definition --filePath "C:/project/app.ts" --line 10 --column 15
-```
-
-**Tips:**
-- Uses real TypeScript language server
-- Handles imports and aliases correctly
-- ~100ms response time
-
-### typescript_find_references
-
-Find all TypeScript references using tsserver.
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-- `includeDeclaration` (boolean, optional): Include declaration (default: true)
-
-**Example:**
-```
-typescript_find_references --filePath "C:/project/models/User.ts" --line 5 --column 10
-```
-
-### typescript_rename_symbol
-
-Rename TypeScript symbols with preview of all affected locations.
-
-**Parameters:**
-- `filePath` (string, required): Path to source file  
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-- `newName` (string, required): New name for the symbol
-- `preview` (boolean, optional): Preview mode (default: true)
-
-**Example:**
-```
-typescript_rename_symbol --filePath "C:/project/models/User.ts" --line 10 --column 5 --newName "Customer"
+log_diagnostics --action status
 ```
 
 **Returns:**
 ```json
 {
   "success": true,
-  "preview": true,
-  "symbol": {
-    "name": "User",
-    "kind": "interface",
-    "fullName": "User"
-  },
-  "newName": "Customer",
-  "locations": [
-    {
-      "filePath": "C:/project/models/User.ts",
-      "line": 10,
-      "column": 5
-    }
-  ],
-  "fileChanges": [
-    {
-      "filePath": "C:/project/models/User.ts",
-      "changes": [
-        {
-          "line": 10,
-          "column": 5,
-          "oldText": "User",
-          "newText": "Customer"
-        }
-      ]
-    }
-  ],
-  "metadata": {
-    "totalChanges": 15,
-    "filesAffected": 5,
-    "language": "typescript"
-  }
+  "action": "status",
+  "logDirectory": "C:/project/.codesearch/logs",
+  "currentLogFiles": 5,
+  "totalLogSize": "12.5 MB",
+  "oldestLog": "2025-01-20T10:00:00Z"
 }
 ```
 
 **Tips:**
-- Validates TypeScript identifiers
-- Shows all locations that would be renamed
-- Preview mode doesn't modify files
-- Uses tsserver for accurate rename analysis
-
-### typescript_hover_info
-
-Get TypeScript type information and documentation - shows detailed type info like IDE hover tooltips.
-
-**Parameters:**
-- `filePath` (string, required): Path to source file
-- `line` (integer, required): Line number (1-based)
-- `column` (integer, required): Column number (1-based)
-
-**Example:**
-```bash
-typescript_hover_info --filePath "C:/project/components/Button.tsx" --line 15 --column 10
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "hoverInfo": {
-    "displayString": "(property) Button.onClick: (event: MouseEvent) => void",
-    "documentation": "Handles button click events",
-    "tags": []
-  }
-}
-```
-
-**Tips:**
-- Shows complete type information including generics
-- Includes JSDoc documentation when available
-- Works with complex types, interfaces, and type aliases
-- Uses real TypeScript language server for accuracy
-
-## Utilities
-
-### set_logging
-
-Control file-based logging for debugging.
-
-**Parameters:**
-- `action` (string, required): "start", "stop", "status", "list", "setlevel", "cleanup"
-- `level` (string, optional): For start/setlevel: "Verbose", "Debug", "Information", "Warning", "Error"
-- `cleanup` (boolean, optional): For cleanup action
-
-**Example:**
-```
-set_logging --action start --level Debug
-```
-
-**Returns:**
-```json
-{
-  "success": true,
-  "message": "Logging started at Debug level",
-  "logDirectory": "C:/project/.codesearch/logs"
-}
-```
-
-**Tips:**
-- Logs never go to stdout (MCP safe)
-- Auto-rotates hourly
-- Location: `.codesearch/logs/`
+- Logs written to `.codesearch/logs` directory
+- Auto-rotates to prevent disk space issues
+- Use cleanup to remove old log files
 
 ### get_version
 
@@ -1746,60 +1089,56 @@ get_version
 ```
 1. recall_context "working on authentication"
 2. index_workspace --workspacePath "C:/project"
-3. set_logging --action start --level Debug
+3. log_diagnostics --action status
 ```
 
 ### Code Investigation Pattern
 ```
-1. fast_text_search --query "TODO" --workspacePath "C:/project"
-2. find_references --filePath "found-file.cs" --line X --column Y
-3. get_call_hierarchy --filePath "found-file.cs" --line X --column Y
-4. flexible_store_memory --type "TechnicalDebt" --content "Found TODO that needs attention"
+1. text_search --query "TODO" --workspacePath "C:/project"
+2. similar_files --sourceFilePath "found-file.cs" --workspacePath "C:/project"
+3. file_size_analysis --workspacePath "C:/project" --mode "largest"
+4. store_memory --type "TechnicalDebt" --content "Found TODO that needs attention"
 ```
 
-### Refactoring Pattern
+### Pattern Analysis Workflow
 ```
-1. search_symbols --pattern "OldName*"
-2. find_references (for each symbol found)
-3. rename_symbol --newName "NewName" --preview true
-4. rename_symbol --newName "NewName" --preview false
-5. flexible_store_memory --type "ArchitecturalDecision" --content "Renamed X to Y because..."
+1. batch_operations --operations [
+     {"operation": "text_search", "query": "authentication"},
+     {"operation": "file_search", "query": "*Service.cs"},
+     {"operation": "recent_files", "timeFrame": "24h"}
+   ]
+2. store_memory --type "CodePattern" --content "Authentication patterns analysis"
 ```
 
 ## Performance Tips
 
-1. **Always index first**: Run `index_workspace` before using fast_* tools
-2. **Use batch operations**: 10x faster than sequential operations
+1. **Always index first**: Run `index_workspace` before using search tools
+2. **Use batch operations**: Execute multiple searches in parallel for faster results
 3. **Leverage summary mode**: For large results, use `responseMode: "summary"`
-4. **Cache workspaces**: The server caches up to 5 workspaces by default
-5. **Filter early**: Use filePattern and extensions to narrow searches
+4. **Filter early**: Use filePattern and extensions to narrow searches
+5. **Monitor health**: Use `index_health_check` to ensure optimal performance
 
-## Language-Specific Notes
+## Tool Categories
 
-### C# Only Tools
-- search_symbols
-- get_implementations
-- get_document_symbols
-- get_diagnostics
-- get_call_hierarchy
-- rename_symbol
-- advanced_symbol_search
-- dependency_analysis
-- project_structure_analysis
+### Text Search Tools (Language Agnostic)
+- text_search
+- file_search
+- directory_search
+- recent_files
+- similar_files
+- file_size_analysis
+- batch_operations
 
-### TypeScript Only Tools
-- search_typescript
-- typescript_go_to_definition
-- typescript_find_references
-- typescript_rename_symbol
-- typescript_hover_info
+### Memory Management Tools
+- All memory system tools work with any language
+- Content analysis is pattern-based, not language-specific
+- Works with any text-based files
 
-### Both C# and TypeScript
-- go_to_definition
-- get_hover_info
-- All fast_* search tools
-- All memory tools
-- All utility tools
+### Utility Tools
+- index_workspace
+- index_health_check
+- log_diagnostics
+- get_version
 
 ## AI-Optimized Response Structure
 
