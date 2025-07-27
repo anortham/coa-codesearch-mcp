@@ -521,7 +521,7 @@ public class FlexibleMemoryServiceUnitTests : IDisposable
     // public async Task AnalyzeProductionSqliteBackup_ShowsCurrentState()
     // {
     //     // Analyze the SQLite backup to understand current production memory state
-    //     var sqlitePath = @"C:\source\COA Roslyn MCP\.codesearch\memories.db";
+    //     var sqlitePath = @"C:\source\COA CodeSearch MCP\.codesearch\memories.db";
     //     AnalyzeSqliteMemories.AnalyzeBackup(sqlitePath);
     // }
     
