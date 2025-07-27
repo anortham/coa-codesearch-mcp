@@ -69,6 +69,11 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
+    
+    // Idle cleanup configuration
+    private readonly Timer _idleCleanupTimer;
+    private readonly TimeSpan _idleTimeout = TimeSpan.FromMinutes(15); // Indexes idle for 15 minutes are evicted
+    private readonly int _maxIndexCount = 100; // Maximum number of indexes to keep in memory
     private volatile bool _disposed;
     
     private const string WriteLockFilename = "write.lock";
@@ -133,8 +138,84 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         
         // Note: Stuck lock cleanup now happens early in Program.cs before services start
         
+        // Initialize idle cleanup timer to run every 5 minutes
+        _idleCleanupTimer = new Timer(
+            callback: async _ => await CleanupIdleIndexesAsync(),
+            state: null,
+            dueTime: TimeSpan.FromMinutes(5),
+            period: TimeSpan.FromMinutes(5));
+        
         // Clean up any memory entries from metadata on startup
         _ = Task.Run(async () => await CleanupMemoryEntriesFromMetadataAsync().ConfigureAwait(false));
+    }
+    
+    /// <summary>
+    /// Cleanup idle indexes to prevent memory leaks
+    /// </summary>
+    private async Task CleanupIdleIndexesAsync()
+    {
+        if (_disposed) return;
+        
+        try
+        {
+            var now = DateTime.UtcNow;
+            var indexesToRemove = new List<string>();
+            
+            // First pass: identify idle indexes
+            foreach (var kvp in _indexes)
+            {
+                var context = kvp.Value;
+                var idleTime = now - context.LastAccessed;
+                
+                if (idleTime > _idleTimeout)
+                {
+                    indexesToRemove.Add(kvp.Key);
+                    _logger.LogDebug("Index {Path} has been idle for {IdleTime}, marking for removal", 
+                        kvp.Key, idleTime);
+                }
+            }
+            
+            // Also check if we need to evict based on count (LRU)
+            if (_indexes.Count > _maxIndexCount)
+            {
+                var lruCandidates = _indexes
+                    .OrderBy(kvp => kvp.Value.LastAccessed)
+                    .Take(_indexes.Count - _maxIndexCount)
+                    .Select(kvp => kvp.Key)
+                    .Where(key => !indexesToRemove.Contains(key));
+                
+                indexesToRemove.AddRange(lruCandidates);
+                _logger.LogDebug("Evicting {Count} least recently used indexes to stay under limit", 
+                    lruCandidates.Count());
+            }
+            
+            // Second pass: remove and dispose idle indexes
+            foreach (var indexPath in indexesToRemove)
+            {
+                if (_indexes.TryRemove(indexPath, out var context))
+                {
+                    try
+                    {
+                        await DisposeContextAsync(context, TimeSpan.FromSeconds(5)).ConfigureAwait(false);
+                        _logger.LogInformation("Removed idle index at {Path}", indexPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Error disposing idle index at {Path}", indexPath);
+                    }
+                }
+            }
+            
+            if (indexesToRemove.Count > 0)
+            {
+                _logger.LogInformation("Cleaned up {Count} idle indexes. Active indexes: {ActiveCount}", 
+                    indexesToRemove.Count, _indexes.Count);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during idle index cleanup");
+        }
     }
     
     /// <summary>
@@ -169,6 +250,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 }
             }
         }
+        
+        // Update last accessed time
+        context.LastAccessed = DateTime.UtcNow;
         
         // Use context-specific lock for writer operations
         using (await context.Lock.LockAsync(cancellationToken).ConfigureAwait(false))
@@ -1193,6 +1277,17 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
         
+        // Dispose the idle cleanup timer
+        try
+        {
+            _idleCleanupTimer?.Change(Timeout.Infinite, 0);
+            _idleCleanupTimer?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error disposing idle cleanup timer");
+        }
+        
         _logger.LogWarning("LuceneIndexService.DisposeAsync() completed - all Lucene resources cleaned up");
     }
     
@@ -1241,6 +1336,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 }
             }
         }
+        
+        // Update last accessed time
+        context.LastAccessed = DateTime.UtcNow;
         
         using (await context.Lock.LockAsync(cancellationToken).ConfigureAwait(false))
         {
