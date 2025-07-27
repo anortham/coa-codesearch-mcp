@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Straight blazin' fast file size analysis using Lucene's indexed size field - find large files, analyze distributions, etc.
+/// High-performance file size analysis using Lucene's indexed size field - find large files, analyze distributions, etc.
 /// </summary>
 public class FastFileSizeAnalysisTool : ITool
 {
@@ -147,7 +147,7 @@ public class FastFileSizeAnalysisTool : ITool
                 });
             }
 
-            _logger.LogInformation("Found {Count} files in {Duration}ms - straight blazin' fast!", 
+            _logger.LogInformation("Found {Count} files in {Duration}ms - high performance analysis!", 
                 results.Count, searchDuration);
 
             var response = new Dictionary<string, object>
@@ -158,7 +158,7 @@ public class FastFileSizeAnalysisTool : ITool
                 ["totalResults"] = results.Count,
                 ["searchDurationMs"] = searchDuration,
                 ["results"] = results,
-                ["performance"] = searchDuration < 10 ? "straight blazin'" : "blazin' fast"
+                ["performance"] = searchDuration < 10 ? "excellent" : "very fast"
             };
 
             if (includeAnalysis && results.Count > 0)
@@ -225,7 +225,7 @@ public class FastFileSizeAnalysisTool : ITool
             workspacePath = workspacePath,
             mode = "distribution",
             searchDurationMs = searchDuration,
-            performance = searchDuration < 50 ? "straight blazin'" : "blazin' fast",
+            performance = searchDuration < 50 ? "excellent" : "very fast",
             summary = new
             {
                 totalFiles = totalFiles,

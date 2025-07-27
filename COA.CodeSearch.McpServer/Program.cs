@@ -98,6 +98,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();

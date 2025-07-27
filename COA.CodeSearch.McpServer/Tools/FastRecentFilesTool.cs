@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Straight blazin' fast tool to find recently modified files using Lucene's indexed lastModified field
+/// High-performance tool to find recently modified files using Lucene's indexed lastModified field
 /// </summary>
 public class FastRecentFilesTool : ITool
 {
@@ -129,7 +129,7 @@ public class FastRecentFilesTool : ITool
                 results.Add(result);
             }
 
-            _logger.LogInformation("Found {Count} recent files in {Duration}ms - straight blazin' fast!", 
+            _logger.LogInformation("Found {Count} recent files in {Duration}ms - high performance search!", 
                 results.Count, searchDuration);
 
             return new
@@ -151,7 +151,7 @@ public class FastRecentFilesTool : ITool
                         .OrderByDescending(x => x.count)
                         .ToList()
                 },
-                performance = searchDuration < 10 ? "straight blazin'" : "blazin' fast"
+                performance = searchDuration < 10 ? "excellent" : "very fast"
             };
         }
         catch (Exception ex)

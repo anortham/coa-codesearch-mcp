@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tests.Helpers;
+using COA.CodeSearch.McpServer.Models;
 using System.Runtime.CompilerServices;
 
 namespace COA.CodeSearch.McpServer.Tests;
@@ -63,6 +64,18 @@ public abstract class LuceneTestBase : IDisposable
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();
+        
+        // Memory pressure service
+        services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
+        
+        // Configure memory limits 
+        services.Configure<MemoryLimitsConfiguration>(config =>
+        {
+            config.MaxFileSize = 10 * 1024 * 1024; // 10MB
+            config.MaxAllowedResults = 10000;
+            config.MaxIndexingConcurrency = 8;
+            config.EnableBackpressure = true;
+        });
         
         // Lucene services
         services.AddSingleton<LuceneIndexService>();

@@ -79,11 +79,32 @@ public static class AllToolRegistrations
                     detailRequest = new 
                     { 
                         type = "object", 
-                        description = "Optional detail request for cached data",
+                        description = @"Request more details from a previous summary response.
+Example: After getting a summary with 150 results, use the provided 
+detailRequestToken to get full results.
+
+Usage:
+1. First call returns summary with metadata.detailRequestToken
+2. Second call with detailRequest gets additional data",
+                        
                         properties = new
                         {
-                            detailLevel = new { type = "string" },
-                            detailRequestToken = new { type = "string" }
+                            detailLevel = new { 
+                                type = "string", 
+                                @enum = new[] { "full", "next50", "hotspots" },
+                                description = "Level of detail: full (all results), next50 (next batch), hotspots (high-concentration files)"
+                            },
+                            detailRequestToken = new { 
+                                type = "string",
+                                description = "Token from metadata.detailRequestToken in previous response" 
+                            }
+                        },
+                        
+                        examples = new[] {
+                            new {
+                                detailLevel = "full",
+                                detailRequestToken = "cache_123abc_1706332800"
+                            }
                         }
                     }
                 },
@@ -128,23 +149,61 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastTextSearchV2Params>(
             name: ToolNames.TextSearch,
-            description: "Search for text content within files across the codebase. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific strings, error messages, configuration values, or any text that appears in code, comments, or documentation.",
+            description: @"Searches file contents for text patterns (literals, wildcards, regex).
+Returns: File paths with line numbers and optional context.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding code patterns, error messages, TODOs, configuration values.
+Not for: File name searches (use file_search), directory searches (use directory_search).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
+                    searchQuery = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
                     workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories." },
-                    filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs' for C# files, 'src/**/*.js' for JavaScript in src)" },
+                    filePattern = new { 
+                        type = "string", 
+                        description = @"Glob pattern to filter files. 
+Syntax:
+- '*.cs' = all C# files
+- 'src/**/*.js' = all JS files under src/
+- '*Test.cs' = files ending with Test.cs
+- '!*.min.js' = exclude minified JS files
+Uses minimatch patterns: * (any chars), ** (any dirs), ? (single char), [abc] (char set)",
+                        examples = new[] { "*.cs", "src/**/*.ts", "*Test.*", "!node_modules/**" }
+                    },
                     extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Limit to specific file types (e.g., ['.cs', '.js', '.json'])" },
-                    contextLines = new { type = "integer", description = "Optional: Show N lines before/after each match for context (default: 0)" },
+                    contextLines = new { 
+                        type = "integer", 
+                        description = @"Lines of context before/after matches. 
+Token impact: ~100 tokens per result with context=3.
+Example: 50 results with context=3 ≈ 5,000 tokens",
+                        @default = 0
+                    },
                     maxResults = new { type = "integer", description = "Maximum number of results", @default = 50 },
                     caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
-                    searchType = new { type = "string", description = "Optional: Search mode - 'standard' (default), 'wildcard' (with *), 'fuzzy' (approximate), 'phrase' (exact)", @default = "standard" },
+                    searchType = new { 
+                        type = "string",
+                        @enum = new[] { "standard", "fuzzy", "wildcard", "phrase", "regex" },
+                        description = @"Search algorithm:
+- standard: Exact substring match (case-insensitive by default)
+- fuzzy: Approximate match allowing typos (append ~ to terms)  
+- wildcard: Pattern matching with * and ?
+- phrase: Exact phrase in quotes
+- regex: Full regex support with capturing groups",
+                        examples = new {
+                            standard = "getUserName",
+                            fuzzy = "getUserNam~",
+                            wildcard = "get*Name",
+                            phrase = "\"get user name\"",
+                            regex = "get\\w+Name"
+                        },
+                        @default = "standard" 
+                    },
                     responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
-                required = new[] { "query", "workspacePath" }
+                required = new[] { "searchQuery", "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
@@ -162,7 +221,7 @@ public static class AllToolRegistrations
                 }
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.SearchQuery, "searchQuery"),
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.FilePattern,
                     parameters.Extensions,
@@ -181,7 +240,7 @@ public static class AllToolRegistrations
     
     private class FastTextSearchV2Params
     {
-        public string? Query { get; set; }
+        public string? SearchQuery { get; set; }
         public string? WorkspacePath { get; set; }
         public string? FilePattern { get; set; }
         public string[]? Extensions { get; set; }
@@ -197,20 +256,42 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSearchV2Params>(
             name: ToolNames.FileSearch,
-            description: "Find files by name when you know the filename but not the exact location. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when looking for specific files, especially with typos or partial names (e.g., find 'UserService.cs' by searching 'UserServ').",
+            description: @"Finds files by name patterns with fuzzy matching support.
+Returns: File paths sorted by relevance score.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Locating specific files, finding files with typos, discovering file patterns.
+Not for: Text content searches (use text_search), directory searches (use directory_search).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
+                    nameQuery = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
+                    searchType = new { 
+                        type = "string",
+                        @enum = new[] { "standard", "fuzzy", "wildcard", "exact", "regex" },
+                        description = @"Search algorithm for file names:
+- standard: Contains match (UserService matches UserService.cs)
+- fuzzy: Typo-tolerant (UserSrvc~ finds UserService.cs)
+- wildcard: Pattern matching (User*.cs finds UserService.cs)
+- exact: Exact filename match
+- regex: Regular expressions (^User.*\.cs$)",
+                        examples = new {
+                            standard = "UserService",
+                            fuzzy = "UserSrvc~",
+                            wildcard = "User*.cs",
+                            exact = "UserService.cs",
+                            regex = "^User.*Service\\.cs$"
+                        },
+                        @default = "standard" 
+                    },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
                     includeDirectories = new { type = "boolean", description = "Include directory names in search", @default = false },
                     responseMode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.", @default = "summary" }
                 },
-                required = new[] { "query", "workspacePath" }
+                required = new[] { "nameQuery", "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
@@ -223,7 +304,7 @@ public static class AllToolRegistrations
                 };
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.NameQuery, "nameQuery"),
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.SearchType ?? "standard",
                     parameters.MaxResults ?? 50,
@@ -240,7 +321,7 @@ public static class AllToolRegistrations
 
     private class FastFileSearchV2Params
     {
-        public string? Query { get; set; }
+        public string? NameQuery { get; set; }
         public string? WorkspacePath { get; set; }
         public string? SearchType { get; set; }
         public int? MaxResults { get; set; }
@@ -252,14 +333,26 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastRecentFilesParams>(
             name: ToolNames.RecentFiles,
-            description: "Find files that were recently changed within a time period. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Use when resuming work after a break, reviewing recent changes, or finding files that were worked on today/this week.",
+            description: @"Finds files modified within specified time periods.
+Returns: File paths sorted by modification time with size information.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Resuming work after breaks, reviewing recent changes, tracking daily progress.
+Not for: Content searches (use text_search), finding specific files (use file_search).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    timeFrame = new { type = "string", description = "Time frame: '30m', '24h' (default), '7d', '4w' for minutes, hours, days, weeks", @default = "24h" },
+                    timeFrame = new { 
+                        type = "string", 
+                        description = @"Time period for recent changes.
+Format: number + unit (m=minutes, h=hours, d=days, w=weeks)
+Examples: '30m' = 30 minutes, '24h' = 24 hours, '7d' = 7 days, '4w' = 4 weeks",
+                        examples = new[] { "30m", "1h", "24h", "3d", "7d", "2w", "4w" },
+                        @default = "24h" 
+                    },
                     filePattern = new { type = "string", description = "Optional: Filter by file pattern (e.g., '*.cs', 'src/**/*.ts')" },
                     extensions = new { type = "array", items = new { type = "string" }, description = "Optional: Filter by file extensions" },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 50 },
@@ -299,14 +392,29 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastFileSizeAnalysisParams>(
             name: ToolNames.FileSizeAnalysis,
-            description: "Analyze files by size - find large files, empty files, or analyze size distributions. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Uses indexed data for instant results across entire codebase.",
+            description: @"Analyzes files by size with distribution insights.
+Returns: File paths with sizes, grouped by analysis mode.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding large files, identifying empty files, understanding codebase distribution.
+Not for: Content analysis (use text_search), recent changes (use recent_files).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to analyze" },
-                    mode = new { type = "string", description = "Analysis mode: 'largest' (default), 'smallest', 'range', 'zero', 'distribution'", @default = "largest" },
+                    mode = new { 
+                        type = "string",
+                        @enum = new[] { "largest", "smallest", "range", "zero", "distribution" },
+                        description = @"Analysis mode:
+- largest: Find biggest files (default)
+- smallest: Find smallest non-empty files
+- range: Files within size bounds (requires minSize/maxSize)
+- zero: Find empty files
+- distribution: Size distribution statistics",
+                        @default = "largest" 
+                    },
                     minSize = new { type = "integer", description = "Minimum file size in bytes (for 'range' mode)" },
                     maxSize = new { type = "integer", description = "Maximum file size in bytes (for 'range' mode)" },
                     filePattern = new { type = "string", description = "Optional: Filter by file pattern" },
@@ -352,13 +460,18 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastSimilarFilesParams>(
             name: ToolNames.SimilarFiles,
-            description: "Find files with similar content using 'More Like This' algorithm - ideal for discovering duplicate code, related implementations, or similar patterns. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows similarity scores and matching terms.",
+            description: @"Finds files with similar content using 'More Like This' algorithm.
+Returns: File paths with similarity scores and matching terms.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding duplicate code, discovering related implementations, identifying patterns.
+Not for: Exact text matches (use text_search), file name searches (use file_search).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    sourceFilePath = new { type = "string", description = "Path to the source file to find similar files for" },
+                    sourcePath = new { type = "string", description = "Path to the source file to find similar files for" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
                     maxResults = new { type = "integer", description = "Maximum similar files to return", @default = 10 },
                     minTermFreq = new { type = "integer", description = "Min times a term must appear in source", @default = 2 },
@@ -368,14 +481,14 @@ public static class AllToolRegistrations
                     excludeExtensions = new { type = "array", items = new { type = "string" }, description = "File extensions to exclude" },
                     includeScore = new { type = "boolean", description = "Include similarity scores", @default = true }
                 },
-                required = new[] { "sourceFilePath", "workspacePath" }
+                required = new[] { "sourcePath", "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.SourceFilePath, "sourceFilePath"),
+                    ValidateRequired(parameters.SourcePath, "sourcePath"),
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.MaxResults ?? 10,
                     parameters.MinTermFreq ?? 2,
@@ -393,7 +506,7 @@ public static class AllToolRegistrations
     
     private class FastSimilarFilesParams
     {
-        public string? SourceFilePath { get; set; }
+        public string? SourcePath { get; set; }
         public string? WorkspacePath { get; set; }
         public int? MaxResults { get; set; }
         public int? MinTermFreq { get; set; }
@@ -408,27 +521,49 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<FastDirectorySearchParams>(
             name: ToolNames.DirectorySearch,
-            description: "Search for directories/folders with fuzzy matching - locate project folders, discover structure, find namespaces. REQUIRES index_workspace to be run first - will fail with error if workspace not indexed. Shows file counts and supports typo correction.",
+            description: @"Searches for directories/folders with fuzzy matching support.
+Returns: Directory paths with file counts and structure information.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Exploring project structure, finding namespaces, locating module folders.
+Not for: File searches (use file_search), text content searches (use text_search).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
+                    directoryQuery = new { type = "string", description = "Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
-                    searchType = new { type = "string", description = "Search mode: 'standard' (default), 'fuzzy' (UserSrvc finds UserService), 'wildcard' (User*), 'exact' (exact match), 'regex' (/pattern/)", @default = "standard" },
+                    searchType = new { 
+                        type = "string",
+                        @enum = new[] { "standard", "fuzzy", "wildcard", "exact", "regex" },
+                        description = @"Search algorithm for directory names:
+- standard: Contains match (Service matches Services/)
+- fuzzy: Typo-tolerant (Servces~ finds Services/)
+- wildcard: Pattern matching (User* finds UserService/)
+- exact: Exact directory name match
+- regex: Regular expressions (^src/.*/models$)",
+                        examples = new {
+                            standard = "Services",
+                            fuzzy = "Servces~",
+                            wildcard = "User*",
+                            exact = "Services",
+                            regex = "^src/.*/models$"
+                        },
+                        @default = "standard" 
+                    },
                     maxResults = new { type = "integer", description = "Maximum results to return", @default = 30 },
                     includeFileCount = new { type = "boolean", description = "Include file count per directory", @default = true },
                     groupByDirectory = new { type = "boolean", description = "Group results by unique directories", @default = true }
                 },
-                required = new[] { "query", "workspacePath" }
+                required = new[] { "directoryQuery", "workspacePath" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.ExecuteAsync(
-                    ValidateRequired(parameters.Query, "query"),
+                    ValidateRequired(parameters.DirectoryQuery, "directoryQuery"),
                     ValidateRequired(parameters.WorkspacePath, "workspacePath"),
                     parameters.SearchType ?? "standard",
                     parameters.MaxResults ?? 30,
@@ -443,7 +578,7 @@ public static class AllToolRegistrations
     
     private class FastDirectorySearchParams
     {
-        public string? Query { get; set; }
+        public string? DirectoryQuery { get; set; }
         public string? WorkspacePath { get; set; }
         public string? SearchType { get; set; }
         public int? MaxResults { get; set; }
@@ -455,7 +590,12 @@ public static class AllToolRegistrations
     {
         registry.RegisterTool<IndexWorkspaceParams>(
             name: ToolNames.IndexWorkspace,
-            description: "REQUIRED FIRST STEP: Build search index to enable text searches. You MUST run this before using text_search, file_search, recent_files, and other indexed search tools - they will fail without it. One-time setup per workspace, then searches are instant.",
+            description: @"Creates search index for a workspace directory.
+Returns: Index statistics including file count, size, and build time.
+Prerequisites: None - this is the first step for all search operations.
+Error handling: Returns DIRECTORY_NOT_FOUND if path doesn't exist.
+Use cases: Initial workspace setup, re-indexing after major changes.
+Important: One-time operation per workspace - subsequent searches use the index.",
             inputSchema: new
             {
                 type = "object",

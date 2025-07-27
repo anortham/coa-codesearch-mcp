@@ -185,7 +185,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             {
                 totalFound = data.Results.Count,
                 searchTime = $"{data.SearchDurationMs:F1}ms",
-                performance = data.SearchDurationMs < 10 ? "blazing" : data.SearchDurationMs < 50 ? "fast" : "normal",
+                performance = data.SearchDurationMs < 10 ? "excellent" : data.SearchDurationMs < 50 ? "fast" : "normal",
                 distribution = new
                 {
                     byExtension = data.ExtensionCounts
@@ -362,7 +362,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         // Performance insight
         if (data.SearchDurationMs < 10)
         {
-            insights.Add("⚡ Blazing fast search performance");
+            insights.Add("⚡ Excellent search performance");
         }
 
         // File type insights

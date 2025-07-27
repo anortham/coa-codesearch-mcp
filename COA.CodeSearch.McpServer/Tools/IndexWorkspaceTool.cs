@@ -6,7 +6,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class IndexWorkspaceTool : ITool
 {
     public string ToolName => "index_workspace";
-    public string Description => "Build search index for blazing fast searches";
+    public string Description => "Build search index for high-performance searches";
     public ToolCategory Category => ToolCategory.Infrastructure;
     private readonly ILogger<IndexWorkspaceTool> _logger;
     private readonly FileIndexingService _fileIndexingService;

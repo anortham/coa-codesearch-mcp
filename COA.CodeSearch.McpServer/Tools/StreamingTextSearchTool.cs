@@ -138,7 +138,7 @@ public class StreamingTextSearchTool : ITool
             totalResults = topDocs.TotalHits,
             processedResults = totalProcessed,
             batchCount = batches.Count,
-            performance = totalDuration < 100 ? "blazing fast streaming!" : "efficient streaming",
+            performance = totalDuration < 100 ? "excellent streaming" : "efficient streaming",
             batches = batches
         };
     }
@@ -176,7 +176,7 @@ public class StreamingTextSearchTool : ITool
                 hasPreviousPage = page.HasPreviousPage
             },
             results = page.Results,
-            performance = processingDuration < 50 ? "blazing fast pagination!" : "efficient pagination"
+            performance = processingDuration < 50 ? "excellent pagination" : "efficient pagination"
         };
     }
 
@@ -189,7 +189,7 @@ public class StreamingTextSearchTool : ITool
             query = query,
             searchDurationMs = searchDuration,
             totalResults = topDocs.TotalHits,
-            performance = searchDuration < 10 ? "instant count!" : "fast count"
+            performance = searchDuration < 10 ? "instant count" : "fast count"
         };
     }
 
