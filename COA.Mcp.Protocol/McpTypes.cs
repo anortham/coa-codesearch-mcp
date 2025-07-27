@@ -357,6 +357,137 @@ public class ListPromptsResult
 }
 
 /// <summary>
+/// Request to read a specific resource by URI.
+/// </summary>
+public class ReadResourceRequest
+{
+    /// <summary>
+    /// Gets or sets the URI of the resource to read.
+    /// </summary>
+    /// <example>codesearch://workspace/indexed-files</example>
+    [JsonPropertyName("uri")]
+    public string Uri { get; set; } = null!;
+}
+
+/// <summary>
+/// Result of a resources/read request containing the resource content.
+/// </summary>
+public class ReadResourceResult
+{
+    /// <summary>
+    /// Gets or sets the list of content items for this resource.
+    /// </summary>
+    [JsonPropertyName("contents")]
+    public List<ResourceContent> Contents { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a piece of content within a resource.
+/// </summary>
+public class ResourceContent
+{
+    /// <summary>
+    /// Gets or sets the URI identifying this content piece.
+    /// </summary>
+    [JsonPropertyName("uri")]
+    public string Uri { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the MIME type of the content.
+    /// </summary>
+    /// <example>text/plain, application/json, text/markdown</example>
+    [JsonPropertyName("mimeType")]
+    public string? MimeType { get; set; }
+
+    /// <summary>
+    /// Gets or sets the text content.
+    /// </summary>
+    [JsonPropertyName("text")]
+    public string? Text { get; set; }
+
+    /// <summary>
+    /// Gets or sets the base64-encoded binary content.
+    /// </summary>
+    [JsonPropertyName("blob")]
+    public string? Blob { get; set; }
+}
+
+/// <summary>
+/// Request to get a specific prompt by name with optional arguments.
+/// </summary>
+public class GetPromptRequest
+{
+    /// <summary>
+    /// Gets or sets the name of the prompt to retrieve.
+    /// </summary>
+    [JsonPropertyName("name")]
+    public string Name { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the arguments to customize the prompt.
+    /// </summary>
+    [JsonPropertyName("arguments")]
+    [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+    public Dictionary<string, object>? Arguments { get; set; }
+}
+
+/// <summary>
+/// Result of a prompts/get request containing the rendered prompt content.
+/// </summary>
+public class GetPromptResult
+{
+    /// <summary>
+    /// Gets or sets the description of what this prompt accomplishes.
+    /// </summary>
+    [JsonPropertyName("description")]
+    public string? Description { get; set; }
+
+    /// <summary>
+    /// Gets or sets the list of messages that make up this prompt.
+    /// </summary>
+    [JsonPropertyName("messages")]
+    public List<PromptMessage> Messages { get; set; } = new();
+}
+
+/// <summary>
+/// Represents a message within a prompt template.
+/// </summary>
+public class PromptMessage
+{
+    /// <summary>
+    /// Gets or sets the role of the message sender.
+    /// </summary>
+    /// <example>user, assistant, system</example>
+    [JsonPropertyName("role")]
+    public string Role { get; set; } = null!;
+
+    /// <summary>
+    /// Gets or sets the content of the message.
+    /// </summary>
+    [JsonPropertyName("content")]
+    public PromptContent Content { get; set; } = null!;
+}
+
+/// <summary>
+/// Represents the content of a prompt message.
+/// </summary>
+public class PromptContent
+{
+    /// <summary>
+    /// Gets or sets the content type.
+    /// </summary>
+    /// <value>Currently only "text" is supported.</value>
+    [JsonPropertyName("type")]
+    public string Type { get; set; } = "text";
+
+    /// <summary>
+    /// Gets or sets the text content of the message.
+    /// </summary>
+    [JsonPropertyName("text")]
+    public string Text { get; set; } = null!;
+}
+
+/// <summary>
 /// Notification sent to inform clients about the progress of long-running operations.
 /// This extends JsonRpcNotification and provides structured progress information for
 /// operations like workspace indexing, batch operations, and large file analysis.
