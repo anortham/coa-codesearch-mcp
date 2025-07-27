@@ -112,7 +112,7 @@ public class SearchAssistantTool : ClaudeOptimizedToolBase
                 ResourceUri = resourceUri,
                 SuggestedNext = suggestedNext,
                 Success = true,
-                Operation = "search_assistant",
+                Operation = ToolNames.SearchAssistant,
                 Query = new { goal, workspacePath }
             };
 
@@ -132,7 +132,7 @@ public class SearchAssistantTool : ClaudeOptimizedToolBase
             return UnifiedToolResponse<object>.CreateError(
                 ErrorCodes.INTERNAL_ERROR,
                 ex.Message,
-                _errorRecoveryService.GetValidationErrorRecovery("search_assistant", "Try refining your search goal or check workspace path"));
+                _errorRecoveryService.GetValidationErrorRecovery(ToolNames.SearchAssistant, "Try refining your search goal or check workspace path"));
         }
     }
 
@@ -422,7 +422,7 @@ public class SearchAssistantResult
     /// <summary>
     /// Operation name for consistency with other tools
     /// </summary>
-    public string Operation { get; set; } = "search_assistant";
+    public string Operation { get; set; } = ToolNames.SearchAssistant;
 
     /// <summary>
     /// Query information for context

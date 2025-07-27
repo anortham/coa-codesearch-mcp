@@ -891,7 +891,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
     private static void RegisterSearchAssistant(ToolRegistry registry, SearchAssistantTool tool)
     {
         registry.RegisterTool<SearchAssistantParams>(
-            name: "search_assistant",
+            name: ToolNames.SearchAssistant,
             description: @"Orchestrates multi-step search operations while maintaining context.
 Analyzes search goals, creates search strategies, executes multiple search operations, discovers patterns and insights, finds related content, and provides actionable next steps.
 Returns: Structured findings with strategy, insights, and resource URI for continued exploration.
