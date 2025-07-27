@@ -35,6 +35,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IStreamingResultService _streamingResultService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly SearchResultResourceProvider? _searchResultResourceProvider;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -49,7 +50,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IFieldSelectorService fieldSelectorService,
         IStreamingResultService streamingResultService,
         IErrorRecoveryService errorRecoveryService,
-        IContextAwarenessService? contextAwarenessService = null)
+        IContextAwarenessService? contextAwarenessService = null,
+        SearchResultResourceProvider? searchResultResourceProvider = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _configuration = configuration;
@@ -60,6 +62,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _fieldSelectorService = fieldSelectorService;
         _streamingResultService = streamingResultService;
         _errorRecoveryService = errorRecoveryService;
+        _searchResultResourceProvider = searchResultResourceProvider;
     }
 
     public async Task<object> ExecuteAsync(
@@ -374,8 +377,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         var actions = GenerateSearchActions(query, searchType, results, totalHits, hotspots, 
             byExtension.ToDictionary(kvp => kvp.Key, kvp => (dynamic)kvp.Value), mode);
 
-        // Create response
-        return new
+        // Create response object
+        var response = new
         {
             success = true,
             operation = ToolNames.TextSearch,
@@ -410,6 +413,45 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 cached = $"txt_{Guid.NewGuid().ToString("N")[..8]}"
             }
         };
+
+        // Store search results as a resource if provider is available
+        if (_searchResultResourceProvider != null && results.Count > 0)
+        {
+            var resourceUri = _searchResultResourceProvider.StoreSearchResult(
+                query, 
+                new
+                {
+                    results = results,
+                    query = response.query,
+                    summary = response.summary,
+                    distribution = response.distribution,
+                    hotspots = response.hotspots,
+                    insights = response.insights
+                },
+                new
+                {
+                    searchType = searchType,
+                    workspacePath = workspacePath,
+                    timestamp = DateTime.UtcNow
+                });
+
+            // Add resource URI to response
+            return new
+            {
+                success = response.success,
+                operation = response.operation,
+                query = response.query,
+                summary = response.summary,
+                distribution = response.distribution,
+                hotspots = response.hotspots,
+                insights = response.insights,
+                actions = response.actions,
+                meta = response.meta,
+                resourceUri = resourceUri
+            };
+        }
+
+        return response;
     }
 
     private List<string> GenerateSearchInsights(
