@@ -51,8 +51,6 @@ public enum ToolCategory
     /// <summary>Memory system tools (store, search, manage memories)</summary>
     Memory,
     
-    /// <summary>TypeScript-specific tools</summary>
-    TypeScript,
     
     /// <summary>Infrastructure tools (indexing, logging, version)</summary>
     Infrastructure,

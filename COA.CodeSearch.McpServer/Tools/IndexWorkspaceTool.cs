@@ -289,11 +289,10 @@ public class IndexWorkspaceTool : ITool
                         projectTypes.Add("ASP.NET");
                         primaryExtensions.Add(".cshtml");
                     }
-                    if (content.Contains("Microsoft.NET.Sdk.BlazorWebAssembly") || content.Contains("<RazorLangVersion>"))
+                    if (content.Contains("Microsoft.NET.Sdk.BlazorWebAssembly"))
                     {
-                        projectTypes.Add("Blazor");
-                        primaryExtensions.Add(".razor");
-                        tips.Add("For Blazor: use extensions .cs,.razor to search both code and components");
+                        projectTypes.Add("Web Assembly");
+                        tips.Add("For Web Assembly projects: use extensions .cs,.html to search code and markup");
                     }
                 }
                 catch { /* Ignore read errors */ }

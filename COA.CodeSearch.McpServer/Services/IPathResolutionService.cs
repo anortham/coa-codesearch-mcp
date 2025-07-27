@@ -61,11 +61,6 @@ public interface IPathResolutionService
     /// <returns>The full path to the index root directory</returns>
     string GetIndexRootPath();
     
-    /// <summary>
-    /// Gets the TypeScript installation directory path
-    /// </summary>
-    /// <returns>The full path to the TypeScript installation directory</returns>
-    string GetTypeScriptInstallPath();
     
     // Safe file system operations
     

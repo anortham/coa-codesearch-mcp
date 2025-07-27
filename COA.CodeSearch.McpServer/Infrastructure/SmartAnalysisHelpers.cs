@@ -226,7 +226,7 @@ public static class SmartAnalysisHelpers
         }
         if (directory.Equals("Pages", StringComparison.OrdinalIgnoreCase))
         {
-            return "Razor Page";
+            return "Web Page";
         }
         if (fileName.StartsWith("I") && char.IsUpper(fileName[1]))
         {
