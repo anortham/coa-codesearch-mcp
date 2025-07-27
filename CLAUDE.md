@@ -56,7 +56,10 @@ mcp__codesearch__recall_context "what I'm working on"  # ALWAYS start with this
 
 # Search workflow
 mcp__codesearch__index_workspace --workspacePath "C:/project"  # Required first
-mcp__codesearch__text_search --query "TODO"                    # Then search
+mcp__codesearch__text_search --query "TODO"                    # Then search (NEW: standardized 'query' parameter)
+
+# NEW: Workflow discovery
+mcp__codesearch__workflow_discovery --goal "search code"       # Learn tool dependencies
 ```
 
 ### Tool Categories
@@ -68,7 +71,8 @@ mcp__codesearch__text_search --query "TODO"                    # Then search
 | Discover Code  | `similar_files`, `directory_search`         | -                                         | -                                      |
 | Index & Search | `index_workspace`, `batch_operations`       | -                                         | -                                      |
 | Store Knowledge| -                                            | `store_memory`, `store_temporary_memory`  | -                                      |
-| Find Knowledge | -                                            | `search_memories`, `recall_context`      | -                                      |
+| Find Knowledge | -                                            | `search_memories`, `recall_context`      | `workflow_discovery` (NEW)             |
+| Explore Memory | -                                            | `memory_graph_navigator`, `memory_timeline` | -                                    |
 | Manage Data    | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
 
 ### Memory System Essentials
@@ -95,6 +99,35 @@ High-performance MCP server in .NET 9.0 providing text search and intelligent me
 - Intelligent memory system for architectural knowledge
 - File discovery and analysis tools
 - Project-wide content indexing
+- **NEW**: AI-optimized tool consistency with standardized parameters
+- **NEW**: Workflow discovery for proactive tool guidance
+- **NEW**: Enhanced error handling with actionable recovery
+
+## 🤖 AI UX Optimizations (Latest)
+
+This project implements comprehensive AI agent experience optimizations:
+
+### Parameter Standardization
+- **All search tools** now use `query` as the primary parameter
+- **Backward compatible** with legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`)
+- **Consistent interface** across `text_search`, `file_search`, `directory_search`
+
+### Response Format Consistency
+- **Unified envelope** with `format` field indicating response type
+- **Mixed format support** for both structured data and markdown display
+- **Predictable parsing** for AI agents
+
+### Workflow Discovery
+- **New tool**: `workflow_discovery` provides proactive guidance
+- **Tool chains**: Understand prerequisites and dependencies
+- **Use case mapping**: Find the right tools for your goals
+
+### Enhanced Error States
+- **Actionable guidance** instead of generic error messages
+- **Suggested next steps** when tools encounter empty states
+- **Recovery workflows** with specific commands to try
+
+See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for complete analysis.
 
 ## 🔧 Development Guidelines
 
