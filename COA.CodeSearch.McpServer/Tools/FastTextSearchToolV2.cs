@@ -34,6 +34,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IQueryCacheService _queryCacheService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IStreamingResultService _streamingResultService;
+    private readonly IErrorRecoveryService _errorRecoveryService;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -47,6 +48,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IQueryCacheService queryCacheService,
         IFieldSelectorService fieldSelectorService,
         IStreamingResultService streamingResultService,
+        IErrorRecoveryService errorRecoveryService,
         IContextAwarenessService? contextAwarenessService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
@@ -57,6 +59,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _queryCacheService = queryCacheService;
         _fieldSelectorService = fieldSelectorService;
         _streamingResultService = streamingResultService;
+        _errorRecoveryService = errorRecoveryService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -85,18 +88,27 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             // Validate input
             if (string.IsNullOrWhiteSpace(query))
             {
-                return CreateErrorResponse<object>("Search query cannot be empty");
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Search query cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("searchQuery", "non-empty string"));
             }
 
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
-                return CreateErrorResponse<object>("Workspace path cannot be empty");
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Workspace path cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("workspacePath", "absolute directory path"));
             }
 
             // Ensure the directory is indexed first
             if (!await EnsureIndexedAsync(workspacePath, cancellationToken))
             {
-                return CreateErrorResponse<object>("Failed to index workspace");
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.INDEX_NOT_FOUND,
+                    $"No search index exists for {workspacePath}",
+                    _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath));
             }
 
             // Get the searcher
@@ -113,10 +125,37 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             // Create AI-optimized response
             return await CreateAiOptimizedResponse(query, searchType, workspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
         }
+        catch (CircuitBreakerOpenException cbEx)
+        {
+            Logger.LogWarning(cbEx, "Circuit breaker is open for text search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.CIRCUIT_BREAKER_OPEN,
+                cbEx.Message,
+                _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName));
+        }
+        catch (DirectoryNotFoundException dnfEx)
+        {
+            Logger.LogError(dnfEx, "Directory not found for text search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.DIRECTORY_NOT_FOUND,
+                dnfEx.Message,
+                _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath));
+        }
+        catch (UnauthorizedAccessException uaEx)
+        {
+            Logger.LogError(uaEx, "Permission denied for text search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.PERMISSION_DENIED,
+                $"Permission denied accessing {workspacePath}: {uaEx.Message}",
+                null);
+        }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error executing fast text search");
-            return CreateErrorResponse<object>($"Search failed: {ex.Message}");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.INTERNAL_ERROR,
+                $"Search failed: {ex.Message}",
+                null);
         }
     }
 

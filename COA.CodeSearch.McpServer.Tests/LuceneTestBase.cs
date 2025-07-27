@@ -61,6 +61,7 @@ public abstract class LuceneTestBase : IDisposable
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
         services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();

@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
@@ -17,16 +18,19 @@ public class FastRecentFilesTool : ITool
     private readonly ILogger<FastRecentFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
+    private readonly IErrorRecoveryService _errorRecoveryService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastRecentFilesTool(
         ILogger<FastRecentFilesTool> logger,
         ILuceneIndexService luceneIndexService,
-        IFieldSelectorService fieldSelectorService)
+        IFieldSelectorService fieldSelectorService,
+        IErrorRecoveryService errorRecoveryService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
+        _errorRecoveryService = errorRecoveryService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -46,11 +50,10 @@ public class FastRecentFilesTool : ITool
             // Validate inputs
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
-                return new
-                {
-                    success = false,
-                    error = "Workspace path cannot be empty"
-                };
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Workspace path cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("workspacePath", "absolute directory path"));
             }
 
             // Parse time frame
@@ -58,7 +61,18 @@ public class FastRecentFilesTool : ITool
             var cutoffTicks = cutoffTime.Ticks;
 
             // Get index searcher
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            IndexSearcher searcher;
+            try
+            {
+                searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.INDEX_NOT_FOUND,
+                    $"No search index exists for {workspacePath}",
+                    _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath));
+            }
             
             // Build range query for lastModified field
             var rangeQuery = NumericRangeQuery.NewInt64Range("lastModified", cutoffTicks, long.MaxValue, true, true);
@@ -154,14 +168,37 @@ public class FastRecentFilesTool : ITool
                 performance = searchDuration < 10 ? "excellent" : "very fast"
             };
         }
+        catch (CircuitBreakerOpenException cbEx)
+        {
+            _logger.LogWarning(cbEx, "Circuit breaker is open for recent files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.CIRCUIT_BREAKER_OPEN,
+                cbEx.Message,
+                _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName));
+        }
+        catch (DirectoryNotFoundException dnfEx)
+        {
+            _logger.LogError(dnfEx, "Directory not found for recent files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.DIRECTORY_NOT_FOUND,
+                dnfEx.Message,
+                _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath));
+        }
+        catch (UnauthorizedAccessException uaEx)
+        {
+            _logger.LogError(uaEx, "Permission denied for recent files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.PERMISSION_DENIED,
+                $"Permission denied accessing {workspacePath}: {uaEx.Message}",
+                null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in fast recent files search");
-            return new
-            {
-                success = false,
-                error = $"Search failed: {ex.Message}"
-            };
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.INTERNAL_ERROR,
+                $"Search failed: {ex.Message}",
+                null);
         }
     }
 

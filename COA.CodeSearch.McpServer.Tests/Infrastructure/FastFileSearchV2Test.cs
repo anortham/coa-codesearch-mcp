@@ -37,7 +37,8 @@ public class FastFileSearchV2Test : TestBase
             ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
-            ServiceProvider.GetRequiredService<IDetailRequestCache>());
+            ServiceProvider.GetRequiredService<IDetailRequestCache>(),
+            ServiceProvider.GetRequiredService<IErrorRecoveryService>());
     }
 
     private async Task AddTestDocumentsToIndex()

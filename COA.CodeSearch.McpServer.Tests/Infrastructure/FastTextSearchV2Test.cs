@@ -32,6 +32,7 @@ public class FastTextSearchV2Test : LuceneTestBase
             ServiceProvider.GetRequiredService<IQueryCacheService>(),
             ServiceProvider.GetRequiredService<IFieldSelectorService>(),
             ServiceProvider.GetRequiredService<IStreamingResultService>(),
+            ServiceProvider.GetRequiredService<IErrorRecoveryService>(),
             null); // IContextAwarenessService is optional
             
         _indexTool = ServiceProvider.GetRequiredService<IndexWorkspaceTool>();
