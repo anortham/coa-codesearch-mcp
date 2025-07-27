@@ -403,6 +403,14 @@ public class FileIndexingService
         CancellationToken cancellationToken)
     {
         var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        
+        // Check if file exists before creating FileInfo to avoid exceptions
+        if (!File.Exists(filePath))
+        {
+            _logger.LogWarning("File no longer exists, skipping indexing: {FilePath}", filePath);
+            return false;
+        }
+        
         var fileInfo = new FileInfo(filePath);
         var success = false;
         string? error = null;
