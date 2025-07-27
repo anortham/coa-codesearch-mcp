@@ -24,24 +24,18 @@
 - **Testing Changes**: Must build → user reinstalls → new Claude session
 - **Example**: Editing `JsonMemoryBackupService.cs` won't affect `backup_memories` until restart
 
-### 4. **TypeScript Requirements**
-
-- Requires npm installed for TypeScript support
-- Without npm: TypeScript tools will fail (installer can't extract .tgz files)
-- Install Node.js from https://nodejs.org/ to fix
-
-### 5. **Path Resolution**
+### 4. **Path Resolution**
 
 - **ALWAYS** use `IPathResolutionService` for ALL file/directory operations
 - **NEVER** use `Path.Combine()` or `Directory.CreateDirectory()` directly
 - See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md)
 
-### 6. **Editing Code**
+### 5. **Editing Code**
 
 - **NEVER** make assumptions about what properties or methods are available on a type, go look it up and see.
 - **ALWAYS** make use of the codesearch tools, that's what they are for and the best way to test and improve on them is to dogfood them.
 
-### 7. **Commit Changes**
+### 6. **Commit Changes**
 
 - **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
 - **NEVER** check in broken builds or failing tests
@@ -66,13 +60,15 @@ mcp__codesearch__text_search --query "TODO"                    # Then search
 
 ### Tool Categories
 
-| Purpose   | C# Tools                                                           | TypeScript Tools                                            | All Languages                                       |
-| --------- | ------------------------------------------------------------------ | ----------------------------------------------------------- | --------------------------------------------------- |
-| Find Code | `search_symbols`                                                   | `search_typescript`                                         | `text_search`, `file_search`                        |
-| Navigate  | `go_to_definition`, `find_references`                              | `typescript_go_to_definition`, `typescript_find_references` | -                                                   |
-| Analyze   | `get_implementations`, `get_call_hierarchy`, `dependency_analysis` | -                                                           | `batch_operations`                                  |
-| Modify    | `rename_symbol`                                                    | `typescript_rename_symbol`                                  | -                                                   |
-| Memory    | -                                                                  | -                                                           | `store_memory`, `recall_context`, `backup_memories` |
+| Purpose        | Text Search Tools                            | Memory Tools                              | Utility Tools                          |
+| -------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------- |
+| Find Files     | `text_search`, `file_search`                 | -                                         | -                                      |
+| Analyze Files  | `recent_files`, `file_size_analysis`        | -                                         | -                                      |
+| Discover Code  | `similar_files`, `directory_search`         | -                                         | -                                      |
+| Index & Search | `index_workspace`, `batch_operations`       | -                                         | -                                      |
+| Store Knowledge| -                                            | `store_memory`, `store_temporary_memory`  | -                                      |
+| Find Knowledge | -                                            | `search_memories`, `recall_context`      | -                                      |
+| Manage Data    | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
 
 ### Memory System Essentials
 
@@ -92,12 +88,12 @@ mcp__codesearch__restore_memories   # Restores from JSON
 
 ## 🏗️ Project Overview
 
-High-performance MCP server in .NET 9.0 providing LSP-like code navigation. Features:
+High-performance MCP server in .NET 9.0 providing text search and intelligent memory management. Features:
 
-- Roslyn-based C# analysis
-- TypeScript support via tsserver
-- Lucene-powered millisecond search
+- Lucene-powered millisecond text search
 - Intelligent memory system for architectural knowledge
+- File discovery and analysis tools
+- Project-wide content indexing
 
 ## 🔧 Development Guidelines
 
@@ -141,12 +137,12 @@ private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
 
 | Service                     | Purpose                                   |
 | --------------------------- | ----------------------------------------- |
-| `CodeAnalysisService`       | Manages Roslyn workspaces and C# analysis |
-| `TypeScriptAnalysisService` | TypeScript analysis via tsserver          |
 | `LuceneIndexService`        | Fast text indexing and search             |
-| `JsonMemoryBackupService`   | JSON-based memory backup/restore          |
 | `FlexibleMemoryService`     | Memory storage with custom fields         |
+| `JsonMemoryBackupService`   | JSON-based memory backup/restore          |
 | `PathResolutionService`     | SINGLE source of truth for all paths      |
+| `FileIndexingService`       | File content extraction and indexing      |
+| `QueryCacheService`         | Query result caching for performance      |
 
 ### Progressive Disclosure (V2 Tools)
 
@@ -179,10 +175,10 @@ Example:
 - Symptom: All searches fail
 - Fix: Exit Claude Code, manually delete `.codesearch/index/*/write.lock`
 
-**TypeScript tools failing**
+**Index corruption or locked files**
 
-- Symptom: "TypeScript installation failed"
-- Fix: Install npm (Node.js)
+- Symptom: "Index is locked" or search operations failing
+- Fix: Use `index_health_check` tool or exit Claude and delete stuck lock files
 
 **Build errors in Release mode**
 
@@ -197,25 +193,24 @@ Example:
 ### Debug Logging
 
 ```bash
-mcp__codesearch__set_logging --action start --level debug
-# Logs written to: %LOCALAPPDATA%\COA.CodeSearch\.codesearch\logs\
+mcp__codesearch__log_diagnostics --action status
+# View current log status and manage log files
 ```
 
 ## 📚 Additional Documentation
 
 - [Memory System Guide](docs/MEMORY_SYSTEM.md) - Detailed memory tools documentation
-- [TypeScript Support](docs/TYPESCRIPT.md) - TypeScript configuration and tools
 - [Path Resolution Critical](docs/PATH_RESOLUTION_CRITICAL.md) - Path handling requirements
 - [Tool Reference](docs/TOOLS.md) - Complete tool documentation
 - [Architecture Decisions](docs/ARCHITECTURE.md) - Design decisions and patterns
 
 ## 🚀 Performance Targets
 
-- Startup: < 100ms (with AOT)
-- GoToDefinition: < 50ms cached
-- FindReferences: < 200ms average
+- Startup: < 500ms (simplified architecture)
 - Text search: < 10ms indexed
-- Memory usage: < 500MB typical
+- File search: < 50ms
+- Memory operations: < 100ms
+- Memory usage: < 200MB typical
 
 ## 🔗 Integration Notes
 

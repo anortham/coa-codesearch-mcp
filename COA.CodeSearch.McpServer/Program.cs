@@ -3,7 +3,6 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tools.Registration;
-using Microsoft.Build.Locator;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -16,9 +15,6 @@ using Serilog.Events;
 // TEST COMMENT 2: Another test at 1:38 PM to trigger file watcher
 Program.ServerStartTime = DateTime.UtcNow;
 
-// Register MSBuild before anything else
-SetupMSBuildEnvironment();
-RegisterMSBuild();
 
 // Handle command line arguments
 if (args.Length > 0 && (args[0] == "--help" || args[0] == "-h"))
@@ -102,7 +98,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IStreamingResultService, StreamingResultService>();
-        services.AddSingleton<CodeAnalysisService>();
         services.AddSingleton<ToolRegistry>();
         
         // Lucene services
@@ -147,46 +142,15 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
-        // TypeScript Analysis
-        services.AddSingleton<TypeScriptAnalysisService>();
-        services.AddSingleton<ITypeScriptAnalysisService>(provider => provider.GetRequiredService<TypeScriptAnalysisService>());
-        services.AddSingleton<TypeScriptTextAnalysisService>();
-        
-        // Razor/Blazor Analysis - DISABLED due to loading issues
-        // services.AddSingleton<RazorServerLocator>();
-        // services.AddSingleton<RazorVirtualDocumentManager>();
-        // services.AddSingleton<RazorLspClient>();
-        // services.AddSingleton<RazorPositionMapper>();
-        // services.AddSingleton<EmbeddedRazorAnalyzer>();
-        // services.AddSingleton<RazorAnalysisService>();
-        // services.AddSingleton<IRazorAnalysisService>(provider => provider.GetRequiredService<RazorAnalysisService>());
         
         
-        // Initialize TypeScript on startup
-        services.AddHostedService<TypeScriptInitializationService>();
         
-        // Initialize Razor on startup
-        // services.AddHostedService<RazorInitializationService>();
+        
         
         // Lucene lifecycle management
         services.AddHostedService<LuceneLifecycleService>();
         
-        // Register all tools
-        services.AddSingleton<GoToDefinitionTool>();
-        services.AddSingleton<FindReferencesTool>();
-        services.AddSingleton<FindReferencesToolV2>();
-        services.AddSingleton<SearchSymbolsToolV2>();
-        services.AddSingleton<GetDiagnosticsToolV2>();
-        services.AddSingleton<TypeScriptHoverInfoTool>();
-        services.AddSingleton<GetHoverInfoTool>();
-        services.AddSingleton<GetImplementationsToolV2>();
-        services.AddSingleton<GetDocumentSymbolsTool>();
-        services.AddSingleton<GetCallHierarchyToolV2>();
-        services.AddSingleton<RenameSymbolToolV2>();
-        services.AddSingleton<BatchOperationsToolV2>();
-        services.AddSingleton<AdvancedSymbolSearchTool>();
-        services.AddSingleton<DependencyAnalysisToolV2>();
-        services.AddSingleton<ProjectStructureAnalysisToolV2>();
+        // Register remaining tools
         services.AddSingleton<FastTextSearchToolV2>();
         services.AddSingleton<FastFileSearchToolV2>();
         services.AddSingleton<FastRecentFilesTool>();
@@ -201,20 +165,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IndexHealthCheckTool>();
         
         
-        // TypeScript tools
-        services.AddSingleton<TypeScriptGoToDefinitionTool>();
-        services.AddSingleton<TypeScriptFindReferencesTool>();
-        services.AddSingleton<TypeScriptSearchTool>();
-        services.AddSingleton<TypeScriptRenameTool>();
-        services.AddSingleton<TypeScriptHoverInfoTool>();
         
-        // Blazor tools - DISABLED due to loading issues
-        // services.AddSingleton<BlazorGoToDefinitionTool>();
-        // services.AddSingleton<BlazorFindReferencesTool>();
-        // services.AddSingleton<BlazorHoverInfoTool>();
-        // services.AddSingleton<BlazorRenameSymbolTool>();
-        // services.AddSingleton<BlazorGetDocumentSymbolsTool>();
-        // services.AddSingleton<BlazorGetDiagnosticsTool>();
         
         
         // Memory caching for performance optimization
@@ -245,65 +196,7 @@ using (var scope = host.Services.CreateScope())
 await host.RunAsync();
 return 0;
 
-static void SetupMSBuildEnvironment()
-{
-    // Suppress MSBuild console output to avoid interfering with MCP protocol
-    Environment.SetEnvironmentVariable("MSBUILDLOGASYNC", "0");
-    Environment.SetEnvironmentVariable("MSBUILDDISABLENODEREUSE", "1");
-    Environment.SetEnvironmentVariable("MSBUILDNOINPROCNODE", "1");
-    Environment.SetEnvironmentVariable("MSBUILDLOGTASKINPUTS", "0");
-    Environment.SetEnvironmentVariable("MSBUILDTARGETOUTPUTLOGGING", "0");
-    Environment.SetEnvironmentVariable("MSBUILDCONSOLELOGGERPARAMETERS", "NoSummary;Verbosity=quiet");
-    Environment.SetEnvironmentVariable("MSBUILDENABLEALLPROPERTYFUNCTIONS", "1");
-    Environment.SetEnvironmentVariable("MSBUILDLOGVERBOSERETHROW", "0");
-    Environment.SetEnvironmentVariable("MSBUILDLOGIMPORTS", "0");
-    Environment.SetEnvironmentVariable("MSBUILDLOGGINGPREPROCESSOR", "0");
-    Environment.SetEnvironmentVariable("MSBUILDLOGALLPROJECTFROMSOLUTION", "0");
-    Environment.SetEnvironmentVariable("DOTNET_CLI_CAPTURE_TIMING", "0");
-    Environment.SetEnvironmentVariable("NUGET_SHOW_STACK", "false");
-    Environment.SetEnvironmentVariable("ROSLYN_COMPILER_LOCATION", "");
-    Environment.SetEnvironmentVariable("ROSLYN_ANALYZERS_ENABLED", "false");
-}
 
-static void RegisterMSBuild()
-{
-    if (!MSBuildLocator.IsRegistered)
-    {
-        try
-        {
-            // Find all available MSBuild instances
-            var instances = MSBuildLocator.QueryVisualStudioInstances()
-                .OrderByDescending(instance => instance.Version)
-                .ToList();
-            
-            if (instances.Any())
-            {
-                var selected = instances.First();
-                Console.Error.WriteLine($"Registering MSBuild: {selected.Name} {selected.Version} at {selected.MSBuildPath}");
-                MSBuildLocator.RegisterInstance(selected);
-            }
-            else
-            {
-                Console.Error.WriteLine("No MSBuild instances found, using defaults");
-                MSBuildLocator.RegisterDefaults();
-            }
-        }
-        catch (Exception ex)
-        {
-            Console.Error.WriteLine($"Failed to register MSBuild: {ex.Message}");
-            // Try to register defaults as fallback
-            try
-            {
-                MSBuildLocator.RegisterDefaults();
-            }
-            catch
-            {
-                // If all else fails, continue without MSBuild
-                Console.Error.WriteLine("WARNING: MSBuild registration failed completely");
-            }
-        }
-    }
-}
 
 static async Task PerformEarlyStartupCleanup()
 {

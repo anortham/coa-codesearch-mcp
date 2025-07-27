@@ -112,7 +112,7 @@ public class FlexibleMemorySearchV2Test : TestBase
     public async Task Should_Analyze_Memory_Patterns()
     {
         // Arrange - Store memories with patterns
-        var testFile = GetTestCodePath();
+        var testFile = await CreateTestFileAsync("TestCode.cs", "// Test code file");
         
         // Technical debt items
         for (int i = 0; i < 6; i++)

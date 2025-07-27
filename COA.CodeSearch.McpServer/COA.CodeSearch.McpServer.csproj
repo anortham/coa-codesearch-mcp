@@ -25,8 +25,8 @@
     <InformationalVersion>$(Version)+local.$(BuildHash)</InformationalVersion>
     <Authors>YOUR-NAME</Authors>
     <Company>YOUR-COMPANY</Company>
-    <Description>High-performance MCP server for code search and navigation across multiple languages</Description>
-    <PackageTags>mcp;codesearch;csharp;blazor;code-navigation;lsp;lucene</PackageTags>
+    <Description>High-performance MCP server for Lucene-based text search and intelligent memory management</Description>
+    <PackageTags>mcp;codesearch;text-search;memory-system;lucene</PackageTags>
     <RepositoryUrl>https://github.com/YOUR-ORG/codesearch-mcp-server</RepositoryUrl>
     <PackageProjectUrl>https://github.com/YOUR-ORG/codesearch-mcp-server</PackageProjectUrl>
     <GeneratePackageOnBuild>true</GeneratePackageOnBuild>
@@ -41,11 +41,6 @@
     <PackageReference Include="Lucene.Net.Misc" Version="4.8.0-beta00017" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     
-    <!-- Roslyn for code analysis -->
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.11.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Workspaces.MSBuild" Version="4.11.0" />
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.11.0" />
-    <PackageReference Include="Microsoft.Build.Locator" Version="1.7.8" />
     
     
     <PackageReference Include="Humanizer.Core" Version="2.14.1" />
@@ -66,14 +61,9 @@
     <!-- Caching -->
     <PackageReference Include="Microsoft.Extensions.Caching.Memory" Version="9.0.0" />
     
-    <!-- HTTP Client for TypeScript installer -->
+    <!-- HTTP Client -->
     <PackageReference Include="Microsoft.Extensions.Http" Version="9.0.0" />
-    <PackageReference Include="SharpCompress" Version="0.40.0" />
     
-    <!-- Razor/Blazor LSP Support -->
-    <PackageReference Include="Microsoft.AspNetCore.Razor.Language" Version="6.0.36" />
-    <PackageReference Include="Microsoft.CodeAnalysis.Razor" Version="6.0.36" />
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Razor.Extensions" Version="6.0.36" />
   </ItemGroup>
 
   <!-- Auto-increment version properties -->
@@ -112,9 +102,6 @@
 
   <ItemGroup>
     <None Update="appsettings.json">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Update="package.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
