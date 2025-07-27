@@ -228,4 +228,47 @@ public class InMemoryTestIndexService : ILuceneIndexService
         return Task.FromResult(result);
     }
     
+    public Task<IndexRepairResult> RepairCorruptedIndexAsync(string workspacePath, 
+        IndexRepairOptions? options = null, 
+        CancellationToken cancellationToken = default)
+    {
+        // Mock implementation for testing
+        var result = new IndexRepairResult
+        {
+            Success = true,
+            Message = "In-memory index repair simulation completed successfully",
+            RemovedSegments = 0,
+            LostDocuments = 0,
+            BackupPath = null,
+            Exception = null,
+            StartTime = DateTime.UtcNow,
+            EndTime = DateTime.UtcNow.AddSeconds(1)
+        };
+        
+        return Task.FromResult(result);
+    }
+    
+    public Task<IndexHealthCheckResult> CheckHealthAsync(bool includeAutoRepair = false, 
+        CancellationToken cancellationToken = default)
+    {
+        // Mock implementation for testing
+        var data = new Dictionary<string, object>
+        {
+            ["totalIndexes"] = _indexes.Count,
+            ["healthyIndexes"] = _indexes.Count,
+            ["unhealthyIndexes"] = 0,
+            ["stuckLocks"] = 0,
+            ["corruptedIndexes"] = 0,
+            ["projectMemoryIndex"] = "healthy",
+            ["localMemoryIndex"] = "healthy"
+        };
+        
+        var result = new IndexHealthCheckResult(
+            IndexHealthCheckResult.HealthStatus.Healthy,
+            "In-memory test index is healthy",
+            data);
+        
+        return Task.FromResult(result);
+    }
+    
 }

@@ -2,6 +2,7 @@ using COA.CodeSearch.McpServer.Infrastructure;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
+using Lucene.Net.Index.Extensions;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
@@ -13,6 +14,33 @@ using System.Text;
 using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Services;
+
+/// <summary>
+/// Options for index repair operations
+/// </summary>
+public class IndexRepairOptions
+{
+    public bool CreateBackup { get; set; } = true;
+    public bool RemoveBadSegments { get; set; } = true;
+    public bool ValidateAfterRepair { get; set; } = true;
+    public string? BackupPath { get; set; }
+}
+
+/// <summary>
+/// Result of an index repair operation
+/// </summary>
+public class IndexRepairResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = string.Empty;
+    public int RemovedSegments { get; set; }
+    public int LostDocuments { get; set; }
+    public string? BackupPath { get; set; }
+    public Exception? Exception { get; set; }
+    public DateTime StartTime { get; set; }
+    public DateTime EndTime { get; set; }
+    public TimeSpan Duration => EndTime - StartTime;
+}
 
 /// <summary>
 /// Simple health check result for index service
@@ -1637,6 +1665,159 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     /// <param name="indexPath">Path to the index directory</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Corruption status with details</returns>
+    /// <summary>
+    /// Repairs a corrupted index by removing bad segments
+    /// </summary>
+    public async Task<IndexRepairResult> RepairCorruptedIndexAsync(string workspacePath, IndexRepairOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        var result = new IndexRepairResult { StartTime = DateTime.UtcNow };
+        options ??= new IndexRepairOptions();
+        
+        try
+        {
+            ThrowIfDisposed();
+            var indexPath = await GetIndexPathAsync(workspacePath).ConfigureAwait(false);
+            
+            _logger.LogWarning("Starting index repair for workspace: {WorkspacePath} at path: {IndexPath}", workspacePath, indexPath);
+            
+            // First check if the index is actually corrupted
+            var corruptionStatus = await CheckIndexCorruptionAsync(indexPath, cancellationToken).ConfigureAwait(false);
+            if (!corruptionStatus.IsCorrupted)
+            {
+                result.Success = true;
+                result.Message = "Index is not corrupted, no repair needed";
+                result.EndTime = DateTime.UtcNow;
+                return result;
+            }
+            
+            // Close any open contexts for this index
+            if (_indexes.TryRemove(indexPath, out var context))
+            {
+                await DisposeContextAsync(context).ConfigureAwait(false);
+            }
+            
+            // Create backup if requested
+            if (options.CreateBackup)
+            {
+                try
+                {
+                    var backupPath = options.BackupPath ?? $"{indexPath}_backup_{DateTime.UtcNow:yyyyMMddHHmmss}";
+                    // Create backup directory and copy files
+                    await Task.Run(() =>
+                    {
+                        System.IO.Directory.CreateDirectory(backupPath);
+                        foreach (var file in System.IO.Directory.GetFiles(indexPath))
+                        {
+                            var fileName = Path.GetFileName(file);
+                            var destFile = Path.Combine(backupPath, fileName);
+                            File.Copy(file, destFile, true);
+                        }
+                    }, cancellationToken).ConfigureAwait(false);
+                    result.BackupPath = backupPath;
+                    _logger.LogInformation("Created index backup at: {BackupPath}", backupPath);
+                }
+                catch (Exception backupEx)
+                {
+                    _logger.LogWarning(backupEx, "Failed to create backup before repair, continuing anyway");
+                }
+            }
+            
+            // Perform the repair
+            var repairResult = await Task.Run(() =>
+            {
+                try
+                {
+                    using var directory = FSDirectory.Open(indexPath);
+                    var checkIndex = new CheckIndex(directory);
+                    
+                    // First get the status
+                    var status = checkIndex.DoCheckIndex();
+                    
+                    if (!status.Clean && options.RemoveBadSegments)
+                    {
+                        _logger.LogWarning("Index has {BadSegments} bad segments with {LostDocs} lost documents. Attempting repair...",
+                            status.NumBadSegments, status.TotLoseDocCount);
+                        
+                        // FixIndex removes bad segments - data in those segments will be lost
+                        checkIndex.FixIndex(status);
+                        
+                        result.RemovedSegments = status.NumBadSegments;
+                        result.LostDocuments = (int)status.TotLoseDocCount;
+                        
+                        _logger.LogInformation("Repair completed. Removed {RemovedSegments} segments, lost {LostDocs} documents",
+                            result.RemovedSegments, result.LostDocuments);
+                    }
+                    
+                    return true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error during index repair");
+                    result.Exception = ex;
+                    return false;
+                }
+            }, cancellationToken).ConfigureAwait(false);
+            
+            if (!repairResult)
+            {
+                result.Success = false;
+                result.Message = $"Repair failed: {result.Exception?.Message ?? "Unknown error"}";
+                result.EndTime = DateTime.UtcNow;
+                return result;
+            }
+            
+            // Validate the repair if requested
+            if (options.ValidateAfterRepair)
+            {
+                var postRepairStatus = await CheckIndexCorruptionAsync(indexPath, cancellationToken).ConfigureAwait(false);
+                if (postRepairStatus.IsCorrupted)
+                {
+                    result.Success = false;
+                    result.Message = $"Index still corrupted after repair: {postRepairStatus.Details}";
+                    
+                    // Restore from backup if available
+                    if (!string.IsNullOrEmpty(result.BackupPath))
+                    {
+                        try
+                        {
+                            await RestoreIndexFromBackupAsync(workspacePath, result.BackupPath, cancellationToken).ConfigureAwait(false);
+                            result.Message += " - Restored from backup";
+                        }
+                        catch (Exception restoreEx)
+                        {
+                            _logger.LogError(restoreEx, "Failed to restore from backup after failed repair");
+                        }
+                    }
+                }
+                else
+                {
+                    result.Success = true;
+                    result.Message = $"Index successfully repaired. Removed {result.RemovedSegments} segments, lost {result.LostDocuments} documents";
+                }
+            }
+            else
+            {
+                result.Success = true;
+                result.Message = $"Repair completed. Removed {result.RemovedSegments} segments, lost {result.LostDocuments} documents";
+            }
+            
+            result.EndTime = DateTime.UtcNow;
+            _logger.LogInformation("Index repair completed in {Duration}ms with result: {Result}", 
+                result.Duration.TotalMilliseconds, result.Message);
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Unexpected error during index repair");
+            result.Success = false;
+            result.Message = $"Unexpected error: {ex.Message}";
+            result.Exception = ex;
+            result.EndTime = DateTime.UtcNow;
+            return result;
+        }
+    }
+    
     private async Task<IndexCorruptionStatus> CheckIndexCorruptionAsync(string indexPath, CancellationToken cancellationToken = default)
     {
         try
@@ -1707,7 +1888,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     /// <summary>
     /// Performs a comprehensive health check of the Lucene index service
     /// </summary>
-    public async Task<IndexHealthCheckResult> CheckHealthAsync(CancellationToken cancellationToken = default)
+    public async Task<IndexHealthCheckResult> CheckHealthAsync(bool includeAutoRepair = false, CancellationToken cancellationToken = default)
     {
         var data = new Dictionary<string, object>();
         var healthyIndexes = 0;
@@ -1755,7 +1936,61 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                         corruptedIndexes++;
                         data[$"index_{indexName}"] = "corrupted";
                         data[$"index_{indexName}_corruption_details"] = corruptionStatus.Details;
-                        unhealthyIndexes++;
+                        
+                        // Attempt automatic repair for corrupted indexes
+                        if (includeAutoRepair)
+                        {
+                            try
+                            {
+                                _logger.LogWarning("Attempting automatic repair for corrupted index: {IndexName}", indexName);
+                                
+                                // Get workspace path from index path mapping
+                                var workspacePath = await GetWorkspaceFromIndexPathAsync(kvp.Key).ConfigureAwait(false);
+                                if (!string.IsNullOrEmpty(workspacePath))
+                                {
+                                    var repairOptions = new IndexRepairOptions
+                                    {
+                                        CreateBackup = true,
+                                        RemoveBadSegments = true,
+                                        ValidateAfterRepair = true
+                                    };
+                                    
+                                    var repairResult = await RepairCorruptedIndexAsync(workspacePath, repairOptions, cancellationToken).ConfigureAwait(false);
+                                    
+                                    if (repairResult.Success)
+                                    {
+                                        data[$"index_{indexName}_repair"] = "success";
+                                        data[$"index_{indexName}_repair_message"] = repairResult.Message;
+                                        // Index is now healthy after repair
+                                        healthyIndexes++;
+                                        corruptedIndexes--;
+                                    }
+                                    else
+                                    {
+                                        data[$"index_{indexName}_repair"] = "failed";
+                                        data[$"index_{indexName}_repair_error"] = repairResult.Message;
+                                        unhealthyIndexes++;
+                                    }
+                                }
+                                else
+                                {
+                                    data[$"index_{indexName}_repair"] = "skipped";
+                                    data[$"index_{indexName}_repair_reason"] = "Could not determine workspace path";
+                                    unhealthyIndexes++;
+                                }
+                            }
+                            catch (Exception repairEx)
+                            {
+                                _logger.LogError(repairEx, "Failed to auto-repair corrupted index: {IndexName}", indexName);
+                                data[$"index_{indexName}_repair"] = "error";
+                                data[$"index_{indexName}_repair_error"] = repairEx.Message;
+                                unhealthyIndexes++;
+                            }
+                        }
+                        else
+                        {
+                            unhealthyIndexes++;
+                        }
                     }
                     else
                     {
@@ -1806,6 +2041,53 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 data, 
                 ex);
         }
+    }
+    
+    /// <summary>
+    /// Gets the workspace path from an index path by checking metadata
+    /// </summary>
+    private async Task<string?> GetWorkspaceFromIndexPathAsync(string indexPath)
+    {
+        try
+        {
+            var metadataPath = _pathResolution.GetWorkspaceMetadataPath();
+            if (File.Exists(metadataPath))
+            {
+                var json = await File.ReadAllTextAsync(metadataPath).ConfigureAwait(false);
+                var metadata = JsonSerializer.Deserialize<WorkspaceMetadata>(json);
+                
+                if (metadata?.Indexes != null)
+                {
+                    // Find the workspace that maps to this index path
+                    foreach (var kvp in metadata.Indexes)
+                    {
+                        if (kvp.Value.HashPath == indexPath)
+                        {
+                            return kvp.Value.OriginalPath;
+                        }
+                    }
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error retrieving workspace from index path: {IndexPath}", indexPath);
+        }
+        
+        return null;
+    }
+    
+    private class WorkspaceMetadata
+    {
+        public Dictionary<string, WorkspaceIndexInfo> Indexes { get; set; } = new();
+    }
+    
+    private class WorkspaceIndexInfo
+    {
+        public string OriginalPath { get; set; } = string.Empty;
+        public string HashPath { get; set; } = string.Empty;
+        public DateTime CreatedAt { get; set; }
+        public DateTime LastAccessed { get; set; }
     }
     
     #endregion

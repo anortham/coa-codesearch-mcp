@@ -37,4 +37,17 @@ public interface ILuceneIndexService : IAsyncDisposable, IDisposable
     Task<IndexDefragmentationResult> DefragmentIndexAsync(string workspacePath, 
         IndexDefragmentationOptions? options = null, 
         CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Repairs a corrupted index by removing bad segments
+    /// </summary>
+    Task<IndexRepairResult> RepairCorruptedIndexAsync(string workspacePath, 
+        IndexRepairOptions? options = null, 
+        CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Performs a comprehensive health check of the Lucene index service
+    /// </summary>
+    Task<IndexHealthCheckResult> CheckHealthAsync(bool includeAutoRepair = false, 
+        CancellationToken cancellationToken = default);
 }
