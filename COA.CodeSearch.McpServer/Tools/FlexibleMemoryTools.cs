@@ -144,6 +144,11 @@ public class FlexibleMemoryTools : ITool
                     "Failed to store working memory"
             };
         }
+        catch (InvalidParametersException)
+        {
+            // Let validation exceptions propagate for proper MCP error handling
+            throw;
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error storing working memory");
