@@ -212,8 +212,7 @@ public static class ChecklistToolRegistrations
                     includeCompleted = new { type = "boolean", description = "Include completed checklists (default: true)", @default = true },
                     onlyShared = new { type = "boolean", description = "Only show shared/team checklists (default: false)", @default = false },
                     maxResults = new { type = "integer", description = "Maximum number of checklists to return (default: 50)", @default = 50 }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {
