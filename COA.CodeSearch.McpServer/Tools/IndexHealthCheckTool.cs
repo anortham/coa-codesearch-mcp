@@ -29,13 +29,13 @@ public class IndexHealthCheckTool
     /// <summary>
     /// Perform comprehensive health check with metrics and circuit breaker status
     /// </summary>
-    public async Task<object> ExecuteAsync(bool includeMetrics = true, bool includeCircuitBreakerStatus = true, CancellationToken cancellationToken = default)
+    public async Task<object> ExecuteAsync(bool includeMetrics = true, bool includeCircuitBreakerStatus = true, bool includeAutoRepair = false, CancellationToken cancellationToken = default)
     {
         try
         {
             _logger.LogInformation("Starting comprehensive index health check");
 
-            var healthResult = await _luceneIndexService.CheckHealthAsync(cancellationToken);
+            var healthResult = await _luceneIndexService.CheckHealthAsync(includeAutoRepair, cancellationToken);
             
             var result = new
             {

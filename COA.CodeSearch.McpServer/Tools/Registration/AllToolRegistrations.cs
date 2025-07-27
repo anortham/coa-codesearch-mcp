@@ -671,6 +671,12 @@ public static class AllToolRegistrations
                         type = "boolean", 
                         description = "Include circuit breaker status for all operations", 
                         @default = true 
+                    },
+                    includeAutoRepair = new
+                    {
+                        type = "boolean",
+                        description = "Automatically attempt to repair corrupted indexes when detected",
+                        @default = false
                     }
                 },
                 required = new string[] { }
@@ -680,6 +686,7 @@ public static class AllToolRegistrations
                 var result = await tool.ExecuteAsync(
                     parameters?.IncludeMetrics ?? true,
                     parameters?.IncludeCircuitBreakerStatus ?? true,
+                    parameters?.IncludeAutoRepair ?? false,
                     ct);
                     
                 return CreateSuccessResult(result);
@@ -691,5 +698,6 @@ public static class AllToolRegistrations
     {
         public bool? IncludeMetrics { get; set; }
         public bool? IncludeCircuitBreakerStatus { get; set; }
+        public bool? IncludeAutoRepair { get; set; }
     }
 }
