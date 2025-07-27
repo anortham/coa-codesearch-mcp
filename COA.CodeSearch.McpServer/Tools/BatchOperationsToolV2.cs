@@ -184,9 +184,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     
     private async Task<object> ExecuteTextSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("query", out var queryProp))
+        if (!operation.TryGetProperty("searchQuery", out var queryProp))
         {
-            throw new InvalidOperationException("text_search operation requires 'query'");
+            throw new InvalidOperationException("text_search operation requires 'searchQuery'");
         }
 
         return await _fastTextSearchToolV2.ExecuteAsync(
@@ -207,9 +207,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private async Task<object> ExecuteFileSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("query", out var queryProp))
+        if (!operation.TryGetProperty("nameQuery", out var queryProp))
         {
-            throw new InvalidOperationException("file_search operation requires 'query'");
+            throw new InvalidOperationException("file_search operation requires 'nameQuery'");
         }
 
         return await _fastFileSearchToolV2.ExecuteAsync(
@@ -255,9 +255,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private async Task<object> ExecuteSimilarFilesAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("sourceFilePath", out var sourceFilePathProp))
+        if (!operation.TryGetProperty("sourcePath", out var sourceFilePathProp))
         {
-            throw new InvalidOperationException("similar_files operation requires 'sourceFilePath'");
+            throw new InvalidOperationException("similar_files operation requires 'sourcePath'");
         }
 
         return await _fastSimilarFilesTool.ExecuteAsync(
@@ -277,9 +277,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private async Task<object> ExecuteDirectorySearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("query", out var queryProp))
+        if (!operation.TryGetProperty("directoryQuery", out var queryProp))
         {
-            throw new InvalidOperationException("directory_search operation requires 'query'");
+            throw new InvalidOperationException("directory_search operation requires 'directoryQuery'");
         }
 
         return await _fastDirectorySearchTool.ExecuteAsync(
