@@ -16,7 +16,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// <summary>
 /// Enhanced memory service with flexible schema and advanced search capabilities
 /// </summary>
-public class FlexibleMemoryService : IMemoryService
+public class FlexibleMemoryService : IMemoryService, IDisposable
 {
     private readonly ILogger<FlexibleMemoryService> _logger;
     private readonly IConfiguration _configuration;
@@ -33,6 +33,9 @@ public class FlexibleMemoryService : IMemoryService
     
     // Safety constants
     private const int MaxAllowedResults = 10000; // Maximum results to prevent OOM
+    
+    // Concurrency control
+    private readonly SemaphoreSlim _batchUpdateSemaphore = new(1, 1);
     
     public FlexibleMemoryService(
         ILogger<FlexibleMemoryService> logger, 
@@ -1178,9 +1181,8 @@ public class FlexibleMemoryService : IMemoryService
                 if (!memoryIdsList.Any())
                     return;
 
-                // Use a lock to ensure atomic batch updates
-                using var semaphore = new SemaphoreSlim(1, 1);
-                await semaphore.WaitAsync();
+                // Use shared semaphore to prevent concurrent batch updates
+                await _batchUpdateSemaphore.WaitAsync();
                 
                 try
                 {
@@ -1192,12 +1194,15 @@ public class FlexibleMemoryService : IMemoryService
                     {
                         var batch = memoryIdsList.Skip(i).Take(batchSize);
                         
+                        // Prepare all updates for this batch first
+                        var updates = new List<(Term term, Document doc)>();
+                        
                         foreach (var memoryId in batch)
                         {
                             // Create update term for the specific memory
                             var term = new Term("id", memoryId);
                             
-                            // First, retrieve the current document to get current access count
+                            // Retrieve current document with fresh searcher
                             var searcher = await _indexService.GetIndexSearcherAsync(workspace);
                             var query = new TermQuery(term);
                             var hits = searcher.Search(query, 1);
@@ -1211,12 +1216,18 @@ public class FlexibleMemoryService : IMemoryService
                                 memory.AccessCount++;
                                 memory.LastAccessed = now;
                                 
+                                // TODO: Add version field for optimistic concurrency control
+                                
                                 // Create updated document
                                 var updatedDoc = CreateDocument(memory);
-                                
-                                // Update the document atomically
-                                indexWriter.UpdateDocument(term, updatedDoc);
+                                updates.Add((term, updatedDoc));
                             }
+                        }
+                        
+                        // Apply all updates in this batch atomically
+                        foreach (var (term, doc) in updates)
+                        {
+                            indexWriter.UpdateDocument(term, doc);
                         }
                     }
                     
@@ -1225,7 +1236,7 @@ public class FlexibleMemoryService : IMemoryService
                 }
                 finally
                 {
-                    semaphore.Release();
+                    _batchUpdateSemaphore.Release();
                 }
             }, context, ErrorSeverity.Recoverable);
         }
@@ -1318,5 +1329,15 @@ public class FlexibleMemoryService : IMemoryService
             _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);
             return false;
         }
+    }
+    
+    /// <summary>
+    /// Dispose of resources
+    /// </summary>
+    public void Dispose()
+    {
+        _batchUpdateSemaphore?.Dispose();
+        _analyzer?.Dispose();
+        GC.SuppressFinalize(this);
     }
 }
