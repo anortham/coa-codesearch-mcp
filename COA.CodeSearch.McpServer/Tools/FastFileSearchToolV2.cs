@@ -25,6 +25,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IConfiguration _configuration;
     private readonly IFieldSelectorService _fieldSelectorService;
+    private readonly IErrorRecoveryService _errorRecoveryService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSearchToolV2(
@@ -35,12 +36,14 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         IResponseSizeEstimator sizeEstimator,
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
-        IDetailRequestCache detailCache)
+        IDetailRequestCache detailCache,
+        IErrorRecoveryService errorRecoveryService)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _luceneIndexService = luceneIndexService;
         _configuration = configuration;
         _fieldSelectorService = fieldSelectorService;
+        _errorRecoveryService = errorRecoveryService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -67,16 +70,33 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             // Validate inputs
             if (string.IsNullOrWhiteSpace(query))
             {
-                return CreateErrorResponse<object>("Query cannot be empty");
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Search query cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("nameQuery", "non-empty string"));
             }
 
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
-                return CreateErrorResponse<object>("Workspace path cannot be empty");
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Workspace path cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("workspacePath", "absolute directory path"));
             }
 
             // Get index searcher
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            IndexSearcher searcher;
+            try
+            {
+                searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.INDEX_NOT_FOUND,
+                    $"No search index exists for {workspacePath}",
+                    _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath));
+            }
             
             // Build the query based on search type
             Query luceneQuery = searchType?.ToLower() switch
@@ -142,10 +162,37 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             // Create AI-optimized response
             return CreateAiOptimizedResponse(query, searchType, workspacePath, searchResults, mode);
         }
+        catch (CircuitBreakerOpenException cbEx)
+        {
+            Logger.LogWarning(cbEx, "Circuit breaker is open for file search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.CIRCUIT_BREAKER_OPEN,
+                cbEx.Message,
+                _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName));
+        }
+        catch (DirectoryNotFoundException dnfEx)
+        {
+            Logger.LogError(dnfEx, "Directory not found for file search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.DIRECTORY_NOT_FOUND,
+                dnfEx.Message,
+                _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath));
+        }
+        catch (UnauthorizedAccessException uaEx)
+        {
+            Logger.LogError(uaEx, "Permission denied for file search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.PERMISSION_DENIED,
+                $"Permission denied accessing {workspacePath}: {uaEx.Message}",
+                null);
+        }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error in fast file search for query: {Query}", query);
-            return CreateErrorResponse<object>($"Search failed: {ex.Message}");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.INTERNAL_ERROR,
+                $"Search failed: {ex.Message}",
+                null);
         }
     }
 
@@ -596,7 +643,10 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
-        return Task.FromResult<object>(CreateErrorResponse<object>("Detail requests not implemented for file search"));
+        return Task.FromResult<object>(UnifiedToolResponse<object>.CreateError(
+            ErrorCodes.VALIDATION_ERROR,
+            "Detail requests not implemented for file search",
+            null));
     }
 
     protected override int GetTotalResults<T>(T data)

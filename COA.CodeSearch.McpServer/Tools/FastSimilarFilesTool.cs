@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Analysis;
 using Lucene.Net.Index;
@@ -20,16 +21,19 @@ public class FastSimilarFilesTool : ITool
     private readonly ILogger<FastSimilarFilesTool> _logger;
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
+    private readonly IErrorRecoveryService _errorRecoveryService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastSimilarFilesTool(
         ILogger<FastSimilarFilesTool> logger,
         ILuceneIndexService luceneIndexService,
-        IFieldSelectorService fieldSelectorService)
+        IFieldSelectorService fieldSelectorService,
+        IErrorRecoveryService errorRecoveryService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
+        _errorRecoveryService = errorRecoveryService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -52,25 +56,35 @@ public class FastSimilarFilesTool : ITool
             // Validate inputs
             if (string.IsNullOrWhiteSpace(sourceFilePath))
             {
-                return new
-                {
-                    success = false,
-                    error = "Source file path cannot be empty"
-                };
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Source file path cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("sourcePath", "absolute file path"));
             }
 
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
-                return new
-                {
-                    success = false,
-                    error = "Workspace path cannot be empty"
-                };
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Workspace path cannot be empty",
+                    _errorRecoveryService.GetValidationErrorRecovery("workspacePath", "absolute directory path"));
             }
 
             // Get index searcher
-            var searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
-            var analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
+            IndexSearcher searcher;
+            Analyzer analyzer;
+            try
+            {
+                searcher = await _luceneIndexService.GetIndexSearcherAsync(workspacePath, cancellationToken);
+                analyzer = await _luceneIndexService.GetAnalyzerAsync(workspacePath, cancellationToken);
+            }
+            catch (DirectoryNotFoundException)
+            {
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.INDEX_NOT_FOUND,
+                    $"No search index exists for {workspacePath}",
+                    _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath));
+            }
             
             // Find the source document
             var sourceQuery = new TermQuery(new Term("path", sourceFilePath));
@@ -78,11 +92,27 @@ public class FastSimilarFilesTool : ITool
             
             if (sourceHits.TotalHits == 0)
             {
-                return new
-                {
-                    success = false,
-                    error = $"Source file not found in index: {sourceFilePath}. Make sure the workspace is indexed."
-                };
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.FILE_NOT_FOUND,
+                    $"Source file not found in index: {sourceFilePath}",
+                    new RecoveryInfo
+                    {
+                        Steps = new List<string>
+                        {
+                            "Verify the file exists at the specified path",
+                            "Ensure the workspace has been indexed",
+                            "If the file was recently added, re-index the workspace"
+                        },
+                        SuggestedActions = new List<SuggestedAction>
+                        {
+                            new SuggestedAction
+                            {
+                                Tool = "index_workspace",
+                                Params = new Dictionary<string, object> { ["workspacePath"] = workspacePath },
+                                Description = "Re-index the workspace to include all files"
+                            }
+                        }
+                    });
             }
 
             var sourceDocId = sourceHits.ScoreDocs[0].Doc;
@@ -185,14 +215,37 @@ public class FastSimilarFilesTool : ITool
                 performance = searchDuration < 50 ? "excellent" : "very fast"
             };
         }
+        catch (CircuitBreakerOpenException cbEx)
+        {
+            _logger.LogWarning(cbEx, "Circuit breaker is open for similar files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.CIRCUIT_BREAKER_OPEN,
+                cbEx.Message,
+                _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName));
+        }
+        catch (DirectoryNotFoundException dnfEx)
+        {
+            _logger.LogError(dnfEx, "Directory not found for similar files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.DIRECTORY_NOT_FOUND,
+                dnfEx.Message,
+                _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath));
+        }
+        catch (UnauthorizedAccessException uaEx)
+        {
+            _logger.LogError(uaEx, "Permission denied for similar files search");
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.PERMISSION_DENIED,
+                $"Permission denied accessing {workspacePath}: {uaEx.Message}",
+                null);
+        }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error in fast similar files search");
-            return new
-            {
-                success = false,
-                error = $"Search failed: {ex.Message}"
-            };
+            return UnifiedToolResponse<object>.CreateError(
+                ErrorCodes.INTERNAL_ERROR,
+                $"Search failed: {ex.Message}",
+                null);
         }
     }
 

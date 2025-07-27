@@ -57,6 +57,7 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<ToolRegistry>();
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
+        services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
@@ -66,6 +67,7 @@ public abstract class TestBase : IDisposable
         
         // Memory services
         services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
+        services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
