@@ -22,6 +22,7 @@ public class ContextAwarenessService : IContextAwarenessService
     // Technology detection patterns
     private static readonly Dictionary<string, string[]> TechnologyPatterns = new()
     {
+        // .NET & Microsoft
         ["aspnet"] = ["Controllers", "Models", "Views", "Startup.cs", "Program.cs", ".csproj"],
         ["blazor"] = [".razor", "BlazorServer", "BlazorWebAssembly"],
         ["ef"] = ["Entity", "DbContext", "Migrations", "Repository"],
@@ -30,7 +31,65 @@ public class ContextAwarenessService : IContextAwarenessService
         ["console"] = ["Program.cs", "Main(", "Console."],
         ["test"] = ["Tests", "Test.cs", "Xunit", "NUnit", "MSTest"],
         ["desktop"] = ["WPF", "WinForms", "MAUI", "Avalonia"],
-        ["mobile"] = ["MAUI", "Xamarin", "Android", "iOS"]
+        ["mobile"] = ["MAUI", "Xamarin", "Android", "iOS"],
+        
+        // Python
+        ["python"] = ["requirements.txt", "setup.py", "pyproject.toml", "__init__.py", "manage.py"],
+        ["django"] = ["manage.py", "settings.py", "urls.py", "models.py", "views.py"],
+        ["flask"] = ["app.py", "flask", "@app.route", "Flask"],
+        ["fastapi"] = ["main.py", "fastapi", "@app.get", "FastAPI"],
+        
+        // JavaScript/TypeScript
+        ["react"] = ["package.json", "react", "jsx", "components"],
+        ["vue"] = ["package.json", "vue", ".vue", "components"],
+        ["angular"] = ["angular.json", "@angular", "component.ts", "module.ts"],
+        ["nodejs"] = ["package.json", "node_modules", "express"],
+        ["nextjs"] = ["next.config.js", "pages", "app", "_app.js"],
+        ["nuxt"] = ["nuxt.config.js", "pages", "layouts"],
+        
+        // Go
+        ["go"] = ["go.mod", "go.sum", "main.go", "package main"],
+        ["gin"] = ["gin.Engine", "gin.Context", "router.GET"],
+        ["fiber"] = ["fiber.App", "fiber.Ctx", "app.Get"],
+        
+        // Rust
+        ["rust"] = ["Cargo.toml", "Cargo.lock", "main.rs", "lib.rs"],
+        ["actix"] = ["actix-web", "HttpServer", "App::new"],
+        ["rocket"] = ["rocket", "#[get", "#[post"],
+        
+        // Java/JVM
+        ["java"] = ["pom.xml", "build.gradle", "Main.java", "Application.java"],
+        ["spring"] = ["@SpringBootApplication", "@RestController", "@Service"],
+        ["maven"] = ["pom.xml", "src/main/java", "target"],
+        ["gradle"] = ["build.gradle", "gradlew", "gradle.properties"],
+        
+        // PHP
+        ["php"] = ["composer.json", "index.php", "<?php"],
+        ["laravel"] = ["artisan", "app/Http", "routes/web.php", "composer.json"],
+        ["symfony"] = ["symfony", "src/Controller", "config/services.yaml"],
+        
+        // Ruby
+        ["ruby"] = ["Gemfile", "Rakefile", "config.ru", ".rb"],
+        ["rails"] = ["Gemfile", "app/controllers", "app/models", "config/routes.rb"],
+        
+        // Databases
+        ["postgresql"] = ["postgresql", "psql", "pg_", ".sql"],
+        ["mysql"] = ["mysql", "mysqldump", ".sql"],
+        ["sqlite"] = ["sqlite", ".db", ".sqlite"],
+        ["mongodb"] = ["mongodb", "mongoose", "mongo"],
+        ["redis"] = ["redis", "redis-server", "redis.conf"],
+        
+        // DevOps & Infrastructure
+        ["docker"] = ["Dockerfile", "docker-compose.yml", ".dockerignore"],
+        ["kubernetes"] = ["deployment.yaml", "service.yaml", "kubectl"],
+        ["terraform"] = [".tf", "terraform", "main.tf"],
+        ["ansible"] = ["playbook.yml", "ansible", "hosts"],
+        
+        // Mobile
+        ["ios"] = ["Info.plist", "AppDelegate", ".swift", ".m"],
+        ["android"] = ["AndroidManifest.xml", "build.gradle", "MainActivity"],
+        ["flutter"] = ["pubspec.yaml", "main.dart", "lib/"],
+        ["reactnative"] = ["package.json", "react-native", "App.js"]
     };
     
     // File type patterns for context extraction
@@ -291,19 +350,56 @@ public class ContextAwarenessService : IContextAwarenessService
         
         context.Technologies = technologies.ToArray();
         
-        // Detect languages
+        // Detect languages from file extensions
         var languages = new HashSet<string>();
         foreach (var file in allFiles)
         {
             var extension = Path.GetExtension(file).ToLowerInvariant();
             switch (extension)
             {
+                // .NET & Microsoft
                 case ".cs": languages.Add("csharp"); break;
+                case ".vb": languages.Add("vb.net"); break;
+                case ".fs": languages.Add("fsharp"); break;
+                
+                // Web Technologies
                 case ".ts": case ".tsx": languages.Add("typescript"); break;
                 case ".js": case ".jsx": languages.Add("javascript"); break;
-                case ".py": languages.Add("python"); break;
-                case ".java": languages.Add("java"); break;
-                case ".cpp": case ".cc": case ".cxx": languages.Add("cpp"); break;
+                case ".html": case ".htm": languages.Add("html"); break;
+                case ".css": case ".scss": case ".sass": case ".less": languages.Add("css"); break;
+                case ".vue": languages.Add("vue"); break;
+                case ".svelte": languages.Add("svelte"); break;
+                case ".php": languages.Add("php"); break;
+                
+                // Programming Languages
+                case ".py": case ".pyi": languages.Add("python"); break;
+                case ".go": languages.Add("go"); break;
+                case ".rs": languages.Add("rust"); break;
+                case ".java": case ".kt": case ".scala": languages.Add("jvm"); break;
+                case ".rb": languages.Add("ruby"); break;
+                case ".cpp": case ".cc": case ".cxx": case ".c": case ".h": languages.Add("c/cpp"); break;
+                case ".swift": languages.Add("swift"); break;
+                case ".dart": languages.Add("dart"); break;
+                case ".r": languages.Add("r"); break;
+                case ".jl": languages.Add("julia"); break;
+                case ".lua": languages.Add("lua"); break;
+                case ".pl": case ".pm": languages.Add("perl"); break;
+                
+                // Functional Languages
+                case ".clj": case ".cljs": languages.Add("clojure"); break;
+                case ".hs": languages.Add("haskell"); break;
+                case ".elm": languages.Add("elm"); break;
+                case ".ml": languages.Add("ocaml"); break;
+                
+                // Data & Config
+                case ".sql": languages.Add("sql"); break;
+                case ".json": case ".yaml": case ".yml": case ".toml": languages.Add("config"); break;
+                case ".xml": case ".xaml": languages.Add("xml"); break;
+                
+                // Shell & Scripts
+                case ".sh": case ".bash": case ".zsh": languages.Add("shell"); break;
+                case ".ps1": languages.Add("powershell"); break;
+                case ".bat": case ".cmd": languages.Add("batch"); break;
             }
         }
         

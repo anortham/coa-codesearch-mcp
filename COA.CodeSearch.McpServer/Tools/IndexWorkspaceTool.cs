@@ -298,40 +298,16 @@ public class IndexWorkspaceTool : ITool
                 catch { /* Ignore read errors */ }
             }
             
-            // Check for package.json in root only
-            var packageJsonPath = Path.Combine(workspacePath, "package.json");
-            if (File.Exists(packageJsonPath))
-            {
-                try
-                {
-                    var content = File.ReadAllText(packageJsonPath);
-                    var deps = content.ToLower();
-                    
-                    if (deps.Contains("@angular/"))
-                    {
-                        projectTypes.Add("Angular");
-                        primaryExtensions.Add(".ts");
-                        primaryExtensions.Add(".html");
-                    }
-                    else if (deps.Contains("\"react\""))
-                    {
-                        projectTypes.Add("React");
-                        primaryExtensions.Add(".tsx");
-                        primaryExtensions.Add(".jsx");
-                    }
-                    else if (deps.Contains("\"vue\""))
-                    {
-                        projectTypes.Add("Vue");
-                        primaryExtensions.Add(".vue");
-                    }
-                    else
-                    {
-                        projectTypes.Add("Node.js");
-                        primaryExtensions.Add(".js");
-                    }
-                }
-                catch { /* Ignore read errors */ }
-            }
+            // Check for various project types
+            DetectJavaScriptProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectPythonProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectGoProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectRustProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectJavaProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectPhpProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectRubyProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectMobileProjects(workspacePath, projectTypes, primaryExtensions);
+            DetectDevOpsProjects(workspacePath, projectTypes, primaryExtensions);
         }
         catch (Exception ex)
         {
@@ -350,6 +326,212 @@ public class IndexWorkspaceTool : ITool
             primaryExtensions = primaryExtensions.Take(10).ToArray(), // Limit array size
             tips = tips.Take(5).ToArray() // Limit tips
         };
+    }
+    
+    private void DetectJavaScriptProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        var packageJsonPath = Path.Combine(workspacePath, "package.json");
+        if (!File.Exists(packageJsonPath)) return;
+        
+        try
+        {
+            var content = File.ReadAllText(packageJsonPath);
+            var deps = content.ToLower();
+            
+            if (deps.Contains("@angular/"))
+            {
+                projectTypes.Add("Angular");
+                primaryExtensions.Add(".ts");
+                primaryExtensions.Add(".html");
+            }
+            else if (deps.Contains("\"react\""))
+            {
+                projectTypes.Add("React");
+                primaryExtensions.Add(".tsx");
+                primaryExtensions.Add(".jsx");
+            }
+            else if (deps.Contains("\"vue\""))
+            {
+                projectTypes.Add("Vue");
+                primaryExtensions.Add(".vue");
+            }
+            else if (deps.Contains("\"next\"") || deps.Contains("next.config"))
+            {
+                projectTypes.Add("Next.js");
+                primaryExtensions.Add(".tsx");
+                primaryExtensions.Add(".jsx");
+            }
+            else if (deps.Contains("\"nuxt\""))
+            {
+                projectTypes.Add("Nuxt.js");
+                primaryExtensions.Add(".vue");
+            }
+            else if (deps.Contains("\"svelte\""))
+            {
+                projectTypes.Add("Svelte");
+                primaryExtensions.Add(".svelte");
+            }
+            else
+            {
+                projectTypes.Add("Node.js");
+                primaryExtensions.Add(".js");
+            }
+        }
+        catch { /* Ignore read errors */ }
+    }
+    
+    private void DetectPythonProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        var indicators = new[]
+        {
+            ("requirements.txt", "Python"),
+            ("pyproject.toml", "Python"),
+            ("setup.py", "Python"),
+            ("manage.py", "Django"),
+            ("app.py", "Flask")
+        };
+        
+        foreach (var (file, type) in indicators)
+        {
+            if (File.Exists(Path.Combine(workspacePath, file)))
+            {
+                projectTypes.Add(type);
+                primaryExtensions.Add(".py");
+                break;
+            }
+        }
+    }
+    
+    private void DetectGoProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        if (File.Exists(Path.Combine(workspacePath, "go.mod")))
+        {
+            projectTypes.Add("Go");
+            primaryExtensions.Add(".go");
+        }
+    }
+    
+    private void DetectRustProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        if (File.Exists(Path.Combine(workspacePath, "Cargo.toml")))
+        {
+            projectTypes.Add("Rust");
+            primaryExtensions.Add(".rs");
+        }
+    }
+    
+    private void DetectJavaProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        if (File.Exists(Path.Combine(workspacePath, "pom.xml")))
+        {
+            projectTypes.Add("Maven/Java");
+            primaryExtensions.Add(".java");
+        }
+        else if (File.Exists(Path.Combine(workspacePath, "build.gradle")))
+        {
+            projectTypes.Add("Gradle/Java");
+            primaryExtensions.Add(".java");
+        }
+    }
+    
+    private void DetectPhpProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        if (File.Exists(Path.Combine(workspacePath, "composer.json")))
+        {
+            try
+            {
+                var content = File.ReadAllText(Path.Combine(workspacePath, "composer.json"));
+                if (content.Contains("laravel/framework"))
+                {
+                    projectTypes.Add("Laravel");
+                }
+                else if (content.Contains("symfony/symfony"))
+                {
+                    projectTypes.Add("Symfony");
+                }
+                else
+                {
+                    projectTypes.Add("PHP");
+                }
+                primaryExtensions.Add(".php");
+            }
+            catch { /* Ignore read errors */ }
+        }
+    }
+    
+    private void DetectRubyProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        if (File.Exists(Path.Combine(workspacePath, "Gemfile")))
+        {
+            try
+            {
+                var content = File.ReadAllText(Path.Combine(workspacePath, "Gemfile"));
+                if (content.Contains("rails"))
+                {
+                    projectTypes.Add("Ruby on Rails");
+                }
+                else
+                {
+                    projectTypes.Add("Ruby");
+                }
+                primaryExtensions.Add(".rb");
+            }
+            catch { /* Ignore read errors */ }
+        }
+    }
+    
+    private void DetectMobileProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        // Flutter
+        if (File.Exists(Path.Combine(workspacePath, "pubspec.yaml")))
+        {
+            projectTypes.Add("Flutter");
+            primaryExtensions.Add(".dart");
+        }
+        
+        // iOS
+        if (Directory.GetFiles(workspacePath, "*.xcodeproj", SearchOption.TopDirectoryOnly).Any() ||
+            File.Exists(Path.Combine(workspacePath, "Info.plist")))
+        {
+            projectTypes.Add("iOS");
+            primaryExtensions.Add(".swift");
+            primaryExtensions.Add(".m");
+        }
+        
+        // Android
+        if (File.Exists(Path.Combine(workspacePath, "AndroidManifest.xml")) ||
+            Directory.GetDirectories(workspacePath).Any(d => Path.GetFileName(d) == "app" && 
+                File.Exists(Path.Combine(d, "build.gradle"))))
+        {
+            projectTypes.Add("Android");
+            primaryExtensions.Add(".java");
+            primaryExtensions.Add(".kt");
+        }
+    }
+    
+    private void DetectDevOpsProjects(string workspacePath, List<string> projectTypes, HashSet<string> primaryExtensions)
+    {
+        // Docker
+        if (File.Exists(Path.Combine(workspacePath, "Dockerfile")) ||
+            File.Exists(Path.Combine(workspacePath, "docker-compose.yml")))
+        {
+            projectTypes.Add("Docker");
+        }
+        
+        // Kubernetes
+        if (Directory.GetFiles(workspacePath, "*.yaml", SearchOption.TopDirectoryOnly)
+            .Any(f => File.ReadAllText(f).Contains("apiVersion")))
+        {
+            projectTypes.Add("Kubernetes");
+            primaryExtensions.Add(".yaml");
+        }
+        
+        // Terraform
+        if (Directory.GetFiles(workspacePath, "*.tf", SearchOption.TopDirectoryOnly).Any())
+        {
+            projectTypes.Add("Terraform");
+            primaryExtensions.Add(".tf");
+        }
     }
     
     private async Task<List<WorkspaceIndexInfo>> GetExistingIndexesAsync()
@@ -382,6 +564,7 @@ public class IndexWorkspaceTool : ITool
         
         return indexes;
     }
+    
     private class WorkspaceMetadata
     {
         public Dictionary<string, WorkspaceIndexInfo> Indexes { get; set; } = new();
