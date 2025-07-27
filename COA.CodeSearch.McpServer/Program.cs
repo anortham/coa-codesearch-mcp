@@ -106,6 +106,12 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ConfigurationValidationService>();
         services.AddSingleton<ToolRegistry>();
         
+        // Resource services for MCP Resources capability
+        services.AddSingleton<IResourceRegistry, ResourceRegistry>();
+        services.AddSingleton<WorkspaceResourceProvider>();
+        services.AddSingleton<SearchResultResourceProvider>();
+        services.AddSingleton<MemoryResourceProvider>();
+        
         // Lucene services
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
@@ -248,6 +254,14 @@ using (var scope = host.Services.CreateScope())
     logger.LogInformation("Registering tools after successful configuration validation...");
     AllToolRegistrations.RegisterAll(toolRegistry, scope.ServiceProvider);
     logger.LogInformation("Tool registration complete");
+    
+    // Register resource providers for MCP Resources capability
+    var resourceRegistry = scope.ServiceProvider.GetRequiredService<IResourceRegistry>();
+    logger.LogInformation("Registering resource providers...");
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<WorkspaceResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<SearchResultResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<MemoryResourceProvider>());
+    logger.LogInformation("Resource provider registration complete");
 }
 
 await host.RunAsync();

@@ -562,6 +562,115 @@
             Gets or sets the list of available prompts.
             </summary>
         </member>
+        <member name="T:COA.Mcp.Protocol.ReadResourceRequest">
+            <summary>
+            Request to read a specific resource by URI.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ReadResourceRequest.Uri">
+            <summary>
+            Gets or sets the URI of the resource to read.
+            </summary>
+            <example>codesearch://workspace/indexed-files</example>
+        </member>
+        <member name="T:COA.Mcp.Protocol.ReadResourceResult">
+            <summary>
+            Result of a resources/read request containing the resource content.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ReadResourceResult.Contents">
+            <summary>
+            Gets or sets the list of content items for this resource.
+            </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.ResourceContent">
+            <summary>
+            Represents a piece of content within a resource.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ResourceContent.Uri">
+            <summary>
+            Gets or sets the URI identifying this content piece.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ResourceContent.MimeType">
+            <summary>
+            Gets or sets the MIME type of the content.
+            </summary>
+            <example>text/plain, application/json, text/markdown</example>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ResourceContent.Text">
+            <summary>
+            Gets or sets the text content.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.ResourceContent.Blob">
+            <summary>
+            Gets or sets the base64-encoded binary content.
+            </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.GetPromptRequest">
+            <summary>
+            Request to get a specific prompt by name with optional arguments.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.GetPromptRequest.Name">
+            <summary>
+            Gets or sets the name of the prompt to retrieve.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.GetPromptRequest.Arguments">
+            <summary>
+            Gets or sets the arguments to customize the prompt.
+            </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.GetPromptResult">
+            <summary>
+            Result of a prompts/get request containing the rendered prompt content.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.GetPromptResult.Description">
+            <summary>
+            Gets or sets the description of what this prompt accomplishes.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.GetPromptResult.Messages">
+            <summary>
+            Gets or sets the list of messages that make up this prompt.
+            </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.PromptMessage">
+            <summary>
+            Represents a message within a prompt template.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.PromptMessage.Role">
+            <summary>
+            Gets or sets the role of the message sender.
+            </summary>
+            <example>user, assistant, system</example>
+        </member>
+        <member name="P:COA.Mcp.Protocol.PromptMessage.Content">
+            <summary>
+            Gets or sets the content of the message.
+            </summary>
+        </member>
+        <member name="T:COA.Mcp.Protocol.PromptContent">
+            <summary>
+            Represents the content of a prompt message.
+            </summary>
+        </member>
+        <member name="P:COA.Mcp.Protocol.PromptContent.Type">
+            <summary>
+            Gets or sets the content type.
+            </summary>
+            <value>Currently only "text" is supported.</value>
+        </member>
+        <member name="P:COA.Mcp.Protocol.PromptContent.Text">
+            <summary>
+            Gets or sets the text content of the message.
+            </summary>
+        </member>
         <member name="T:COA.Mcp.Protocol.ProgressNotification">
             <summary>
             Notification sent to inform clients about the progress of long-running operations.

@@ -14,6 +14,7 @@ public class McpServer : BackgroundService, INotificationService
 {
     private readonly ILogger<McpServer> _logger;
     private readonly ToolRegistry _toolRegistry;
+    private readonly IResourceRegistry _resourceRegistry;
     private readonly JsonSerializerOptions _jsonOptions;
     private StreamWriter? _writer;
     private readonly SemaphoreSlim _writerLock = new(1, 1);
@@ -23,10 +24,12 @@ public class McpServer : BackgroundService, INotificationService
 
     public McpServer(
         ILogger<McpServer> logger,
-        ToolRegistry toolRegistry)
+        ToolRegistry toolRegistry,
+        IResourceRegistry resourceRegistry)
     {
         _logger = logger;
         _toolRegistry = toolRegistry;
+        _resourceRegistry = resourceRegistry;
         
         _jsonOptions = new JsonSerializerOptions
         {
@@ -171,6 +174,8 @@ public class McpServer : BackgroundService, INotificationService
                 "notifications/initialized" => null, // MCP client sends this as notification
                 "tools/list" => HandleToolsList(),
                 "tools/call" => await HandleToolsCallAsync(request, requestToken),
+                "resources/list" => await HandleResourcesListAsync(requestToken),
+                "resources/read" => await HandleResourcesReadAsync(request, requestToken),
                 _ => throw new NotSupportedException($"Method '{request.Method}' is not supported")
             };
 
@@ -239,7 +244,12 @@ public class McpServer : BackgroundService, INotificationService
             },
             Capabilities = new ServerCapabilities
             {
-                Tools = new { }
+                Tools = new { },
+                Resources = new ResourceCapabilities
+                {
+                    Subscribe = false, // Not implemented yet
+                    ListChanged = false // Not implemented yet
+                }
             }
         };
     }
@@ -331,6 +341,46 @@ public class McpServer : BackgroundService, INotificationService
     }
 
     #endregion
+
+    private async Task<ListResourcesResult> HandleResourcesListAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Handling resources/list request");
+        
+        var resources = await _resourceRegistry.ListResourcesAsync(cancellationToken);
+        
+        return new ListResourcesResult
+        {
+            Resources = resources
+        };
+    }
+
+    private async Task<ReadResourceResult> HandleResourcesReadAsync(JsonRpcRequest request, CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Handling resources/read request");
+
+        if (request.Params == null)
+        {
+            throw new ArgumentException("resources/read requires parameters");
+        }
+
+        ReadResourceRequest? readRequest;
+        try
+        {
+            readRequest = JsonSerializer.Deserialize<ReadResourceRequest>(
+                request.Params.ToString()!, _jsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Invalid parameters for resources/read: {ex.Message}", ex);
+        }
+
+        if (readRequest?.Uri == null)
+        {
+            throw new ArgumentException("resources/read requires a 'uri' parameter");
+        }
+
+        return await _resourceRegistry.ReadResourceAsync(readRequest.Uri, cancellationToken);
+    }
 
     public override void Dispose()
     {
