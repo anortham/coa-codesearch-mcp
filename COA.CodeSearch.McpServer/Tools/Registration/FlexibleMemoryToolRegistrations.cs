@@ -81,15 +81,23 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
-                var result = await tool.StoreMemoryAsync(
-                    ValidateRequired(parameters.MemoryType, "memoryType"),
-                    ValidateRequired(parameters.Content, "content"),
-                    parameters.IsShared ?? true,
-                    parameters.SessionId,
-                    parameters.Files,
-                    parameters.Fields);
-                    
-                return CreateSuccessResult(result);
+                try
+                {
+                    var result = await tool.StoreMemoryAsync(
+                        ValidateRequired(parameters.MemoryType, "memoryType"),
+                        ValidateRequired(parameters.Content, "content"),
+                        parameters.IsShared ?? true,
+                        parameters.SessionId,
+                        parameters.Files,
+                        parameters.Fields);
+                        
+                    return CreateSuccessResult(result);
+                }
+                catch (InvalidParametersException)
+                {
+                    // Let validation exceptions propagate for proper MCP error handling
+                    throw;
+                }
             }
         );
     }
@@ -116,14 +124,22 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
-                var result = await tool.StoreWorkingMemoryAsync(
-                    ValidateRequired(parameters.Content, "content"),
-                    parameters.ExpiresIn,
-                    parameters.SessionId,
-                    parameters.Files,
-                    parameters.Fields);
-                    
-                return CreateSuccessResult(result);
+                try
+                {
+                    var result = await tool.StoreWorkingMemoryAsync(
+                        ValidateRequired(parameters.Content, "content"),
+                        parameters.ExpiresIn,
+                        parameters.SessionId,
+                        parameters.Files,
+                        parameters.Fields);
+                        
+                    return CreateSuccessResult(result);
+                }
+                catch (InvalidParametersException)
+                {
+                    // Let validation exceptions propagate for proper MCP error handling
+                    throw;
+                }
             }
         );
     }
