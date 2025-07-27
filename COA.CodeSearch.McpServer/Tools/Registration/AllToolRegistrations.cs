@@ -675,8 +675,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
             inputSchema: new
             {
                 type = "object",
-                properties = new { },
-                required = Array.Empty<string>()
+                properties = new { }
             },
             handler: async (parameters, ct) =>
             {
@@ -737,8 +736,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                 {
                     scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to backup. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
                     includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {
@@ -760,8 +758,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                 {
                     scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to restore. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
                     includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {
@@ -821,8 +818,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                         description = "Automatically attempt to repair corrupted indexes when detected",
                         @default = false
                     }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {
@@ -878,8 +874,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                         description = "Include configuration status and validation",
                         @default = false
                     }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {

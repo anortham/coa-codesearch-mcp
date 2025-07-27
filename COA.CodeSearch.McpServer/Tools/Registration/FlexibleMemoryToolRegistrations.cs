@@ -169,8 +169,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                             detailRequestToken = new { type = "string" }
                         }
                     }
-                },
-                required = Array.Empty<string>()
+                }
             },
             handler: async (parameters, ct) =>
             {
@@ -355,8 +354,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             inputSchema: new
             {
                 type = "object",
-                properties = new { },
-                required = Array.Empty<string>()
+                properties = new { }
             },
             handler: async (parameters, ct) =>
             {
@@ -374,8 +372,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             inputSchema: new
             {
                 type = "object",
-                properties = new { },
-                required = Array.Empty<string>()
+                properties = new { }
             },
             handler: async (parameters, ct) =>
             {
