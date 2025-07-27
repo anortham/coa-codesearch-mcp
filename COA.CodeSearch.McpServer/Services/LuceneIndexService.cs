@@ -836,19 +836,73 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         return _pathResolution.GetWorkspaceMetadataPath();
     }
     
+    /// <summary>
+    /// Retry helper for file operations that may encounter transient locking issues
+    /// </summary>
+    private async Task<T> RetryFileOperationAsync<T>(Func<Task<T>> operation, string path, string operationName)
+    {
+        const int maxRetries = 3;
+        const int baseDelayMs = 100;
+        
+        for (int i = 0; i < maxRetries; i++)
+        {
+            try
+            {
+                return await operation().ConfigureAwait(false);
+            }
+            catch (IOException ex) when (i < maxRetries - 1 && IsTransientFileError(ex))
+            {
+                var delay = baseDelayMs * (int)Math.Pow(2, i); // Exponential backoff
+                _logger.LogWarning("Transient error during {Operation} for {Path}, retrying in {Delay}ms (attempt {Attempt}/{Max}): {Error}",
+                    operationName, path, delay, i + 1, maxRetries, ex.Message);
+                await Task.Delay(delay).ConfigureAwait(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to {Operation} from {Path}", operationName, path);
+                throw;
+            }
+        }
+        
+        throw new InvalidOperationException($"Failed to {operationName} after {maxRetries} attempts");
+    }
+    
+    /// <summary>
+    /// Retry helper for file operations that don't return a value
+    /// </summary>
+    private async Task RetryFileOperationAsync(Func<Task> operation, string path, string operationName)
+    {
+        await RetryFileOperationAsync<object>(async () => 
+        {
+            await operation().ConfigureAwait(false);
+            return null!;
+        }, path, operationName).ConfigureAwait(false);
+    }
+    
+    /// <summary>
+    /// Determines if an IOException is transient and should be retried
+    /// </summary>
+    private bool IsTransientFileError(IOException ex)
+    {
+        // Check for common transient errors
+        var message = ex.Message;
+        return message.Contains("being used by another process", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("access is denied", StringComparison.OrdinalIgnoreCase) ||
+               message.Contains("sharing violation", StringComparison.OrdinalIgnoreCase);
+    }
+    
     private async Task<IndexMetadata> LoadMetadataAsync(string metadataPath)
     {
         if (await FileExistsAsync(metadataPath).ConfigureAwait(false))
         {
-            try
+            return await RetryFileOperationAsync(async () =>
             {
-                var json = await File.ReadAllTextAsync(metadataPath).ConfigureAwait(false);
+                // Use FileShare.Read to allow multiple readers
+                using var stream = new FileStream(metadataPath, FileMode.Open, FileAccess.Read, FileShare.Read);
+                using var reader = new StreamReader(stream);
+                var json = await reader.ReadToEndAsync().ConfigureAwait(false);
                 return JsonSerializer.Deserialize<IndexMetadata>(json) ?? new IndexMetadata();
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to load metadata from {Path}", metadataPath);
-            }
+            }, metadataPath, "load metadata").ConfigureAwait(false);
         }
         
         return new IndexMetadata();
@@ -914,19 +968,26 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     
     private async Task SaveMetadataAsync(string metadataPath, IndexMetadata metadata)
     {
-        try
+        await RetryFileOperationAsync(async () =>
         {
             var options = new JsonSerializerOptions
             {
                 WriteIndented = true
             };
             var json = JsonSerializer.Serialize(metadata, options);
-            await File.WriteAllTextAsync(metadataPath, json).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to save metadata to {Path}", metadataPath);
-        }
+            
+            // Write to temp file first to ensure atomic operation
+            var tempPath = metadataPath + ".tmp";
+            using (var stream = new FileStream(tempPath, FileMode.Create, FileAccess.Write, FileShare.None))
+            using (var writer = new StreamWriter(stream))
+            {
+                await writer.WriteAsync(json).ConfigureAwait(false);
+                await writer.FlushAsync().ConfigureAwait(false);
+            }
+            
+            // Atomic move - this prevents partial writes
+            File.Move(tempPath, metadataPath, overwrite: true);
+        }, metadataPath, "save metadata").ConfigureAwait(false);
     }
     
     private async Task CleanupMemoryEntriesFromMetadataAsync()
