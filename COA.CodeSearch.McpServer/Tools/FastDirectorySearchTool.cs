@@ -9,7 +9,7 @@ using System.Text.RegularExpressions;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Straight blazin' fast directory search using Lucene index - find folders by name with fuzzy matching
+/// High-performance directory search using Lucene index - find folders by name with fuzzy matching
 /// </summary>
 public class FastDirectorySearchTool : ITool
 {
@@ -128,7 +128,7 @@ public class FastDirectorySearchTool : ITool
                     })
                     .ToList();
 
-                _logger.LogInformation("Found {Count} directories in {Duration}ms - straight blazin' fast!", 
+                _logger.LogInformation("Found {Count} directories in {Duration}ms - high performance search!", 
                     results.Count, searchDuration);
 
                 return new
@@ -140,7 +140,7 @@ public class FastDirectorySearchTool : ITool
                     totalResults = results.Count,
                     searchDurationMs = searchDuration,
                     results = results,
-                    performance = searchDuration < 20 ? "straight blazin'" : "blazin' fast"
+                    performance = searchDuration < 20 ? "excellent" : "very fast"
                 };
             }
             else
@@ -173,7 +173,7 @@ public class FastDirectorySearchTool : ITool
                     totalResults = results.Count,
                     searchDurationMs = searchDuration,
                     results = results,
-                    performance = searchDuration < 20 ? "straight blazin'" : "blazin' fast"
+                    performance = searchDuration < 20 ? "excellent" : "very fast"
                 };
             }
         }

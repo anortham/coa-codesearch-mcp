@@ -57,27 +57,32 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<StoreMemoryParams>(
             name: ToolNames.StoreMemory,
-            description: "Store knowledge PERMANENTLY (never expires). Use when you discover something important that should persist forever: architectural decisions, technical debt, code patterns, project insights. If you're unsure, use this - temporary storage is for session reminders only.",
+            description: @"Stores knowledge permanently in searchable memory system.
+Returns: Created memory with ID and metadata.
+Prerequisites: None - memory system is always available.
+Error handling: Returns VALIDATION_ERROR if memoryType is invalid or content is empty.
+Use cases: Architectural decisions, technical debt, code patterns, project insights.
+Not for: Temporary notes (use store_temporary_memory), file storage (use Write tool).",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    type = new { type = "string", description = "Memory type (TechnicalDebt, Question, ArchitecturalDecision, CodePattern, etc.)" },
+                    memoryType = new { type = "string", description = "Memory type (TechnicalDebt, Question, ArchitecturalDecision, CodePattern, etc.)" },
                     content = new { type = "string", description = "Main content of the memory" },
                     isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
                     sessionId = new { type = "string", description = "Optional session ID" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
                     fields = new { type = "object", description = "Custom fields as JSON object (status, priority, tags, etc.)" }
                 },
-                required = new[] { "type", "content" }
+                required = new[] { "memoryType", "content" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.StoreMemoryAsync(
-                    ValidateRequired(parameters.Type, "type"),
+                    ValidateRequired(parameters.MemoryType, "memoryType"),
                     ValidateRequired(parameters.Content, "content"),
                     parameters.IsShared ?? true,
                     parameters.SessionId,
@@ -127,7 +132,12 @@ public static class FlexibleMemoryToolRegistrations
     {
         registry.RegisterTool<SearchMemoriesV2Params>(
             name: ToolNames.SearchMemories,
-            description: "Search through stored memories using natural language queries. Includes AI-powered query expansion, context-awareness, and intelligent filtering by type, date, files, and custom fields.",
+            description: @"Searches stored memories with intelligent query expansion.
+Returns: Matching memories with scores, metadata, and relationships.
+Prerequisites: None - searches existing memory database.
+Error handling: Returns empty results if no matches found.
+Use cases: Finding past decisions, reviewing technical debt, discovering patterns.
+Features: Query expansion, context awareness, faceted filtering, smart ranking.",
             inputSchema: new
             {
                 type = "object",
@@ -553,7 +563,7 @@ public static class FlexibleMemoryToolRegistrations
 
 public class StoreMemoryParams
 {
-    public string Type { get; set; } = "";
+    public string MemoryType { get; set; } = "";
     public string Content { get; set; } = "";
     public bool? IsShared { get; set; }
     public string? SessionId { get; set; }

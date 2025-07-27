@@ -10,7 +10,7 @@ using System.Text;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Straight blazin' fast tool to find files with similar content using Lucene's "More Like This" feature
+/// High-performance tool to find files with similar content using Lucene's "More Like This" feature
 /// </summary>
 public class FastSimilarFilesTool : ITool
 {
@@ -154,7 +154,7 @@ public class FastSimilarFilesTool : ITool
                 });
             }
 
-            _logger.LogInformation("Found {Count} similar files in {Duration}ms - straight blazin' fast!", 
+            _logger.LogInformation("Found {Count} similar files in {Duration}ms - high performance search!", 
                 results.Count, searchDuration);
 
             return new
@@ -182,7 +182,7 @@ public class FastSimilarFilesTool : ITool
                         maxWordLength = maxWordLength
                     }
                 },
-                performance = searchDuration < 50 ? "straight blazin'" : "blazin' fast"
+                performance = searchDuration < 50 ? "excellent" : "very fast"
             };
         }
         catch (Exception ex)
