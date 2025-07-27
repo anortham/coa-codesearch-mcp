@@ -1332,6 +1332,11 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 return true;
             }, context, ErrorSeverity.Recoverable);
         }
+        catch (COA.Mcp.Protocol.InvalidParametersException)
+        {
+            // Let validation exceptions propagate to tool layer
+            throw;
+        }
         catch (Exception ex)
         {
             _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);

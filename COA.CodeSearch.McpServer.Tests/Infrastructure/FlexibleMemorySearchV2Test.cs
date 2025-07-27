@@ -124,8 +124,8 @@ public class FlexibleMemorySearchV2Test : TestBase
                 FilesInvolved = new[] { testFile },
                 Fields = new Dictionary<string, JsonElement>
                 {
-                    ["status"] = JsonSerializer.SerializeToElement("pending"),
-                    ["priority"] = JsonSerializer.SerializeToElement("medium")
+                    ["state"] = JsonSerializer.SerializeToElement("pending"),
+                    ["importance"] = JsonSerializer.SerializeToElement("medium")
                 }
             });
         }
@@ -139,7 +139,7 @@ public class FlexibleMemorySearchV2Test : TestBase
                 Content = $"Question {i}: How does this work?",
                 Fields = new Dictionary<string, JsonElement>
                 {
-                    ["status"] = JsonSerializer.SerializeToElement("pending")
+                    ["state"] = JsonSerializer.SerializeToElement("pending")
                 }
             });
         }
@@ -294,7 +294,7 @@ public class FlexibleMemorySearchV2Test : TestBase
                 Content = "Use dependency injection for all services",
                 Fields = new Dictionary<string, JsonElement>
                 {
-                    ["status"] = JsonSerializer.SerializeToElement("approved"),
+                    ["state"] = JsonSerializer.SerializeToElement("approved"),
                     ["impact"] = JsonSerializer.SerializeToElement("high")
                 }
             },
@@ -304,8 +304,8 @@ public class FlexibleMemorySearchV2Test : TestBase
                 Content = "Refactor authentication system to use JWT",
                 Fields = new Dictionary<string, JsonElement>
                 {
-                    ["status"] = JsonSerializer.SerializeToElement("pending"),
-                    ["priority"] = JsonSerializer.SerializeToElement("high")
+                    ["state"] = JsonSerializer.SerializeToElement("pending"),
+                    ["importance"] = JsonSerializer.SerializeToElement("high")
                 }
             },
             new FlexibleMemoryEntry
@@ -314,7 +314,7 @@ public class FlexibleMemorySearchV2Test : TestBase
                 Content = "How should we handle rate limiting?",
                 Fields = new Dictionary<string, JsonElement>
                 {
-                    ["status"] = JsonSerializer.SerializeToElement("pending")
+                    ["state"] = JsonSerializer.SerializeToElement("pending")
                 }
             },
             new FlexibleMemoryEntry
