@@ -73,7 +73,7 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
                     sessionId = new { type = "string", description = "Optional session ID" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", description = "Custom fields as JSON object (status, priority, tags, etc.)" }
+                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (status, priority, tags, etc.)" }
                 },
                 required = new[] { "memoryType", "content" }
             },
@@ -108,7 +108,7 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     expiresIn = new { type = "string", description = "Expiration time: 'end-of-session' (default), '1h', '4h', '24h', '7d', etc." },
                     sessionId = new { type = "string", description = "Optional session ID (auto-generated if not provided)" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", description = "Custom fields as JSON object (category, context, tags, etc.)" }
+                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (category, context, tags, etc.)" }
                 },
                 required = new[] { "content" }
             },
@@ -146,7 +146,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     query = new { type = "string", description = "Search query (* for all)" },
                     types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
                     dateRange = new { type = "string", description = "Relative time: 'last-week', 'last-month', 'last-7-days'" },
-                    facets = new { type = "object", description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
+                    facets = new { type = "object", additionalProperties = true, description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
                     orderBy = new { type = "string", description = "Sort field: 'created', 'modified', 'type', 'score', or custom field" },
                     orderDescending = new { type = "boolean", description = "Sort order (default: true)", @default = true },
                     maxResults = new { type = "integer", description = "Maximum results (default: 50)", @default = 50 },
@@ -396,9 +396,9 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                 properties = new
                 {
                     templateId = new { type = "string", description = "Template ID (use flexible_list_templates to see available templates)" },
-                    placeholders = new { type = "object", description = "Key-value pairs for template placeholders" },
+                    placeholders = new { type = "object", additionalProperties = true, description = "Key-value pairs for template placeholders" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files (optional)" },
-                    additionalFields = new { type = "object", description = "Additional custom fields (optional)" }
+                    additionalFields = new { type = "object", additionalProperties = true, description = "Additional custom fields (optional)" }
                 },
                 required = new[] { "templateId", "placeholders" }
             },
@@ -466,7 +466,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     commitDate = new { type = "string", description = "Commit date in ISO format (optional)" },
                     filesChanged = new { type = "array", items = new { type = "string" }, description = "Files changed in this commit (optional)" },
                     branch = new { type = "string", description = "Branch name (optional)" },
-                    additionalFields = new { type = "object", description = "Additional custom fields (optional)" }
+                    additionalFields = new { type = "object", additionalProperties = true, description = "Additional custom fields (optional)" }
                 },
                 required = new[] { "sha", "message", "description" }
             },
