@@ -73,7 +73,7 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
                     sessionId = new { type = "string", description = "Optional session ID" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (status, priority, tags, etc.)" }
+                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (importance, urgency, category, etc.)" }
                 },
                 required = new[] { "memoryType", "content" }
             },
@@ -108,7 +108,7 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                     expiresIn = new { type = "string", description = "Expiration time: 'end-of-session' (default), '1h', '4h', '24h', '7d', etc." },
                     sessionId = new { type = "string", description = "Optional session ID (auto-generated if not provided)" },
                     files = new { type = "array", items = new { type = "string" }, description = "Related files" },
-                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (category, context, tags, etc.)" }
+                    fields = new { type = "object", additionalProperties = true, description = "Custom fields as JSON object (importance, urgency, category, etc.)" }
                 },
                 required = new[] { "content" }
             },

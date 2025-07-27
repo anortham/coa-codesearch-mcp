@@ -59,7 +59,7 @@ mcp__codesearch__store_memory
 
 **Working memory** (temporary):
 ```bash
-mcp__codesearch__store_working_memory 
+mcp__codesearch__store_temporary_memory 
   --content "User wants to refactor auth" 
   --expiresIn "4h"  # or "end-of-session"
 ```
@@ -134,7 +134,7 @@ mcp__codesearch__get_related_memories --memoryId "epic-001" --maxDepth 2
 Link memories to specific commits:
 
 ```bash
-mcp__codesearch__store_git_commit 
+mcp__codesearch__store_git_commit_memory 
   --sha "abc123" 
   --message "Refactor auth system"
   --description "Implemented JWT authentication"
@@ -146,7 +146,7 @@ mcp__codesearch__store_git_commit
 Find all memories related to a file:
 
 ```bash
-mcp__codesearch__memories_for_file --filePath "Services/AuthService.cs"
+mcp__codesearch__get_memories_for_file --filePath "Services/AuthService.cs"
 ```
 
 ### Persistent Checklists

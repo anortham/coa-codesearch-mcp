@@ -140,7 +140,7 @@ recall_context "what I was working on"
 text_search --query "authentication" --workspacePath "C:/YourProject"
 
 # Find similar implementations
-similar_files --sourceFilePath "AuthService.cs" --workspacePath "C:/YourProject"
+similar_files --sourcePath "AuthService.cs" --workspacePath "C:/YourProject"
 
 # Analyze recent changes
 recent_files --timeFrame "24h" --workspacePath "C:/YourProject"

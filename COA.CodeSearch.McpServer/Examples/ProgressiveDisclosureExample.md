@@ -9,7 +9,7 @@ The progressive disclosure pattern allows tools to:
 2. Provide metadata about available detail levels
 3. Support targeted detail requests without re-executing the entire operation
 
-## Example Flow: RenameSymbol with Large Result Set
+## Example Flow: Text Search with Large Result Set
 
 ### Step 1: Initial Request (Summary Mode)
 
@@ -18,12 +18,10 @@ The progressive disclosure pattern allows tools to:
 {
   "method": "tools/call",
   "params": {
-    "name": "rename_symbol",
+    "name": "text_search",
     "arguments": {
-      "filePath": "Services/ICmsService.cs",
-      "line": 10,
-      "column": 15,
-      "newName": "IContentManagementService",
+      "query": "ICmsService",
+      "workspacePath": "/project/path",
       "responseMode": "summary"
     }
   }
@@ -34,21 +32,17 @@ The progressive disclosure pattern allows tools to:
 ```json
 {
   "success": true,
-  "symbol": {
-    "oldName": "ICmsService",
-    "newName": "IContentManagementService",
-    "kind": "Interface"
-  },
+  "query": "ICmsService",
   "summary": {
     "totalFiles": 39,
-    "totalChanges": 156,
+    "totalMatches": 156,
     "topFiles": [
-      { "filePath": "Controllers/CmsController.cs", "changeCount": 12 },
-      { "filePath": "Services/CmsService.cs", "changeCount": 8 },
-      { "filePath": "Pages/Admin/Content.razor", "changeCount": 7 },
+      { "filePath": "Controllers/CmsController.cs", "matchCount": 12 },
+      { "filePath": "Services/CmsService.cs", "matchCount": 8 },
+      { "filePath": "Pages/Admin/Content.razor", "matchCount": 7 },
       // ... top 10 files
     ],
-    "message": "Showing top 10 files out of 39 total files affected"
+    "message": "Showing top 10 files out of 39 total files with matches"
   },
   "metadata": {
     "totalResults": 39,
@@ -64,16 +58,16 @@ The progressive disclosure pattern allows tools to:
         "isActive": false
       },
       {
-        "id": "changes",
-        "name": "Change Details",
-        "description": "Detailed changes for specific files",
+        "id": "matches",
+        "name": "Match Details",
+        "description": "Detailed matches for specific files with context",
         "estimatedTokens": 15600,
         "isActive": false
       },
       {
-        "id": "preview",
-        "name": "Change Preview",
-        "description": "Preview of changes with before/after context",
+        "id": "context",
+        "name": "Full Context",
+        "description": "Complete matches with surrounding code context",
         "estimatedTokens": 31200,
         "isActive": false
       }
@@ -89,10 +83,12 @@ The progressive disclosure pattern allows tools to:
 {
   "method": "tools/call",
   "params": {
-    "name": "rename_symbol_details",
+    "name": "batch_operations",
     "arguments": {
-      "detailRequestToken": "ZXlKemVXMWliMnhPWVcxbCI6SWts...",
-      "detailLevelId": "files"
+      "detailRequest": {
+        "detailRequestToken": "ZXlKemVXMWliMnhPWVcxbCI6SWts...",
+        "detailLevel": "files"
+      }
     }
   }
 }
@@ -104,9 +100,9 @@ The progressive disclosure pattern allows tools to:
   "success": true,
   "detailLevel": "files",
   "files": [
-    { "filePath": "Controllers/CmsController.cs", "changeCount": 12 },
-    { "filePath": "Services/CmsService.cs", "changeCount": 8 },
-    { "filePath": "Pages/Admin/Content.razor", "changeCount": 7 },
+    { "filePath": "Controllers/CmsController.cs", "matchCount": 12 },
+    { "filePath": "Services/CmsService.cs", "matchCount": 8 },
+    { "filePath": "Pages/Admin/Content.razor", "matchCount": 7 },
     // ... all 39 files
   ],
   "metadata": {
@@ -124,13 +120,19 @@ The progressive disclosure pattern allows tools to:
 {
   "method": "tools/call",
   "params": {
-    "name": "rename_symbol_details",
+    "name": "batch_operations",
     "arguments": {
-      "detailRequestToken": "ZXlKemVXMWliMnhPWVcxbCI6SWts...",
-      "detailLevelId": "changes",
-      "targetItems": [
-        "Controllers/CmsController.cs",
-        "Services/CmsService.cs"
+      "detailRequest": {
+        "detailRequestToken": "ZXlKemVXMWliMnhPWVcxbCI6SWts...",
+        "detailLevel": "matches"
+      },
+      "operations": [
+        {
+          "operation": "text_search",
+          "query": "ICmsService",
+          "workspacePath": "/project/path",
+          "filePattern": "Controllers/CmsController.cs"
+        }
       ]
     }
   }
@@ -248,32 +250,34 @@ private async Task<object> GetDetailsAsync(DetailRequest request)
 
 ```typescript
 // 1. Get summary
-const summary = await mcpClient.callTool('find_references', {
-  filePath: 'Service.cs',
-  line: 10,
-  column: 5,
+const summary = await mcpClient.callTool('text_search', {
+  query: 'ICmsService',
+  workspacePath: '/project/path',
   responseMode: 'summary'
 });
 
 // 2. Check available detail levels
 const detailLevels = summary.metadata.availableDetailLevels;
-console.log(`Found ${summary.totalReferences} references`);
+console.log(`Found ${summary.totalMatches} matches`);
 console.log(`Available details:`, detailLevels);
 
 // 3. Request specific details based on user action
 if (userWantsFileList) {
-  const fileDetails = await mcpClient.callTool('find_references_details', {
-    detailRequestToken: summary.metadata.detailRequestToken,
-    detailLevelId: 'files'
+  const fileDetails = await mcpClient.callTool('batch_operations', {
+    detailRequest: {
+      detailRequestToken: summary.metadata.detailRequestToken,
+      detailLevel: 'files'
+    }
   });
 }
 
 // 4. Drill down to specific files
 if (userSelectsFiles) {
-  const changeDetails = await mcpClient.callTool('find_references_details', {
-    detailRequestToken: summary.metadata.detailRequestToken,
-    detailLevelId: 'changes',
-    targetItems: selectedFiles
+  const matchDetails = await mcpClient.callTool('text_search', {
+    query: 'ICmsService',
+    workspacePath: '/project/path',
+    filePattern: selectedFiles.join(','),
+    contextLines: 3
   });
 }
 ```
