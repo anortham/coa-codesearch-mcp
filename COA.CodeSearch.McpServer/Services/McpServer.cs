@@ -15,6 +15,7 @@ public class McpServer : BackgroundService, INotificationService
     private readonly ILogger<McpServer> _logger;
     private readonly ToolRegistry _toolRegistry;
     private readonly IResourceRegistry _resourceRegistry;
+    private readonly IPromptRegistry _promptRegistry;
     private readonly JsonSerializerOptions _jsonOptions;
     private StreamWriter? _writer;
     private readonly SemaphoreSlim _writerLock = new(1, 1);
@@ -25,11 +26,13 @@ public class McpServer : BackgroundService, INotificationService
     public McpServer(
         ILogger<McpServer> logger,
         ToolRegistry toolRegistry,
-        IResourceRegistry resourceRegistry)
+        IResourceRegistry resourceRegistry,
+        IPromptRegistry promptRegistry)
     {
         _logger = logger;
         _toolRegistry = toolRegistry;
         _resourceRegistry = resourceRegistry;
+        _promptRegistry = promptRegistry;
         
         _jsonOptions = new JsonSerializerOptions
         {
@@ -176,6 +179,8 @@ public class McpServer : BackgroundService, INotificationService
                 "tools/call" => await HandleToolsCallAsync(request, requestToken),
                 "resources/list" => await HandleResourcesListAsync(requestToken),
                 "resources/read" => await HandleResourcesReadAsync(request, requestToken),
+                "prompts/list" => await HandlePromptsListAsync(requestToken),
+                "prompts/get" => await HandlePromptsGetAsync(request, requestToken),
                 _ => throw new NotSupportedException($"Method '{request.Method}' is not supported")
             };
 
@@ -249,7 +254,8 @@ public class McpServer : BackgroundService, INotificationService
                 {
                     Subscribe = false, // Not implemented yet
                     ListChanged = false // Not implemented yet
-                }
+                },
+                Prompts = new { }
             }
         };
     }
@@ -380,6 +386,46 @@ public class McpServer : BackgroundService, INotificationService
         }
 
         return await _resourceRegistry.ReadResourceAsync(readRequest.Uri, cancellationToken);
+    }
+
+    private async Task<ListPromptsResult> HandlePromptsListAsync(CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Handling prompts/list request");
+        
+        var prompts = await _promptRegistry.ListPromptsAsync(cancellationToken);
+        
+        return new ListPromptsResult
+        {
+            Prompts = prompts
+        };
+    }
+
+    private async Task<GetPromptResult> HandlePromptsGetAsync(JsonRpcRequest request, CancellationToken cancellationToken)
+    {
+        _logger.LogDebug("Handling prompts/get request");
+
+        if (request.Params == null)
+        {
+            throw new ArgumentException("prompts/get requires parameters");
+        }
+
+        GetPromptRequest? getRequest;
+        try
+        {
+            getRequest = JsonSerializer.Deserialize<GetPromptRequest>(
+                request.Params.ToString()!, _jsonOptions);
+        }
+        catch (JsonException ex)
+        {
+            throw new ArgumentException($"Invalid parameters for prompts/get: {ex.Message}", ex);
+        }
+
+        if (string.IsNullOrWhiteSpace(getRequest?.Name))
+        {
+            throw new ArgumentException("prompts/get requires a 'name' parameter");
+        }
+
+        return await _promptRegistry.GetPromptAsync(getRequest.Name, getRequest.Arguments, cancellationToken);
     }
 
     public override void Dispose()

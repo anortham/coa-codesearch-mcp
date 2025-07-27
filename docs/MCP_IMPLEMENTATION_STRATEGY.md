@@ -143,29 +143,29 @@ Our analysis reveals that implementing the Resources capability (Phase 1) would 
 **Goal:** Enable data sharing and guided workflows
 
 #### Sprint 1-2: Resources Implementation
-- [ ] Implement ResourceRegistry service
-- [ ] Add `resources/list` method handler
-- [ ] Add `resources/read` method handler
-- [ ] Create resource URI scheme (`codesearch://`)
-- [ ] Implement resource providers:
-  - [ ] WorkspaceResourceProvider (browse indexed files)
-  - [ ] SearchResultResourceProvider (persistent search results)
-  - [ ] MemoryResourceProvider (access memories as documents)
-- [ ] Add MIME type handling
+- [x] Implement ResourceRegistry service
+- [x] Add `resources/list` method handler
+- [x] Add `resources/read` method handler
+- [x] Create resource URI scheme (`codesearch://`)
+- [x] Implement resource providers:
+  - [x] WorkspaceResourceProvider (browse indexed files)
+  - [x] SearchResultResourceProvider (persistent search results)
+  - [x] MemoryResourceProvider (access memories as documents)
+- [x] Add MIME type handling
 - [ ] Implement resource caching with ETags
 - [ ] Create comprehensive tests
 
 #### Sprint 3-4: Prompts Implementation
-- [ ] Implement PromptRegistry service
-- [ ] Add `prompts/list` method handler
-- [ ] Add `prompts/get` method handler
+- [x] Implement PromptRegistry service
+- [x] Add `prompts/list` method handler
+- [x] Add `prompts/get` method handler
 - [ ] Create prompt templates:
-  - [ ] Advanced search builder
+  - [x] Advanced search builder
   - [ ] Memory creation wizard
   - [ ] Code pattern detector
   - [ ] Technical debt reporter
-- [ ] Implement argument validation
-- [ ] Add template variable substitution
+- [x] Implement argument validation
+- [x] Add template variable substitution
 - [ ] Create interactive prompt tests
 
 **Deliverables:**
