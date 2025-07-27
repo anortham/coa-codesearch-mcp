@@ -26,6 +26,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IConfiguration _configuration;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSearchToolV2(
@@ -37,13 +38,15 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
         IDetailRequestCache detailCache,
-        IErrorRecoveryService errorRecoveryService)
+        IErrorRecoveryService errorRecoveryService,
+        SearchResultResourceProvider? searchResultResourceProvider = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _luceneIndexService = luceneIndexService;
         _configuration = configuration;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _searchResultResourceProvider = searchResultResourceProvider;
     }
 
     public async Task<object> ExecuteAsync(
@@ -217,8 +220,8 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             ? PrepareFullResults(data)
             : PrepareSummaryResults(data, analysis);
 
-        // Create response
-        return new
+        // Create response object
+        var response = new
         {
             success = true,
             operation = ToolNames.FileSearch,
@@ -282,6 +285,44 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 cached = $"filesearch_{Guid.NewGuid().ToString("N")[..8]}"
             }
         };
+
+        // Store search results as a resource if provider is available
+        if (_searchResultResourceProvider != null && data.Results.Count > 0)
+        {
+            var resourceUri = _searchResultResourceProvider.StoreSearchResult(
+                query,
+                new
+                {
+                    results = data.Results,
+                    query = response.query,
+                    summary = response.summary,
+                    analysis = response.analysis,
+                    insights = insights
+                },
+                new
+                {
+                    searchType = searchType,
+                    workspacePath = workspacePath,
+                    timestamp = DateTime.UtcNow
+                });
+
+            // Add resource URI to response
+            return new
+            {
+                success = response.success,
+                operation = response.operation,
+                query = response.query,
+                summary = response.summary,
+                analysis = response.analysis,
+                results = response.results,
+                insights = response.insights,
+                actions = response.actions,
+                meta = response.meta,
+                resourceUri = resourceUri
+            };
+        }
+
+        return response;
     }
 
     private FileSearchAnalysis AnalyzeSearchResults(string query, FileSearchData data)

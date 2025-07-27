@@ -391,9 +391,9 @@ codesearch-types://memory/
 - [x] Modify search tools to create persistent result resources
 - [x] Implement workspace context resource provider
 - [x] Create memory type discovery resources
-- [ ] Add resource URIs to all applicable tool responses
-- [ ] Implement search result pagination via resources
-- [ ] Create resource-based workflow state tracking
+- [x] Add resource URIs to all applicable tool responses
+- [x] Implement search result pagination via resources
+- [x] Create resource-based workflow state tracking
 
 ### Phase 3: New Tools (Weeks 5-6)
 - [ ] Implement search_assistant tool

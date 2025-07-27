@@ -112,6 +112,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<SearchResultResourceProvider>();
         services.AddSingleton<MemoryResourceProvider>();
         services.AddSingleton<TypeDiscoveryResourceProvider>();
+        services.AddSingleton<WorkflowStateResourceProvider>();
         
         // Prompt services for MCP Prompts capability
         services.AddSingleton<IPromptRegistry, PromptRegistry>();
@@ -267,6 +268,7 @@ using (var scope = host.Services.CreateScope())
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<SearchResultResourceProvider>());
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<MemoryResourceProvider>());
     resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<TypeDiscoveryResourceProvider>());
+    resourceRegistry.RegisterProvider(scope.ServiceProvider.GetRequiredService<WorkflowStateResourceProvider>());
     logger.LogInformation("Resource provider registration complete");
     
     // Register prompt templates for MCP Prompts capability
