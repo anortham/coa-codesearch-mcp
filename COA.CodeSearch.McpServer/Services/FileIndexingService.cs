@@ -45,7 +45,12 @@ public class FileIndexingService
         
         // Initialize supported extensions from configuration or defaults
         var extensions = configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>() 
-            ?? new[] { ".cs", ".razor", ".cshtml", ".json", ".xml", ".md", ".txt", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".html", ".yml", ".yaml", ".csproj", ".sln", ".py", ".pyi" };
+            ?? new[] { 
+                // Common text-based files (fallback if config missing)
+                ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".sql",
+                ".html", ".css", ".json", ".xml", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini", ".log",
+                ".sh", ".bat", ".ps1", ".dockerfile", ".makefile", ".gradle", ".csproj", ".sln", ".config"
+            };
         _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
         
         // Initialize excluded directories
@@ -557,6 +562,11 @@ public class FileIndexingService
 
         // Add language field if we can determine it
         var language = GetLanguageFromExtension(extension);
+        if (string.IsNullOrEmpty(language) && string.IsNullOrEmpty(extension))
+        {
+            // Try filename-based detection for files without extensions
+            language = GetLanguageFromFilename(fileName);
+        }
         if (!string.IsNullOrEmpty(language))
         {
             doc.Add(new StringField("language", language, Field.Store.YES));
@@ -607,24 +617,141 @@ public class FileIndexingService
     {
         return extension.ToLowerInvariant() switch
         {
+            // .NET & Microsoft
             ".cs" => "csharp",
+            ".vb" => "vb.net",
+            ".fs" or ".fsi" or ".fsx" => "fsharp",
+            ".csproj" or ".vbproj" or ".fsproj" => "msbuild",
+            ".sln" => "solution",
+            ".config" => "xml",
+            ".resx" => "xml",
+            ".xaml" => "xaml",
             ".razor" => "razor",
-            ".cshtml" => "razor",
+            ".cshtml" or ".vbhtml" => "razor",
+            
+            // Web Technologies
+            ".html" or ".htm" => "html",
+            ".css" => "css",
+            ".scss" or ".sass" => "scss",
+            ".less" => "less",
             ".js" => "javascript",
             ".ts" => "typescript",
             ".jsx" => "javascript",
             ".tsx" => "typescript",
+            ".vue" => "vue",
+            ".svelte" => "svelte",
+            ".php" => "php",
+            ".asp" or ".aspx" => "asp",
+            
+            // Data & Configuration
             ".json" => "json",
             ".xml" => "xml",
-            ".html" => "html",
-            ".css" => "css",
-            ".scss" => "scss",
-            ".yml" or ".yaml" => "yaml",
+            ".yaml" or ".yml" => "yaml",
+            ".toml" => "toml",
+            ".ini" or ".cfg" or ".conf" => "ini",
+            ".properties" => "properties",
+            ".env" => "dotenv",
+            ".editorconfig" => "editorconfig",
+            
+            // Documentation & Text
             ".md" => "markdown",
-            ".csproj" => "msbuild",
-            ".sln" => "solution",
-            ".py" => "python",
-            ".pyi" => "python",
+            ".txt" => "text",
+            ".rst" => "restructuredtext",
+            ".adoc" => "asciidoc",
+            ".tex" => "latex",
+            ".rtf" => "rtf",
+            ".log" => "log",
+            ".readme" => "text",
+            ".changelog" => "text",
+            ".license" or ".authors" => "text",
+            
+            // Programming Languages
+            ".py" or ".pyi" or ".pyx" => "python",
+            ".go" => "go",
+            ".rs" => "rust",
+            ".java" => "java",
+            ".kt" or ".kts" => "kotlin",
+            ".scala" => "scala",
+            ".clj" or ".cljs" or ".cljc" => "clojure",
+            ".rb" => "ruby",
+            ".pl" or ".pm" => "perl",
+            ".cpp" or ".cc" or ".cxx" => "cpp",
+            ".c" => "c",
+            ".h" or ".hpp" or ".hh" or ".hxx" => "c",
+            ".m" or ".mm" => "objective-c",
+            ".swift" => "swift",
+            ".dart" => "dart",
+            ".lua" => "lua",
+            ".r" => "r",
+            ".jl" => "julia",
+            
+            // Functional & ML
+            ".hs" or ".lhs" => "haskell",
+            ".elm" => "elm",
+            ".ml" or ".mli" => "ocaml",
+            ".edn" => "edn",
+            
+            // Shell & Scripts
+            ".sh" or ".bash" => "bash",
+            ".zsh" => "zsh",
+            ".fish" => "fish",
+            ".ps1" or ".psm1" => "powershell",
+            ".bat" or ".cmd" => "batch",
+            ".awk" => "awk",
+            ".sed" => "sed",
+            
+            // Database & Query
+            ".sql" or ".psql" or ".mysql" or ".sqlite" => "sql",
+            ".cypher" => "cypher",
+            ".sparql" => "sparql",
+            ".hql" => "hql",
+            ".plsql" => "plsql",
+            
+            // Build & CI/CD
+            ".dockerfile" or ".containerfile" => "dockerfile",
+            ".makefile" => "makefile",
+            ".cmake" => "cmake",
+            ".gradle" => "gradle",
+            ".maven" => "xml",
+            ".ant" => "xml",
+            ".sbt" => "scala",
+            ".cabal" => "cabal",
+            ".stack" => "yaml",
+            
+            // Templates & DSL
+            ".j2" or ".jinja" => "jinja",
+            ".mustache" => "mustache",
+            ".handlebars" => "handlebars",
+            ".liquid" => "liquid",
+            ".erb" => "erb",
+            ".haml" => "haml",
+            ".slim" => "slim",
+            ".pug" or ".jade" => "pug",
+            
+            // Special Purpose
+            ".graphql" or ".gql" => "graphql",
+            ".proto" => "protobuf",
+            ".thrift" => "thrift",
+            ".avro" => "avro",
+            ".pem" or ".crt" or ".key" or ".cer" => "certificate",
+            
+            // Default case for unknown extensions
+            _ => ""
+        };
+    }
+    
+    private static string GetLanguageFromFilename(string filename)
+    {
+        return filename.ToLowerInvariant() switch
+        {
+            "dockerfile" or "containerfile" => "dockerfile",
+            "makefile" or "gnumakefile" => "makefile",
+            "rakefile" => "ruby",
+            "gemfile" => "ruby",
+            "pipfile" => "toml",
+            "poetry.lock" => "toml",
+            "cargo.lock" => "toml",
+            "package-lock.json" => "json",
             _ => ""
         };
     }
