@@ -125,19 +125,6 @@ Controls response size and token limits to prevent overwhelming AI assistants:
 }
 ```
 
-### TypeScript Configuration
-
-```json
-{
-  "TypeScript": {
-    "ServerPath": null,               // Custom tsserver path (auto-detected if null)
-    "EnableSemanticAnalysis": true,   // Enable semantic TypeScript analysis
-    "MaxProjectsOpen": 10,            // Maximum concurrent TypeScript projects
-    "RequestTimeout": "00:00:30",     // TypeScript request timeout
-    "SkipInitialization": false       // Skip TypeScript installation check
-  }
-}
-```
 
 ### File Watcher Settings
 
@@ -182,8 +169,6 @@ CODESEARCH__McpServer__MaxWorkspaces=10
 # Override Lucene RAM buffer
 CODESEARCH__Lucene__IndexSettings__RAMBufferSizeMB=512
 
-# Override TypeScript timeout
-CODESEARCH__TypeScript__RequestTimeout=00:01:00
 ```
 
 ## Performance Tuning

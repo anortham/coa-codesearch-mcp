@@ -36,25 +36,10 @@ public class PathViolationFixTests : IDisposable
         var services = new ServiceCollection();
         services.AddSingleton(_mockPathResolution.Object);
         services.AddSingleton(_mockConfiguration.Object);
-        // TypeScript installer removed - now uses global installation
         
         _serviceProvider = services.BuildServiceProvider();
     }
 
-    [Fact]
-    public void TypeScriptInstaller_ShouldUsePathResolutionService()
-    {
-        // This test verifies that TypeScriptInstaller should not hardcode paths
-        // Currently it uses: Path.Combine(appData, "COA.CodeSearch.McpServer", "typescript")
-        // It should use PathResolutionService for TypeScript installation path
-        
-        // Arrange & Act
-        // After refactoring, TypeScriptInstaller should accept IPathResolutionService
-        // and use something like _pathResolution.GetTypeScriptInstallPath()
-        
-        // This is a placeholder test that will be implemented after adding the method
-        Assert.True(true);
-    }
 
     [Fact]
     public void FlexibleMemoryTools_ShouldNotHardcodeBasePath()
