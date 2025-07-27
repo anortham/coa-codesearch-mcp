@@ -60,7 +60,7 @@ Add the following to your Claude Desktop configuration:
 ```json
 {
   "mcpServers": {
-    "roslyn": {
+    "codesearch": {
       "command": "C:\\path\\to\\COA.CodeSearch.McpServer.exe",
       "args": ["stdio"]
     }
