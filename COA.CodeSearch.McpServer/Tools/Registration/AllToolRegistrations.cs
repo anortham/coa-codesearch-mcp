@@ -738,7 +738,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                     scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to backup. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
                     includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -761,7 +761,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                     scopes = new { type = "array", items = new { type = "string" }, description = "Memory types to restore. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight" },
                     includeLocal = new { type = "boolean", description = "Include local developer memories (WorkSession, LocalInsight). Default: false", @default = false }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -822,7 +822,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                         @default = false
                     }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -879,7 +879,7 @@ Important: One-time operation per workspace - subsequent searches use the index.
                         @default = false
                     }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
