@@ -31,7 +31,7 @@ public class FlexibleMemoryTools : ITool
     /// Store a new memory with flexible schema
     /// </summary>
     public async Task<StoreMemoryResult> StoreMemoryAsync(
-        string type,
+        string memoryType,
         string content,
         bool isShared = true,
         string? sessionId = null,
@@ -42,7 +42,7 @@ public class FlexibleMemoryTools : ITool
         {
             var memory = new FlexibleMemoryEntry
             {
-                Type = type,
+                Type = memoryType,
                 Content = content,
                 IsShared = isShared,
                 SessionId = sessionId ?? "",
@@ -57,7 +57,7 @@ public class FlexibleMemoryTools : ITool
                 Success = success,
                 MemoryId = success ? memory.Id : null,
                 Message = success ? 
-                    $"Successfully stored {type} memory" : 
+                    $"Successfully stored {memoryType} memory" : 
                     "Failed to store memory"
             };
         }
@@ -292,17 +292,17 @@ public class FlexibleMemoryTools : ITool
     /// <summary>
     /// Archive old memories of a specific type
     /// </summary>
-    public async Task<ArchiveMemoriesResult> ArchiveMemoriesAsync(string type, int daysOld)
+    public async Task<ArchiveMemoriesResult> ArchiveMemoriesAsync(string memoryType, int daysOld)
     {
         try
         {
-            var archived = await _memoryService.ArchiveMemoriesAsync(type, TimeSpan.FromDays(daysOld));
+            var archived = await _memoryService.ArchiveMemoriesAsync(memoryType, TimeSpan.FromDays(daysOld));
             
             return new ArchiveMemoriesResult
             {
                 Success = true,
                 ArchivedCount = archived,
-                Message = $"Archived {archived} {type} memories older than {daysOld} days"
+                Message = $"Archived {archived} {memoryType} memories older than {daysOld} days"
             };
         }
         catch (Exception ex)
@@ -359,7 +359,7 @@ public class FlexibleMemoryTools : ITool
     /// Summarize old memories to save space and improve relevance
     /// </summary>
     public async Task<SummarizeMemoriesResult> SummarizeMemoriesAsync(
-        string type,
+        string memoryType,
         int daysOld,
         int batchSize = 10,
         bool preserveOriginals = false)
@@ -370,7 +370,7 @@ public class FlexibleMemoryTools : ITool
             var searchRequest = new FlexibleMemorySearchRequest
             {
                 Query = "*",
-                Types = new[] { type },
+                Types = new[] { memoryType },
                 MaxResults = 1000,
                 OrderBy = "created",
                 OrderDescending = false
@@ -389,7 +389,7 @@ public class FlexibleMemoryTools : ITool
                     Success = true,
                     ProcessedCount = 0,
                     SummaryCount = 0,
-                    Message = $"No {type} memories older than {daysOld} days found"
+                    Message = $"No {memoryType} memories older than {daysOld} days found"
                 };
             }
             
@@ -400,17 +400,17 @@ public class FlexibleMemoryTools : ITool
             for (int i = 0; i < oldMemories.Count; i += batchSize)
             {
                 var batch = oldMemories.Skip(i).Take(batchSize).ToList();
-                var summary = CreateBatchSummary(batch, type);
+                var summary = CreateBatchSummary(batch, memoryType);
                 
                 // Store the summary
                 var summaryMemory = new FlexibleMemoryEntry
                 {
-                    Type = $"{type}Summary",
+                    Type = $"{memoryType}Summary",
                     Content = summary.Content,
                     IsShared = batch.Any(m => m.IsShared),
                     Fields = new Dictionary<string, JsonElement>
                     {
-                        ["originalType"] = JsonSerializer.SerializeToElement(type),
+                        ["originalType"] = JsonSerializer.SerializeToElement(memoryType),
                         ["dateRange"] = JsonSerializer.SerializeToElement(new
                         {
                             from = batch.Min(m => m.Created),
@@ -465,7 +465,7 @@ public class FlexibleMemoryTools : ITool
         }
     }
     
-    private BatchSummary CreateBatchSummary(List<FlexibleMemoryEntry> memories, string type)
+    private BatchSummary CreateBatchSummary(List<FlexibleMemoryEntry> memories, string memoryType)
     {
         var summary = new BatchSummary();
         
@@ -483,7 +483,7 @@ public class FlexibleMemoryTools : ITool
         // Build summary content
         var contentParts = new List<string>
         {
-            $"Summary of {memories.Count} {type} memories from {memories.Min(m => m.Created):yyyy-MM-dd} to {memories.Max(m => m.Created):yyyy-MM-dd}",
+            $"Summary of {memories.Count} {memoryType} memories from {memories.Min(m => m.Created):yyyy-MM-dd} to {memories.Max(m => m.Created):yyyy-MM-dd}",
             "",
             "Key Themes:"
         };
@@ -504,7 +504,7 @@ public class FlexibleMemoryTools : ITool
         }
         
         // Add specific insights based on memory type
-        var typeSpecificInsights = GetTypeSpecificInsights(memories, type);
+        var typeSpecificInsights = GetTypeSpecificInsights(memories, memoryType);
         if (typeSpecificInsights.Any())
         {
             contentParts.Add("");
@@ -544,11 +544,11 @@ public class FlexibleMemoryTools : ITool
             .ToList();
     }
     
-    private List<string> GetTypeSpecificInsights(List<FlexibleMemoryEntry> memories, string type)
+    private List<string> GetTypeSpecificInsights(List<FlexibleMemoryEntry> memories, string memoryType)
     {
         var insights = new List<string>();
         
-        switch (type)
+        switch (memoryType)
         {
             case "WorkSession":
                 var totalSessions = memories.Count;

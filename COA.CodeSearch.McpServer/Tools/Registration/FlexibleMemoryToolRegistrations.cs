@@ -271,17 +271,17 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                 type = "object",
                 properties = new
                 {
-                    type = new { type = "string", description = "Memory type to archive" },
+                    memoryType = new { type = "string", description = "Memory type to archive" },
                     daysOld = new { type = "integer", description = "Archive memories older than this many days" }
                 },
-                required = new[] { "type", "daysOld" }
+                required = new[] { "memoryType", "daysOld" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.ArchiveMemoriesAsync(
-                    ValidateRequired(parameters.Type, "type"),
+                    ValidateRequired(parameters.MemoryType, "memoryType"),
                     ValidatePositive(parameters.DaysOld, "daysOld"));
                     
                 return CreateSuccessResult(result);
@@ -325,19 +325,19 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                 type = "object",
                 properties = new
                 {
-                    type = new { type = "string", description = "Memory type to summarize" },
+                    memoryType = new { type = "string", description = "Memory type to summarize" },
                     daysOld = new { type = "integer", description = "Summarize memories older than this many days" },
                     batchSize = new { type = "integer", description = "Number of memories to summarize together (default: 10)", @default = 10 },
                     preserveOriginals = new { type = "boolean", description = "Keep original memories after summarization (default: false)", @default = false }
                 },
-                required = new[] { "type", "daysOld" }
+                required = new[] { "memoryType", "daysOld" }
             },
             handler: async (parameters, ct) =>
             {
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.SummarizeMemoriesAsync(
-                    ValidateRequired(parameters.Type, "type"),
+                    ValidateRequired(parameters.MemoryType, "memoryType"),
                     ValidatePositive(parameters.DaysOld, "daysOld"),
                     parameters.BatchSize ?? 10,
                     parameters.PreserveOriginals ?? false);
@@ -623,7 +623,7 @@ public class FindSimilarMemoriesParams
 
 public class ArchiveMemoriesParams
 {
-    public string Type { get; set; } = "";
+    public string MemoryType { get; set; } = "";
     public int DaysOld { get; set; }
 }
 
@@ -634,7 +634,7 @@ public class GetMemoryByIdParams
 
 public class SummarizeMemoriesParams
 {
-    public string Type { get; set; } = "";
+    public string MemoryType { get; set; } = "";
     public int DaysOld { get; set; }
     public int? BatchSize { get; set; }
     public bool? PreserveOriginals { get; set; }
