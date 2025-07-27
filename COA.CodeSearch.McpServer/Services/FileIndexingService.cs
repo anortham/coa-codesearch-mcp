@@ -63,7 +63,7 @@ public class FileIndexingService
     {
         using var operationTracker = _metricsService.StartOperation("IndexDirectory", workspacePath);
         
-        var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken);
+        var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken).ConfigureAwait(false);
         var indexedCount = 0;
         
         try
@@ -136,7 +136,7 @@ public class FileIndexingService
             }
             
             // Final commit
-            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken).ConfigureAwait(false);
             
             _logger.LogInformation("Indexed {Count} files from directory: {Directory}", indexedCount, directoryPath);
             return indexedCount;
@@ -343,12 +343,12 @@ public class FileIndexingService
                 $"IndexFile:{Path.GetExtension(filePath)}", 
                 async () =>
                 {
-                    var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken);
+                    var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken).ConfigureAwait(false);
                     var result = await IndexFileOptimizedAsync(indexWriter, filePath, workspacePath, cancellationToken);
                     
                     if (result)
                     {
-                        await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+                        await _luceneIndexService.CommitAsync(workspacePath, cancellationToken).ConfigureAwait(false);
                     }
                     
                     return result;
@@ -596,13 +596,13 @@ public class FileIndexingService
     {
         try
         {
-            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken);
+            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(workspacePath, cancellationToken).ConfigureAwait(false);
             
             // Delete document by file path (using the "id" field)
             indexWriter.DeleteDocuments(new Term("id", filePath));
             
             // Commit the deletion
-            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken).ConfigureAwait(false);
             
             return true;
         }

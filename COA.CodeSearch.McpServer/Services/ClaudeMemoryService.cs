@@ -64,9 +64,9 @@ public class ClaudeMemoryService : IDisposable
             var document = CreateLuceneDocument(memory);
             var workspacePath = IsProjectScope(memory.Scope) ? _projectMemoryWorkspace : _localMemoryWorkspace;
             
-            var writer = await _indexService.GetIndexWriterAsync(workspacePath);
+            var writer = await _indexService.GetIndexWriterAsync(workspacePath).ConfigureAwait(false);
             writer.AddDocument(document);
-            await _indexService.CommitAsync(workspacePath);
+            await _indexService.CommitAsync(workspacePath).ConfigureAwait(false);
             
             var scopeType = IsProjectScope(memory.Scope) ? "project" : "local";
             _logger.LogInformation("Stored {ScopeType} memory: {Content}", scopeType, memory.Content[..Math.Min(50, memory.Content.Length)]);
@@ -97,8 +97,8 @@ public class ClaudeMemoryService : IDisposable
         try
         {
             // Search both indexes
-            var projectMemories = await SearchIndex(_projectMemoryWorkspace, query, scopeFilter, maxResults);
-            var localMemories = await SearchIndex(_localMemoryWorkspace, query, scopeFilter, maxResults);
+            var projectMemories = await SearchIndex(_projectMemoryWorkspace, query, scopeFilter, maxResults).ConfigureAwait(false);
+            var localMemories = await SearchIndex(_localMemoryWorkspace, query, scopeFilter, maxResults).ConfigureAwait(false);
             
             // Combine and sort by relevance
             var allMemories = projectMemories.Concat(localMemories)
@@ -132,7 +132,7 @@ public class ClaudeMemoryService : IDisposable
             maxResults = _config.MaxSearchResults;
         
         var workspacePath = IsProjectScope(scope) ? _projectMemoryWorkspace : _localMemoryWorkspace;
-        return await SearchIndex(workspacePath, "*", scope, maxResults);
+        return await SearchIndex(workspacePath, "*", scope, maxResults).ConfigureAwait(false);
     }
     
     /// <summary>
@@ -150,7 +150,7 @@ public class ClaudeMemoryService : IDisposable
             Tags = tags ?? Array.Empty<string>()
         };
         
-        return await StoreMemoryAsync(memory);
+        return await StoreMemoryAsync(memory).ConfigureAwait(false);
     }
     
     /// <summary>
@@ -167,7 +167,7 @@ public class ClaudeMemoryService : IDisposable
             Category = "pattern"
         };
         
-        return await StoreMemoryAsync(memory);
+        return await StoreMemoryAsync(memory).ConfigureAwait(false);
     }
     
     /// <summary>
@@ -184,7 +184,7 @@ public class ClaudeMemoryService : IDisposable
             Category = "session"
         };
         
-        return await StoreMemoryAsync(memory);
+        return await StoreMemoryAsync(memory).ConfigureAwait(false);
     }
     
     /// <summary>
@@ -208,7 +208,7 @@ public class ClaudeMemoryService : IDisposable
         try
         {
             // Use LuceneIndexService to get the searcher - single source of truth for paths
-            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
+            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath).ConfigureAwait(false);
             if (searcher == null)
             {
                 _logger.LogDebug("No index searcher available for workspace {WorkspacePath}", workspacePath);
