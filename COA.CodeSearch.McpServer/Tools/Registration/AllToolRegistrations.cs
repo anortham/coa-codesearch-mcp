@@ -71,7 +71,7 @@ public static class AllToolRegistrations
                     operations = new 
                     { 
                         type = "array", 
-                        items = new { type = "object" },
+                        items = new { type = "object", additionalProperties = true },
                         description = "Array of operations to execute. Format: [{\"operation\": \"text_search\", \"query\": \"TODO\"}, {\"operation\": \"file_search\", \"query\": \"*.cs\"}]. Each operation must have 'operation' field plus operation-specific parameters."
                     },
                     workspacePath = new { type = "string", description = "Default workspace path for operations" },
