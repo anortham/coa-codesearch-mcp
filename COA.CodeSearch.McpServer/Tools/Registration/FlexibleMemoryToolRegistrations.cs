@@ -170,7 +170,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                         }
                     }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -356,7 +356,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             {
                 type = "object",
                 properties = new { },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -375,7 +375,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             {
                 type = "object",
                 properties = new { },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
@@ -514,7 +514,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     includeExpired = new { type = "boolean", description = "Include expired working memories (default: false)", @default = false },
                     maxPerGroup = new { type = "integer", description = "Maximum memories per time group (default: 10)", @default = 10 }
                 },
-                required = new string[] { }
+                required = Array.Empty<string>()
             },
             handler: async (parameters, ct) =>
             {
