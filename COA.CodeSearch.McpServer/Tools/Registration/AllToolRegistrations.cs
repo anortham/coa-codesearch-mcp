@@ -56,6 +56,14 @@ public static class AllToolRegistrations
         
         // System health check tool
         RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
+        
+        // AI-optimized search tools
+        RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>());
+        RegisterPatternDetector(registry, serviceProvider.GetRequiredService<PatternDetectorTool>());
+        RegisterMemoryGraphNavigator(registry, serviceProvider.GetRequiredService<MemoryGraphNavigatorTool>());
+        
+        // Tool usage analytics
+        RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>());
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
@@ -879,4 +887,386 @@ Important: One-time operation per workspace - subsequent searches use the index.
         public bool? IncludeSystemMetrics { get; set; }
         public bool? IncludeConfiguration { get; set; }
     }
+
+    private static void RegisterSearchAssistant(ToolRegistry registry, SearchAssistantTool tool)
+    {
+        registry.RegisterTool<SearchAssistantParams>(
+            name: "search_assistant",
+            description: @"Orchestrates multi-step search operations while maintaining context.
+Analyzes search goals, creates search strategies, executes multiple search operations, discovers patterns and insights, finds related content, and provides actionable next steps.
+Returns: Structured findings with strategy, insights, and resource URI for continued exploration.
+Use cases: Complex code discovery, pattern analysis, architecture understanding, debugging workflows.
+AI-optimized: Provides guided search assistance with context preservation.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    goal = new 
+                    { 
+                        type = "string", 
+                        description = "The goal or objective of the search operation (e.g., 'Find all error handling patterns', 'Locate authentication code', 'Understand data flow')" 
+                    },
+                    workspacePath = new 
+                    { 
+                        type = "string", 
+                        description = "Directory path to search in (e.g., C:\\MyProject). Use the project root directory." 
+                    },
+                    constraints = new
+                    {
+                        type = "object",
+                        description = "Optional constraints to limit search scope",
+                        properties = new
+                        {
+                            fileTypes = new
+                            {
+                                type = "array",
+                                items = new { type = "string" },
+                                description = "File types to include (e.g., ['cs', 'ts', 'js'])"
+                            },
+                            excludePaths = new
+                            {
+                                type = "array",
+                                items = new { type = "string" },
+                                description = "Paths to exclude from search"
+                            },
+                            maxResults = new
+                            {
+                                type = "integer",
+                                description = "Maximum number of results per operation",
+                                @default = 50
+                            }
+                        }
+                    },
+                    previousContext = new
+                    {
+                        type = "string",
+                        description = "Resource URI from a previous search to build upon (enables context preservation)"
+                    },
+                    responseMode = new 
+                    { 
+                        type = "string", 
+                        description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", 
+                        @default = "summary" 
+                    }
+                },
+                required = new[] { "goal", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+
+                var constraints = parameters.Constraints != null ? new SearchConstraints
+                {
+                    FileTypes = parameters.Constraints.FileTypes?.ToList(),
+                    ExcludePaths = parameters.Constraints.ExcludePaths?.ToList(),
+                    MaxResults = parameters.Constraints.MaxResults
+                } : null;
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.Goal, "goal"),
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    constraints,
+                    parameters.PreviousContext,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class SearchAssistantParams
+    {
+        public string? Goal { get; set; }
+        public string? WorkspacePath { get; set; }
+        public SearchConstraintsParams? Constraints { get; set; }
+        public string? PreviousContext { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
+    private class SearchConstraintsParams
+    {
+        public string[]? FileTypes { get; set; }
+        public string[]? ExcludePaths { get; set; }
+        public int? MaxResults { get; set; }
+    }
+
+    private static void RegisterPatternDetector(ToolRegistry registry, PatternDetectorTool tool)
+    {
+        registry.RegisterTool<PatternDetectorParams>(
+            name: ToolNames.PatternDetector,
+            description: @"Analyzes files by size with distribution insights.
+Detects architectural patterns, security vulnerabilities, performance issues, and testing patterns.
+Returns: Detailed analysis of patterns and anti-patterns with severity levels and remediation guidance.
+Use cases: Code quality assessment, security audits, architecture reviews, technical debt identification.
+AI-optimized: Provides actionable insights with confidence scores and prioritized recommendations.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workspacePath = new 
+                    { 
+                        type = "string", 
+                        description = "Directory path to analyze (e.g., C:\\MyProject). Use the project root directory." 
+                    },
+                    patternTypes = new
+                    {
+                        type = "array",
+                        items = new
+                        {
+                            type = "string",
+                            @enum = new[] { "architecture", "security", "performance", "testing" }
+                        },
+                        description = "Types of patterns to detect (e.g., ['architecture', 'security'])"
+                    },
+                    depth = new
+                    {
+                        type = "string",
+                        @enum = new[] { "shallow", "deep" },
+                        description = "Analysis depth: 'shallow' for quick scan, 'deep' for comprehensive analysis",
+                        @default = "shallow"
+                    },
+                    createMemories = new
+                    {
+                        type = "boolean",
+                        description = "Automatically create memories for significant findings",
+                        @default = false
+                    },
+                    responseMode = new 
+                    { 
+                        type = "string", 
+                        description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.", 
+                        @default = "summary" 
+                    }
+                },
+                required = new[] { "workspacePath", "patternTypes" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+
+                var patternTypes = parameters.PatternTypes?.Select(pt => Enum.Parse<PatternType>(pt, true)).ToArray() ?? new PatternType[0];
+                var depth = Enum.TryParse<PatternDepth>(parameters.Depth, true, out var parsedDepth) ? parsedDepth : PatternDepth.Shallow;
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    patternTypes,
+                    depth,
+                    parameters.CreateMemories ?? false,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class PatternDetectorParams
+    {
+        public string? WorkspacePath { get; set; }
+        public string[]? PatternTypes { get; set; }
+        public string? Depth { get; set; }
+        public bool? CreateMemories { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
+    private static void RegisterMemoryGraphNavigator(ToolRegistry registry, MemoryGraphNavigatorTool tool)
+    {
+        registry.RegisterTool<MemoryGraphNavigatorParams>(
+            name: ToolNames.MemoryGraphNavigator,
+            description: @"Explores memory relationships and dependencies with graph visualization.
+Maps connections between memories to understand knowledge structure and dependencies.
+Returns: Interactive graph showing memory nodes, relationships, clusters, and insights.
+Use cases: Understanding project knowledge structure, finding related memories, identifying knowledge gaps.
+AI-optimized: Provides relationship strength, clusters themes, and suggests exploration paths.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    startPoint = new 
+                    { 
+                        type = "string", 
+                        description = "Memory ID or search query to start graph exploration from (e.g., memory ID or 'authentication patterns')" 
+                    },
+                    depth = new
+                    {
+                        type = "integer",
+                        description = "Maximum depth of relationship traversal (1-5)",
+                        @default = 2,
+                        minimum = 1,
+                        maximum = 5
+                    },
+                    filterTypes = new
+                    {
+                        type = "array",
+                        items = new { type = "string" },
+                        description = "Filter by specific memory types (e.g., ['TechnicalDebt', 'ArchitecturalDecision'])"
+                    },
+                    includeOrphans = new
+                    {
+                        type = "boolean",
+                        description = "Include memories with no relationships in the graph",
+                        @default = false
+                    },
+                    responseMode = new 
+                    { 
+                        type = "string", 
+                        description = "Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large graphs.", 
+                        @default = "summary" 
+                    }
+                },
+                required = new[] { "startPoint" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    ValidateRequired(parameters.StartPoint, "startPoint"),
+                    parameters.Depth ?? 2,
+                    parameters.FilterTypes,
+                    parameters.IncludeOrphans ?? false,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class MemoryGraphNavigatorParams
+    {
+        public string? StartPoint { get; set; }
+        public int? Depth { get; set; }
+        public string[]? FilterTypes { get; set; }
+        public bool? IncludeOrphans { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
+    private static void RegisterToolUsageAnalytics(ToolRegistry registry, ToolUsageAnalyticsTool tool)
+    {
+        registry.RegisterTool<ToolUsageAnalyticsParams>(
+            name: ToolNames.ToolUsageAnalytics,
+            description: @"View tool usage analytics, performance metrics, and workflow patterns.
+Provides insights into tool effectiveness, usage patterns, error analysis, and optimization recommendations.
+Returns: Analytics data including usage statistics, performance metrics, and actionable insights.
+Use cases: Understanding tool performance, optimizing workflows, identifying issues, tracking usage patterns.
+AI-optimized: Provides intelligent recommendations and workflow optimization suggestions.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    action = new
+                    {
+                        type = "string",
+                        @enum = new[] { "summary", "detailed", "tool_specific", "export", "reset" },
+                        description = @"Analytics action to perform:
+- summary: High-level analytics overview
+- detailed: Complete analytics data with all metrics
+- tool_specific: Analytics for a specific tool (requires toolName)
+- export: Export all analytics data as JSON
+- reset: Clear all analytics data",
+                        @default = "summary"
+                    },
+                    toolName = new
+                    {
+                        type = "string",
+                        description = "Name of specific tool to analyze (required for tool_specific action)"
+                    },
+                    responseMode = new
+                    {
+                        type = "string",
+                        description = "Response mode: 'summary' (default) or 'full'",
+                        @default = "summary"
+                    }
+                }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var mode = ResponseMode.Summary;
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+
+                var action = AnalyticsAction.Summary;
+                if (!string.IsNullOrWhiteSpace(parameters.Action))
+                {
+                    action = parameters.Action.ToLowerInvariant() switch
+                    {
+                        "summary" => AnalyticsAction.Summary,
+                        "detailed" => AnalyticsAction.Detailed,
+                        "tool_specific" => AnalyticsAction.ToolSpecific,
+                        "export" => AnalyticsAction.Export,
+                        "reset" => AnalyticsAction.Reset,
+                        _ => AnalyticsAction.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    action,
+                    parameters.ToolName,
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class ToolUsageAnalyticsParams
+    {
+        public string? Action { get; set; }
+        public string? ToolName { get; set; }
+        public string? ResponseMode { get; set; }
+    }
+
 }
