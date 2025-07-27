@@ -89,7 +89,7 @@ public class FileIndexingService
                 {
                     await foreach (var filePath in GetFilesToIndexAsync(directoryPath, cancellationToken))
                     {
-                        await channel.Writer.WriteAsync(filePath, cancellationToken);
+                        await channel.Writer.WriteAsync(filePath, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex)
@@ -114,7 +114,7 @@ public class FileIndexingService
                 {
                     try
                     {
-                        if (await IndexFileOptimizedAsync(indexWriter, filePath, workspacePath, ct))
+                        if (await IndexFileOptimizedAsync(indexWriter, filePath, workspacePath, ct).ConfigureAwait(false))
                         {
                             Interlocked.Increment(ref indexedCount);
                         }
@@ -124,10 +124,10 @@ public class FileIndexingService
                         errors.Add((filePath, ex));
                         _logger.LogWarning(ex, "Failed to index file: {FilePath}", filePath);
                     }
-                });
+                }).ConfigureAwait(false);
             
             // Wait for producer to complete
-            await producerTask;
+            await producerTask.ConfigureAwait(false);
             
             // Report any errors
             if (!errors.IsEmpty)
@@ -182,7 +182,7 @@ public class FileIndexingService
                 {
                     await foreach (var filePath in GetFilesToIndexAsync(directoryPath, cancellationToken))
                     {
-                        await channel.Writer.WriteAsync(filePath, cancellationToken);
+                        await channel.Writer.WriteAsync(filePath, cancellationToken).ConfigureAwait(false);
                     }
                 }
                 catch (Exception ex)
@@ -207,7 +207,7 @@ public class FileIndexingService
                 {
                     try
                     {
-                        if (await IndexFileForBatchAsync(filePath, workspacePath, ct))
+                        if (await IndexFileForBatchAsync(filePath, workspacePath, ct).ConfigureAwait(false))
                         {
                             Interlocked.Increment(ref indexedCount);
                         }
@@ -217,13 +217,13 @@ public class FileIndexingService
                         errors.Add((filePath, ex));
                         _logger.LogWarning(ex, "Failed to add file to batch: {FilePath}", filePath);
                     }
-                });
+                }).ConfigureAwait(false);
             
             // Wait for producer to complete
-            await producerTask;
+            await producerTask.ConfigureAwait(false);
             
             // Flush any remaining batched documents
-            await _batchIndexingService.FlushBatchAsync(workspacePath, cancellationToken);
+            await _batchIndexingService.FlushBatchAsync(workspacePath, cancellationToken).ConfigureAwait(false);
             
             // Report any errors
             if (!errors.IsEmpty)
