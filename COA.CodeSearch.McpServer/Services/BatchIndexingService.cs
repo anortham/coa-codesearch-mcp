@@ -65,7 +65,7 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
     {
         if (_workspaceBatches.TryGetValue(workspacePath, out var batch))
         {
-            await FlushBatchInternalAsync(batch, cancellationToken);
+            await FlushBatchInternalAsync(batch, cancellationToken).ConfigureAwait(false);
         }
     }
 
@@ -97,7 +97,7 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             .Select(batch => FlushBatchInternalAsync(batch, cancellationToken))
             .ToList();
             
-        await Task.WhenAll(flushTasks);
+        await Task.WhenAll(flushTasks).ConfigureAwait(false);
     }
 
     private async Task FlushBatchInternalAsync(WorkspaceBatch batch, CancellationToken cancellationToken)
@@ -121,7 +121,7 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             _logger.LogDebug("Flushing batch of {Count} documents for workspace: {Workspace}", 
                 documentsToFlush.Count, batch.WorkspacePath);
             
-            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(batch.WorkspacePath, cancellationToken);
+            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(batch.WorkspacePath, cancellationToken).ConfigureAwait(false);
             
             // Batch update all documents
             foreach (var (document, id) in documentsToFlush)
@@ -130,7 +130,7 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             }
             
             // Single commit for entire batch
-            await _luceneIndexService.CommitAsync(batch.WorkspacePath, cancellationToken);
+            await _luceneIndexService.CommitAsync(batch.WorkspacePath, cancellationToken).ConfigureAwait(false);
             
             // Update statistics
             lock (batch.Lock)
@@ -189,7 +189,7 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
                 {
                     var flushTasks = staleBatches.Select(batch => 
                         FlushBatchInternalAsync(batch, CancellationToken.None));
-                    await Task.WhenAll(flushTasks);
+                    await Task.WhenAll(flushTasks).ConfigureAwait(false);
                 }
                 catch (Exception ex)
                 {
