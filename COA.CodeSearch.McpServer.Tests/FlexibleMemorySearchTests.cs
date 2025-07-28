@@ -65,11 +65,10 @@ public class FlexibleMemorySearchTests : IDisposable
                 It.IsAny<CancellationToken>()))
             .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
         
-        // Create MemoryAnalyzer mock
-        var memoryAnalyzerLoggerMock = new Mock<ILogger<MemoryAnalyzer>>();
-        var memoryAnalyzer = new MemoryAnalyzer(memoryAnalyzerLoggerMock.Object);
+        // MemoryAnalyzer is now managed by LuceneIndexService
         
-        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, memoryAnalyzer);
+        var facetingServiceMock = new Mock<MemoryFacetingService>(Mock.Of<ILogger<MemoryFacetingService>>(), Mock.Of<IPathResolutionService>());
+        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, facetingServiceMock.Object);
     }
     
     public void Dispose()

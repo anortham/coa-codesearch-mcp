@@ -38,6 +38,7 @@
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net.Facet" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Misc" Version="4.8.0-beta00017" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
     

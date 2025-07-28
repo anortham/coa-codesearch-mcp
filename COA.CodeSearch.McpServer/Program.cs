@@ -152,15 +152,16 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<JsonMemoryBackupService>();
         
-        // Flexible Memory System
+        // Flexible Memory System (analyzer for memory search with synonyms)
         services.AddSingleton<MemoryAnalyzer>();
         
-        // Lucene services (analyzer dependent) - must come after MemoryAnalyzer
+        // Lucene services (uses path-based analyzer selection: StandardAnalyzer for code, MemoryAnalyzer for memory)
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
         
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
+        services.AddSingleton<MemoryFacetingService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
         services.AddSingleton<FlexibleMemoryTools>();

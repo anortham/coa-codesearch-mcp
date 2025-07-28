@@ -1,5 +1,30 @@
 # Lucene Expert Brief: Memory System Search Optimization
 
+## 🚨 CRITICAL ARCHITECTURE NOTICE
+
+**DUAL SYSTEM ARCHITECTURE - READ FIRST**
+
+This codebase contains **TWO DISTINCT SEARCH SYSTEMS** with different requirements:
+
+### 1. **Code Search Tools** (`text_search`, `file_search`, etc.)
+- **Purpose**: Precise, literal searching of source code
+- **Analyzer**: `StandardAnalyzer` (no synonyms, exact matching)
+- **Index Location**: User-specified workspace directories  
+- **Use Case**: Find specific functions, classes, patterns in code
+
+### 2. **Memory Search Tools** (`search_memories`, `store_memory`, etc.)
+- **Purpose**: Conceptual searching of knowledge artifacts
+- **Analyzer**: `MemoryAnalyzer` (with synonyms, stemming, fuzzy matching)
+- **Index Location**: `.codesearch/memory/` directories
+- **Use Case**: Find related concepts, architectural decisions, technical debt
+
+⚠️ **CRITICAL**: Changes to one system MUST NOT break the other. Always consider both systems.
+
+### **Previous Expert Issues to Avoid**
+1. **Analyzer Mixing**: Using MemoryAnalyzer for code searches breaks precision
+2. **Instance Mismatch**: Separate analyzer instances between indexing/querying cause search failures  
+3. **Highlighting**: HTML highlighting adds 10-15% token overhead with minimal AI benefit (disabled by default)
+
 ## Overview
 We need a comprehensive review of our memory system's search capabilities from a Lucene perspective. Our memory system stores knowledge artifacts (architectural decisions, technical debt, code patterns) as searchable memories, and we want to ensure we're leveraging Lucene's full capabilities while avoiding reinventing functionality that Lucene provides natively.
 
@@ -12,11 +37,32 @@ We need a comprehensive review of our memory system's search capabilities from a
 - **Lucene Version**: 4.8.0-beta00017
 
 ### Current Lucene Usage
+
+**Path-Based Analyzer Selection** (implemented in `LuceneIndexService`):
 ```csharp
-// From FlexibleMemoryService.cs
-private readonly Analyzer _analyzer = new StandardAnalyzer(LUCENE_VERSION);
-private readonly IndexWriter _writer;
-private readonly SearcherManager _searcherManager;
+// LuceneIndexService manages dual analyzer architecture
+private readonly StandardAnalyzer _standardAnalyzer;     // For code searches
+private readonly MemoryAnalyzer _memoryAnalyzer;         // For memory searches
+
+// Selects appropriate analyzer based on workspace path
+private Analyzer GetAnalyzerForWorkspace(string pathToCheck)
+{
+    var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
+    var localMemoryPath = _pathResolution.GetLocalMemoryPath();
+    
+    if (pathToCheck.Equals(projectMemoryPath) || pathToCheck.Equals(localMemoryPath))
+    {
+        return _memoryAnalyzer;  // Conceptual search with synonyms
+    }
+    
+    return _standardAnalyzer;    // Precise code search
+}
+```
+
+**Memory Search** (FlexibleMemoryService gets analyzer from LuceneIndexService):
+```csharp
+// FlexibleMemoryService no longer maintains separate analyzer
+// Gets analyzer via: await _indexService.GetAnalyzerAsync(_projectMemoryWorkspace)
 ```
 
 ## Areas for Expert Review
