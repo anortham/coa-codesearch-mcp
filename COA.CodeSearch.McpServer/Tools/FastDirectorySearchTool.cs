@@ -23,6 +23,7 @@ public class FastDirectorySearchTool : ITool
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly IScoringService? _scoringService;
+    private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastDirectorySearchTool(
@@ -30,13 +31,15 @@ public class FastDirectorySearchTool : ITool
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
         IErrorRecoveryService errorRecoveryService,
-        IScoringService? scoringService = null)
+        IScoringService? scoringService = null,
+        SearchResultResourceProvider? searchResultResourceProvider = null)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
         _scoringService = scoringService;
+        _searchResultResourceProvider = searchResultResourceProvider;
     }
 
     public async Task<object> ExecuteAsync(
@@ -171,17 +174,74 @@ public class FastDirectorySearchTool : ITool
                 _logger.LogInformation("Found {Count} directories in {Duration}ms - high performance search!", 
                     results.Count, searchDuration);
 
-                return new
+                var response = new
                 {
                     success = true,
-                    query = query,
-                    searchType = searchType,
-                    workspacePath = workspacePath,
-                    totalResults = results.Count,
-                    searchDurationMs = searchDuration,
+                    operation = "directory_search",
+                    query = new
+                    {
+                        text = query,
+                        type = searchType ?? "standard",
+                        workspace = workspacePath
+                    },
+                    summary = new
+                    {
+                        totalHits = topDocs.TotalHits,
+                        returnedResults = results.Count,
+                        searchTime = $"{searchDuration}ms",
+                        performance = searchDuration < 20 ? "excellent" : "very fast"
+                    },
                     results = results,
-                    performance = searchDuration < 20 ? "excellent" : "very fast"
+                    resultsSummary = new
+                    {
+                        included = results.Count,
+                        total = topDocs.TotalHits,
+                        hasMore = topDocs.TotalHits > results.Count
+                    },
+                    meta = new
+                    {
+                        mode = "grouped",
+                        indexed = true,
+                        searchTime = $"{searchDuration}ms"
+                    }
                 };
+
+                // Store search results as a resource if provider is available
+                if (_searchResultResourceProvider != null && results.Count > 0)
+                {
+                    var resourceUri = _searchResultResourceProvider.StoreSearchResult(
+                        query,
+                        new
+                        {
+                            results = results,
+                            query = response.query,
+                            summary = response.summary,
+                            searchType = searchType,
+                            workspacePath = workspacePath,
+                            groupByDirectory = groupByDirectory
+                        },
+                        new { tool = "directory_search", timestamp = DateTime.UtcNow }
+                    );
+
+                    return new
+                    {
+                        success = response.success,
+                        operation = response.operation,
+                        query = response.query,
+                        summary = response.summary,
+                        results = response.results,
+                        resultsSummary = response.resultsSummary,
+                        meta = new
+                        {
+                            mode = response.meta.mode,
+                            indexed = response.meta.indexed,
+                            searchTime = response.meta.searchTime,
+                            resourceUri = resourceUri
+                        }
+                    };
+                }
+
+                return response;
             }
             else
             {
@@ -194,27 +254,79 @@ public class FastDirectorySearchTool : ITool
                     
                     results.Add(new
                     {
-                        path = doc.Get("path"),
-                        filename = doc.Get("filename"),
-                        directory = doc.Get("directory"),
-                        relativeDirectory = doc.Get("relativeDirectory"),
-                        directoryName = doc.Get("directoryName"),
-                        extension = doc.Get("extension"),
+                        path = doc.Get("relativeDirectory") ?? doc.Get("directory"),
                         score = scoreDoc.Score
                     });
                 }
 
-                return new
+                var response = new
                 {
                     success = true,
-                    query = query,
-                    searchType = searchType,
-                    workspacePath = workspacePath,
-                    totalResults = results.Count,
-                    searchDurationMs = searchDuration,
+                    operation = "directory_search",
+                    query = new
+                    {
+                        text = query,
+                        type = searchType ?? "standard",
+                        workspace = workspacePath
+                    },
+                    summary = new
+                    {
+                        totalHits = topDocs.TotalHits,
+                        returnedResults = results.Count,
+                        searchTime = $"{searchDuration}ms",
+                        performance = searchDuration < 20 ? "excellent" : "very fast"
+                    },
                     results = results,
-                    performance = searchDuration < 20 ? "excellent" : "very fast"
+                    resultsSummary = new
+                    {
+                        included = results.Count,
+                        total = topDocs.TotalHits,
+                        hasMore = topDocs.TotalHits > results.Count
+                    },
+                    meta = new
+                    {
+                        mode = "standard",
+                        indexed = true,
+                        searchTime = $"{searchDuration}ms"
+                    }
                 };
+
+                // Store search results as a resource if provider is available
+                if (_searchResultResourceProvider != null && results.Count > 0)
+                {
+                    var resourceUri = _searchResultResourceProvider.StoreSearchResult(
+                        query,
+                        new
+                        {
+                            results = results,
+                            query = response.query,
+                            summary = response.summary,
+                            searchType = searchType,
+                            workspacePath = workspacePath,
+                            groupByDirectory = groupByDirectory
+                        },
+                        new { tool = "directory_search", timestamp = DateTime.UtcNow }
+                    );
+
+                    return new
+                    {
+                        success = response.success,
+                        operation = response.operation,
+                        query = response.query,
+                        summary = response.summary,
+                        results = response.results,
+                        resultsSummary = response.resultsSummary,
+                        meta = new
+                        {
+                            mode = response.meta.mode,
+                            indexed = response.meta.indexed,
+                            searchTime = response.meta.searchTime,
+                            resourceUri = resourceUri
+                        }
+                    };
+                }
+
+                return response;
             }
         }
         catch (CircuitBreakerOpenException cbEx)
