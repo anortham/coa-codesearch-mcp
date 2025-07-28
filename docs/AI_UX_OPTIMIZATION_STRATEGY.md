@@ -335,11 +335,33 @@ Flow:
 
 ## Resource-Enhanced Features
 
-### 1. **Search Result Persistence**
+### 1. **Search Result Persistence with Hybrid Response Model**
 
-All search operations should create persistent resources:
+**Critical Learning**: Pure resource-based responses create poor UX for AI agents. While architectural elegance of two-step retrieval (summary → resource) has merits, AI agents need immediate access to results.
+
+**Hybrid Response Model** (Implemented after AI UX review):
+- Include first 10-20 results directly in initial response
+- Maintain resourceUri for accessing complete result sets
+- Add resultsSummary field showing included vs total results
+- Smart inclusion based on token budget and response mode
+
+All search operations should:
+1. Return immediate results in response body
+2. Create persistent resources for full results:
 
 ```
+// Response includes results directly:
+{
+  "results": [...first 20 results...],
+  "resultsSummary": {
+    "included": 20,
+    "total": 150,
+    "hasMore": true
+  },
+  "resourceUri": "codesearch-search://abc123/"
+}
+
+// Resource structure for complete results:
 codesearch-search://abc123/
 ├── summary.json
 ├── results/
@@ -437,6 +459,41 @@ codesearch-types://memory/
 - **40-60% reduction** in AI confusion rates
 - **30% improvement** in token efficiency
 - **50% reduction** in parameter errors
+
+## Lessons Learned
+
+### 1. **Immediate Utility Trumps Architectural Elegance**
+
+**Issue**: Phase 2 implementation of pure resource-based responses for text_search created a two-step process that confused AI agents.
+
+**Learning**: AI agents expect immediate, actionable data. While resources are valuable for persistence and sharing, they should complement, not replace, direct response data.
+
+**Solution**: Hybrid response model that includes first page of results while maintaining resource URIs for complete access.
+
+### 2. **Test with Real AI Agent Workflows**
+
+**Issue**: The two-step resource design seemed logical from an architectural perspective but failed in practice.
+
+**Learning**: Always validate designs with actual AI agent usage patterns. What seems elegant in design may create friction in practice.
+
+**Best Practice**: Include AI agent testing in the development cycle, not just unit tests.
+
+### 3. **Progressive Disclosure Should Be Optional**
+
+**Issue**: Forcing progressive disclosure (summary → details) added unnecessary steps for common use cases.
+
+**Learning**: Most searches need immediate results. Progressive disclosure should enhance, not hinder, the primary use case.
+
+**Implementation**: Default to including results, with options to request summary-only responses for token efficiency.
+
+### 4. **Cross-Tool Consistency Matters**
+
+**Issue**: Only text_search had the resource-only pattern, creating inconsistency across tools.
+
+**Learning**: All search tools should follow the same response patterns. Inconsistency increases cognitive load for AI agents.
+
+**Action**: Verified all other search tools (file_search, directory_search, similar_files, recent_files, memory_search) already include results directly.
+
 - **80% success rate** for complex multi-tool workflows
 
 ## Migration Strategy
