@@ -415,6 +415,99 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         }
     }
     
+    /// <summary>
+    /// Create document with native Lucene faceting support (async version)
+    /// </summary>
+    private async Task<Document> CreateDocumentAsync(FlexibleMemoryEntry memory, string workspacePath)
+    {
+        var doc = new Document();
+        
+        // Core fields - DOCVALUES OPTIMIZATION APPLIED
+        // ID: Keep stored for retrieval, but no DocValues needed (not sorted/faceted)
+        doc.Add(new StringField("id", memory.Id, Field.Store.YES));
+        
+        // Type: Add DocValues for efficient sorting and faceting (3-5x performance improvement)
+        doc.Add(new StringField("type", memory.Type, Field.Store.YES));
+        doc.Add(new SortedDocValuesField("type", new BytesRef(memory.Type)));
+        
+        // Content: Keep stored for display, searchable via _all field
+        doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        
+        // Date fields with custom field type for proper numeric range query support
+        var dateFieldType = new FieldType 
+        { 
+            IsIndexed = true,
+            IsStored = true,
+            NumericType = NumericType.INT64,
+            NumericPrecisionStep = 8 // Required for NumericRangeQuery to work properly
+        };
+        
+        doc.Add(new Int64Field("created", memory.Created.Ticks, dateFieldType));
+        doc.Add(new NumericDocValuesField("created", memory.Created.Ticks));
+        
+        doc.Add(new Int64Field("modified", memory.Modified.Ticks, dateFieldType));
+        doc.Add(new NumericDocValuesField("modified", memory.Modified.Ticks));
+        
+        doc.Add(new Int64Field("timestamp_ticks", memory.TimestampTicks, dateFieldType));
+        doc.Add(new NumericDocValuesField("timestamp_ticks", memory.TimestampTicks));
+        
+        // Shared status: Add DocValues for efficient filtering (shared vs local memories)
+        doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
+        doc.Add(new SortedDocValuesField("is_shared", new BytesRef(memory.IsShared.ToString())));
+        
+        // Access count: Optimize storage + add DocValues for sorting by popularity
+        doc.Add(new Int32Field("access_count", memory.AccessCount, Field.Store.NO));
+        doc.Add(new NumericDocValuesField("access_count", memory.AccessCount));
+        
+        if (!string.IsNullOrEmpty(memory.SessionId))
+        {
+            doc.Add(new StringField("session_id", memory.SessionId, Field.Store.YES));
+        }
+        
+        if (memory.LastAccessed.HasValue)
+        {
+            doc.Add(new Int64Field("last_accessed", memory.LastAccessed.Value.Ticks, dateFieldType));
+            doc.Add(new NumericDocValuesField("last_accessed", memory.LastAccessed.Value.Ticks));
+        }
+        
+        // Files: Optimize for multi-value faceting while preserving stored access
+        foreach (var file in memory.FilesInvolved)
+        {
+            doc.Add(new StringField("file", file, Field.Store.YES));
+        }
+        
+        // Add SortedSetDocValues for efficient file-based faceting if there are files
+        if (memory.FilesInvolved.Any())
+        {
+            foreach (var file in memory.FilesInvolved)
+            {
+                doc.Add(new SortedSetDocValuesField("files_facet", new BytesRef(file)));
+            }
+        }
+        
+        // Extended fields as JSON
+        if (memory.Fields.Any())
+        {
+            var fieldsJson = JsonSerializer.Serialize(memory.Fields);
+            doc.Add(new StoredField("extended_fields", fieldsJson));
+            
+            // Index specific fields for searching
+            IndexExtendedFields(doc, memory.Fields);
+        }
+        
+        // Create searchable content
+        var searchableContent = BuildSearchableContent(memory);
+        doc.Add(new TextField("_all", searchableContent, Field.Store.NO));
+        
+        // Add native Lucene facet fields with proper taxonomy writer integration
+        doc = await _facetingService.AddFacetFieldsAsync(doc, memory, workspacePath);
+        
+        return doc;
+    }
+
+    /// <summary>
+    /// Create document (synchronous version for backward compatibility)
+    /// </summary>
     private Document CreateDocument(FlexibleMemoryEntry memory)
     {
         var doc = new Document();
@@ -496,7 +589,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         var searchableContent = BuildSearchableContent(memory);
         doc.Add(new TextField("_all", searchableContent, Field.Store.NO));
         
-        // Add native Lucene facet fields for efficient faceting
+        // Add native Lucene facet fields for efficient faceting (synchronous version - limited support)
         doc = _facetingService.AddFacetFields(doc, memory);
         
         return doc;
@@ -1496,8 +1589,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 // Get index writer
                 var indexWriter = await _indexService.GetIndexWriterAsync(workspace);
                 
-                // Create document
-                var document = CreateDocument(memory);
+                // Create document with faceting support
+                var document = await CreateDocumentAsync(memory, workspace);
                 
                 // Check if memory already exists to determine operation type
                 var existingQuery = new TermQuery(new Term("id", memory.Id));

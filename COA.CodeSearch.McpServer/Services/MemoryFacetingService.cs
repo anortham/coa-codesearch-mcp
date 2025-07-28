@@ -82,20 +82,12 @@ public class MemoryFacetingService : IDisposable
     }
     
     /// <summary>
-    /// Add facet fields to a document during indexing
+    /// Add facet fields to a document and build it for indexing
     /// </summary>
-    public Document AddFacetFields(Document document, FlexibleMemoryEntry memory)
+    public async Task<Document> AddFacetFieldsAsync(Document document, FlexibleMemoryEntry memory, string workspacePath)
     {
         try
         {
-            // TODO: Native Lucene faceting temporarily disabled until taxonomy infrastructure is complete
-            // For now, just return the original document to avoid breaking memory storage
-            // The faceting will be handled by manual facet calculation as before
-            _logger.LogDebug("Native faceting temporarily disabled for memory {Id} - using manual faceting", memory.Id);
-            return document;
-
-            // The code below will be enabled once taxonomy directory creation is properly implemented
-            /*
             // Skip faceting if no useful facet data is available
             if (string.IsNullOrEmpty(memory.Type) && 
                 memory.GetField<string>("status") == null &&
@@ -146,17 +138,42 @@ public class MemoryFacetingService : IDisposable
                 }
             }
             
+            // Get or create taxonomy writer for this workspace
+            var taxonomyWriter = await GetTaxonomyWriterAsync(workspacePath);
+            
             // Build the document with facet configuration
-            // This is required for Lucene.NET faceting to work properly
-            var facetDocument = _facetsConfig.Build(document);
+            // This associates the document with the taxonomy
+            var facetDocument = _facetsConfig.Build(taxonomyWriter, document);
             
             _logger.LogDebug("Added facet fields to document for memory {Id}", memory.Id);
             return facetDocument;
-            */
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error adding facet fields to document for memory {Id} - faceting will be skipped", memory.Id);
+            return document; // Return original document if faceting fails
+        }
+    }
+    
+    /// <summary>
+    /// Add facet fields to a document during indexing (synchronous version for backward compatibility)
+    /// NOTE: This version cannot add raw FacetField objects as they require taxonomy writer processing
+    /// Use AddFacetFieldsAsync for full faceting support with taxonomy management
+    /// </summary>
+    public Document AddFacetFields(Document document, FlexibleMemoryEntry memory)
+    {
+        try
+        {
+            // Skip adding raw FacetField objects as they require taxonomy writer processing
+            // The synchronous version cannot access the workspace path needed for taxonomy setup
+            // For now, faceting is handled by the manual CalculateFacets method
+            
+            _logger.LogDebug("Skipping native facet fields for memory {Id} in synchronous mode - use AddFacetFieldsAsync for full faceting", memory.Id);
+            return document;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in AddFacetFields for memory {Id}", memory.Id);
             return document; // Return original document if faceting fails
         }
     }
@@ -333,14 +350,23 @@ public class MemoryFacetingService : IDisposable
     }
     
     /// <summary>
-    /// Get the taxonomy directory path for a workspace
+    /// Get the taxonomy directory path for a workspace and ensure it exists
     /// </summary>
     private string GetTaxonomyPath(string workspacePath)
     {
         // Create taxonomy directory alongside the main index
         // Use the PathResolutionService to properly resolve the index path
         var indexBasePath = _pathResolution.GetIndexPath(workspacePath);
-        return Path.Combine(indexBasePath, "taxonomy");
+        var taxonomyPath = Path.Combine(indexBasePath, "taxonomy");
+        
+        // Ensure the taxonomy directory exists
+        if (!System.IO.Directory.Exists(taxonomyPath))
+        {
+            System.IO.Directory.CreateDirectory(taxonomyPath);
+            _logger.LogDebug("Created taxonomy directory: {TaxonomyPath}", taxonomyPath);
+        }
+        
+        return taxonomyPath;
     }
     
     /// <summary>
