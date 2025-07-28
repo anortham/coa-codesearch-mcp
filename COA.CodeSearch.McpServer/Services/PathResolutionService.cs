@@ -53,6 +53,20 @@ public class PathResolutionService : IPathResolutionService
             return GetLocalMemoryPath();
         }
         
+        // Check if this is already a full path to a memory directory
+        var projectMemoryPath = GetProjectMemoryPath();
+        var localMemoryPath = GetLocalMemoryPath();
+        
+        if (string.Equals(Path.GetFullPath(normalizedPath), Path.GetFullPath(projectMemoryPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return projectMemoryPath;
+        }
+        
+        if (string.Equals(Path.GetFullPath(normalizedPath), Path.GetFullPath(localMemoryPath), StringComparison.OrdinalIgnoreCase))
+        {
+            return localMemoryPath;
+        }
+        
         // For regular workspace paths
         var indexRoot = Path.Combine(_basePath, PathConstants.IndexDirectoryName);
         
