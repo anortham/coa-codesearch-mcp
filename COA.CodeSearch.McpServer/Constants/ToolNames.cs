@@ -28,6 +28,7 @@ public static class ToolNames
     public const string BackupMemories = "backup_memories";
     public const string RestoreMemories = "restore_memories";
     public const string RecallContext = "recall_context";
+    public const string LoadContext = "load_context";
     
     // Memory linking tools
     public const string LinkMemories = "link_memories";

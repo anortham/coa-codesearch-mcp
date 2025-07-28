@@ -127,10 +127,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<TestCoverageImproverPrompt>();
         services.AddSingleton<PromptTemplateResourceProvider>();
         
-        // Lucene services
-        services.AddSingleton<LuceneIndexService>();
-        services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
-        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
+        // Lucene services (non-analyzer dependent)
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
         services.AddSingleton<FileIndexingService>();
@@ -156,6 +153,13 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<JsonMemoryBackupService>();
         
         // Flexible Memory System
+        services.AddSingleton<MemoryAnalyzer>();
+        
+        // Lucene services (analyzer dependent) - must come after MemoryAnalyzer
+        services.AddSingleton<LuceneIndexService>();
+        services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
+        services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());
+        
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
@@ -166,6 +170,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
         services.AddSingleton<TimelineTool>();
+        services.AddSingleton<AIContextService>();
+        services.AddSingleton<LoadContextTool>();
         
         // Query Expansion for Memory Intelligence
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();

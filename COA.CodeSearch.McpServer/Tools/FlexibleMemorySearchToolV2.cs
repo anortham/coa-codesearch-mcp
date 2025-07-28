@@ -61,6 +61,10 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         string? currentFile = null,
         string[]? recentFiles = null,
         ResponseMode mode = ResponseMode.Summary,
+        // Highlighting parameters
+        bool enableHighlighting = false,
+        int maxFragments = 3,
+        int fragmentSize = 100,
         DetailRequest? detailRequest = null,
         CancellationToken cancellationToken = default)
     {
@@ -88,7 +92,10 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
                 MaxResults = maxResults,
                 IncludeArchived = includeArchived,
                 BoostRecent = boostRecent,
-                BoostFrequent = boostFrequent
+                BoostFrequent = boostFrequent,
+                EnableHighlighting = enableHighlighting,
+                MaxFragments = maxFragments,
+                FragmentSize = fragmentSize
             };
 
             if (!string.IsNullOrEmpty(dateRange))

@@ -67,6 +67,9 @@ public static class AllToolRegistrations
         
         // Workflow discovery
         RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
+        
+        // AI Context loading
+        RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
@@ -1339,6 +1342,44 @@ Use cases: Understanding tool dependencies, discovering workflow patterns, getti
     {
         public string? ToolName { get; set; }
         public string? Goal { get; set; }
+    }
+
+    private static void RegisterLoadContext(ToolRegistry registry, LoadContextTool tool)
+    {
+        registry.RegisterTool<LoadContextParams>(
+            name: ToolNames.LoadContext,
+            description: @"Load AI working context with relevant memories for directory or session.
+Automatically loads and ranks memories by relevance for the current working environment.
+Returns: Organized memories (primary/secondary/available), insights, and suggested actions.
+Use cases: Starting work sessions, resuming projects, getting contextual memory overview.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    workingDirectory = new { type = "string", description = "Directory to load context for (defaults to current directory)" },
+                    sessionId = new { type = "string", description = "Session ID to load session-specific memories (optional)" },
+                    refreshCache = new { type = "boolean", description = "Force refresh cached context (default: false)" }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.WorkingDirectory,
+                    parameters?.SessionId,
+                    parameters?.RefreshCache ?? false,
+                    ct);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class LoadContextParams
+    {
+        public string? WorkingDirectory { get; set; }
+        public string? SessionId { get; set; }
+        public bool? RefreshCache { get; set; }
     }
 
 }
