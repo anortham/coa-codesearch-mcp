@@ -24,15 +24,29 @@ public class MultiFactorScoreQuery : Query
 
     public override Weight CreateWeight(IndexSearcher searcher)
     {
-        // Handle queries that need rewriting (like WildcardQuery, PrefixQuery, etc.)
-        var rewrittenQuery = _baseQuery;
-        if (_baseQuery is MultiTermQuery || _baseQuery is WildcardQuery || _baseQuery is PrefixQuery)
+        try
         {
-            rewrittenQuery = _baseQuery.Rewrite(searcher.IndexReader);
+            // Always try to rewrite the query first - this handles all query types that need rewriting
+            var rewrittenQuery = _baseQuery.Rewrite(searcher.IndexReader);
+            
+            // If the query changed after rewriting, use the rewritten version
+            if (!ReferenceEquals(rewrittenQuery, _baseQuery))
+            {
+                var baseWeight = rewrittenQuery.CreateWeight(searcher);
+                return new MultiFactorWeight(this, baseWeight, searcher);
+            }
+            
+            // Otherwise, use the original query
+            var weight = _baseQuery.CreateWeight(searcher);
+            return new MultiFactorWeight(this, weight, searcher);
         }
-        
-        var baseWeight = rewrittenQuery.CreateWeight(searcher);
-        return new MultiFactorWeight(this, baseWeight, searcher);
+        catch (NotSupportedException ex) when (ex.Message.Contains("does not implement createWeight"))
+        {
+            // If CreateWeight fails, try to rewrite more aggressively
+            var rewrittenQuery = _baseQuery.Rewrite(searcher.IndexReader);
+            var baseWeight = rewrittenQuery.CreateWeight(searcher);
+            return new MultiFactorWeight(this, baseWeight, searcher);
+        }
     }
 
     public override string ToString(string field)

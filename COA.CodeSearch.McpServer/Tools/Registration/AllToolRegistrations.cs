@@ -283,8 +283,8 @@ Not for: Text content searches (use text_search), directory searches (use direct
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
-                    nameQuery = new { type = "string", description = "[DEPRECATED] Use 'query' instead. File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '^User' (regex start)" },
+                    query = new { type = "string", description = "File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '.*Test.*.cs' (regex)" },
+                    nameQuery = new { type = "string", description = "[DEPRECATED] Use 'query' instead. File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '.*Test.*.cs' (regex)" },
                     workspacePath = new { type = "string", description = "Path to solution, project, or directory to search" },
                     searchType = new { 
                         type = "string",
@@ -294,7 +294,11 @@ Not for: Text content searches (use text_search), directory searches (use direct
 - fuzzy: Typo-tolerant (UserSrvc~ finds UserService.cs)
 - wildcard: Pattern matching (User*.cs finds UserService.cs)
 - exact: Exact filename match
-- regex: Regular expressions (^User.*\.cs$)",
+- regex: Regular expressions on relative paths - examples:
+  * '.*Test.*\.cs' - files with 'Test' in name
+  * '.*Service\.cs' - files ending with 'Service.cs'
+  * 'Tests\\.*' - files in Tests folders
+  * '.*\\Services\\.*' - files in Services folders",
                         examples = new[] { "UserService", "UserSrvc~", "User*.cs", "UserService.cs", "^User.*Service\\.cs$" },
                         @default = "standard" 
                     },
