@@ -27,7 +27,8 @@ public class ScoringService : IScoringService
             { "FilenameRelevance", new FilenameRelevanceFactor() },
             { "PathRelevance", new PathRelevanceFactor() },
             { "RecencyBoost", new RecencyBoostFactor() },
-            { "FileTypeRelevance", new FileTypeRelevanceFactor() }
+            { "FileTypeRelevance", new FileTypeRelevanceFactor() },
+            { "TemporalScoring", new TemporalScoringFactor(null, logger) }
         };
 
         // Load configuration for factor weights

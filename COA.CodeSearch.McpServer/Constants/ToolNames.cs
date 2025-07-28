@@ -68,4 +68,7 @@ public static class ToolNames
     public const string PatternDetector = "pattern_detector";
     public const string MemoryGraphNavigator = "memory_graph_navigator";
     public const string WorkflowDiscovery = "workflow_discovery";
+    
+    // Phase 3: Unified Memory Interface
+    public const string UnifiedMemory = "unified_memory";
 }

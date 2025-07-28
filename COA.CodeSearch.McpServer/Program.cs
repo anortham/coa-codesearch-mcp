@@ -174,6 +174,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<AIContextService>();
         services.AddSingleton<LoadContextTool>();
         
+        // Phase 3: Unified Memory Interface
+        services.AddSingleton<UnifiedMemoryService>();
+        services.AddSingleton<UnifiedMemoryTool>();
+        
         // Query Expansion for Memory Intelligence
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
