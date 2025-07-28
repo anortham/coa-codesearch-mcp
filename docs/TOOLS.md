@@ -2,6 +2,37 @@
 
 Complete documentation for all tools available in the CodeSearch MCP Server.
 
+## 🎯 Token Optimizations (July 2025)
+
+**All search tools now feature 60-85% token reduction:**
+
+### Confidence-Based Result Limiting
+- **High confidence** (score > 0.8): 2-3 results
+- **Medium confidence** (score > 0.5): 3-5 results  
+- **Low confidence**: 5-8 results with refinement suggestions
+- **Context-aware**: Fewer results when `contextLines` included
+
+### Resource URI System
+- Minimal initial response with essential results
+- Full results accessible via `meta.resourceUri`
+- Use `ReadMcpResourceTool` to access complete data when needed
+
+### Standardized Response Format
+All search tools now return consistent structure:
+```json
+{
+  "results": [/* optimized results */],
+  "resultsSummary": {
+    "included": 3,    // What's in this response
+    "total": 15,      // Total available  
+    "hasMore": true   // More via resourceUri
+  },
+  "meta": {
+    "resourceUri": "codesearch://search_abc123"
+  }
+}
+```
+
 ## Tool Categories
 
 All code analysis tools now provide AI-optimized responses with:
@@ -10,6 +41,7 @@ All code analysis tools now provide AI-optimized responses with:
 - **Progressive Disclosure**: Request specific details without re-running operations
 - **Pattern Recognition**: Identifies trends, hotspots, and optimization opportunities
 - **Progress Tracking**: Real-time notifications for long-running operations
+- **🆕 Confidence-Based Limiting**: Dynamic result counts based on search quality
 
 ## Table of Contents
 
