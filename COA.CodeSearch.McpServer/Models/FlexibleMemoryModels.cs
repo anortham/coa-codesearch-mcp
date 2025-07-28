@@ -255,6 +255,32 @@ public static class MemoryRelationshipTypes
 }
 
 /// <summary>
+/// Temporal scoring modes for memory search
+/// </summary>
+public enum TemporalScoringMode
+{
+    /// <summary>
+    /// No temporal scoring - original relevance only
+    /// </summary>
+    None,
+    
+    /// <summary>
+    /// Default temporal scoring - moderate decay
+    /// </summary>
+    Default,
+    
+    /// <summary>
+    /// Aggressive temporal scoring - strongly favor recent memories
+    /// </summary>
+    Aggressive,
+    
+    /// <summary>
+    /// Gentle temporal scoring - slow decay over long periods
+    /// </summary>
+    Gentle
+}
+
+/// <summary>
 /// Enhanced search request with faceting and advanced filters
 /// </summary>
 public class FlexibleMemorySearchRequest
@@ -334,6 +360,11 @@ public class FlexibleMemorySearchRequest
     /// Maximum fragment size in characters (optimized for tokens)
     /// </summary>
     public int FragmentSize { get; set; } = 100;
+    
+    /// <summary>
+    /// Temporal scoring mode to apply (None = no temporal boost, Default = moderate decay)
+    /// </summary>
+    public TemporalScoringMode TemporalScoring { get; set; } = TemporalScoringMode.Default;
 }
 
 /// <summary>

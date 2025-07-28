@@ -1,5 +1,6 @@
 using System.Text.Json;
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Scoring;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
@@ -29,6 +30,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     private readonly IErrorHandlingService _errorHandling;
     private readonly IMemoryValidationService _validation;
     private readonly MemoryFacetingService _facetingService;
+    private readonly IScoringService _scoringService;
     private readonly string _projectMemoryWorkspace;
     private readonly string _localMemoryWorkspace;
     
@@ -49,7 +51,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         IPathResolutionService pathResolution,
         IErrorHandlingService errorHandling,
         IMemoryValidationService validation,
-        MemoryFacetingService facetingService)
+        MemoryFacetingService facetingService,
+        IScoringService scoringService)
     {
         _logger = logger;
         _configuration = configuration;
@@ -58,6 +61,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         _errorHandling = errorHandling;
         _validation = validation;
         _facetingService = facetingService;
+        _scoringService = scoringService;
         
         // Initialize workspace paths from PathResolutionService
         _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
@@ -715,18 +719,58 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 searcher.IndexReader.NumDocs);
             
             // Build the query
-            var query = await BuildQueryAsync(request);
-            _logger.LogInformation("Built query: {Query}", query.ToString());
+            var baseQuery = await BuildQueryAsync(request);
+            _logger.LogInformation("Built base query: {Query}", baseQuery.ToString());
+            
+            // Apply scoring based on temporal scoring mode
+            var finalQuery = baseQuery;
+            if (request.TemporalScoring != TemporalScoringMode.None)
+            {
+                // Configure temporal scoring factor based on mode
+                var scoringFactors = new HashSet<string> { "TemporalScoring" };
+                var searchContext = new ScoringContext
+                {
+                    QueryText = request.Query,
+                    SearchType = "memory_search", 
+                    WorkspacePath = workspacePath,
+                    AdditionalData = new Dictionary<string, object>
+                    {
+                        ["TemporalScoringMode"] = request.TemporalScoring
+                    }
+                };
+                
+                // Update temporal scoring factor based on mode
+                var availableFactors = _scoringService.GetAvailableFactors();
+                if (availableFactors.TryGetValue("TemporalScoring", out var temporalFactor) && temporalFactor is TemporalScoringFactor tsFactor)
+                {
+                    // Create a new temporal factor with the appropriate decay function
+                    var decayFunction = request.TemporalScoring switch
+                    {
+                        TemporalScoringMode.Aggressive => TemporalDecayFunction.Aggressive,
+                        TemporalScoringMode.Gentle => TemporalDecayFunction.Gentle,
+                        _ => TemporalDecayFunction.Default
+                    };
+                    
+                    // Replace the temporal factor with one configured for this request
+                    var customTemporalFactor = new TemporalScoringFactor(decayFunction, _logger);
+                    searchContext.AdditionalData["CustomTemporalFactor"] = customTemporalFactor;
+                }
+                
+                finalQuery = _scoringService.CreateScoredQuery(baseQuery, searchContext, scoringFactors);
+                _logger.LogInformation("Applied temporal scoring ({Mode}) to query: {Query}", 
+                    request.TemporalScoring, finalQuery.ToString());
+            }
             
             // Execute search
-            var topDocs = searcher.Search(query, request.MaxResults * 2); // Get extra for filtering
+            var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
             
             // Setup highlighting if enabled
             Highlighter? highlighter = null;
             if (request.EnableHighlighting && !string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
             {
-                highlighter = CreateHighlighter(query, request);
+                // Use base query for highlighting to avoid scoring interference
+                highlighter = CreateHighlighter(baseQuery, request);
             }
             
             foreach (var scoreDoc in topDocs.ScoreDocs)

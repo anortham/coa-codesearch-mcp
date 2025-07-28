@@ -36,6 +36,9 @@ public static class AllToolRegistrations
         // Flexible Memory System tools
         FlexibleMemoryToolRegistrations.RegisterFlexibleMemoryTools(registry, serviceProvider);
         
+        // Phase 3: Unified Memory Interface
+        RegisterUnifiedMemory(registry, serviceProvider.GetRequiredService<UnifiedMemoryTool>());
+        
         // Memory Linking tools
         MemoryLinkingToolRegistrations.RegisterAll(registry, serviceProvider.GetRequiredService<MemoryLinkingTools>());
         
@@ -1380,6 +1383,121 @@ Use cases: Starting work sessions, resuming projects, getting contextual memory 
         public string? WorkingDirectory { get; set; }
         public string? SessionId { get; set; }
         public bool? RefreshCache { get; set; }
+    }
+
+    /// <summary>
+    /// Phase 3: Register unified memory tool - natural language interface to all memory operations
+    /// </summary>
+    private static void RegisterUnifiedMemory(ToolRegistry registry, UnifiedMemoryTool tool)
+    {
+        registry.RegisterTool<UnifiedMemoryInputParams>(
+            name: ToolNames.UnifiedMemory,
+            description: @"Unified memory interface that uses natural language to perform memory operations.
+Replaces the need for multiple memory tools with intelligent intent detection.
+Automatically routes commands to appropriate tools based on detected intent.
+
+Supported intents:
+- SAVE: Store memories, create checklists (""remember that UserService has performance issues"")
+- FIND: Search memories, files, content (""find all authentication bugs"")  
+- CONNECT: Link related memories (""connect auth bug to security audit"")
+- EXPLORE: Navigate relationships (""explore authentication system connections"")
+- SUGGEST: Get recommendations (""suggest improvements for authentication"")
+- MANAGE: Update/delete memories (""update technical debt status to resolved"")
+
+Examples:
+- ""remember that database query in UserService.GetActiveUsers() takes 5 seconds""
+- ""find all technical debt related to authentication system""
+- ""create checklist for database migration project""
+- ""explore relationships around user management architecture""
+- ""suggest next steps for performance optimization""
+
+Use cases: Natural language memory operations, AI agent workflows, context-aware suggestions.
+AI-optimized: Provides intent detection, action suggestions, and usage guidance.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    command = new 
+                    { 
+                        type = "string", 
+                        description = "The natural language command to execute" 
+                    },
+                    intent = new
+                    {
+                        type = "string",
+                        @enum = new[] { "save", "find", "connect", "explore", "suggest", "manage", "auto" },
+                        description = "Optional: Force a specific intent instead of auto-detection",
+                        @default = "auto"
+                    },
+                    workingDirectory = new 
+                    { 
+                        type = "string", 
+                        description = "Optional: Working directory for file operations" 
+                    },
+                    sessionId = new 
+                    { 
+                        type = "string", 
+                        description = "Optional: Session ID for tracking" 
+                    },
+                    relatedFiles = new
+                    {
+                        type = "array",
+                        items = new { type = "string" },
+                        description = "Optional: Files currently being worked on"
+                    },
+                    currentFocus = new
+                    {
+                        type = "string",
+                        description = "Optional: Current focus or task description"
+                    }
+                },
+                required = new[] { "command" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                // Convert string intent to MemoryIntent enum
+                MemoryIntent? intent = null;
+                if (!string.IsNullOrEmpty(parameters.Intent) && parameters.Intent != "auto")
+                {
+                    intent = parameters.Intent.ToLowerInvariant() switch
+                    {
+                        "save" => MemoryIntent.Save,
+                        "find" => MemoryIntent.Find,
+                        "connect" => MemoryIntent.Connect,
+                        "explore" => MemoryIntent.Explore,
+                        "suggest" => MemoryIntent.Suggest,
+                        "manage" => MemoryIntent.Manage,
+                        _ => null
+                    };
+                }
+
+                var toolParams = new UnifiedMemoryParams
+                {
+                    Command = ValidateRequired(parameters.Command, "command"),
+                    Intent = intent,
+                    WorkingDirectory = parameters.WorkingDirectory,
+                    SessionId = parameters.SessionId,
+                    RelatedFiles = parameters.RelatedFiles?.ToList() ?? new List<string>(),
+                    CurrentFocus = parameters.CurrentFocus
+                };
+
+                var result = await tool.ExecuteAsync(toolParams, ct);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private class UnifiedMemoryToolParams
+    {
+        public string? Command { get; set; }
+        public string? Intent { get; set; }
+        public string? WorkingDirectory { get; set; }
+        public string? SessionId { get; set; }
+        public string[]? RelatedFiles { get; set; }
+        public string? CurrentFocus { get; set; }
     }
 
 }
