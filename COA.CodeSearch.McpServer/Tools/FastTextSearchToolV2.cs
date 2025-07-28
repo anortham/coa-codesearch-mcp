@@ -38,6 +38,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private readonly IScoringService? _scoringService;
+    private readonly IResultConfidenceService? _resultConfidenceService;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -54,7 +55,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IErrorRecoveryService errorRecoveryService,
         IContextAwarenessService? contextAwarenessService = null,
         SearchResultResourceProvider? searchResultResourceProvider = null,
-        IScoringService? scoringService = null)
+        IScoringService? scoringService = null,
+        IResultConfidenceService? resultConfidenceService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _configuration = configuration;
@@ -67,6 +69,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _errorRecoveryService = errorRecoveryService;
         _searchResultResourceProvider = searchResultResourceProvider;
         _scoringService = scoringService;
+        _resultConfidenceService = resultConfidenceService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -142,7 +145,20 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
 
             // Execute search
             var topDocs = searcher.Search(luceneQuery, maxResults);
-            var results = await ProcessSearchResultsAsync(searcher, topDocs, query, contextLines, cancellationToken);
+            
+            // Apply confidence-based result limiting if service is available
+            int effectiveMaxResults = maxResults;
+            string? confidenceInsight = null;
+            if (_resultConfidenceService != null)
+            {
+                var confidence = _resultConfidenceService.AnalyzeResults(topDocs, maxResults, contextLines > 0);
+                effectiveMaxResults = confidence.RecommendedCount;
+                confidenceInsight = confidence.Insight;
+                Logger.LogDebug("Confidence analysis: level={Level}, recommended={Count}, topScore={Score:F2}", 
+                    confidence.ConfidenceLevel, confidence.RecommendedCount, confidence.TopScore);
+            }
+            
+            var results = await ProcessSearchResultsAsync(searcher, topDocs, query, contextLines, effectiveMaxResults, cancellationToken);
 
             // Create AI-optimized response
             return await CreateAiOptimizedResponse(query, searchType, workspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
@@ -187,17 +203,18 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         TopDocs topDocs,
         string query,
         int? contextLines,
+        int maxResults,
         CancellationToken cancellationToken)
     {
         const int StreamingThreshold = 100; // Use streaming for 100+ results
         
         if (topDocs.ScoreDocs.Length >= StreamingThreshold)
         {
-            return await ProcessSearchResultsStreamingAsync(searcher, topDocs, query, contextLines, cancellationToken);
+            return await ProcessSearchResultsStreamingAsync(searcher, topDocs, query, contextLines, maxResults, cancellationToken);
         }
         else
         {
-            return await ProcessSearchResultsOptimizedAsync(searcher, topDocs, query, contextLines, cancellationToken);
+            return await ProcessSearchResultsOptimizedAsync(searcher, topDocs, query, contextLines, maxResults, cancellationToken);
         }
     }
 
@@ -209,9 +226,13 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         TopDocs topDocs,
         string query,
         int? contextLines,
+        int maxResults,
         CancellationToken cancellationToken)
     {
-        var results = new List<SearchResult>(topDocs.ScoreDocs.Length);
+        // Limit results based on confidence analysis
+        var scoreDocs = topDocs.ScoreDocs.Take(maxResults).ToArray();
+        
+        var results = new List<SearchResult>(scoreDocs.Length);
         var fieldSet = _fieldSelectorService.GetFieldSet(FieldSetType.SearchResults);
         
         var parallelOptions = new ParallelOptions 
@@ -222,7 +243,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         
         var resultBag = new ConcurrentBag<(SearchResult result, float score)>();
         
-        await Parallel.ForEachAsync(topDocs.ScoreDocs, parallelOptions, async (scoreDoc, ct) =>
+        await Parallel.ForEachAsync(scoreDocs, parallelOptions, async (scoreDoc, ct) =>
         {
             // Use field selector for efficient document loading - PRIMARY OPTIMIZATION
             var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, fieldSet.Fields);
@@ -262,24 +283,31 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         TopDocs topDocs,
         string query,
         int? contextLines,
+        int maxResults,
         CancellationToken cancellationToken)
     {
         var results = new List<SearchResult>();
         var fieldSet = _fieldSelectorService.GetFieldSet(FieldSetType.SearchResults);
         
+        // Limit results based on confidence analysis
+        var scoreDocs = topDocs.ScoreDocs.Take(maxResults).ToArray();
+        
         // Create score lookup for efficient score retrieval
-        var scoreMap = topDocs.ScoreDocs.ToDictionary(sd => sd.Doc, sd => sd.Score);
+        var scoreMap = scoreDocs.ToDictionary(sd => sd.Doc, sd => sd.Score);
         
         var streamingOptions = new StreamingOptions
         {
             BatchSize = 50,
             BatchDelay = TimeSpan.FromMilliseconds(2),
-            MaxResults = topDocs.ScoreDocs.Length
+            MaxResults = maxResults
         };
 
+        // Create limited TopDocs for streaming
+        var limitedTopDocs = new TopDocs(topDocs.TotalHits, scoreDocs, topDocs.MaxScore);
+        
         // Stream results with field selector optimization
         await foreach (var batch in _streamingResultService.StreamResultsWithFieldSelectorAsync(
-            searcher, topDocs, (s, docId, fields) => ProcessDocumentWithScore(s, docId, fields, scoreMap), 
+            searcher, limitedTopDocs, (s, docId, fields) => ProcessDocumentWithScore(s, docId, fields, scoreMap), 
             fieldSet.Fields, streamingOptions, cancellationToken))
         {
             // Process each batch

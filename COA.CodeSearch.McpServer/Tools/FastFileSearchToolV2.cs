@@ -29,6 +29,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private readonly IScoringService? _scoringService;
+    private readonly IResultConfidenceService? _resultConfidenceService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSearchToolV2(
@@ -42,7 +43,8 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         IDetailRequestCache detailCache,
         IErrorRecoveryService errorRecoveryService,
         SearchResultResourceProvider? searchResultResourceProvider = null,
-        IScoringService? scoringService = null)
+        IScoringService? scoringService = null,
+        IResultConfidenceService? resultConfidenceService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _luceneIndexService = luceneIndexService;
@@ -51,6 +53,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         _errorRecoveryService = errorRecoveryService;
         _searchResultResourceProvider = searchResultResourceProvider;
         _scoringService = scoringService;
+        _resultConfidenceService = resultConfidenceService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -144,11 +147,23 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             var topDocs = searcher.Search(luceneQuery, maxResults);
             var searchDuration = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
+            // Apply confidence-based result limiting if service is available
+            int effectiveMaxResults = maxResults;
+            string? confidenceInsight = null;
+            if (_resultConfidenceService != null)
+            {
+                var confidence = _resultConfidenceService.AnalyzeResults(topDocs, maxResults, false); // No context for file search
+                effectiveMaxResults = confidence.RecommendedCount;
+                confidenceInsight = confidence.Insight;
+                Logger.LogDebug("File search confidence: level={Level}, recommended={Count}, topScore={Score:F2}", 
+                    confidence.ConfidenceLevel, confidence.RecommendedCount, confidence.TopScore);
+            }
+
             // Process results
             var searchResults = new FileSearchData();
             searchResults.SearchDurationMs = searchDuration;
 
-            foreach (var scoreDoc in topDocs.ScoreDocs)
+            foreach (var scoreDoc in topDocs.ScoreDocs.Take(effectiveMaxResults))
             {
                 // Use field selector to load only required fields for optimal performance
                 var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, 
