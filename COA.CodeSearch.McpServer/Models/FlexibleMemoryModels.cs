@@ -71,6 +71,11 @@ public class FlexibleMemoryEntry
     /// </summary>
     public DateTime? LastAccessed { get; set; }
     
+    /// <summary>
+    /// Highlighted fragments for this memory (field -> fragments)
+    /// </summary>
+    public Dictionary<string, string[]> Highlights { get; set; } = new();
+    
     // Helper methods for common field operations
     
     /// <summary>
@@ -314,6 +319,21 @@ public class FlexibleMemorySearchRequest
     /// Boost frequently accessed memories
     /// </summary>
     public bool BoostFrequent { get; set; } = true;
+    
+    /// <summary>
+    /// Enable highlighting for search results
+    /// </summary>
+    public bool EnableHighlighting { get; set; } = false;
+    
+    /// <summary>
+    /// Maximum number of highlight fragments per field
+    /// </summary>
+    public int MaxFragments { get; set; } = 3;
+    
+    /// <summary>
+    /// Maximum fragment size in characters (optimized for tokens)
+    /// </summary>
+    public int FragmentSize { get; set; } = 100;
 }
 
 /// <summary>

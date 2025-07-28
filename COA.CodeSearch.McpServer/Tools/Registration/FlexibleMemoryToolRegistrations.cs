@@ -52,6 +52,45 @@ public static class FlexibleMemoryToolRegistrations
         // File context
         RegisterGetMemoriesForFile(registry, memoryTools);
     }
+
+    // Helper methods for dynamic parameter access
+    private static bool? GetBooleanProperty(dynamic? obj, string propertyName)
+    {
+        if (obj == null) return null;
+        try
+        {
+            var property = obj.GetType().GetProperty(propertyName);
+            if (property != null)
+            {
+                var value = property.GetValue(obj);
+                if (value is bool boolValue) return boolValue;
+            }
+        }
+        catch
+        {
+            // Ignore property access errors
+        }
+        return null;
+    }
+
+    private static int? GetIntegerProperty(dynamic? obj, string propertyName)
+    {
+        if (obj == null) return null;
+        try
+        {
+            var property = obj.GetType().GetProperty(propertyName);
+            if (property != null)
+            {
+                var value = property.GetValue(obj);
+                if (value is int intValue) return intValue;
+            }
+        }
+        catch
+        {
+            // Ignore property access errors
+        }
+        return null;
+    }
     
     private static void RegisterStoreMemory(ToolRegistry registry, FlexibleMemoryTools tool)
     {
@@ -179,6 +218,10 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     currentFile = new { type = "string", description = "Path to current file being worked on (for context awareness)" },
                     recentFiles = new { type = "array", items = new { type = "string" }, description = "Recently accessed files (for context awareness)" },
                     mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
+                    // Highlighting parameters
+                    enableHighlighting = new { type = "boolean", description = "Enable highlighting for search results", @default = false },
+                    maxFragments = new { type = "integer", description = "Maximum number of highlight fragments per field", @default = 3 },
+                    fragmentSize = new { type = "integer", description = "Size of highlight fragments in characters", @default = 100 },
                     detailRequest = new 
                     { 
                         type = "object", 
@@ -210,6 +253,10 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     parameters?.CurrentFile,
                     parameters?.RecentFiles,
                     Enum.TryParse<ResponseMode>(parameters?.Mode, true, out var mode) ? mode : ResponseMode.Summary,
+                    // Highlighting parameters
+                    GetBooleanProperty(parameters, "EnableHighlighting") ?? false,
+                    GetIntegerProperty(parameters, "MaxFragments") ?? 3,
+                    GetIntegerProperty(parameters, "FragmentSize") ?? 100,
                     parameters?.DetailRequest,
                     ct);
                     

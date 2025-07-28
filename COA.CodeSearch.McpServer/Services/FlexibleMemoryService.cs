@@ -6,6 +6,7 @@ using Lucene.Net.Index;
 using Lucene.Net.Queries.Mlt;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
+using Lucene.Net.Search.Highlight;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
 using Microsoft.Extensions.Configuration;
@@ -583,11 +584,25 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Execute search
             var topDocs = searcher.Search(query, request.MaxResults * 2); // Get extra for filtering
             
+            // Setup highlighting if enabled
+            Highlighter highlighter = null;
+            if (request.EnableHighlighting && !string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
+            {
+                highlighter = CreateHighlighter(query, request);
+            }
+            
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
                 var doc = searcher.Doc(scoreDoc.Doc);
                 var memory = DocumentToMemory(doc);
                 memory.IsShared = isShared;
+                
+                // Add highlighting if enabled
+                if (highlighter != null)
+                {
+                    AddHighlightsToMemory(memory, doc, highlighter, request);
+                }
+                
                 memories.Add(memory);
             }
         }
@@ -597,6 +612,71 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         }
         
         return memories;
+    }
+    
+    /// <summary>
+    /// Create a Lucene highlighter with HTML formatter
+    /// </summary>
+    private Highlighter CreateHighlighter(Query query, FlexibleMemorySearchRequest request)
+    {
+        // Create a formatter that wraps matches in HTML tags
+        var formatter = new SimpleHTMLFormatter("<mark>", "</mark>");
+        
+        // Create scorer for the query
+        var scorer = new QueryScorer(query);
+        
+        // Create highlighter with formatter and scorer
+        var highlighter = new Highlighter(formatter, scorer);
+        
+        // Configure fragment size (optimized for tokens - roughly 25 words)
+        var fragmenter = new SimpleFragmenter(request.FragmentSize);
+        highlighter.TextFragmenter = fragmenter;
+        
+        return highlighter;
+    }
+    
+    /// <summary>
+    /// Add highlighted fragments to memory entry
+    /// </summary>
+    private void AddHighlightsToMemory(
+        FlexibleMemoryEntry memory, 
+        Document doc, 
+        Highlighter highlighter, 
+        FlexibleMemorySearchRequest request)
+    {
+        try
+        {
+            // Highlight content field (most important)
+            var content = doc.Get("content") ?? "";
+            if (!string.IsNullOrEmpty(content))
+            {
+                var contentFragments = highlighter.GetBestFragments(
+                    _analyzer, "content", content, request.MaxFragments);
+                
+                if (contentFragments.Length > 0)
+                {
+                    memory.Highlights["content"] = contentFragments;
+                }
+            }
+            
+            // Highlight type field if it has matches
+            var type = doc.Get("type") ?? "";
+            if (!string.IsNullOrEmpty(type))
+            {
+                var typeFragments = highlighter.GetBestFragments(
+                    _analyzer, "type", type, 1); // Only one fragment for type
+                
+                if (typeFragments.Length > 0)
+                {
+                    memory.Highlights["type"] = typeFragments;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error generating highlights for memory {Id}", memory.Id);
+            // Don't fail the search if highlighting fails
+        }
     }
     
     private Query BuildQuery(FlexibleMemorySearchRequest request)

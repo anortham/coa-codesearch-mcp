@@ -575,7 +575,7 @@ public class AIResponseBuilderService
     private object CreateMemoryItem(FlexibleMemoryEntry memory, int tokenBudget)
     {
         var contentLength = Math.Min(tokenBudget * 4, 300); // Rough char-to-token conversion
-        return new
+        var item = new
         {
             id = memory.Id,
             type = memory.Type,
@@ -584,6 +584,23 @@ public class AIResponseBuilderService
             files = memory.FilesInvolved.Take(3).ToArray(),
             isShared = memory.IsShared
         };
+
+        // Add highlights if available
+        if (memory.Highlights != null && memory.Highlights.Count > 0)
+        {
+            return new
+            {
+                id = item.id,
+                type = item.type,
+                content = item.content,
+                created = item.created,
+                files = item.files,
+                isShared = item.isShared,
+                highlights = memory.Highlights
+            };
+        }
+
+        return item;
     }
 
     private object CreateFileItem(FileSearchResult file, int tokenBudget)

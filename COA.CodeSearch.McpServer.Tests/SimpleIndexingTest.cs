@@ -43,7 +43,8 @@ public class SimpleIndexingTest
             .Build();
             
         var pathResolutionService = new PathResolutionService(config);
-        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config, pathResolutionService);
+        var memoryAnalyzer = new MemoryAnalyzer(loggerFactory.CreateLogger<MemoryAnalyzer>());
+        var luceneService = new LuceneIndexService(loggerFactory.CreateLogger<LuceneIndexService>(), config, pathResolutionService, memoryAnalyzer);
         var fileService = new FileIndexingService(loggerFactory.CreateLogger<FileIndexingService>(), config, luceneService, pathResolutionService, new MockIndexingMetricsService(), new MockCircuitBreakerService(), new MockBatchIndexingService(), new MockMemoryPressureService(), Options.Create(new MemoryLimitsConfiguration()));
         
         // Create test file

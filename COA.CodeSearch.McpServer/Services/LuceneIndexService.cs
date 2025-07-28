@@ -93,7 +93,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
     private readonly IPathResolutionService _pathResolution;
-    private readonly StandardAnalyzer _analyzer;
+    private readonly MemoryAnalyzer _analyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
@@ -154,12 +154,12 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         }
     }
     
-    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration, IPathResolutionService pathResolution)
+    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration, IPathResolutionService pathResolution, MemoryAnalyzer memoryAnalyzer)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
-        _analyzer = new StandardAnalyzer(Version);
+        _analyzer = memoryAnalyzer ?? throw new ArgumentNullException(nameof(memoryAnalyzer));
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
