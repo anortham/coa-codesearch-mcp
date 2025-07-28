@@ -660,7 +660,9 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
             query = $"*{query}*";
         }
         
-        return new WildcardQuery(new Term("filename_text", query.ToLower()));
+        // Use the non-analyzed "filename_lower" field for wildcard searches to ensure predictable
+        // pattern matching for AI agents with case-insensitive behavior across all platforms.
+        return new WildcardQuery(new Term("filename_lower", query.ToLowerInvariant()));
     }
 
     private Query BuildExactQuery(string query)
