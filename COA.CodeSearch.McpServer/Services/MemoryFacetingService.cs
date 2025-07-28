@@ -201,6 +201,8 @@ public class MemoryFacetingService : IDisposable
             return existingWriter;
         }
         
+        await Task.Yield(); // Make it truly async
+        
         try
         {
             var taxonomyPath = GetTaxonomyPath(workspacePath);
@@ -227,6 +229,8 @@ public class MemoryFacetingService : IDisposable
     /// </summary>
     public async Task<DirectoryTaxonomyReader> GetTaxonomyReaderAsync(string workspacePath)
     {
+        await Task.Yield(); // Make it truly async
+        
         try
         {
             var taxonomyPath = GetTaxonomyPath(workspacePath);
@@ -412,10 +416,309 @@ public class MemoryFacetingService : IDisposable
     }
     
     /// <summary>
+    /// Generate intelligent facet suggestions based on current search context
+    /// </summary>
+    public FacetSuggestions GenerateFacetSuggestions(
+        FacetResult[] facetResults, 
+        string? currentQuery = null, 
+        Dictionary<string, string>? currentFacets = null,
+        int maxSuggestions = 5)
+    {
+        var suggestions = new List<FacetSuggestion>();
+        
+        // Convert facet results to our working format
+        var facetData = ConvertFacetResults(facetResults);
+        
+        // 1. High-Impact Discriminating Facets
+        // Suggest facets that would significantly narrow down results
+        var discriminatingFacets = GetDiscriminatingFacets(facetData, currentFacets);
+        suggestions.AddRange(discriminatingFacets.Take(2));
+        
+        // 2. Query-Context Suggestions
+        // Suggest facets based on the search query content
+        if (!string.IsNullOrEmpty(currentQuery))
+        {
+            var contextualFacets = GetQueryContextualFacets(facetData, currentQuery, currentFacets);
+            suggestions.AddRange(contextualFacets.Take(2));
+        }
+        
+        // 3. Popular Combination Suggestions
+        // Suggest commonly-used facet combinations
+        var popularCombinations = GetPopularFacetCombinations(facetData, currentFacets);
+        suggestions.AddRange(popularCombinations.Take(2));
+        
+        // 4. Smart Default Suggestions
+        // When no specific context, suggest most useful facets
+        if (suggestions.Count < maxSuggestions && (currentFacets == null || !currentFacets.Any()))
+        {
+            var defaultSuggestions = GetSmartDefaultSuggestions(facetData);
+            suggestions.AddRange(defaultSuggestions.Take(maxSuggestions - suggestions.Count));
+        }
+        
+        // Remove duplicates and limit results
+        var uniqueSuggestions = suggestions
+            .GroupBy(s => $"{s.FacetField}:{s.FacetValue}")
+            .Select(g => g.First())
+            .OrderByDescending(s => s.Priority)
+            .Take(maxSuggestions)
+            .ToList();
+        
+        return new FacetSuggestions
+        {
+            Suggestions = uniqueSuggestions,
+            TotalAvailableFacets = facetData.SelectMany(f => f.Value.Keys).Count(),
+            QueryContext = currentQuery,
+            GeneratedAt = DateTime.UtcNow
+        };
+    }
+    
+    /// <summary>
+    /// Get facets that would significantly reduce result count (high discrimination)
+    /// </summary>
+    private List<FacetSuggestion> GetDiscriminatingFacets(
+        Dictionary<string, Dictionary<string, int>> facetData,
+        Dictionary<string, string>? currentFacets)
+    {
+        var suggestions = new List<FacetSuggestion>();
+        
+        foreach (var facetField in facetData)
+        {
+            // Skip if already filtered on this field
+            if (currentFacets?.ContainsKey(facetField.Key) == true)
+                continue;
+            
+            var totalCount = facetField.Value.Values.Sum();
+            var sortedValues = facetField.Value.OrderByDescending(v => v.Value).ToList();
+            
+            // Look for values that represent 20-60% of total (good discrimination)
+            foreach (var facetValue in sortedValues)
+            {
+                var percentage = (double)facetValue.Value / totalCount;
+                if (percentage >= 0.2 && percentage <= 0.6)
+                {
+                    suggestions.Add(new FacetSuggestion
+                    {
+                        FacetField = facetField.Key,
+                        FacetValue = facetValue.Key,
+                        Count = facetValue.Value,
+                        Priority = CalculateDiscriminationPriority(percentage, facetValue.Value),
+                        Reason = $"Would filter to {facetValue.Value} items ({percentage:P0} of results)"
+                    });
+                    break; // Only suggest one value per field for discrimination
+                }
+            }
+        }
+        
+        return suggestions.OrderByDescending(s => s.Priority).ToList();
+    }
+    
+    /// <summary>
+    /// Get facet suggestions based on search query context
+    /// </summary>
+    private List<FacetSuggestion> GetQueryContextualFacets(
+        Dictionary<string, Dictionary<string, int>> facetData,
+        string query,
+        Dictionary<string, string>? currentFacets)
+    {
+        var suggestions = new List<FacetSuggestion>();
+        var queryLower = query.ToLowerInvariant();
+        
+        // Query-to-facet mappings for contextual relevance
+        var contextMappings = new Dictionary<string, string[]>
+        {
+            ["authentication"] = new[] { "type:SecurityRule", "category:Backend/Security" },
+            ["auth"] = new[] { "type:SecurityRule", "type:ArchitecturalDecision" },
+            ["database"] = new[] { "category:Backend/Database", "type:TechnicalDebt" },
+            ["api"] = new[] { "category:Backend/API", "type:ArchitecturalDecision" },
+            ["frontend"] = new[] { "category:Frontend", "type:CodePattern" },
+            ["ui"] = new[] { "category:Frontend/UI", "type:TechnicalDebt" },
+            ["performance"] = new[] { "priority:high", "type:TechnicalDebt" },
+            ["bug"] = new[] { "type:TechnicalDebt", "priority:high" },
+            ["security"] = new[] { "type:SecurityRule", "priority:high" },
+            ["test"] = new[] { "category:Testing", "type:CodePattern" }
+        };
+        
+        foreach (var mapping in contextMappings)
+        {
+            if (queryLower.Contains(mapping.Key))
+            {
+                foreach (var suggestion in mapping.Value)
+                {
+                    var parts = suggestion.Split(':');
+                    if (parts.Length == 2)
+                    {
+                        var field = parts[0];
+                        var value = parts[1];
+                        
+                        // Skip if already filtered or facet doesn't exist
+                        if (currentFacets?.ContainsKey(field) == true || 
+                            !facetData.ContainsKey(field) ||
+                            !facetData[field].ContainsKey(value))
+                            continue;
+                        
+                        var count = facetData[field][value];
+                        suggestions.Add(new FacetSuggestion
+                        {
+                            FacetField = field,
+                            FacetValue = value,
+                            Count = count,
+                            Priority = 8, // High priority for contextual matches
+                            Reason = $"Related to '{mapping.Key}' in your search"
+                        });
+                    }
+                }
+            }
+        }
+        
+        return suggestions;
+    }
+    
+    /// <summary>
+    /// Suggest popular facet combinations that work well together
+    /// </summary>
+    private List<FacetSuggestion> GetPopularFacetCombinations(
+        Dictionary<string, Dictionary<string, int>> facetData,
+        Dictionary<string, string>? currentFacets)
+    {
+        var suggestions = new List<FacetSuggestion>();
+        
+        // Popular combinations based on common usage patterns
+        var popularCombinations = new[]
+        {
+            // If filtering by TechnicalDebt, suggest priority
+            new { If = "type:TechnicalDebt", Then = "priority:high", Reason = "High-priority technical debt" },
+            new { If = "type:TechnicalDebt", Then = "status:pending", Reason = "Actionable technical debt" },
+            
+            // If filtering by ArchitecturalDecision, suggest shared
+            new { If = "type:ArchitecturalDecision", Then = "is_shared:True", Reason = "Team architectural decisions" },
+            
+            // If filtering by high priority, suggest type
+            new { If = "priority:high", Then = "type:TechnicalDebt", Reason = "Critical technical issues" },
+            
+            // If filtering by pending status, suggest priority
+            new { If = "status:pending", Then = "priority:high", Reason = "Urgent pending items" }
+        };
+        
+        foreach (var combo in popularCombinations)
+        {
+            var ifParts = combo.If.Split(':');
+            var thenParts = combo.Then.Split(':');
+            
+            if (ifParts.Length == 2 && thenParts.Length == 2)
+            {
+                var ifField = ifParts[0];
+                var ifValue = ifParts[1];
+                var thenField = thenParts[0];
+                var thenValue = thenParts[1];
+                
+                // Check if the "if" condition matches current facets
+                if (currentFacets?.ContainsKey(ifField) == true && 
+                    currentFacets[ifField] == ifValue &&
+                    currentFacets?.ContainsKey(thenField) != true)
+                {
+                    // Check if the suggested facet exists and has data
+                    if (facetData.ContainsKey(thenField) && facetData[thenField].ContainsKey(thenValue))
+                    {
+                        var count = facetData[thenField][thenValue];
+                        suggestions.Add(new FacetSuggestion
+                        {
+                            FacetField = thenField,
+                            FacetValue = thenValue,
+                            Count = count,
+                            Priority = 7, // High priority for popular combinations
+                            Reason = combo.Reason
+                        });
+                    }
+                }
+            }
+        }
+        
+        return suggestions;
+    }
+    
+    /// <summary>
+    /// Get smart default suggestions when no specific context is available
+    /// </summary>
+    private List<FacetSuggestion> GetSmartDefaultSuggestions(
+        Dictionary<string, Dictionary<string, int>> facetData)
+    {
+        var suggestions = new List<FacetSuggestion>();
+        
+        // Priority order for default suggestions
+        var defaultPriorities = new Dictionary<string, int>
+        {
+            ["type"] = 10,      // Most important: what type of memory
+            ["priority"] = 9,   // Second: what's urgent
+            ["status"] = 8,     // Third: what's actionable
+            ["is_shared"] = 7,  // Fourth: team vs personal
+            ["category"] = 6    // Fifth: domain area
+        };
+        
+        foreach (var priorityField in defaultPriorities.OrderByDescending(p => p.Value))
+        {
+            if (!facetData.ContainsKey(priorityField.Key))
+                continue;
+            
+            var fieldData = facetData[priorityField.Key];
+            var mostCommon = fieldData.OrderByDescending(v => v.Value).First();
+            
+            // Only suggest if it represents a reasonable portion but not everything
+            var percentage = (double)mostCommon.Value / fieldData.Values.Sum();
+            if (percentage >= 0.1 && percentage <= 0.8)
+            {
+                suggestions.Add(new FacetSuggestion
+                {
+                    FacetField = priorityField.Key,
+                    FacetValue = mostCommon.Key,
+                    Count = mostCommon.Value,
+                    Priority = priorityField.Value,
+                    Reason = $"Most common {GetFacetFieldDisplayName(priorityField.Key)}"
+                });
+            }
+        }
+        
+        return suggestions;
+    }
+    
+    /// <summary>
+    /// Calculate priority score for discrimination-based suggestions
+    /// </summary>
+    private double CalculateDiscriminationPriority(double percentage, int count)
+    {
+        // Ideal discrimination is around 30-40% (0.3-0.4)
+        var idealPercentage = 0.35;
+        var percentageScore = 1.0 - Math.Abs(percentage - idealPercentage) / idealPercentage;
+        
+        // Boost priority for higher absolute counts (more meaningful)
+        var countScore = Math.Min(count / 100.0, 1.0);
+        
+        return (percentageScore * 0.7 + countScore * 0.3) * 10; // Scale to 0-10
+    }
+    
+    /// <summary>
+    /// Get display-friendly name for facet fields
+    /// </summary>
+    private string GetFacetFieldDisplayName(string fieldName)
+    {
+        return fieldName switch
+        {
+            "type" => "memory type",
+            "priority" => "priority level",
+            "status" => "status",
+            "is_shared" => "sharing level",
+            "category" => "category",
+            "files" => "related files",
+            _ => fieldName
+        };
+    }
+    
+    /// <summary>
     /// Commit changes to taxonomy writers
     /// </summary>
     public async Task CommitAsync(string workspacePath)
     {
+        await Task.Yield(); // Make it truly async
+        
         if (_taxonomyWriters.TryGetValue(workspacePath, out var writer))
         {
             try

@@ -4,6 +4,7 @@ using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -23,6 +24,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     private readonly IQueryExpansionService _queryExpansion;
     private readonly IContextAwarenessService _contextAwareness;
     private readonly AIResponseBuilderService _responseBuilder;
+    private readonly MemoryLinkingTools _memoryLinking;
 
     public FlexibleMemorySearchToolV2(
         ILogger<FlexibleMemorySearchToolV2> logger,
@@ -31,6 +33,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         IQueryExpansionService queryExpansion,
         IContextAwarenessService contextAwareness,
         AIResponseBuilderService responseBuilder,
+        MemoryLinkingTools memoryLinking,
         IResponseSizeEstimator sizeEstimator,
         IResultTruncator truncator,
         IOptions<ResponseLimitOptions> options,
@@ -42,6 +45,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         _queryExpansion = queryExpansion;
         _contextAwareness = contextAwareness;
         _responseBuilder = responseBuilder;
+        _memoryLinking = memoryLinking;
     }
 
     public async Task<object> ExecuteAsync(
@@ -122,10 +126,236 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     }
 
 
-    private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
+    private async Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
-        // For now, return error as we don't have complex detail levels
-        return Task.FromResult<object>(CreateErrorResponse<object>("Detail requests not implemented for memory search"));
+        try
+        {
+            if (string.IsNullOrEmpty(request.DetailRequestToken))
+            {
+                return CreateErrorResponse<object>("Detail request token is required");
+            }
+
+            // Retrieve cached search data
+            var cachedData = DetailCache?.GetDetailData<FlexibleMemorySearchResult>(request.DetailRequestToken);
+            if (cachedData == null)
+            {
+                return CreateErrorResponse<object>("Invalid or expired detail request token. Please perform a new search.");
+            }
+
+            Logger.LogInformation("Processing detail request: level={Level}, targetItems={TargetCount}", 
+                request.DetailLevelId, request.TargetItems?.Count ?? 0);
+
+            return request.DetailLevelId switch
+            {
+                "full_content" => await GetFullContentDetailsAsync(cachedData, request),
+                "memory_details" => await GetMemoryDetailsAsync(cachedData, request),
+                "relationships" => await GetRelationshipDetailsAsync(cachedData, request),
+                "file_analysis" => await GetFileAnalysisDetailsAsync(cachedData, request),
+                _ => CreateErrorResponse<object>($"Unknown detail level: {request.DetailLevelId}. Available levels: full_content, memory_details, relationships, file_analysis")
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error processing detail request");
+            return CreateErrorResponse<object>("Failed to process detail request: " + ex.Message);
+        }
+    }
+
+    private Task<object> GetFullContentDetailsAsync(FlexibleMemorySearchResult cachedData, DetailRequest request)
+    {
+        var targetMemories = GetTargetMemories(cachedData, request.TargetItems);
+        var maxResults = request.MaxResults ?? 10;
+
+        var fullMemories = targetMemories.Take(maxResults).Select(memory => new
+        {
+            id = memory.Id,
+            type = memory.Type,
+            content = memory.Content, // Full content, not truncated
+            created = memory.Created,
+            modified = memory.Modified,
+            files = memory.FilesInvolved,
+            isShared = memory.IsShared,
+            fields = memory.Fields,
+            highlights = memory.Highlights
+        }).ToList();
+
+        return Task.FromResult<object>(new
+        {
+            success = true,
+            detailLevel = "full_content",
+            memories = fullMemories,
+            metadata = new
+            {
+                totalResults = targetMemories.Count,
+                returnedResults = fullMemories.Count,
+                estimatedTokens = EstimateTokens(fullMemories)
+            }
+        });
+    }
+
+    private async Task<object> GetMemoryDetailsAsync(FlexibleMemorySearchResult cachedData, DetailRequest request)
+    {
+        var targetMemories = GetTargetMemories(cachedData, request.TargetItems);
+        var maxResults = request.MaxResults ?? 5;
+
+        var detailedMemories = new List<object>();
+        
+        foreach (var memory in targetMemories.Take(maxResults))
+        {
+            // Get related memories for each target memory
+            var relatedMemoriesResult = await _memoryLinking.GetRelatedMemoriesAsync(memory.Id, maxDepth: 1);
+            var relatedMemories = relatedMemoriesResult?.RelatedMemories;
+            
+            detailedMemories.Add(new
+            {
+                id = memory.Id,
+                type = memory.Type,
+                content = memory.Content,
+                created = memory.Created,
+                modified = memory.Modified,
+                files = memory.FilesInvolved,
+                isShared = memory.IsShared,
+                fields = memory.Fields,
+                highlights = memory.Highlights,
+                relatedCount = relatedMemories?.Count ?? 0,
+                relatedMemories = relatedMemories?.Take(3).Select(r => (object)new
+                {
+                    id = r.Memory.Id,
+                    type = r.Memory.Type,
+                    content = r.Memory.Content.Length > 100 ? r.Memory.Content.Substring(0, 100) + "..." : r.Memory.Content,
+                    relationshipType = r.RelationshipType
+                }).ToList() ?? new List<object>()
+            });
+        }
+
+        return new
+        {
+            success = true,
+            detailLevel = "memory_details",
+            memories = detailedMemories,
+            metadata = new
+            {
+                totalResults = targetMemories.Count,
+                returnedResults = detailedMemories.Count,
+                estimatedTokens = EstimateTokens(detailedMemories)
+            }
+        };
+    }
+
+    private async Task<object> GetRelationshipDetailsAsync(FlexibleMemorySearchResult cachedData, DetailRequest request)
+    {
+        var targetMemories = GetTargetMemories(cachedData, request.TargetItems);
+        var maxResults = request.MaxResults ?? 3;
+
+        var relationshipData = new List<object>();
+
+        foreach (var memory in targetMemories.Take(maxResults))
+        {
+            var relatedMemoriesResult = await _memoryLinking.GetRelatedMemoriesAsync(memory.Id, maxDepth: 2);
+            var relatedMemories = relatedMemoriesResult?.RelatedMemories;
+            
+            relationshipData.Add(new
+            {
+                sourceMemory = new
+                {
+                    id = memory.Id,
+                    type = memory.Type,
+                    content = memory.Content.Length > 150 ? memory.Content.Substring(0, 150) + "..." : memory.Content
+                },
+                relationships = relatedMemories?.Select(r => (object)new
+                {
+                    id = r.Memory.Id,
+                    type = r.Memory.Type,
+                    content = r.Memory.Content.Length > 100 ? r.Memory.Content.Substring(0, 100) + "..." : r.Memory.Content,
+                    relationshipType = r.RelationshipType,
+                    created = r.Memory.Created
+                }).ToList() ?? new List<object>(),
+                relationshipCount = relatedMemories?.Count ?? 0
+            });
+        }
+
+        return new
+        {
+            success = true,
+            detailLevel = "relationships",
+            relationshipData,
+            metadata = new
+            {
+                totalResults = targetMemories.Count,
+                returnedResults = relationshipData.Count,
+                estimatedTokens = EstimateTokens(relationshipData)
+            }
+        };
+    }
+
+    private Task<object> GetFileAnalysisDetailsAsync(FlexibleMemorySearchResult cachedData, DetailRequest request)
+    {
+        var targetMemories = GetTargetMemories(cachedData, request.TargetItems);
+
+        // Analyze file references across all target memories
+        var fileAnalysis = targetMemories
+            .SelectMany(m => m.FilesInvolved.Select(f => new { file = f, memory = m }))
+            .GroupBy(x => x.file)
+            .Select(g => new
+            {
+                filePath = g.Key,
+                fileName = Path.GetFileName(g.Key),
+                referencesCount = g.Count(),
+                memoryTypes = g.Select(x => x.memory.Type).Distinct().ToList(),
+                memories = g.Select(x => new
+                {
+                    id = x.memory.Id,
+                    type = x.memory.Type,
+                    content = x.memory.Content.Length > 80 ? x.memory.Content.Substring(0, 80) + "..." : x.memory.Content,
+                    created = x.memory.Created
+                }).ToList()
+            })
+            .OrderByDescending(f => f.referencesCount)
+            .Take(request.MaxResults ?? 10)
+            .ToList();
+
+        return Task.FromResult<object>(new
+        {
+            success = true,
+            detailLevel = "file_analysis",
+            fileAnalysis,
+            summary = new
+            {
+                totalFiles = fileAnalysis.Count,
+                totalReferences = fileAnalysis.Sum(f => f.referencesCount),
+                mostReferencedFile = fileAnalysis.FirstOrDefault()?.fileName
+            },
+            metadata = new
+            {
+                totalResults = fileAnalysis.Count,
+                returnedResults = fileAnalysis.Count,
+                estimatedTokens = EstimateTokens(fileAnalysis)
+            }
+        });
+    }
+
+    private List<FlexibleMemoryEntry> GetTargetMemories(FlexibleMemorySearchResult cachedData, List<string>? targetItems)
+    {
+        if (targetItems == null || !targetItems.Any())
+        {
+            return cachedData.Memories;
+        }
+
+        // Filter by memory IDs if specified
+        return cachedData.Memories.Where(m => targetItems.Contains(m.Id)).ToList();
+    }
+
+    private int EstimateTokens(object data)
+    {
+        try
+        {
+            var json = System.Text.Json.JsonSerializer.Serialize(data);
+            return Math.Max(50, json.Length / 4); // Rough estimation: 4 chars per token
+        }
+        catch
+        {
+            return 100; // Conservative fallback
+        }
     }
 
     protected override int GetTotalResults<T>(T data)

@@ -3,6 +3,7 @@ using COA.CodeSearch.McpServer.Models;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
+using Lucene.Net.Facet;
 using Lucene.Net.Index;
 using Lucene.Net.Queries.Mlt;
 using Lucene.Net.QueryParsers.Classic;
@@ -95,6 +96,16 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             
             // Calculate facets using native Lucene faceting on both project and local indices
             result.FacetCounts = await CalculateCombinedFacetsAsync(request);
+            
+            // Generate intelligent facet suggestions based on the current search context
+            var combinedFacetResults = await GetCombinedFacetResultsAsync(request);
+            if (combinedFacetResults != null && combinedFacetResults.Any())
+            {
+                result.FacetSuggestions = _facetingService.GenerateFacetSuggestions(
+                    combinedFacetResults,
+                    request.Query,
+                    request.Facets);
+            }
             
             // Apply pagination with bounds checking
             result.TotalFound = sorted.Count;
@@ -712,7 +723,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
             
             // Setup highlighting if enabled
-            Highlighter highlighter = null;
+            Highlighter? highlighter = null;
             if (request.EnableHighlighting && !string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
             {
                 highlighter = CreateHighlighter(query, request);
@@ -919,7 +930,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             {
                 // Determine field name based on whether it's a native facet field or extended field
                 string fieldName;
-                var nativeFacetFields = new[] { "type", "status", "priority", "category", "is_shared", "files" };
+                var nativeFacetFields = new[] { "type", "is_shared", "files" }; // Only fields indexed natively
                 
                 if (nativeFacetFields.Contains(field, StringComparer.OrdinalIgnoreCase))
                 {
@@ -1168,7 +1179,30 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             }
 
             var query = await BuildQueryAsync(request);
-            return await CalculateFacetsAsync(workspacePath, searcher, query);
+            var facetResults = await _facetingService.SearchFacetsAsync(workspacePath, searcher, query, 10);
+            
+            // Convert FacetResult[] to Dictionary format
+            var facets = new Dictionary<string, Dictionary<string, int>>();
+            if (facetResults != null)
+            {
+                foreach (var facetResult in facetResults)
+                {
+                    var facetName = facetResult.Dim;
+                    if (!facets.ContainsKey(facetName))
+                    {
+                        facets[facetName] = new Dictionary<string, int>();
+                    }
+                    
+                    foreach (var labelValue in facetResult.LabelValues)
+                    {
+                        var label = labelValue.Label;
+                        var count = (int)labelValue.Value;
+                        facets[facetName][label] = count;
+                    }
+                }
+            }
+            
+            return facets;
         }
         catch (Exception ex)
         {
@@ -1190,6 +1224,61 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             {
                 target[facetName][value] = target[facetName].GetValueOrDefault(value, 0) + count;
             }
+        }
+    }
+
+    /// <summary>
+    /// Get combined facet results from both project and local memory indices for suggestions
+    /// </summary>
+    private async Task<FacetResult[]?> GetCombinedFacetResultsAsync(FlexibleMemorySearchRequest request)
+    {
+        try
+        {
+            var allFacetResults = new List<FacetResult>();
+            
+            // Get facet results from project memory index
+            var projectFacetResults = await GetFacetResultsFromIndexAsync(_projectMemoryWorkspace, request);
+            if (projectFacetResults != null)
+            {
+                allFacetResults.AddRange(projectFacetResults);
+            }
+            
+            // Get facet results from local memory index
+            var localFacetResults = await GetFacetResultsFromIndexAsync(_localMemoryWorkspace, request);
+            if (localFacetResults != null)
+            {
+                allFacetResults.AddRange(localFacetResults);
+            }
+            
+            return allFacetResults.ToArray();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting combined facet results for suggestions");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Get facet results from a specific index for suggestions
+    /// </summary>
+    private async Task<FacetResult[]?> GetFacetResultsFromIndexAsync(string workspacePath, FlexibleMemorySearchRequest request)
+    {
+        try
+        {
+            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
+            if (searcher == null)
+            {
+                return null;
+            }
+
+            var query = await BuildQueryAsync(request);
+            return await _facetingService.SearchFacetsAsync(workspacePath, searcher, query, 10);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting facet results from index {WorkspacePath}", workspacePath);
+            return null;
         }
     }
     

@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using Microsoft.Extensions.Logging;
 using System.Text;
@@ -12,6 +13,7 @@ public class AIResponseBuilderService
 {
     private readonly ILogger<AIResponseBuilderService> _logger;
     private readonly ITokenEstimationService _tokenEstimator;
+    private readonly IDetailRequestCache _detailCache;
 
     // Token budgets for different response modes
     private const int SummaryTokenBudget = 1500;
@@ -20,10 +22,12 @@ public class AIResponseBuilderService
 
     public AIResponseBuilderService(
         ILogger<AIResponseBuilderService> logger,
-        ITokenEstimationService tokenEstimator)
+        ITokenEstimationService tokenEstimator,
+        IDetailRequestCache detailCache)
     {
         _logger = logger;
         _tokenEstimator = tokenEstimator;
+        _detailCache = detailCache;
     }
 
     /// <summary>
@@ -48,6 +52,16 @@ public class AIResponseBuilderService
 
         // Estimate tokens
         var estimatedTokens = EstimateMemoryResponseTokens(searchResult, data, actions, insights);
+
+        // Store data in cache for detail requests
+        string? detailRequestToken = null;
+        List<DetailLevel>? availableDetailLevels = null;
+        
+        if (mode == ResponseMode.Summary && _detailCache != null)
+        {
+            detailRequestToken = _detailCache.StoreDetailData(searchResult);
+            availableDetailLevels = CreateMemoryDetailLevels(searchResult);
+        }
 
         // Create backward-compatible response format that includes AI optimizations
         return new
@@ -107,7 +121,9 @@ public class AIResponseBuilderService
                 estimatedTokens = estimatedTokens,
                 truncated = searchResult.Memories.Count < searchResult.TotalFound,
                 format = "ai-optimized",
-                cached = GenerateCacheKey("memory_search")
+                cached = GenerateCacheKey("memory_search"),
+                detailRequestToken = detailRequestToken,
+                availableDetailLevels = availableDetailLevels
             }
         };
     }
@@ -706,6 +722,60 @@ public class AIResponseBuilderService
     private string GenerateCacheKey(string operation)
     {
         return $"{operation}_{DateTime.UtcNow.Ticks:X}_{Guid.NewGuid():N}";
+    }
+
+    private List<DetailLevel> CreateMemoryDetailLevels(FlexibleMemorySearchResult searchResult)
+    {
+        var levels = new List<DetailLevel>();
+
+        // Full content detail level
+        levels.Add(new DetailLevel
+        {
+            Id = "full_content",
+            Name = "Full Content",
+            Description = "Complete memory content without truncation",
+            EstimatedTokens = searchResult.Memories.Sum(m => Math.Max(50, m.Content.Length / 4)),
+            IsActive = false
+        });
+
+        // Memory details with relationships
+        levels.Add(new DetailLevel
+        {
+            Id = "memory_details",
+            Name = "Memory Details",
+            Description = "Full memory details including related memories and custom fields",
+            EstimatedTokens = searchResult.Memories.Count * 200, // Rough estimate
+            IsActive = false
+        });
+
+        // Relationship analysis
+        if (searchResult.Memories.Count > 1)
+        {
+            levels.Add(new DetailLevel
+            {
+                Id = "relationships",
+                Name = "Relationship Analysis",
+                Description = "Deep analysis of relationships between memories",
+                EstimatedTokens = searchResult.Memories.Count * 150,
+                IsActive = false
+            });
+        }
+
+        // File analysis if memories have file references
+        var totalFiles = searchResult.Memories.SelectMany(m => m.FilesInvolved).Distinct().Count();
+        if (totalFiles > 0)
+        {
+            levels.Add(new DetailLevel
+            {
+                Id = "file_analysis",
+                Name = "File Analysis",
+                Description = $"Analysis of {totalFiles} referenced files across memories",
+                EstimatedTokens = totalFiles * 100,
+                IsActive = false
+            });
+        }
+
+        return levels;
     }
 
     #endregion
