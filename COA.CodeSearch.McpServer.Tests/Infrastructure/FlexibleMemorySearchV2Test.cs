@@ -30,6 +30,7 @@ public class FlexibleMemorySearchV2Test : TestBase
             ServiceProvider.GetRequiredService<IConfiguration>(),
             ServiceProvider.GetRequiredService<IQueryExpansionService>(),
             ServiceProvider.GetRequiredService<IContextAwarenessService>(),
+            ServiceProvider.GetRequiredService<AIResponseBuilderService>(),
             ServiceProvider.GetRequiredService<IResponseSizeEstimator>(),
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),

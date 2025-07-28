@@ -77,6 +77,8 @@ public abstract class TestBase : IDisposable
         // Memory intelligence services
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
+        services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
+        services.AddSingleton<AIResponseBuilderService>();
         
         // Text search tools
         services.AddSingleton<FastTextSearchToolV2>();

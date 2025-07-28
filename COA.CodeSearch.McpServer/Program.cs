@@ -161,6 +161,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<FlexibleMemorySearchToolV2>();
+        services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
+        services.AddSingleton<AIResponseBuilderService>();
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
         services.AddSingleton<TimelineTool>();
