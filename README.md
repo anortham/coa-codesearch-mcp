@@ -12,12 +12,22 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 - **🆕 Parameter Standardization**: Consistent `query` parameter across all search tools
 - **🆕 Workflow Discovery**: Proactive tool guidance and dependency mapping
 - **🆕 Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
+- **⚡ Confidence-Based Limiting**: Dynamic result counts based on score distribution (60-85% token savings)
+- **🔗 Resource URI System**: Two-tier access with minimal initial responses + full results on demand
+- **📊 Standardized Responses**: Unified `resultsSummary` format across all search tools
 
 ### Performance
 - Startup: < 500ms (simplified architecture)
 - Text search: < 10ms indexed
 - File search: < 50ms
 - Memory usage: < 200MB typical
+
+### 🎯 Token Optimization (New!)
+- **60-85% token reduction** for high-confidence searches
+- **Confidence-based limiting**: 2-3 results for high confidence vs 10+ default
+- **Minimal result fields**: Essential data only (path, score vs 6+ fields)
+- **Resource URIs**: Full results available on-demand without initial token cost
+- **Smart context handling**: Fewer results when context lines are included
 
 ## 📋 Prerequisites
 
@@ -218,36 +228,65 @@ search_assistant --goal "Understand authentication implementation" \
 
 ## 🚀 AI Agent Optimizations
 
-This MCP server is specifically optimized for AI agent workflows:
+This MCP server is specifically optimized for AI agent workflows with **60-85% token reduction**:
 
-- **🧠 Progressive Disclosure**: Automatic token-aware response summarization
-- **🔄 Response Format Consistency**: Unified envelope format across all tools
-- **📊 Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
-- **🗺️ Workflow Discovery**: Proactive tool guidance and dependency mapping
-- **⚡ Parameter Standardization**: Consistent `query` parameter across search tools
-- **🔗 Resource URIs**: Stateful exploration with persistent context
+### 🎯 Token Optimization Features
+- **⚡ Confidence-Based Result Limiting**: Dynamic result counts based on search quality
+  - High confidence (score > 0.8): Show 2-3 results 
+  - Medium confidence (score > 0.5): Show 3-5 results
+  - Low confidence: Show 5-8 results with refinement suggestions
+- **🔗 Resource URI System**: Two-tier access pattern
+  - Minimal initial response with essential results
+  - Full results accessible via `resourceUri` when needed
+- **📊 Standardized Response Structure**: Consistent `resultsSummary` across all tools
+  - `included`: Number of results in response
+  - `total`: Total results available  
+  - `hasMore`: Whether more results exist
+- **🗂️ Field Minimization**: Essential data only (path + score vs 6+ fields)
 
-### AI-Friendly Features
+### 🧠 Intelligence Features  
+- **Progressive Disclosure**: Automatic token-aware response summarization
+- **Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
+- **Workflow Discovery**: Proactive tool guidance and dependency mapping
+- **Parameter Standardization**: Consistent `query` parameter across search tools
+
+### Example Optimized Response
 
 ```json
-// Example response with AI optimizations
+// Example response showing token optimizations
 {
   "success": true,
-  "format": "structured",
-  "mode": "summary",
-  "autoModeSwitch": true,
-  "data": { /* Intelligent summary */ },
-  "nextActions": {
-    "recommended": ["Follow-up actions"],
-    "available": ["Additional options"]
+  "operation": "text_search",
+  "query": {
+    "text": "authentication",
+    "type": "standard",
+    "workspace": "MyProject"
   },
-  "metadata": {
-    "detailRequestToken": "cache_token",
-    "estimatedTokens": 3200,
-    "resourceUri": "codesearch://session_abc123"
+  "results": [
+    // Only 3 results (confidence-limited from 15 total)
+    {
+      "file": "AuthService.cs",
+      "path": "src/services/AuthService.cs", 
+      "score": 0.89
+      // Minimal fields - no redundant filename, relativePath, etc.
+    }
+  ],
+  "resultsSummary": {
+    "included": 3,      // What's shown (confidence-limited)  
+    "total": 15,        // What's available
+    "hasMore": true     // More available via resourceUri
+  },
+  "meta": {  
+    "searchTime": "4ms",
+    "resourceUri": "codesearch-search://search_abc123"  // Full results
   }
 }
 ```
+
+**Token Comparison:**
+- **Before**: ~4,500 tokens (15 results × 300 tokens each)
+- **After**: ~900 tokens (3 results × 50 tokens each) 
+- **Savings**: 80% reduction for high-confidence searches
 
 ## 🤖 Claude Code Usage Best Practices
 

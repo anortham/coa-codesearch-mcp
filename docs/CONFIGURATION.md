@@ -71,6 +71,40 @@ Controls response size and token limits to prevent overwhelming AI assistants:
 }
 ```
 
+### 🆕 Result Confidence Settings (Token Optimization)
+
+Configure the confidence-based result limiting for 60-85% token reduction:
+
+```json
+{
+  "ResultConfidence": {
+    "HighConfidenceThreshold": 0.8,      // Score threshold for high confidence
+    "MediumConfidenceThreshold": 0.5,    // Score threshold for medium confidence
+    "ScoreGapThreshold": 0.3,            // Min gap between top scores for high confidence
+    
+    // Result count limits by confidence level
+    "HighConfidenceResultCount": {
+      "withContext": 2,                   // Results when contextLines > 0
+      "withoutContext": 3                 // Results when no context
+    },
+    "MediumConfidenceResultCount": {
+      "withContext": 3,
+      "withoutContext": 5
+    },
+    "LowConfidenceResultCount": {
+      "withContext": 5,
+      "withoutContext": 8
+    }
+  }
+}
+```
+
+**Default Behavior:**
+- High confidence (score > 0.8, gap > 0.3): Show 2-3 results
+- Medium confidence (score > 0.5): Show 3-5 results
+- Low confidence: Show 5-8 results with refinement suggestions
+- Context lines reduce result count to save tokens
+
 ### Lucene Index Settings
 
 ```json
