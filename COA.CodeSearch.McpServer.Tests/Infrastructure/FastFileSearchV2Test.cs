@@ -61,7 +61,8 @@ public class FastFileSearchV2Test : TestBase
             {
                 new StringField("path", path, Field.Store.YES),
                 new StringField("filename", filename, Field.Store.YES),
-                new TextField("filename_text", filename.ToLower(), Field.Store.NO),
+                new StringField("filename_lower", filename.ToLowerInvariant(), Field.Store.NO),
+                new TextField("filename_text", filename, Field.Store.NO),
                 new StringField("relativePath", relativePath, Field.Store.YES),
                 new StringField("extension", extension, Field.Store.YES),
                 new NumericDocValuesField("size", size),
@@ -362,5 +363,75 @@ public class FastFileSearchV2Test : TestBase
             }
         }
         hasSuggestions.Should().BeTrue("Should suggest alternative search types");
+    }
+
+    [Fact]
+    public async Task Should_Handle_Wildcard_Search_Case_Insensitive()
+    {
+        // Arrange - add test documents including mixed case filenames
+        var writer = await _indexService.GetIndexWriterAsync(_testWorkspacePath);
+        
+        var mixedCaseFiles = new[]
+        {
+            ("azure-pipelines.yml", "C:\\test\\project\\azure-pipelines.yml", "azure-pipelines.yml", ".yml", 1024L),
+            ("Azure-DevOps-Setup.md", "C:\\test\\project\\Azure-DevOps-Setup.md", "Azure-DevOps-Setup.md", ".md", 2048L),
+            ("AZURE_CONFIG.json", "C:\\test\\project\\AZURE_CONFIG.json", "AZURE_CONFIG.json", ".json", 512L)
+        };
+        
+        foreach (var (filename, path, relativePath, extension, size) in mixedCaseFiles)
+        {
+            var doc = new Document
+            {
+                new StringField("path", path, Field.Store.YES),
+                new StringField("filename", filename, Field.Store.YES),
+                new StringField("filename_lower", filename.ToLowerInvariant(), Field.Store.NO),
+                new TextField("filename_text", filename, Field.Store.NO), // Store as-is, let analyzer handle case
+                new StringField("relativePath", relativePath, Field.Store.YES),
+                new StringField("extension", extension, Field.Store.YES),
+                new NumericDocValuesField("size", size),
+                new StoredField("size", size.ToString()),
+                new NumericDocValuesField("lastModified", DateTime.UtcNow.Ticks),
+                new StoredField("lastModified", DateTime.UtcNow.Ticks.ToString()),
+                new StringField("language", "yaml", Field.Store.YES)
+            };
+            writer.AddDocument(doc);
+        }
+        
+        writer.Commit();
+        
+        // Act - search with different case patterns
+        var testCases = new[]
+        {
+            ("azure-pipelines*", 1, "lowercase should match mixed case file"),
+            ("Azure-Pipelines*", 1, "mixed case should match lowercase file"),
+            ("AZURE-PIPELINES*", 1, "uppercase should match lowercase file"),
+            ("azure*", 3, "wildcard should match all azure files regardless of case"),
+            ("AZURE*", 3, "uppercase wildcard should match all azure files"),
+            ("*.yml", 1, "extension wildcard should work"),
+            ("*pipelines*", 1, "middle wildcard should work case-insensitively")
+        };
+        
+        foreach (var (query, expectedCount, description) in testCases)
+        {
+            var result = await _tool.ExecuteAsync(
+                query: query,
+                workspacePath: _testWorkspacePath,
+                searchType: "wildcard");
+            
+            // Assert
+            var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+            { 
+                WriteIndented = true,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+            });
+            
+            var response = JsonDocument.Parse(json).RootElement;
+            
+            response.GetProperty("success").GetBoolean().Should().BeTrue();
+            
+            var summary = response.GetProperty("summary");
+            summary.GetProperty("totalFound").GetInt32().Should().Be(expectedCount, 
+                $"Query '{query}' {description}");
+        }
     }
 }

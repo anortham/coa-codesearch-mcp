@@ -587,6 +587,7 @@ public class FileIndexingService
             new StringField("id", filePath, Field.Store.YES),
             new StringField("path", filePath, Field.Store.YES),
             new StringField("filename", fileName, Field.Store.YES),
+            new StringField("filename_lower", fileName.ToLowerInvariant(), Field.Store.NO), // For case-insensitive wildcard search
             new StringField("extension", extension, Field.Store.YES),
             new Int64Field("size", fileInfo.Length, Field.Store.YES),
             new Int64Field("lastModified", fileInfo.LastWriteTimeUtc.Ticks, Field.Store.YES),
