@@ -18,11 +18,19 @@
 - **Before Tests**: ALWAYS build first: `dotnet build -c Debug && dotnet test`
 - **For User**: They build Release mode after exiting Claude Code
 
-### 3. **Code vs Runtime Version**
+### 3. **🚨 STOP! CODE vs RUNTIME VERSION 🚨**
+
+```
+⚠️  BEFORE TESTING ANY MCP TOOL CHANGES:
+    1. User must restart Claude Code
+    2. Changes don't work until restart
+    3. NO EXCEPTIONS TO THIS RULE
+```
 
 - **MCP Tools (`mcp__codesearch__*`)**: Execute on INSTALLED server, not your edits
-- **Testing Changes**: Must build → user reinstalls → new Claude session
+- **Testing Changes**: Must build → user reinstalls → new Claude session  
 - **Example**: Editing `JsonMemoryBackupService.cs` won't affect `backup_memories` until restart
+- **⚠️ REMINDER**: If you edit tool code, IMMEDIATELY tell user to restart before testing
 
 ### 4. **Path Resolution**
 
