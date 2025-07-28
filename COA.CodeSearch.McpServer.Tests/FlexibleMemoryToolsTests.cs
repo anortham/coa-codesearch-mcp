@@ -19,7 +19,6 @@ public class FlexibleMemoryToolsTests : IDisposable
     private readonly FlexibleMemoryService _memoryService;
     private readonly FlexibleMemoryTools _memoryTools;
     private readonly InMemoryTestIndexService _indexService;
-    private readonly MemoryAnalyzer _memoryAnalyzer;
     
     public FlexibleMemoryToolsTests()
     {
@@ -70,11 +69,10 @@ public class FlexibleMemoryToolsTests : IDisposable
                 It.IsAny<CancellationToken>()))
             .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
         
-        // Create MemoryAnalyzer mock
-        var memoryAnalyzerLoggerMock = new Mock<ILogger<MemoryAnalyzer>>();
-        _memoryAnalyzer = new MemoryAnalyzer(memoryAnalyzerLoggerMock.Object);
+        // MemoryAnalyzer is now managed by LuceneIndexService
         
-        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, _memoryAnalyzer);
+        var facetingServiceMock = new Mock<MemoryFacetingService>(Mock.Of<ILogger<MemoryFacetingService>>(), Mock.Of<IPathResolutionService>());
+        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, facetingServiceMock.Object);
         _memoryTools = new FlexibleMemoryTools(_toolsLoggerMock.Object, _memoryService, _pathResolutionMock.Object);
     }
     
@@ -82,7 +80,6 @@ public class FlexibleMemoryToolsTests : IDisposable
     {
         // Clean up the in-memory index service
         _indexService?.Dispose();
-        _memoryAnalyzer?.Dispose();
     }
     
     [Fact]

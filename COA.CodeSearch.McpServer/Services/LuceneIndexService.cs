@@ -93,7 +93,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
     private readonly IPathResolutionService _pathResolution;
-    private readonly MemoryAnalyzer _analyzer;
+    private readonly StandardAnalyzer _standardAnalyzer;
+    private readonly MemoryAnalyzer _memoryAnalyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
@@ -159,19 +160,41 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
-        _analyzer = memoryAnalyzer ?? throw new ArgumentNullException(nameof(memoryAnalyzer));
+        _standardAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        _memoryAnalyzer = memoryAnalyzer ?? throw new ArgumentNullException(nameof(memoryAnalyzer));
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
-        
-        // Note: Stuck lock cleanup now happens early in Program.cs before services start
-        
-        // Initialize idle cleanup timer to run every 5 minutes
-        _idleCleanupTimer = new Timer(
-            callback: async _ => await CleanupIdleIndexesAsync(),
-            state: null,
-            dueTime: TimeSpan.FromMinutes(5),
-            period: TimeSpan.FromMinutes(5));
+    }
+    
+    /// <summary>
+    /// Select appropriate analyzer based on workspace or index path
+    /// Memory paths use MemoryAnalyzer (with synonyms), code paths use StandardAnalyzer
+    /// </summary>
+    private Analyzer GetAnalyzerForWorkspace(string pathToCheck)
+    {
+        try
+        {
+            // Check if this is a memory path (works for both workspace paths and index paths since they're the same for memory)
+            var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
+            var localMemoryPath = _pathResolution.GetLocalMemoryPath();
+            
+            if (pathToCheck.Equals(projectMemoryPath, StringComparison.OrdinalIgnoreCase) ||
+                pathToCheck.Equals(localMemoryPath, StringComparison.OrdinalIgnoreCase) ||
+                _pathResolution.IsProtectedPath(pathToCheck))
+            {
+                _logger.LogDebug("Using MemoryAnalyzer for memory path: {Path}", pathToCheck);
+                return _memoryAnalyzer;
+            }
+            
+            _logger.LogDebug("Using StandardAnalyzer for code path: {Path}", pathToCheck);
+            return _standardAnalyzer;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error determining analyzer for path {Path}, defaulting to StandardAnalyzer", pathToCheck);
+            return _standardAnalyzer;
+        }
         
         // Clean up any memory entries from metadata on startup
         _ = Task.Run(async () => await CleanupMemoryEntriesFromMetadataAsync().ConfigureAwait(false));
@@ -288,7 +311,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             // Ensure writer is still valid
             if (context.Writer == null)
             {
-                context.Writer = CreateWriter(context.Directory, forceRecreate, context.Path);
+                context.Writer = CreateWriter(context.Directory, forceRecreate, workspacePath, context.Path);
             }
             
             context.LastAccessed = DateTime.UtcNow;
@@ -571,7 +594,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         try
         {
             directory = FSDirectory.Open(indexPath);
-            writer = CreateWriter(directory, forceRecreate, indexPath);
+            writer = CreateWriter(directory, forceRecreate, indexPath, indexPath);
             
             var context = new IndexContext(indexPath)
             {
@@ -595,9 +618,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         }
     }
     
-    private IndexWriter CreateWriter(FSDirectory directory, bool forceRecreate, string? indexPath = null)
+    private IndexWriter CreateWriter(FSDirectory directory, bool forceRecreate, string workspacePath, string? indexPath = null)
     {
-        var config = new IndexWriterConfig(Version, _analyzer)
+        var analyzer = GetAnalyzerForWorkspace(workspacePath);
+        var config = new IndexWriterConfig(Version, analyzer)
         {
             // Use CREATE_OR_APPEND by default, CREATE if forcing recreate
             OpenMode = forceRecreate ? OpenMode.CREATE : OpenMode.CREATE_OR_APPEND
@@ -1668,7 +1692,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         await Task.WhenAll(disposeTasks).ConfigureAwait(false);
         
         _indexes.Clear();
-        _analyzer?.Dispose();
+        _standardAnalyzer?.Dispose();
+        _memoryAnalyzer?.Dispose();
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
         
@@ -1798,9 +1823,10 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     {
         ThrowIfDisposed();
         
-        // Return shared analyzer instance for better performance
-        // StandardAnalyzer is thread-safe for reading operations
-        return Task.FromResult<Analyzer>(_analyzer);
+        // Return appropriate analyzer based on workspace path
+        // Both analyzers are thread-safe for reading operations
+        var analyzer = GetAnalyzerForWorkspace(workspacePath);
+        return Task.FromResult<Analyzer>(analyzer);
     }
     
     /// <summary>

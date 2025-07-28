@@ -229,7 +229,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     recentFiles = new { type = "array", items = new { type = "string" }, description = "Recently accessed files (for context awareness)" },
                     mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" },
                     // Highlighting parameters
-                    enableHighlighting = new { type = "boolean", description = "Enable highlighting for search results", @default = true },
+                    enableHighlighting = new { type = "boolean", description = "Enable highlighting for search results", @default = false },
                     maxFragments = new { type = "integer", description = "Maximum number of highlight fragments per field", @default = 3 },
                     fragmentSize = new { type = "integer", description = "Size of highlight fragments in characters", @default = 100 },
                     detailRequest = new 
@@ -264,7 +264,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     parameters?.RecentFiles,
                     Enum.TryParse<ResponseMode>(parameters?.Mode, true, out var mode) ? mode : ResponseMode.Summary,
                     // Highlighting parameters
-                    GetBooleanProperty(parameters, "enableHighlighting") ?? true,
+                    GetBooleanProperty(parameters, "enableHighlighting") ?? false,
                     GetIntegerProperty(parameters, "maxFragments") ?? 3,
                     GetIntegerProperty(parameters, "fragmentSize") ?? 100,
                     parameters?.DetailRequest,
