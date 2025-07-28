@@ -57,7 +57,11 @@ public class FlexibleMemoryQueryTests
                 It.IsAny<CancellationToken>()))
             .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
         
-        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object);
+        // Create MemoryAnalyzer mock
+        var memoryAnalyzerLoggerMock = new Mock<ILogger<MemoryAnalyzer>>();
+        var memoryAnalyzer = new MemoryAnalyzer(memoryAnalyzerLoggerMock.Object);
+        
+        _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, memoryAnalyzer);
     }
     
     [Fact]

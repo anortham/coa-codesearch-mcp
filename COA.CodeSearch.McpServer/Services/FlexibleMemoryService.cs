@@ -28,7 +28,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     private readonly string _localMemoryWorkspace;
     
     // Lucene components
-    private readonly StandardAnalyzer _analyzer;
+    private readonly MemoryAnalyzer _analyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
     
     // Safety constants
@@ -43,7 +43,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         ILuceneIndexService indexService,
         IPathResolutionService pathResolution,
         IErrorHandlingService errorHandling,
-        IMemoryValidationService validation)
+        IMemoryValidationService validation,
+        MemoryAnalyzer memoryAnalyzer)
     {
         _logger = logger;
         _configuration = configuration;
@@ -52,7 +53,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         _errorHandling = errorHandling;
         _validation = validation;
         
-        _analyzer = new StandardAnalyzer(LUCENE_VERSION);
+        _analyzer = memoryAnalyzer;
         
         // Initialize workspace paths from PathResolutionService
         _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
