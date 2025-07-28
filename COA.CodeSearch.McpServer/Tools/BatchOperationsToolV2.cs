@@ -75,43 +75,27 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
             var results = new List<object>();
             var progressToken = $"batch-operations-{Guid.NewGuid():N}";
-            var currentOperation = 0;
 
             // Send initial progress notification
             await SendProgressNotification(progressToken, 0, operationCount, "Starting batch operations...");
 
-            // Execute each operation
-            foreach (var operation in operations.EnumerateArray())
+            // Execute all operations in parallel
+            var operationArray = operations.EnumerateArray().ToArray();
+            var operationTasks = new List<Task<object>>();
+            
+            for (int i = 0; i < operationArray.Length; i++)
             {
-                currentOperation++;
-                var operationType = operation.GetProperty("operation").GetString() 
-                    ?? operation.GetProperty("type").GetString() 
-                    ?? throw new InvalidOperationException("Operation must have 'operation' or 'type' property");
-
-                await SendProgressNotification(progressToken, currentOperation, operationCount, 
-                    $"Executing {operationType}...");
-
-                try
-                {
-                    var operationResult = await ExecuteOperationAsync(operation, workspacePath, cancellationToken);
-                    results.Add(new
-                    {
-                        success = true,
-                        operation = operationType,
-                        result = operationResult
-                    });
-                }
-                catch (Exception ex)
-                {
-                    Logger.LogError(ex, "Error executing operation {Type}", operationType);
-                    results.Add(new
-                    {
-                        success = false,
-                        operation = operationType,
-                        error = ex.Message
-                    });
-                }
+                var operation = operationArray[i];
+                var index = i; // Capture index for closure
+                
+                operationTasks.Add(ExecuteOperationWithIndexAsync(operation, workspacePath, progressToken, operationCount, index, cancellationToken));
             }
+
+            // Wait for all operations to complete in parallel
+            var operationResults = await Task.WhenAll(operationTasks);
+
+            // Sort results back to original order and add to results list
+            results.AddRange(operationResults.OrderBy(r => GetOperationIndex(r)));
 
             // Create batch result
             var batchResult = new
@@ -178,6 +162,52 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         var resultJson = JsonSerializer.Serialize(result);
         var doc = JsonDocument.Parse(resultJson);
         return doc.RootElement.TryGetProperty("success", out var s) && s.GetBoolean();
+    }
+
+    private static int GetOperationIndex(object result)
+    {
+        var resultJson = JsonSerializer.Serialize(result);
+        var doc = JsonDocument.Parse(resultJson);
+        return doc.RootElement.TryGetProperty("index", out var index) ? index.GetInt32() : 0;
+    }
+
+    private async Task<object> ExecuteOperationWithIndexAsync(
+        JsonElement operation, 
+        string? workspacePath, 
+        string progressToken, 
+        int operationCount, 
+        int index, 
+        CancellationToken cancellationToken)
+    {
+        var operationType = operation.GetProperty("operation").GetString() 
+            ?? operation.GetProperty("type").GetString() 
+            ?? throw new InvalidOperationException("Operation must have 'operation' or 'type' property");
+
+        await SendProgressNotification(progressToken, index + 1, operationCount, 
+            $"Executing {operationType}...");
+
+        try
+        {
+            var operationResult = await ExecuteOperationAsync(operation, workspacePath, cancellationToken);
+            return new
+            {
+                success = true,
+                operation = operationType,
+                result = operationResult,
+                index = index // Preserve original order
+            };
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Error executing operation {Type}", operationType);
+            return new
+            {
+                success = false,
+                operation = operationType,
+                error = ex.Message,
+                index = index // Preserve original order
+            };
+        }
     }
 
     // Individual operation execution methods
