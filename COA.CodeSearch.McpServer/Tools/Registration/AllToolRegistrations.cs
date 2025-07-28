@@ -71,6 +71,10 @@ public static class AllToolRegistrations
         // Workflow discovery
         RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
         
+        // Phase 3: Semantic Search Layer
+        RegisterSemanticSearch(registry, serviceProvider.GetRequiredService<SemanticSearchTool>());
+        RegisterHybridSearch(registry, serviceProvider.GetRequiredService<HybridSearchTool>());
+        
         // AI Context loading
         RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
     }
@@ -1498,6 +1502,88 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
         public string? SessionId { get; set; }
         public string[]? RelatedFiles { get; set; }
         public string? CurrentFocus { get; set; }
+    }
+
+    private static void RegisterSemanticSearch(ToolRegistry registry, SemanticSearchTool tool)
+    {
+        registry.RegisterTool<SemanticSearchParams>(
+            name: "semantic_search",
+            description: "Perform semantic search to find conceptually similar memories using embeddings. Finds memories based on concepts and meaning, not just exact keyword matches. Ideal for discovering related architectural decisions, similar problems, or concept-based exploration.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Search query (concepts, not just keywords). Examples: 'authentication issues', 'performance problems', 'database design patterns'" },
+                    maxResults = new { type = "integer", description = "Maximum number of results to return", @default = 20, minimum = 1, maximum = 100 },
+                    threshold = new { type = "number", description = "Minimum similarity threshold (0.0 to 1.0). Lower values find more results.", @default = 0.2f, minimum = 0.0f, maximum = 1.0f },
+                    memoryType = new { type = "string", description = "Filter by memory type (TechnicalDebt, ArchitecturalDecision, etc.)" },
+                    isShared = new { type = "boolean", description = "Filter by shared status" },
+                    customFilters = new { 
+                        type = "object", 
+                        description = "Custom field filters as key-value pairs",
+                        additionalProperties = true
+                    }
+                },
+                required = new[] { "query" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                if (string.IsNullOrWhiteSpace(parameters.Query))
+                    throw new InvalidParametersException("query is required and cannot be empty");
+
+                var result = await tool.ExecuteAsync(parameters);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private static void RegisterHybridSearch(ToolRegistry registry, HybridSearchTool tool)
+    {
+        registry.RegisterTool<HybridSearchParams>(
+            name: "hybrid_search",
+            description: "Perform hybrid search combining Lucene text search with semantic search for comprehensive results. Merges exact keyword matches with conceptual understanding. Best for thorough exploration when you need both precision and recall.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Search query for both text and semantic search" },
+                    maxResults = new { type = "integer", description = "Maximum number of results to return", @default = 20, minimum = 1, maximum = 100 },
+                    luceneWeight = new { type = "number", description = "Weight for text search results (0.0 to 1.0)", @default = 0.6f, minimum = 0.0f, maximum = 1.0f },
+                    semanticWeight = new { type = "number", description = "Weight for semantic search results (0.0 to 1.0)", @default = 0.4f, minimum = 0.0f, maximum = 1.0f },
+                    mergeStrategy = new { 
+                        type = "string", 
+                        description = "Strategy for merging results: Linear, Reciprocal, Multiplicative", 
+                        @enum = new[] { "Linear", "Reciprocal", "Multiplicative" },
+                        @default = "Linear"
+                    },
+                    semanticThreshold = new { type = "number", description = "Minimum similarity threshold for semantic results", @default = 0.2f, minimum = 0.0f, maximum = 1.0f },
+                    bothFoundBoost = new { type = "number", description = "Boost factor when result found by both methods", @default = 1.2f, minimum = 1.0f, maximum = 3.0f },
+                    luceneFilters = new { 
+                        type = "object", 
+                        description = "Filters for Lucene search (faceted search)",
+                        additionalProperties = new { type = "string" }
+                    },
+                    semanticFilters = new { 
+                        type = "object", 
+                        description = "Filters for semantic search",
+                        additionalProperties = true
+                    }
+                },
+                required = new[] { "query" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                if (string.IsNullOrWhiteSpace(parameters.Query))
+                    throw new InvalidParametersException("query is required and cannot be empty");
+
+                var result = await tool.ExecuteAsync(parameters);
+                return CreateSuccessResult(result);
+            }
+        );
     }
 
 }
