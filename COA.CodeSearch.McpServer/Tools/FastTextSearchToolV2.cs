@@ -377,7 +377,12 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         var actions = GenerateSearchActions(query, searchType, results, totalHits, hotspots, 
             byExtension.ToDictionary(kvp => kvp.Key, kvp => (dynamic)kvp.Value), mode);
 
-        // Create response object
+        // Determine how many results to include inline based on token budget and mode
+        const int maxInlineResults = 20;
+        var includeResults = mode == ResponseMode.Full || results.Count <= maxInlineResults;
+        var inlineResults = includeResults ? results : results.Take(maxInlineResults).ToList();
+        
+        // Create response object with hybrid approach: include first page of results
         var response = new
         {
             success = true,
@@ -396,6 +401,27 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 returnedResults = results.Count,
                 filesMatched = results.Select(r => r.FilePath).Distinct().Count(),
                 truncated = totalHits > results.Count
+            },
+            // Include actual results for immediate AI agent use
+            results = inlineResults.Select(r => new
+            {
+                filePath = r.FilePath,
+                relativePath = r.RelativePath,
+                fileName = r.FileName,
+                extension = r.Extension,
+                score = r.Score,
+                context = r.Context?.Select(c => new
+                {
+                    lineNumber = c.LineNumber,
+                    content = c.Content,
+                    isMatch = c.IsMatch
+                }).ToList()
+            }).ToList(),
+            resultsSummary = new
+            {
+                included = inlineResults.Count,
+                total = results.Count,
+                hasMore = results.Count > inlineResults.Count
             },
             distribution = new
             {
@@ -435,19 +461,21 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                     timestamp = DateTime.UtcNow
                 });
 
-            // Add resource URI to response
+            // Add resource URI to response while keeping results
             return new
             {
                 success = response.success,
                 operation = response.operation,
                 query = response.query,
                 summary = response.summary,
+                results = response.results,  // Include results in response
+                resultsSummary = response.resultsSummary,
                 distribution = response.distribution,
                 hotspots = response.hotspots,
                 insights = response.insights,
                 actions = response.actions,
                 meta = response.meta,
-                resourceUri = resourceUri
+                resourceUri = resourceUri  // Also provide URI for complete results
             };
         }
 
