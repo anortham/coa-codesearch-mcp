@@ -169,7 +169,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
-        
+        // Scoring services for improved search relevance
+        services.AddSingleton<IScoringService, ScoringService>();
         
         
         

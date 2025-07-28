@@ -2,6 +2,7 @@ using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
@@ -36,6 +37,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IStreamingResultService _streamingResultService;
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
+    private readonly IScoringService? _scoringService;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -51,7 +53,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IStreamingResultService streamingResultService,
         IErrorRecoveryService errorRecoveryService,
         IContextAwarenessService? contextAwarenessService = null,
-        SearchResultResourceProvider? searchResultResourceProvider = null)
+        SearchResultResourceProvider? searchResultResourceProvider = null,
+        IScoringService? scoringService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _configuration = configuration;
@@ -63,6 +66,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _streamingResultService = streamingResultService;
         _errorRecoveryService = errorRecoveryService;
         _searchResultResourceProvider = searchResultResourceProvider;
+        _scoringService = scoringService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -120,6 +124,21 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
 
             // Build the query with caching for performance
             var luceneQuery = BuildQueryWithCache(query, searchType, caseSensitive, filePattern, extensions, analyzer);
+
+            // Apply multi-factor scoring if service is available
+            if (_scoringService != null)
+            {
+                var searchContext = new ScoringContext
+                {
+                    QueryText = query,
+                    SearchType = searchType,
+                    WorkspacePath = workspacePath
+                };
+                
+                // Wrap query with multi-factor scoring
+                luceneQuery = _scoringService.CreateScoredQuery(luceneQuery, searchContext);
+                Logger.LogDebug("Applied multi-factor scoring to text search query");
+            }
 
             // Execute search
             var topDocs = searcher.Search(luceneQuery, maxResults);
