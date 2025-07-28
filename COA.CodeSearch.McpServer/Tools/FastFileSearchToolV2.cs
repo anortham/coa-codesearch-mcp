@@ -703,7 +703,10 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         try
         {
             _ = new Regex(query);
-            return new RegexpQuery(new Term("filename", query));
+            // Use relativePath for regex to allow more flexible pattern matching
+            // This allows patterns like "^Test.*" to match files in Test directories
+            // or ".*Service\.cs$" to match the full path pattern
+            return new RegexpQuery(new Term("relativePath", query));
         }
         catch (ArgumentException)
         {
