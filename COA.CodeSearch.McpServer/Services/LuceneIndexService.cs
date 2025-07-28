@@ -99,8 +99,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
     
-    // Idle cleanup configuration
-    private readonly Timer _idleCleanupTimer;
+    // Idle cleanup configuration (timer removed - cleanup is done on-demand)
     private readonly TimeSpan _idleTimeout = TimeSpan.FromMinutes(15); // Indexes idle for 15 minutes are evicted
     private readonly int _maxIndexCount = 100; // Maximum number of indexes to keep in memory
     private volatile bool _disposed;
@@ -165,6 +164,9 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
+        
+        // Clean up any memory entries from metadata on startup
+        _ = Task.Run(async () => await CleanupMemoryEntriesFromMetadataAsync().ConfigureAwait(false));
     }
     
     /// <summary>
@@ -195,9 +197,6 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             _logger.LogWarning(ex, "Error determining analyzer for path {Path}, defaulting to StandardAnalyzer", pathToCheck);
             return _standardAnalyzer;
         }
-        
-        // Clean up any memory entries from metadata on startup
-        _ = Task.Run(async () => await CleanupMemoryEntriesFromMetadataAsync().ConfigureAwait(false));
     }
     
     /// <summary>
@@ -1737,16 +1736,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
         
-        // Dispose the idle cleanup timer
-        try
-        {
-            _idleCleanupTimer?.Change(Timeout.Infinite, 0);
-            _idleCleanupTimer?.Dispose();
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error disposing idle cleanup timer");
-        }
+        // Idle cleanup timer removed - cleanup is done on-demand
         
         _logger.LogWarning("LuceneIndexService.DisposeAsync() completed - all Lucene resources cleaned up");
     }

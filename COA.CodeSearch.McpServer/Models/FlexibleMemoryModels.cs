@@ -449,6 +449,11 @@ public class FlexibleMemorySearchResult
     /// AI-generated insights about the results
     /// </summary>
     public MemorySearchInsights? Insights { get; set; }
+    
+    /// <summary>
+    /// Intelligent facet suggestions to help refine the search
+    /// </summary>
+    public FacetSuggestions? FacetSuggestions { get; set; }
 }
 
 /// <summary>
@@ -599,5 +604,85 @@ public class WorkingMemory : FlexibleMemoryEntry
         };
         memory.SetField(MemoryFields.ExpiresAt, memory.ExpiresAt);
         return memory;
+    }
+}
+
+/// <summary>
+/// Individual facet suggestion with context and reasoning
+/// </summary>
+public class FacetSuggestion
+{
+    /// <summary>
+    /// The facet field name (e.g., "type", "priority")
+    /// </summary>
+    public string FacetField { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// The facet value to filter by (e.g., "TechnicalDebt", "high")
+    /// </summary>
+    public string FacetValue { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Number of memories that would match this facet
+    /// </summary>
+    public int Count { get; set; }
+    
+    /// <summary>
+    /// Priority score (0-10, higher is more relevant)
+    /// </summary>
+    public double Priority { get; set; }
+    
+    /// <summary>
+    /// Human-readable explanation of why this facet is suggested
+    /// </summary>
+    public string Reason { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Display-friendly representation of the facet
+    /// </summary>
+    public string DisplayText => $"{FacetField}: {FacetValue} ({Count} items)";
+}
+
+/// <summary>
+/// Collection of intelligent facet suggestions with context
+/// </summary>
+public class FacetSuggestions
+{
+    /// <summary>
+    /// List of suggested facets, ordered by relevance
+    /// </summary>
+    public List<FacetSuggestion> Suggestions { get; set; } = new();
+    
+    /// <summary>
+    /// Total number of unique facet values available
+    /// </summary>
+    public int TotalAvailableFacets { get; set; }
+    
+    /// <summary>
+    /// The search query context used for suggestions (if any)
+    /// </summary>
+    public string? QueryContext { get; set; }
+    
+    /// <summary>
+    /// When these suggestions were generated
+    /// </summary>
+    public DateTime GeneratedAt { get; set; }
+    
+    /// <summary>
+    /// Whether any suggestions are available
+    /// </summary>
+    public bool HasSuggestions => Suggestions.Any();
+    
+    /// <summary>
+    /// Get suggestions grouped by priority level
+    /// </summary>
+    public Dictionary<string, List<FacetSuggestion>> GetGroupedByPriority()
+    {
+        return new Dictionary<string, List<FacetSuggestion>>
+        {
+            ["High Priority"] = Suggestions.Where(s => s.Priority >= 8).ToList(),
+            ["Medium Priority"] = Suggestions.Where(s => s.Priority >= 5 && s.Priority < 8).ToList(),
+            ["Low Priority"] = Suggestions.Where(s => s.Priority < 5).ToList()
+        };
     }
 }

@@ -64,39 +64,39 @@ public class FlexibleMemoryQueryTests
     }
     
     [Fact]
-    public void BuildQuery_EmptyRequest_ReturnsMatchAllDocsQuery()
+    public async Task BuildQuery_EmptyRequest_ReturnsMatchAllDocsQuery()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest();
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<MatchAllDocsQuery>(query);
     }
     
     [Fact]
-    public void BuildQuery_WildcardQuery_ReturnsMatchAllDocsQuery()
+    public async Task BuildQuery_WildcardQuery_ReturnsMatchAllDocsQuery()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest { Query = "*" };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<MatchAllDocsQuery>(query);
     }
     
     [Fact]
-    public void BuildQuery_WithTextQuery_CreatesBooleanQuery()
+    public async Task BuildQuery_WithTextQuery_CreatesBooleanQuery()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest { Query = "authentication" };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<BooleanQuery>(query);
@@ -106,7 +106,7 @@ public class FlexibleMemoryQueryTests
     }
     
     [Fact]
-    public void BuildQuery_WithTypes_CreatesTypeFilter()
+    public async Task BuildQuery_WithTypes_CreatesTypeFilter()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest 
@@ -115,7 +115,7 @@ public class FlexibleMemoryQueryTests
         };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<BooleanQuery>(query);
@@ -130,7 +130,7 @@ public class FlexibleMemoryQueryTests
     }
     
     [Fact]
-    public void BuildQuery_WithDateRange_CreatesNumericRangeQuery()
+    public async Task BuildQuery_WithDateRange_CreatesNumericRangeQuery()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest 
@@ -143,7 +143,7 @@ public class FlexibleMemoryQueryTests
         };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<BooleanQuery>(query);
@@ -153,7 +153,7 @@ public class FlexibleMemoryQueryTests
     }
     
     [Fact]
-    public void BuildQuery_WithFacets_CreatesFacetFilters()
+    public async Task BuildQuery_WithFacets_CreatesFacetFilters()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest 
@@ -166,7 +166,7 @@ public class FlexibleMemoryQueryTests
         };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<BooleanQuery>(query);
@@ -182,7 +182,7 @@ public class FlexibleMemoryQueryTests
     }
     
     [Fact]
-    public void BuildQuery_ComplexQuery_CombinesAllFilters()
+    public async Task BuildQuery_ComplexQuery_CombinesAllFilters()
     {
         // Arrange
         var request = new FlexibleMemorySearchRequest 
@@ -194,7 +194,7 @@ public class FlexibleMemoryQueryTests
         };
         
         // Act
-        var query = InvokeBuildQuery(request);
+        var query = await InvokeBuildQueryAsync(request);
         
         // Assert
         Assert.IsType<BooleanQuery>(query);
@@ -373,11 +373,12 @@ public class FlexibleMemoryQueryTests
     
     // Helper methods to invoke private methods via reflection
     
-    private Query InvokeBuildQuery(FlexibleMemorySearchRequest request)
+    private async Task<Query> InvokeBuildQueryAsync(FlexibleMemorySearchRequest request)
     {
-        var method = typeof(FlexibleMemoryService).GetMethod("BuildQuery", 
+        var method = typeof(FlexibleMemoryService).GetMethod("BuildQueryAsync", 
             BindingFlags.NonPublic | BindingFlags.Instance);
-        return (Query)method!.Invoke(_memoryService, new object[] { request })!;
+        var task = (Task<Query>)method!.Invoke(_memoryService, new object[] { request })!;
+        return await task;
     }
     
     private Document InvokeCreateDocument(FlexibleMemoryEntry memory)

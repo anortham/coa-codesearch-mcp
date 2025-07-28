@@ -44,7 +44,7 @@ public class LoadContextTool : ITool
             
             // Check cache first (unless refresh requested)
             var cacheKey = $"context_{workingDirectory}_{sessionId ?? "default"}";
-            if (!refreshCache && _cache.TryGetValue<AIWorkingContext>(cacheKey, out var cached))
+            if (!refreshCache && _cache.TryGetValue<AIWorkingContext>(cacheKey, out var cached) && cached != null)
             {
                 _logger.LogDebug("Returning cached context for {CacheKey}", cacheKey);
                 return new
@@ -52,7 +52,7 @@ public class LoadContextTool : ITool
                     success = true,
                     context = new
                     {
-                        sessionId = cached.SessionId,
+                        sessionId = cached.SessionId ?? "default",
                         workingDirectory = cached.WorkingDirectory,
                         loadedAt = cached.LoadedAt,
                         fromCache = true,
@@ -91,7 +91,7 @@ public class LoadContextTool : ITool
                 success = true,
                 context = new
                 {
-                    sessionId = context.SessionId,
+                    sessionId = context.SessionId ?? "default",
                     workingDirectory = context.WorkingDirectory,
                     loadedAt = context.LoadedAt,
                     fromCache = false,
