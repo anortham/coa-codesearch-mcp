@@ -60,6 +60,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<MemoryAnalyzer>();
         services.AddSingleton<MemoryFacetingService>();
+        services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<MemoryLinkingTools>();
@@ -339,6 +340,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<MemoryAnalyzer>();
         services.AddSingleton<MemoryFacetingService>();
+        services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<FlexibleMemoryService>();
         
         return services.BuildServiceProvider();

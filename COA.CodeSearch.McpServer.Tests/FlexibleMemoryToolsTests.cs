@@ -72,7 +72,8 @@ public class FlexibleMemoryToolsTests : IDisposable
         // MemoryAnalyzer is now managed by LuceneIndexService
         
         var facetingServiceMock = new Mock<MemoryFacetingService>(Mock.Of<ILogger<MemoryFacetingService>>(), Mock.Of<IPathResolutionService>());
-        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, facetingServiceMock.Object);
+        var scoringServiceMock = new Mock<IScoringService>();
+        _memoryService = new FlexibleMemoryService(_memoryLoggerMock.Object, _configuration, _indexService, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, facetingServiceMock.Object, scoringServiceMock.Object);
         _memoryTools = new FlexibleMemoryTools(_toolsLoggerMock.Object, _memoryService, _pathResolutionMock.Object);
     }
     
