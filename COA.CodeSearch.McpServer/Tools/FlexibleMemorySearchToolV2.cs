@@ -62,7 +62,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         string[]? recentFiles = null,
         ResponseMode mode = ResponseMode.Summary,
         // Highlighting parameters
-        bool enableHighlighting = false,
+        bool enableHighlighting = true,
         int maxFragments = 3,
         int fragmentSize = 100,
         DetailRequest? detailRequest = null,
