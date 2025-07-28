@@ -24,6 +24,7 @@ public class FastDirectorySearchTool : ITool
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly IScoringService? _scoringService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
+    private readonly IResultConfidenceService? _resultConfidenceService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastDirectorySearchTool(
@@ -32,7 +33,8 @@ public class FastDirectorySearchTool : ITool
         IFieldSelectorService fieldSelectorService,
         IErrorRecoveryService errorRecoveryService,
         IScoringService? scoringService = null,
-        SearchResultResourceProvider? searchResultResourceProvider = null)
+        SearchResultResourceProvider? searchResultResourceProvider = null,
+        IResultConfidenceService? resultConfidenceService = null)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
@@ -40,6 +42,7 @@ public class FastDirectorySearchTool : ITool
         _errorRecoveryService = errorRecoveryService;
         _scoringService = scoringService;
         _searchResultResourceProvider = searchResultResourceProvider;
+        _resultConfidenceService = resultConfidenceService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -124,6 +127,18 @@ public class FastDirectorySearchTool : ITool
             var startTime = DateTime.UtcNow;
             var topDocs = searcher.Search(luceneQuery, groupByDirectory ? 1000 : maxResults); // Get more if grouping
             var searchDuration = (DateTime.UtcNow - startTime).TotalMilliseconds;
+
+            // Apply confidence-based result limiting if service is available
+            int effectiveMaxResults = groupByDirectory ? 1000 : maxResults; // Don't limit if grouping
+            string? confidenceInsight = null;
+            if (_resultConfidenceService != null && !groupByDirectory)
+            {
+                var confidence = _resultConfidenceService.AnalyzeResults(topDocs, maxResults, false);
+                effectiveMaxResults = confidence.RecommendedCount;
+                confidenceInsight = confidence.Insight;
+                _logger.LogDebug("Directory search confidence: level={Level}, recommended={Count}, topScore={Score:F2}", 
+                    confidence.ConfidenceLevel, confidence.RecommendedCount, confidence.TopScore);
+            }
 
             // Process results
             if (groupByDirectory)
@@ -247,7 +262,7 @@ public class FastDirectorySearchTool : ITool
             {
                 // Return individual file results
                 var results = new List<object>();
-                foreach (var scoreDoc in topDocs.ScoreDocs.Take(maxResults))
+                foreach (var scoreDoc in topDocs.ScoreDocs.Take(effectiveMaxResults))
                 {
                     // Use field selector to load only directory-related fields for better performance
                     var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, FieldSetType.DirectoryListing);

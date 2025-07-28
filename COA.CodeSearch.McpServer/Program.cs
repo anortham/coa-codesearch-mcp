@@ -171,6 +171,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Scoring services for improved search relevance
         services.AddSingleton<IScoringService, ScoringService>();
+        services.AddSingleton<IResultConfidenceService, ResultConfidenceService>();
         
         
         
