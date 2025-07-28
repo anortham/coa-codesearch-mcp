@@ -186,7 +186,12 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<IResultConfidenceService, ResultConfidenceService>();
         
-        
+        // Phase 3: Semantic Search Layer
+        services.Configure<EmbeddingOptions>(context.Configuration.GetSection("Embedding"));
+        services.AddSingleton<IEmbeddingService, EmbeddingService>();
+        services.AddSingleton<IVectorIndex, InMemoryVectorIndex>();
+        services.AddSingleton<SemanticMemoryIndex>();
+        services.AddSingleton<HybridMemorySearch>();
         
         
         // Lucene lifecycle management
@@ -212,8 +217,8 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<MemoryGraphNavigatorTool>();
         services.AddSingleton<ToolUsageAnalyticsTool>();
         services.AddSingleton<WorkflowDiscoveryTool>();
-        
-        
+        services.AddSingleton<SemanticSearchTool>();
+        services.AddSingleton<HybridSearchTool>();
         
         
         
