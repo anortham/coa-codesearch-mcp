@@ -75,6 +75,12 @@ public static class AllToolRegistrations
         RegisterSemanticSearch(registry, serviceProvider.GetRequiredService<SemanticSearchTool>());
         RegisterHybridSearch(registry, serviceProvider.GetRequiredService<HybridSearchTool>());
         
+        // Phase 3: Memory Quality Validation
+        RegisterMemoryQualityAssessment(registry, serviceProvider.GetRequiredService<MemoryQualityAssessmentTool>());
+        
+        // Phase 3: Multi-level Caching Strategy
+        RegisterCacheManagement(registry, serviceProvider.GetRequiredService<CacheManagementTool>());
+        
         // AI Context loading
         RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
     }
@@ -1580,6 +1586,102 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
                 if (string.IsNullOrWhiteSpace(parameters.Query))
                     throw new InvalidParametersException("query is required and cannot be empty");
 
+                var result = await tool.ExecuteAsync(parameters);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private static void RegisterMemoryQualityAssessment(ToolRegistry registry, MemoryQualityAssessmentTool tool)
+    {
+        registry.RegisterTool<MemoryQualityAssessmentParams>(
+            name: "memory_quality_assessment",
+            description: "Assess and improve the quality of stored memories with detailed scoring and suggestions. Evaluates completeness, relevance, consistency, and provides actionable improvement recommendations.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    memoryId = new { type = "string", description = "Memory ID to assess quality for" },
+                    memoryIds = new { 
+                        type = "array", 
+                        items = new { type = "string" },
+                        description = "Multiple memory IDs to assess (batch operation)" 
+                    },
+                    memoryType = new { type = "string", description = "Memory type to filter by (for bulk assessment)" },
+                    qualityThreshold = new { type = "number", description = "Quality threshold (0.0-1.0, default: 0.7)", @default = 0.7, minimum = 0.0, maximum = 1.0 },
+                    enabledValidators = new { 
+                        type = "array", 
+                        items = new { type = "string" },
+                        description = "Specific validators to use (if not specified, all validators are used)" 
+                    },
+                    includeSuggestions = new { type = "boolean", description = "Include improvement suggestions in results", @default = true },
+                    allowAutoImprovements = new { type = "boolean", description = "Allow automatic improvements to be applied", @default = false },
+                    contextWorkspace = new { type = "string", description = "Current workspace context for relevance assessment" },
+                    recentFiles = new { 
+                        type = "array", 
+                        items = new { type = "string" },
+                        description = "Recently accessed files for context assessment" 
+                    },
+                    maxResults = new { type = "integer", description = "Maximum number of memories to assess (for bulk operations)", @default = 50, minimum = 1, maximum = 200 },
+                    showDetails = new { type = "boolean", description = "Show detailed validation results", @default = false },
+                    mode = new { 
+                        type = "string", 
+                        description = "Assessment mode: 'single', 'batch', 'bulk', or 'report'",
+                        @enum = new[] { "single", "batch", "bulk", "report" },
+                        @default = "single"
+                    }
+                },
+                required = new string[] { }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.ExecuteAsync(parameters);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    private static void RegisterCacheManagement(ToolRegistry registry, CacheManagementTool tool)
+    {
+        registry.RegisterTool<CacheManagementParams>(
+            name: ToolNames.CacheManagement,
+            description: "Manage and monitor the multi-level cache system with statistics, clear, warm, and invalidate operations",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    operation = new { 
+                        type = "string", 
+                        description = "Operation to perform: 'statistics', 'clear', 'warm', 'invalidate', 'health', 'config'",
+                        @enum = new[] { "statistics", "stats", "clear", "warm", "invalidate", "health", "config" },
+                        @default = "statistics"
+                    },
+                    keys = new { type = "string", description = "Cache keys to warm or invalidate (comma-separated)" },
+                    pattern = new { type = "string", description = "Pattern for pattern-based invalidation (supports wildcards)" },
+                    level = new { 
+                        type = "string", 
+                        description = "Cache level to operate on: 'L1', 'L2', or 'both'",
+                        @enum = new[] { "L1", "L2", "both" },
+                        @default = "both"
+                    },
+                    invalidationStrategy = new { 
+                        type = "string", 
+                        description = "Invalidation strategy: 'immediate', 'delayed', 'lazy'",
+                        @enum = new[] { "immediate", "delayed", "lazy" }
+                    },
+                    includeDetails = new { type = "boolean", description = "Include detailed breakdown in statistics", @default = true },
+                    force = new { type = "boolean", description = "Force operation even if it may impact performance", @default = false }
+                },
+                required = new[] { "operation" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
                 var result = await tool.ExecuteAsync(parameters);
                 return CreateSuccessResult(result);
             }
