@@ -2,6 +2,7 @@ using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -27,6 +28,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
+    private readonly IScoringService? _scoringService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSearchToolV2(
@@ -39,7 +41,8 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         IOptions<ResponseLimitOptions> options,
         IDetailRequestCache detailCache,
         IErrorRecoveryService errorRecoveryService,
-        SearchResultResourceProvider? searchResultResourceProvider = null)
+        SearchResultResourceProvider? searchResultResourceProvider = null,
+        IScoringService? scoringService = null)
         : base(sizeEstimator, truncator, options, logger, detailCache)
     {
         _luceneIndexService = luceneIndexService;
@@ -47,6 +50,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
         _searchResultResourceProvider = searchResultResourceProvider;
+        _scoringService = scoringService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -110,6 +114,30 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 "regex" => BuildRegexQuery(query),
                 _ => BuildStandardQuery(query)
             };
+
+            // Apply multi-factor scoring if service is available
+            if (_scoringService != null)
+            {
+                var searchContext = new ScoringContext
+                {
+                    QueryText = query,
+                    SearchType = searchType ?? "standard",
+                    WorkspacePath = workspacePath
+                };
+                
+                // For file search, we might want to emphasize filename relevance more
+                var enabledFactors = new HashSet<string> 
+                { 
+                    "FilenameRelevance", // Most important for file search
+                    "PathRelevance", 
+                    "RecencyBoost", 
+                    "FileTypeRelevance" 
+                };
+                
+                // Wrap query with multi-factor scoring
+                luceneQuery = _scoringService.CreateScoredQuery(luceneQuery, searchContext, enabledFactors);
+                Logger.LogDebug("Applied multi-factor scoring to file search query");
+            }
 
             // Execute search
             var startTime = DateTime.UtcNow;

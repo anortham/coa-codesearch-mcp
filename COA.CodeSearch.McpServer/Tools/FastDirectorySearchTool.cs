@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -21,18 +22,21 @@ public class FastDirectorySearchTool : ITool
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly IScoringService? _scoringService;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastDirectorySearchTool(
         ILogger<FastDirectorySearchTool> logger,
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
-        IErrorRecoveryService errorRecoveryService)
+        IErrorRecoveryService errorRecoveryService,
+        IScoringService? scoringService = null)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _scoringService = scoringService;
     }
 
     public async Task<object> ExecuteAsync(
@@ -89,6 +93,29 @@ public class FastDirectorySearchTool : ITool
                 "regex" => BuildRegexQuery(query),
                 _ => BuildStandardQuery(query)
             };
+
+            // Apply multi-factor scoring if service is available
+            if (_scoringService != null)
+            {
+                var searchContext = new ScoringContext
+                {
+                    QueryText = query,
+                    SearchType = searchType ?? "standard",
+                    WorkspacePath = workspacePath
+                };
+                
+                // For directory search, emphasize path relevance
+                var enabledFactors = new HashSet<string> 
+                { 
+                    "PathRelevance", // Most important for directory search
+                    "FilenameRelevance", // Directory names matter too
+                    "RecencyBoost" // Recent directories might be more relevant
+                };
+                
+                // Wrap query with multi-factor scoring
+                luceneQuery = _scoringService.CreateScoredQuery(luceneQuery, searchContext, enabledFactors);
+                _logger.LogDebug("Applied multi-factor scoring to directory search query");
+            }
 
             // Execute search
             var startTime = DateTime.UtcNow;
