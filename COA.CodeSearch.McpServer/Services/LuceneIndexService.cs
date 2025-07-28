@@ -1394,13 +1394,14 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     
     /// <summary>
     /// TIER 3: Diagnose memory locks only - never auto-remove
+    /// This includes both main memory index locks and taxonomy subdirectory locks
     /// </summary>
     private static async Task<int> DiagnoseMemoryIndexLocksAsync(IPathResolutionService pathResolution, ILogger logger, TimeSpan minAge)
     {
         const string WriteLockFilename = "write.lock";
         var foundCount = 0;
         
-        logger.LogDebug("TIER 3: Diagnosing memory locks (no auto-cleanup)");
+        logger.LogDebug("TIER 3: Diagnosing memory locks including taxonomy directories (no auto-cleanup)");
         
         var memoryPaths = new[]
         {
@@ -1415,29 +1416,50 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 continue;
             }
             
-            var lockPath = Path.Combine(memoryPath, WriteLockFilename);
+            var memoryType = Path.GetFileName(memoryPath);
             
-            if (await FileExistsAsync(lockPath).ConfigureAwait(false))
+            // Check main memory index lock
+            var mainLockPath = Path.Combine(memoryPath, WriteLockFilename);
+            foundCount += await DiagnoseStaticMemoryLockFileAsync(mainLockPath, $"{memoryType} main index", logger, minAge);
+            
+            // Check taxonomy subdirectory lock
+            var taxonomyPath = Path.Combine(memoryPath, "taxonomy");
+            if (await DirectoryExistsAsync(taxonomyPath).ConfigureAwait(false))
             {
-                foundCount++;
-                var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
-                var memoryType = Path.GetFileName(memoryPath);
-                
-                if (lockAge > minAge)
-                {
-                    logger.LogError("TIER 3: CRITICAL - Found stuck {MemoryType} memory lock, age: {Age}. " +
-                                  "This indicates improper disposal! The memory index may be corrupted. " +
-                                  "MANUAL INTERVENTION REQUIRED: Exit Claude Code and delete {LockPath}",
-                                  memoryType, lockAge, lockPath);
-                }
-                else
-                {
-                    logger.LogDebug("TIER 3: Found recent {MemoryType} memory lock ({Age}) - likely in use", memoryType, lockAge);
-                }
+                var taxonomyLockPath = Path.Combine(taxonomyPath, WriteLockFilename);
+                foundCount += await DiagnoseStaticMemoryLockFileAsync(taxonomyLockPath, $"{memoryType} taxonomy index", logger, minAge);
             }
         }
         
         return foundCount;
+    }
+    
+    /// <summary>
+    /// Diagnose a specific memory lock file (static version for startup)
+    /// </summary>
+    private static async Task<int> DiagnoseStaticMemoryLockFileAsync(string lockPath, string lockDescription, ILogger logger, TimeSpan minAge)
+    {
+        if (await FileExistsAsync(lockPath).ConfigureAwait(false))
+        {
+            var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
+            
+            if (lockAge > minAge)
+            {
+                logger.LogError("TIER 3: CRITICAL - Found stuck {LockDescription} lock, age: {Age}. " +
+                              "This indicates improper disposal! The index may be corrupted. " +
+                              "MANUAL INTERVENTION REQUIRED: Exit Claude Code and delete {LockPath}",
+                              lockDescription, lockAge, lockPath);
+            }
+            else
+            {
+                logger.LogDebug("TIER 3: Found recent {LockDescription} lock ({Age}) - likely in use", 
+                                lockDescription, lockAge);
+            }
+            
+            return 1; // Found one lock file
+        }
+        
+        return 0; // No lock file found
     }
     
     /// <summary>
@@ -1539,6 +1561,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     
     /// <summary>
     /// Diagnose stuck write.lock files in memory indexes (project-memory and local-memory).
+    /// This includes both main memory index locks and taxonomy subdirectory locks.
     /// This method only reports stuck locks but does NOT remove them automatically.
     /// </summary>
     private async Task DiagnoseMemoryIndexLocksAsync()
@@ -1556,25 +1579,42 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
                 continue;
             }
             
-            var lockPath = Path.Combine(memoryPath, WriteLockFilename);
+            var memoryType = Path.GetFileName(memoryPath);
             
-            if (await FileExistsAsync(lockPath).ConfigureAwait(false))
+            // Check main memory index lock
+            var mainLockPath = Path.Combine(memoryPath, WriteLockFilename);
+            await DiagnoseMemoryLockFileAsync(mainLockPath, $"{memoryType} main index");
+            
+            // Check taxonomy subdirectory lock
+            var taxonomyPath = Path.Combine(memoryPath, "taxonomy");
+            if (await DirectoryExistsAsync(taxonomyPath).ConfigureAwait(false))
             {
-                var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
-                var memoryType = Path.GetFileName(memoryPath);
-                
-                if (lockAge > _lockTimeout)
-                {
-                    _logger.LogError("CRITICAL: Found stuck write.lock in {MemoryType} memory index, age: {Age}. " +
-                                   "This indicates improper disposal! The memory index may be corrupted. " +
-                                   "Manual intervention required: delete {Path} after ensuring no processes are using it.",
-                                   memoryType, lockAge, lockPath);
-                }
-                else
-                {
-                    _logger.LogDebug("Found recent write.lock in {MemoryType} memory index ({Age}) - likely in use", 
-                                    memoryType, lockAge);
-                }
+                var taxonomyLockPath = Path.Combine(taxonomyPath, WriteLockFilename);
+                await DiagnoseMemoryLockFileAsync(taxonomyLockPath, $"{memoryType} taxonomy index");
+            }
+        }
+    }
+    
+    /// <summary>
+    /// Diagnose a specific memory lock file
+    /// </summary>
+    private async Task DiagnoseMemoryLockFileAsync(string lockPath, string lockDescription)
+    {
+        if (await FileExistsAsync(lockPath).ConfigureAwait(false))
+        {
+            var lockAge = DateTime.UtcNow - await GetFileLastWriteTimeUtcAsync(lockPath).ConfigureAwait(false);
+            
+            if (lockAge > _lockTimeout)
+            {
+                _logger.LogError("CRITICAL: Found stuck write.lock in {LockDescription}, age: {Age}. " +
+                               "This indicates improper disposal! The index may be corrupted. " +
+                               "Manual intervention required: delete {Path} after ensuring no processes are using it.",
+                               lockDescription, lockAge, lockPath);
+            }
+            else
+            {
+                _logger.LogDebug("Found recent write.lock in {LockDescription} ({Age}) - likely in use", 
+                                lockDescription, lockAge);
             }
         }
     }
