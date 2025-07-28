@@ -24,7 +24,14 @@ public class MultiFactorScoreQuery : Query
 
     public override Weight CreateWeight(IndexSearcher searcher)
     {
-        var baseWeight = _baseQuery.CreateWeight(searcher);
+        // Handle queries that need rewriting (like WildcardQuery, PrefixQuery, etc.)
+        var rewrittenQuery = _baseQuery;
+        if (_baseQuery is MultiTermQuery || _baseQuery is WildcardQuery || _baseQuery is PrefixQuery)
+        {
+            rewrittenQuery = _baseQuery.Rewrite(searcher.IndexReader);
+        }
+        
+        var baseWeight = rewrittenQuery.CreateWeight(searcher);
         return new MultiFactorWeight(this, baseWeight, searcher);
     }
 
