@@ -71,6 +71,7 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
         services.AddSingleton<MemoryFacetingService>();
+        services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<MemoryLinkingTools>();
