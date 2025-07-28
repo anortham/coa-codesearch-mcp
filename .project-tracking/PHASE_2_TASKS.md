@@ -103,6 +103,7 @@
 - ✅ Taxonomy directory management complete with PathResolutionService
 - ✅ Async document creation with native faceting integration
 - ✅ Native faceting working as confirmed by MCP search tools
+- ✅ **CRITICAL FIX**: Path resolution bug fixed - taxonomy directories now in correct location (.codesearch/project-memory/taxonomy/)
 
 ### Day 8-10 (16 hours) - Integration & Optimization
 - [ ] 🤖 **[AI-UX]** Design facet response format for AI consumption

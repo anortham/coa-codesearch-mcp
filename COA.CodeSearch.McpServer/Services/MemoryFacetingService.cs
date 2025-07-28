@@ -26,6 +26,10 @@ public class MemoryFacetingService : IDisposable
     private readonly Dictionary<string, DirectoryTaxonomyReader> _taxonomyReaders = new();
     private readonly Dictionary<string, FSDirectory> _taxonomyDirectories = new();
     
+    // Facet caching for performance
+    private readonly Dictionary<string, (FacetResult[] Results, DateTime CacheTime)> _facetCache = new();
+    private readonly TimeSpan _cacheExpiry = TimeSpan.FromMinutes(5); // Cache facets for 5 minutes
+    
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
     
     // Facet field names
@@ -105,15 +109,15 @@ public class MemoryFacetingService : IDisposable
                 document.Add(new FacetField(TYPE_FACET, memory.Type));
             }
             
-            // Add status facet
-            var status = memory.GetField<string>("status");
+            // Add status facet (check multiple field names due to reserved field restrictions)
+            var status = memory.GetField<string>("status") ?? memory.GetField<string>("state");
             if (!string.IsNullOrEmpty(status))
             {
                 document.Add(new FacetField(STATUS_FACET, status));
             }
             
-            // Add priority facet
-            var priority = memory.GetField<string>("priority");
+            // Add priority facet (check multiple field names due to reserved field restrictions)
+            var priority = memory.GetField<string>("priority") ?? memory.GetField<string>("importance");
             if (!string.IsNullOrEmpty(priority))
             {
                 document.Add(new FacetField(PRIORITY_FACET, priority));
@@ -145,7 +149,10 @@ public class MemoryFacetingService : IDisposable
             // This associates the document with the taxonomy
             var facetDocument = _facetsConfig.Build(taxonomyWriter, document);
             
-            _logger.LogDebug("Added facet fields to document for memory {Id}", memory.Id);
+            // Commit taxonomy changes to make facets available for search
+            await Task.Run(() => taxonomyWriter.Commit());
+            
+            _logger.LogDebug("Added facet fields and committed taxonomy for memory {Id}", memory.Id);
             return facetDocument;
         }
         catch (Exception ex)
@@ -221,14 +228,25 @@ public class MemoryFacetingService : IDisposable
             // Check if we need to refresh the reader
             if (_taxonomyReaders.TryGetValue(workspacePath, out var existingReader))
             {
-                var newReader = DirectoryTaxonomyReader.OpenIfChanged(existingReader);
-                if (newReader != null)
+                try
                 {
-                    existingReader.Dispose();
-                    _taxonomyReaders[workspacePath] = newReader;
-                    return newReader;
+                    var newReader = DirectoryTaxonomyReader.OpenIfChanged(existingReader);
+                    if (newReader != null)
+                    {
+                        existingReader.Dispose();
+                        _taxonomyReaders[workspacePath] = newReader;
+                        return newReader;
+                    }
+                    return existingReader;
                 }
-                return existingReader;
+                catch (IndexNotFoundException)
+                {
+                    // Taxonomy was deleted, need to recreate
+                    _logger.LogDebug("Taxonomy index missing for workspace {WorkspacePath}, will recreate", workspacePath);
+                    existingReader.Dispose();
+                    _taxonomyReaders.Remove(workspacePath);
+                    // Fall through to create new reader
+                }
             }
             
             // Create new reader
@@ -236,6 +254,17 @@ public class MemoryFacetingService : IDisposable
             if (!_taxonomyDirectories.ContainsKey(workspacePath))
             {
                 _taxonomyDirectories[workspacePath] = directory;
+            }
+            
+            // Check if taxonomy index exists, if not create it
+            if (!DirectoryReader.IndexExists(directory))
+            {
+                _logger.LogDebug("Creating new taxonomy index for workspace {WorkspacePath}", workspacePath);
+                // Create empty taxonomy by creating and immediately closing a writer
+                using (var tempWriter = new DirectoryTaxonomyWriter(directory))
+                {
+                    tempWriter.Commit();
+                }
             }
             
             var reader = new DirectoryTaxonomyReader(directory);
@@ -262,14 +291,41 @@ public class MemoryFacetingService : IDisposable
     {
         try
         {
+            // Generate cache key from workspace, query, and maxResults
+            var cacheKey = $"{workspacePath}:{query.ToString()}:{maxResults}";
+            
+            // Check cache first
+            if (_facetCache.TryGetValue(cacheKey, out var cached))
+            {
+                if (DateTime.UtcNow - cached.CacheTime < _cacheExpiry)
+                {
+                    _logger.LogDebug("Returning cached facet results for workspace {WorkspacePath}", workspacePath);
+                    return cached.Results;
+                }
+                else
+                {
+                    // Remove expired cache entry
+                    _facetCache.Remove(cacheKey);
+                }
+            }
             var taxonomyReader = await GetTaxonomyReaderAsync(workspacePath);
             var facetsCollector = new FacetsCollector();
             
             // Perform the search with facet collection
             var results = FacetsCollector.Search(searcher, query, maxResults, facetsCollector);
             
-            // Get facet results
-            var facets = new FastTaxonomyFacetCounts(taxonomyReader, _facetsConfig, facetsCollector);
+            // Get facet results - handle case where taxonomy is empty or mismatched
+            FastTaxonomyFacetCounts facets;
+            try
+            {
+                facets = new FastTaxonomyFacetCounts(taxonomyReader, _facetsConfig, facetsCollector);
+            }
+            catch (IndexOutOfRangeException ex)
+            {
+                _logger.LogWarning("Taxonomy appears empty or corrupted for workspace {WorkspacePath}, returning empty facets: {Error}", 
+                    workspacePath, ex.Message);
+                return new FacetResult[0];
+            }
             
             var facetResults = new List<FacetResult>();
             
@@ -295,13 +351,32 @@ public class MemoryFacetingService : IDisposable
             _logger.LogDebug("Retrieved {Count} facet results for workspace {WorkspacePath}", 
                 facetResults.Count, workspacePath);
             
-            return facetResults.ToArray();
+            var facetArray = facetResults.ToArray();
+            
+            // Cache the results
+            _facetCache[cacheKey] = (facetArray, DateTime.UtcNow);
+            
+            return facetArray;
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error performing faceted search for workspace {WorkspacePath}", workspacePath);
             return Array.Empty<FacetResult>();
         }
+    }
+    
+    /// <summary>
+    /// Invalidate facet cache for a workspace (call when memories are updated)
+    /// </summary>
+    public void InvalidateFacetCache(string workspacePath)
+    {
+        var keysToRemove = _facetCache.Keys.Where(k => k.StartsWith($"{workspacePath}:")).ToList();
+        foreach (var key in keysToRemove)
+        {
+            _facetCache.Remove(key);
+        }
+        _logger.LogDebug("Invalidated {Count} cached facet entries for workspace {WorkspacePath}", 
+            keysToRemove.Count, workspacePath);
     }
     
     /// <summary>

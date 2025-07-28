@@ -93,8 +93,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Apply sorting
             var sorted = ApplySorting(filtered, request);
             
-            // Calculate facets - using fallback for now, TODO: integrate with native faceting during search phase
-            result.FacetCounts = CalculateFacets(sorted);
+            // Calculate facets using native Lucene faceting on both project and local indices
+            result.FacetCounts = await CalculateCombinedFacetsAsync(request);
             
             // Apply pagination with bounds checking
             result.TotalFound = sorted.Count;
@@ -917,7 +917,21 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         {
             foreach (var (field, value) in request.Facets)
             {
-                var fieldName = $"field_{field}";
+                // Determine field name based on whether it's a native facet field or extended field
+                string fieldName;
+                var nativeFacetFields = new[] { "type", "status", "priority", "category", "is_shared", "files" };
+                
+                if (nativeFacetFields.Contains(field, StringComparer.OrdinalIgnoreCase))
+                {
+                    // Native facet fields are indexed directly
+                    fieldName = field.ToLowerInvariant();
+                }
+                else
+                {
+                    // Extended fields use the field_ prefix
+                    fieldName = $"field_{field}";
+                }
+                
                 booleanQuery.Add(new TermQuery(new Term(fieldName, value)), Occur.MUST);
             }
         }
@@ -1115,6 +1129,67 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             
             // Fallback to manual calculation if native faceting fails
             return new Dictionary<string, Dictionary<string, int>>();
+        }
+    }
+
+    private async Task<Dictionary<string, Dictionary<string, int>>> CalculateCombinedFacetsAsync(FlexibleMemorySearchRequest request)
+    {
+        var combinedFacets = new Dictionary<string, Dictionary<string, int>>();
+        
+        try
+        {
+            // Calculate facets from project memory index
+            var projectFacets = await CalculateFacetsFromIndexAsync(_projectMemoryWorkspace, request);
+            
+            // Calculate facets from local memory index  
+            var localFacets = await CalculateFacetsFromIndexAsync(_localMemoryWorkspace, request);
+            
+            // Merge the facet results
+            MergeFacetCounts(combinedFacets, projectFacets);
+            MergeFacetCounts(combinedFacets, localFacets);
+            
+            return combinedFacets;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calculating combined facets, returning empty facets");
+            return new Dictionary<string, Dictionary<string, int>>();
+        }
+    }
+
+    private async Task<Dictionary<string, Dictionary<string, int>>> CalculateFacetsFromIndexAsync(string workspacePath, FlexibleMemorySearchRequest request)
+    {
+        try
+        {
+            var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
+            if (searcher == null)
+            {
+                return new Dictionary<string, Dictionary<string, int>>();
+            }
+
+            var query = await BuildQueryAsync(request);
+            return await CalculateFacetsAsync(workspacePath, searcher, query);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calculating facets from index {WorkspacePath}", workspacePath);
+            return new Dictionary<string, Dictionary<string, int>>();
+        }
+    }
+
+    private void MergeFacetCounts(Dictionary<string, Dictionary<string, int>> target, Dictionary<string, Dictionary<string, int>> source)
+    {
+        foreach (var (facetName, facetValues) in source)
+        {
+            if (!target.ContainsKey(facetName))
+            {
+                target[facetName] = new Dictionary<string, int>();
+            }
+
+            foreach (var (value, count) in facetValues)
+            {
+                target[facetName][value] = target[facetName].GetValueOrDefault(value, 0) + count;
+            }
         }
     }
     
@@ -1517,6 +1592,10 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                         {
                             indexWriter.UpdateDocument(term, doc);
                         }
+                        
+                        // Invalidate facet cache for both workspaces since memories were updated
+                        _facetingService.InvalidateFacetCache(_projectMemoryWorkspace);
+                        _facetingService.InvalidateFacetCache(_localMemoryWorkspace);
                     }
                     
                     // Commit all changes
@@ -1602,11 +1681,17 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                     // Update existing memory
                     indexWriter.UpdateDocument(new Term("id", memory.Id), document);
                     _logger.LogDebug("Updated memory {MemoryId} of type {Type}", memory.Id, memory.Type);
+                    
+                    // Invalidate facet cache since memory was updated
+                    _facetingService.InvalidateFacetCache(workspace);
                 }
                 else
                 {
                     // Add new memory
                     indexWriter.AddDocument(document);
+                    
+                    // Invalidate facet cache since new memory was added
+                    _facetingService.InvalidateFacetCache(workspace);
                     _logger.LogDebug("Added new memory {MemoryId} of type {Type}", memory.Id, memory.Type);
                 }
                 
