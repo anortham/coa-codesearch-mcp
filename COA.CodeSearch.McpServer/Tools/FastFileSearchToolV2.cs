@@ -303,6 +303,12 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 }
             },
             results = results,
+            resultsSummary = new
+            {
+                included = results.Count,
+                total = data.Results.Count,
+                hasMore = data.Results.Count > results.Count
+            },
             insights = insights,
             actions = actions,
             meta = new
@@ -343,6 +349,7 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 summary = response.summary,
                 analysis = response.analysis,
                 results = response.results,
+                resultsSummary = response.resultsSummary,
                 insights = response.insights,
                 actions = response.actions,
                 meta = response.meta,
