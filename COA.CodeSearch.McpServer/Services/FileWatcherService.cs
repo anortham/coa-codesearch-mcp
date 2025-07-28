@@ -199,8 +199,14 @@ public class FileWatcherService : BackgroundService
         {
             var workspacePath = group.Key;
             
+            // Apply smart event coalescing to detect atomic writes
+            var coalescedEvents = CoalesceAtomicWrites(group.ToList());
+            
+            // Separate true deletes from updates/creates
+            var deletes = coalescedEvents.Where(c => c.ChangeType == FileChangeType.Deleted).ToList();
+            var updates = coalescedEvents.Where(c => c.ChangeType != FileChangeType.Deleted).ToList();
+            
             // Process deletes first (they're quick and don't require file access)
-            var deletes = group.Where(c => c.ChangeType == FileChangeType.Deleted).ToList();
             foreach (var delete in deletes)
             {
                 try
@@ -218,7 +224,6 @@ public class FileWatcherService : BackgroundService
             }
 
             // Process updates and creates
-            var updates = group.Where(c => c.ChangeType != FileChangeType.Deleted).ToList();
             foreach (var update in updates)
             {
                 try
@@ -235,6 +240,45 @@ public class FileWatcherService : BackgroundService
                 }
             }
         }
+    }
+    
+    /// <summary>
+    /// Coalesce atomic write operations (delete+create) into modifications
+    /// Many editors use atomic writes: delete original, create new with same name
+    /// </summary>
+    private List<FileChangeEvent> CoalesceAtomicWrites(List<FileChangeEvent> events)
+    {
+        var result = new List<FileChangeEvent>();
+        var eventsByFile = events.GroupBy(e => e.FilePath).ToList();
+        
+        foreach (var fileGroup in eventsByFile)
+        {
+            var fileEvents = fileGroup.ToList();
+            
+            // Look for delete followed by create/modify pattern (atomic write)
+            var hasDelete = fileEvents.Any(e => e.ChangeType == FileChangeType.Deleted);
+            var hasCreateOrModify = fileEvents.Any(e => e.ChangeType == FileChangeType.Created || e.ChangeType == FileChangeType.Modified);
+            
+            if (hasDelete && hasCreateOrModify)
+            {
+                // This looks like an atomic write - convert to a single modification
+                _logger.LogDebug("Detected atomic write for {FilePath}, converting delete+create to modification", fileGroup.Key);
+                
+                result.Add(new FileChangeEvent
+                {
+                    WorkspacePath = fileEvents.First().WorkspacePath,
+                    FilePath = fileGroup.Key,
+                    ChangeType = FileChangeType.Modified
+                });
+            }
+            else
+            {
+                // No atomic write pattern detected, keep all events
+                result.AddRange(fileEvents);
+            }
+        }
+        
+        return result;
     }
     
     private async Task NotifySubscribersAsync(FileChangeEvent changeEvent, CancellationToken cancellationToken)
