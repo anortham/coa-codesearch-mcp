@@ -377,8 +377,10 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         var actions = GenerateSearchActions(query, searchType, results, totalHits, hotspots, 
             byExtension.ToDictionary(kvp => kvp.Key, kvp => (dynamic)kvp.Value), mode);
 
-        // Determine how many results to include inline based on token budget and mode
-        const int maxInlineResults = 20;
+        // Determine how many results to include inline based on token budget, mode, and context
+        // Token-aware result limiting: with context lines, fewer results to stay under token limits
+        var hasContext = results.Any(r => r.Context?.Any() == true);
+        var maxInlineResults = hasContext ? 5 : 10; // Fewer results when including context
         var includeResults = mode == ResponseMode.Full || results.Count <= maxInlineResults;
         var inlineResults = includeResults ? results : results.Take(maxInlineResults).ToList();
         
@@ -403,19 +405,19 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 truncated = totalHits > results.Count
             },
             // Include actual results for immediate AI agent use
+            // Use consistent field names with file_search for AI agent consistency
             results = inlineResults.Select(r => new
             {
-                filePath = r.FilePath,
-                relativePath = r.RelativePath,
-                fileName = r.FileName,
-                extension = r.Extension,
-                score = r.Score,
-                context = r.Context?.Select(c => new
+                file = r.FileName,
+                path = r.RelativePath,
+                score = Math.Round(r.Score, 2),
+                // Only include context if it exists to manage token usage
+                context = r.Context?.Any() == true ? r.Context.Select(c => new
                 {
-                    lineNumber = c.LineNumber,
+                    line = c.LineNumber,
                     content = c.Content,
-                    isMatch = c.IsMatch
-                }).ToList()
+                    match = c.IsMatch
+                }).ToList() : null
             }).ToList(),
             resultsSummary = new
             {
