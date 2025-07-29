@@ -676,6 +676,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             string.Join(" ", memory.FilesInvolved)
         };
         
+        // Debug logging for tests
+        System.Diagnostics.Debug.WriteLine($"BuildSearchableContent: Content='{memory.Content}', Type='{memory.Type}', Files=[{string.Join(",", memory.FilesInvolved)}]");
+        
         // Add string values from extended fields
         foreach (var (key, value) in memory.Fields)
         {
@@ -695,7 +698,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             }
         }
         
-        return string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        var result = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
+        System.Diagnostics.Debug.WriteLine($"BuildSearchableContent result: '{result}'");
+        return result;
     }
     
     private async Task<List<FlexibleMemoryEntry>> SearchIndexAsync(string workspacePath, FlexibleMemorySearchRequest request, bool isShared)
