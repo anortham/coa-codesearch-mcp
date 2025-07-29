@@ -244,10 +244,15 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
         // Extension insights
         if (data.extensionGroups.Count > 0)
         {
-            var extensionGroups = (Dictionary<string, dynamic>)data.extensionGroups;
-            var topExt = extensionGroups.OrderByDescending(kv => kv.Value.totalSize).First();
-            var percentage = (double)topExt.Value.totalSize / statistics.TotalSize * 100;
-            insights.Add($"{topExt.Key} files account for {percentage:F1}% of total size");
+            // Cast results to proper type to avoid dynamic issues
+            List<FileSizeResult> sizeResults = data.results;
+            var firstExt = sizeResults
+                .GroupBy(r => r.Extension)
+                .Select(g => new { Extension = g.Key, TotalSize = g.Sum(r => r.FileSize) })
+                .OrderByDescending(x => x.TotalSize)
+                .First();
+            var percentage = (double)firstExt.TotalSize / statistics.TotalSize * 100;
+            insights.Add($"{firstExt.Extension} files account for {percentage:F1}% of total size");
         }
 
         // Directory concentration
@@ -377,10 +382,12 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                         Parameters = new Dictionary<string, object>
                         {
                             ["workspacePath"] = data.workspacePath,
-                            ["focusExtensions"] = ((Dictionary<string, dynamic>)data.extensionGroups)
-                                .OrderByDescending(kv => kv.Value.totalSize)
+                            ["focusExtensions"] = ((List<FileSizeResult>)data.results)
+                                .GroupBy(r => r.Extension)
+                                .Select(g => new { Extension = g.Key, TotalSize = g.Sum(r => r.FileSize) })
+                                .OrderByDescending(x => x.TotalSize)
                                 .Take(3)
-                                .Select(kv => kv.Key)
+                                .Select(x => x.Extension)
                                 .ToList()
                         }
                     },
