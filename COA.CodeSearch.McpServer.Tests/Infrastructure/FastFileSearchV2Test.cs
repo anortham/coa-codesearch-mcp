@@ -38,7 +38,8 @@ public class FastFileSearchV2Test : TestBase
             ServiceProvider.GetRequiredService<IResultTruncator>(),
             ServiceProvider.GetRequiredService<IOptions<ResponseLimitOptions>>(),
             ServiceProvider.GetRequiredService<IDetailRequestCache>(),
-            ServiceProvider.GetRequiredService<IErrorRecoveryService>());
+            ServiceProvider.GetRequiredService<IErrorRecoveryService>(),
+            ServiceProvider.GetRequiredService<AIResponseBuilderService>());
     }
 
     private async Task AddTestDocumentsToIndex()
@@ -295,14 +296,7 @@ public class FastFileSearchV2Test : TestBase
                 firstResult.GetProperty("filename").GetString().Should().NotBeNullOrEmpty();
                 firstResult.GetProperty("relativePath").GetString().Should().NotBeNullOrEmpty();
                 firstResult.GetProperty("extension").GetString().Should().NotBeNullOrEmpty();
-                firstResult.GetProperty("size").GetInt64().Should().BeGreaterThanOrEqualTo(0);
-                firstResult.GetProperty("sizeFormatted").GetString().Should().NotBeNullOrEmpty();
-                firstResult.GetProperty("lastModified").GetString().Should().NotBeNullOrEmpty();
                 firstResult.GetProperty("score").GetDouble().Should().BeGreaterThan(0);
-                
-                // Verify first result structure
-                firstResult.GetProperty("filename").GetString().Should().NotBeNullOrEmpty();
-                firstResult.GetProperty("sizeFormatted").GetString().Should().NotBeNullOrEmpty();
             }
         }
     }

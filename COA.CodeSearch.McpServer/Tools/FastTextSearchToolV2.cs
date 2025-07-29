@@ -39,6 +39,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private readonly IScoringService? _scoringService;
     private readonly IResultConfidenceService? _resultConfidenceService;
+    private readonly AIResponseBuilderService _aiResponseBuilder;
 
     public FastTextSearchToolV2(
         ILogger<FastTextSearchToolV2> logger,
@@ -53,6 +54,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         IFieldSelectorService fieldSelectorService,
         IStreamingResultService streamingResultService,
         IErrorRecoveryService errorRecoveryService,
+        AIResponseBuilderService aiResponseBuilder,
         IContextAwarenessService? contextAwarenessService = null,
         SearchResultResourceProvider? searchResultResourceProvider = null,
         IScoringService? scoringService = null,
@@ -70,6 +72,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _searchResultResourceProvider = searchResultResourceProvider;
         _scoringService = scoringService;
         _resultConfidenceService = resultConfidenceService;
+        _aiResponseBuilder = aiResponseBuilder;
     }
 
     public async Task<object> ExecuteAsync(
@@ -98,27 +101,46 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             // Validate input
             if (string.IsNullOrWhiteSpace(query))
             {
-                return UnifiedToolResponse<object>.CreateError(
-                    ErrorCodes.VALIDATION_ERROR,
-                    "Search query cannot be empty",
-                    _errorRecoveryService.GetValidationErrorRecovery("searchQuery", "non-empty string"));
+                return new
+                {
+                    success = false,
+                    error = new
+                    {
+                        code = ErrorCodes.VALIDATION_ERROR,
+                        message = "Search query cannot be empty",
+                        recovery = _errorRecoveryService.GetValidationErrorRecovery("searchQuery", "non-empty string")
+                    }
+                };
             }
 
             if (string.IsNullOrWhiteSpace(workspacePath))
             {
-                return UnifiedToolResponse<object>.CreateError(
-                    ErrorCodes.VALIDATION_ERROR,
-                    "Workspace path cannot be empty",
-                    _errorRecoveryService.GetValidationErrorRecovery("workspacePath", "absolute directory path"));
+                return new
+                {
+                    success = false,
+                    error = new
+                    {
+                        code = ErrorCodes.VALIDATION_ERROR,
+                        message = "Workspace path cannot be empty",
+                        recovery = _errorRecoveryService.GetValidationErrorRecovery("workspacePath",
+                            "absolute directory path")
+                    }
+                };
             }
 
             // Ensure the directory is indexed first
             if (!await EnsureIndexedAsync(workspacePath, cancellationToken))
             {
-                return UnifiedToolResponse<object>.CreateError(
-                    ErrorCodes.INDEX_NOT_FOUND,
-                    $"No search index exists for {workspacePath}",
-                    _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath));
+                return new
+                {
+                    success = false,
+                    error = new
+                    {
+                        code = ErrorCodes.INDEX_NOT_FOUND,
+                        message = $"No search index exists for {workspacePath}",
+                        recovery = _errorRecoveryService.GetIndexNotFoundRecovery(workspacePath)
+                    }
+                };
             }
 
             // Get the searcher
@@ -160,40 +182,139 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             
             var results = await ProcessSearchResultsAsync(searcher, topDocs, query, contextLines, effectiveMaxResults, cancellationToken);
 
-            // Create AI-optimized response
-            return await CreateAiOptimizedResponse(query, searchType, workspacePath, results, topDocs.TotalHits, filePattern, extensions, mode, cancellationToken);
+            // Get project context and check for alternate results
+            var projectContext = await GetProjectContextAsync(workspacePath);
+            long? alternateHits = null;
+            Dictionary<string, int>? alternateExtensions = null;
+            
+            if (topDocs.TotalHits == 0 && (filePattern != null || extensions?.Length > 0))
+            {
+                var (altHits, altExts) = await CheckAlternateSearchResults(query, workspacePath, searchType, caseSensitive, cancellationToken);
+                if (altHits > 0)
+                {
+                    alternateHits = altHits;
+                    alternateExtensions = altExts;
+                }
+            }
+
+            // Convert SearchResult to TextSearchResult for AIResponseBuilder
+            var textSearchResults = results.Select(r => new TextSearchResult
+            {
+                FilePath = r.FilePath,
+                FileName = r.FileName,
+                RelativePath = r.RelativePath,
+                Extension = r.Extension,
+                Language = r.Language,
+                Score = r.Score,
+                Context = r.Context?.Select(c => new TextSearchContextLine
+                {
+                    LineNumber = c.LineNumber,
+                    Content = c.Content,
+                    IsMatch = c.IsMatch
+                }).ToList()
+            }).ToList();
+
+            // Create AI-optimized response using the service
+            var response = _aiResponseBuilder.BuildTextSearchResponse(
+                query, searchType, workspacePath, textSearchResults, topDocs.TotalHits,
+                filePattern, extensions, mode, projectContext, alternateHits, alternateExtensions);
+
+            // Store search results as a resource if provider is available
+            if (_searchResultResourceProvider != null && results.Count > 0)
+            {
+                var resourceUri = _searchResultResourceProvider.StoreSearchResult(
+                    query, 
+                    new
+                    {
+                        results = results,
+                        query = ((dynamic)response).query,
+                        summary = ((dynamic)response).summary,
+                        distribution = ((dynamic)response).distribution,
+                        hotspots = ((dynamic)response).hotspots,
+                        insights = ((dynamic)response).insights
+                    },
+                    new
+                    {
+                        searchType = searchType,
+                        workspacePath = workspacePath,
+                        timestamp = DateTime.UtcNow
+                    });
+
+                // Add resource URI to response
+                var dynamicResponse = (dynamic)response;
+                var enhancedResponse = new
+                {
+                    success = dynamicResponse.success,
+                    operation = dynamicResponse.operation,
+                    query = dynamicResponse.query,
+                    summary = dynamicResponse.summary,
+                    results = dynamicResponse.results,
+                    resultsSummary = dynamicResponse.resultsSummary,
+                    distribution = dynamicResponse.distribution,
+                    hotspots = dynamicResponse.hotspots,
+                    insights = dynamicResponse.insights,
+                    actions = dynamicResponse.actions,
+                    meta = dynamicResponse.meta,
+                    resourceUri = resourceUri
+                };
+                return enhancedResponse;
+            }
+
+            return response;
         }
         catch (CircuitBreakerOpenException cbEx)
         {
             Logger.LogWarning(cbEx, "Circuit breaker is open for text search");
-            return UnifiedToolResponse<object>.CreateError(
-                ErrorCodes.CIRCUIT_BREAKER_OPEN,
-                cbEx.Message,
-                _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName));
+            return new
+            {
+                success = false,
+                error = new
+                {
+                    code = ErrorCodes.CIRCUIT_BREAKER_OPEN,
+                    message = cbEx.Message,
+                    recovery = _errorRecoveryService.GetCircuitBreakerOpenRecovery(cbEx.OperationName)
+                }
+            };
         }
         catch (DirectoryNotFoundException dnfEx)
         {
             Logger.LogError(dnfEx, "Directory not found for text search");
-            return UnifiedToolResponse<object>.CreateError(
-                ErrorCodes.DIRECTORY_NOT_FOUND,
-                dnfEx.Message,
-                _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath));
+            return new
+            {
+                success = false,
+                error = new
+                {
+                    code = ErrorCodes.DIRECTORY_NOT_FOUND,
+                    message = dnfEx.Message,
+                    recovery = _errorRecoveryService.GetDirectoryNotFoundRecovery(workspacePath)
+                }
+            };
         }
         catch (UnauthorizedAccessException uaEx)
         {
             Logger.LogError(uaEx, "Permission denied for text search");
-            return UnifiedToolResponse<object>.CreateError(
-                ErrorCodes.PERMISSION_DENIED,
-                $"Permission denied accessing {workspacePath}: {uaEx.Message}",
-                null);
+            return new
+            {
+                success = false,
+                error = new
+                {
+                    code = ErrorCodes.PERMISSION_DENIED,
+                    message = $"Permission denied accessing {workspacePath}: {uaEx.Message}"
+                }
+            };
         }
         catch (Exception ex)
         {
             Logger.LogError(ex, "Error executing fast text search");
-            return UnifiedToolResponse<object>.CreateError(
-                ErrorCodes.INTERNAL_ERROR,
-                $"Search failed: {ex.Message}",
-                null);
+            return new
+            {
+                success = false,
+                error = new
+                {
+                    code = ErrorCodes.INTERNAL_ERROR,
+                    message = $"Search failed: {ex.Message}"
+                }
+            };
         }
     }
 
