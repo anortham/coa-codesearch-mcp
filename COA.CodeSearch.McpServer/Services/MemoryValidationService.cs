@@ -51,11 +51,11 @@ public class MemoryValidationService : IMemoryValidationService
     private const int MaxCustomFieldValueLength = 1000;
     
     // Reserved field names that cannot be used in custom fields
+    // Only core system fields that would break the memory storage structure
     private static readonly HashSet<string> ReservedFieldNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "id", "type", "content", "created", "modified", "lastaccessed", "accesscount",
-        "sessionid", "isshared", "filesinvolved", "fields", "archived", "expires",
-        "priority", "status", "tags", "workspace", "author", "version"
+        "sessionid", "isshared", "filesinvolved", "fields"
     };
     
     // Allowed file path patterns (basic security check)
