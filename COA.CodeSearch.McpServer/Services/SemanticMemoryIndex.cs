@@ -29,18 +29,18 @@ public class SemanticMemoryIndex
     /// <summary>
     /// Index a memory for semantic search
     /// </summary>
-    public async Task IndexMemoryAsync(FlexibleMemoryEntry memory)
+    public async Task IndexMemoryAsync(FlexibleMemoryEntry memory, bool isBulkOperation = false)
     {
         try
         {
             // Create searchable content by combining relevant fields
             var searchableContent = CreateSearchableContent(memory);
-            _logger.LogInformation("Created searchable content for memory {Id}: {Content}", 
+            _logger.LogDebug("Created searchable content for memory {Id}: {Content}", 
                 memory.Id, searchableContent.Substring(0, Math.Min(100, searchableContent.Length)));
             
             // Generate embedding
             var embedding = await _embeddingService.GetEmbeddingAsync(searchableContent);
-            _logger.LogInformation("Generated embedding for memory {Id} with {Dimensions} dimensions", 
+            _logger.LogDebug("Generated embedding for memory {Id} with {Dimensions} dimensions", 
                 memory.Id, embedding.Length);
             
             // Create metadata for filtering and context
@@ -70,8 +70,17 @@ public class SemanticMemoryIndex
             // Store in vector index
             await _vectorIndex.AddAsync(memory.Id, embedding, metadata);
             
-            _logger.LogInformation("Successfully stored memory {Id} in vector index with metadata keys: {Keys}", 
-                memory.Id, string.Join(", ", metadata.Keys));
+            // Use DEBUG level for bulk operations to reduce log noise, INFO for individual operations
+            if (isBulkOperation)
+            {
+                _logger.LogDebug("Successfully stored memory {Id} in vector index with metadata keys: {Keys}", 
+                    memory.Id, string.Join(", ", metadata.Keys));
+            }
+            else
+            {
+                _logger.LogInformation("Successfully stored memory {Id} in vector index with metadata keys: {Keys}", 
+                    memory.Id, string.Join(", ", metadata.Keys));
+            }
         }
         catch (Exception ex)
         {
@@ -140,7 +149,7 @@ public class SemanticMemoryIndex
     /// </summary>
     public async Task UpdateMemoryIndexAsync(FlexibleMemoryEntry memory)
     {
-        await IndexMemoryAsync(memory); // Vector index handles updates as AddOrUpdate
+        await IndexMemoryAsync(memory, isBulkOperation: false); // Vector index handles updates as AddOrUpdate
     }
 
     /// <summary>
@@ -205,7 +214,7 @@ public class SemanticMemoryIndex
         var memoryList = memories.ToList();
         _logger.LogInformation("Starting bulk indexing of {Count} memories", memoryList.Count);
 
-        var tasks = memoryList.Select(IndexMemoryAsync);
+        var tasks = memoryList.Select(memory => IndexMemoryAsync(memory, isBulkOperation: true));
         await Task.WhenAll(tasks);
 
         _logger.LogInformation("Completed bulk indexing of {Count} memories", memoryList.Count);
