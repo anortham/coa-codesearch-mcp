@@ -207,7 +207,8 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
             // Top terms insight
             if (data.topTerms != null && data.topTerms.Count > 0)
             {
-                var termList = string.Join(", ", data.topTerms.Take(5));
+                List<string> terms = data.topTerms;
+                var termList = string.Join(", ", terms.Take(5));
                 insights.Add($"Key terms: {termList}");
             }
         }

@@ -282,7 +282,7 @@ public class AIResponseBuilderService
             return new FileSizeResult
             {
                 FileName = d.filename,
-                RelativePath = d.relativePath,
+                RelativePath = d.relativePath ?? d.path ?? "",
                 Extension = d.extension,
                 FileSize = (long)d.size
             };
