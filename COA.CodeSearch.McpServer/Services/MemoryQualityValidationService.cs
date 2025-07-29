@@ -38,7 +38,7 @@ public class MemoryQualityValidationService : IMemoryQualityValidator
                 try
                 {
                     var result = await validator.ValidateAsync(memory, options);
-                    return new { validator.Name, validator.Weight, Result = result };
+                    return new { validator.Name, validator.Weight, Result = (QualityValidatorResult?)result };
                 }
                 catch (Exception ex)
                 {
@@ -125,7 +125,7 @@ public class MemoryQualityValidationService : IMemoryQualityValidator
             SessionId = memory.SessionId,
             IsShared = memory.IsShared,
             FilesInvolved = memory.FilesInvolved,
-            Fields = memory.Fields?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+            Fields = memory.Fields?.ToDictionary(kvp => kvp.Key, kvp => kvp.Value) ?? new Dictionary<string, JsonElement>(),
             // Archived = memory.Archived,  // Property doesn't exist
             // Expires = memory.Expires     // Property doesn't exist
         };
