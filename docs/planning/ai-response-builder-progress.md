@@ -67,12 +67,12 @@ This document tracks the progress of implementing the AIResponseBuilderService t
 |------|--------|-------|
 | FastTextSearchToolV2 | ✅ Complete | Using AIResponseBuilderService |
 | FastFileSearchToolV2 | ✅ Complete | Using AIResponseBuilderService |
+| BatchOperationsToolV2 | ✅ Complete | Using AIResponseBuilderService |
+| FastDirectorySearchTool | ✅ Complete | Using AIResponseBuilderService (BuildDirectorySearchResponse) |
 
 ### Pending Tools
 | Tool | Priority | Work Required |
-|------|----------|---------------|
-| BatchOperationsToolV2 | Medium | Needs AIResponseBuilderService integration |
-| DirectorySearchToolV2 | Medium | Needs response builder method |
+|------|----------|-------------|
 | SimilarFilesToolV2 | Medium | Needs response builder method |
 | RecentFilesToolV2 | Medium | Needs response builder method |
 | FileSizeAnalysisToolV2 | Low | Needs response builder method |
@@ -85,6 +85,7 @@ This document tracks the progress of implementing the AIResponseBuilderService t
 | MemoryAnalyzer unit tests | Medium | Not started |
 | Performance benchmarks | Medium | Not started |
 | ~~System.Text.Json POC~~ | ~~High~~ | CANCELLED - Dynamic is 92x faster |
+| Test all integrated tools | High | Pending - wait until all tools integrated |
 
 ## Key Technical Decisions
 
@@ -113,11 +114,18 @@ This document tracks the progress of implementing the AIResponseBuilderService t
 }
 ```
 
+### 6. FastDirectorySearchTool Integration
+- ✅ Successfully integrated with AIResponseBuilderService
+- ✅ Implemented BuildDirectorySearchResponse method
+- ✅ Added support for grouped and non-grouped results
+- ✅ Included directory-specific insights (depth analysis, structure patterns)
+- ✅ Created contextual actions for directory exploration
+
 ## Next Steps
 
 ### Immediate (This Week)
-1. Implement BatchOperationsToolV2 integration with AIResponseBuilderService
-2. Create BuildBatchOperationsResponse method
+1. Integrate SimilarFilesToolV2 with AIResponseBuilderService
+2. Create BuildSimilarFilesResponse method
 3. Write MemoryAnalyzer unit tests
 
 ### Short Term (Next Week)

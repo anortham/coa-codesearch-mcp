@@ -1522,6 +1522,314 @@ public class AIResponseBuilderService
 
     #endregion
 
+    #region Directory Search Implementation
+
+    /// <summary>
+    /// Build AI-optimized response for directory search results
+    /// </summary>
+    public object BuildDirectorySearchResponse(
+        string query,
+        string? searchType,
+        string workspacePath,
+        List<dynamic> results,
+        double searchDurationMs,
+        ResponseMode mode,
+        bool groupByDirectory,
+        long totalHits)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Generate insights
+        var insights = GenerateDirectorySearchInsights(results, query, searchDurationMs, totalHits);
+
+        // Extract distribution data from results if grouped
+        Dictionary<string, int> extensionCounts = new Dictionary<string, int>();
+        Dictionary<string, int> depthDistribution = new Dictionary<string, int>();
+        List<object> hotspots = new List<object>();
+
+        if (groupByDirectory && results.Any())
+        {
+            foreach (var result in results)
+            {
+                // Count by depth
+                int depth = result.depth;
+                var depthKey = $"level_{depth}";
+                if (!depthDistribution.ContainsKey(depthKey))
+                    depthDistribution[depthKey] = 0;
+                depthDistribution[depthKey]++;
+
+                // Extract file types if available
+                if (result.fileTypes != null)
+                {
+                    foreach (string ext in result.fileTypes)
+                    {
+                        if (!extensionCounts.ContainsKey(ext))
+                            extensionCounts[ext] = 0;
+                        extensionCounts[ext]++;
+                    }
+                }
+
+                // Find hotspots (directories with many files)
+                if (result.fileCount > 10)
+                {
+                    hotspots.Add(new
+                    {
+                        path = result.relativePath,
+                        fileCount = result.fileCount,
+                        fileTypes = result.fileTypes
+                    });
+                }
+            }
+
+            // Sort hotspots by file count
+            hotspots = hotspots
+                .OrderByDescending(h => ((dynamic)h).fileCount)
+                .Take(5)
+                .ToList();
+        }
+
+        // Generate actions
+        var actions = GenerateDirectorySearchActions(query, searchType, results, groupByDirectory, mode);
+
+        // Prepare results based on mode
+        var resultsToInclude = mode == ResponseMode.Full 
+            ? results
+            : results.Take(20).ToList();
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "directory_search",
+            query = new
+            {
+                text = query,
+                type = searchType ?? "standard",
+                workspace = Path.GetFileName(workspacePath),
+                grouped = groupByDirectory
+            },
+            summary = new
+            {
+                totalFound = totalHits,
+                returnedDirectories = results.Count,
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 20 ? "excellent" : searchDurationMs < 50 ? "fast" : "normal",
+                averageDepth = results.Any() ? results.Average(r => (double)r.depth) : 0
+            },
+            analysis = new
+            {
+                patterns = AnalyzeDirectorySearchPatterns(results, extensionCounts, depthDistribution).Take(3).ToList(),
+                distribution = new
+                {
+                    byDepth = depthDistribution,
+                    byFileTypes = extensionCounts
+                        .OrderByDescending(kv => kv.Value)
+                        .Take(5)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value)
+                },
+                hotspots = new
+                {
+                    largeFolders = hotspots
+                }
+            },
+            results = resultsToInclude,
+            resultsSummary = new
+            {
+                included = resultsToInclude.Count,
+                total = results.Count,
+                hasMore = results.Count > resultsToInclude.Count
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                truncated = false,
+                tokens = EstimateDirectorySearchResponseTokens(results),
+                cached = GenerateCacheKey("dirsearch")
+            }
+        };
+
+        return response;
+    }
+
+    private List<string> GenerateDirectorySearchInsights(List<dynamic> results, string query, double searchDurationMs, long totalHits)
+    {
+        var insights = new List<string>();
+
+        // Basic result insight
+        if (results.Count == 0)
+        {
+            insights.Add($"No directories matching '{query}'");
+            insights.Add("Try fuzzy or wildcard search for approximate matches");
+        }
+        else
+        {
+            insights.Add($"Found {results.Count} directories in {searchDurationMs:F0}ms");
+        }
+
+        // Performance insight
+        if (searchDurationMs < 20)
+        {
+            insights.Add("⚡ Excellent search performance");
+        }
+
+        // Structure insights
+        if (results.Any())
+        {
+            var avgDepth = results.Average(r => (double)r.depth);
+            if (avgDepth > 3)
+            {
+                insights.Add($"Deep directory structure detected (avg depth: {avgDepth:F1})");
+            }
+
+            // Check for common patterns
+            var hasTestDirs = results.Any(r => ((string)r.directoryName).Contains("test", StringComparison.OrdinalIgnoreCase));
+            var hasSrcDirs = results.Any(r => ((string)r.directoryName).Contains("src", StringComparison.OrdinalIgnoreCase));
+            
+            if (hasTestDirs && hasSrcDirs)
+            {
+                insights.Add("Project follows standard src/test structure");
+            }
+        }
+
+        return insights;
+    }
+
+    private List<object> GenerateDirectorySearchActions(
+        string query,
+        string? searchType,
+        List<dynamic> results,
+        bool groupByDirectory,
+        ResponseMode mode)
+    {
+        var actions = new List<object>();
+
+        // Navigate to directory action
+        if (results.Any())
+        {
+            var topResult = results.First();
+            actions.Add(new
+            {
+                id = "explore_directory",
+                cmd = new { operation = "ls", path = topResult.path },
+                tokens = 200,
+                priority = "recommended"
+            });
+
+            // Search within directory
+            actions.Add(new
+            {
+                id = "search_in_directory",
+                cmd = new
+                {
+                    operation = "text_search",
+                    workspacePath = topResult.path,
+                    query = "*"
+                },
+                tokens = 1500,
+                priority = "available"
+            });
+        }
+
+        // Alternative search suggestions
+        if (results.Count == 0)
+        {
+            if (searchType != "fuzzy")
+            {
+                actions.Add(new
+                {
+                    id = "try_fuzzy_search",
+                    cmd = new { query = $"{query}~", searchType = "fuzzy" },
+                    tokens = 200,
+                    priority = "recommended"
+                });
+            }
+
+            if (searchType != "wildcard")
+            {
+                actions.Add(new
+                {
+                    id = "try_wildcard_search",
+                    cmd = new { query = $"*{query}*", searchType = "wildcard" },
+                    tokens = 200,
+                    priority = "recommended"
+                });
+            }
+        }
+
+        // Group/ungroup toggle
+        if (results.Count > 0)
+        {
+            actions.Add(new
+            {
+                id = groupByDirectory ? "show_files" : "group_directories",
+                cmd = new
+                {
+                    query = query,
+                    groupByDirectory = !groupByDirectory
+                },
+                tokens = 500,
+                priority = "available"
+            });
+        }
+
+        return actions;
+    }
+
+    private List<string> AnalyzeDirectorySearchPatterns(
+        List<dynamic> results,
+        Dictionary<string, int> extensionCounts,
+        Dictionary<string, int> depthDistribution)
+    {
+        var patterns = new List<string>();
+
+        if (results.Count == 0)
+        {
+            patterns.Add("No matches found - check spelling or use fuzzy search");
+        }
+        else if (results.Count == 1)
+        {
+            patterns.Add("Single directory match - precise search result");
+        }
+        else if (results.Count >= 20)
+        {
+            patterns.Add("Many directory matches - consider refining search");
+        }
+
+        // Depth patterns
+        if (depthDistribution.Any())
+        {
+            var mostCommonDepth = depthDistribution.OrderByDescending(kv => kv.Value).First();
+            patterns.Add($"Most directories at {mostCommonDepth.Key.Replace("level_", "depth ")}");
+        }
+
+        // File type patterns
+        if (extensionCounts.Count > 0)
+        {
+            var dominantType = extensionCounts.OrderByDescending(kv => kv.Value).First();
+            patterns.Add($"Directories contain mostly {dominantType.Key} files");
+        }
+
+        return patterns;
+    }
+
+    private int EstimateDirectorySearchResponseTokens(List<dynamic> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 200;
+        
+        // Per result tokens (directories tend to have more metadata)
+        var perResultTokens = 40;
+        
+        // Additional for statistics
+        var statsTokens = 150;
+        
+        return baseTokens + (results.Count * perResultTokens) + statsTokens;
+    }
+
+    #endregion
+
     #region Text Search Implementation
 
     private List<string> GenerateTextSearchInsights(
