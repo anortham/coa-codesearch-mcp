@@ -349,15 +349,13 @@ public class UnifiedMemoryService
             if (searchMode == SearchMode.Semantic && _semanticSearchTool != null)
             {
                 // Use semantic search for conceptual queries
-                var semanticResult = await _semanticSearchTool.ExecuteAsync(
-                    command.Content,
-                    maxResults: 20,
-                    threshold: 0.2f,
-                    memoryType: null,
-                    isShared: null,
-                    customFilters: null,
-                    cancellationToken
-                );
+                var semanticResult = await _semanticSearchTool.ExecuteAsync(new SemanticSearchParams
+                {
+                    Query = command.Content,
+                    MaxResults = 20,
+                    Threshold = 0.2f,
+                    MemoryType = null
+                });
                 
                 if (semanticResult is JsonElement jsonResult && 
                     jsonResult.TryGetProperty("success", out var success) && success.GetBoolean() &&
@@ -377,18 +375,16 @@ public class UnifiedMemoryService
             else if (searchMode == SearchMode.Hybrid && _hybridSearchTool != null)
             {
                 // Use hybrid search for balanced results
-                var hybridResult = await _hybridSearchTool.ExecuteAsync(
-                    command.Content,
-                    maxResults: 20,
-                    luceneWeight: 0.6f,
-                    semanticWeight: 0.4f,
-                    semanticThreshold: 0.2f,
-                    mergeStrategy: "Linear",
-                    bothFoundBoost: 1.2f,
-                    luceneFilters: null,
-                    semanticFilters: null,
-                    cancellationToken
-                );
+                var hybridResult = await _hybridSearchTool.ExecuteAsync(new HybridSearchParams
+                {
+                    Query = command.Content,
+                    MaxResults = 20,
+                    LuceneWeight = 0.6f,
+                    SemanticWeight = 0.4f,
+                    SemanticThreshold = 0.2f,
+                    MergeStrategy = MergeStrategy.Linear,
+                    BothFoundBoost = 1.2f
+                });
                 
                 if (hybridResult is JsonElement jsonResult && 
                     jsonResult.TryGetProperty("success", out var success) && success.GetBoolean() &&
@@ -523,10 +519,10 @@ public class UnifiedMemoryService
             }
 
             // First, try to find memories by the descriptions
-            var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, maxResults: 1);
-            var targetMemories = await _memoryTools.SearchMemoriesAsync(target, maxResults: 1);
+            var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, null, null, null, null, true, 1);
+            var targetMemories = await _memoryTools.SearchMemoriesAsync(target, null, null, null, null, true, 1);
 
-            if (!sourceMemories.Success || sourceMemories.Memories == null || !sourceMemories.Memories.Any())
+            if (sourceMemories.Memories == null || !sourceMemories.Memories.Any())
             {
                 return new UnifiedMemoryResult
                 {
@@ -536,7 +532,7 @@ public class UnifiedMemoryService
                 };
             }
 
-            if (!targetMemories.Success || targetMemories.Memories == null || !targetMemories.Memories.Any())
+            if (targetMemories.Memories == null || !targetMemories.Memories.Any())
             {
                 return new UnifiedMemoryResult
                 {
@@ -583,7 +579,7 @@ public class UnifiedMemoryService
                 Success = true,
                 Action = "connected",
                 Message = $"Connected '{sourceMemory.Content.Substring(0, Math.Min(50, sourceMemory.Content.Length))}...' to '{targetMemory.Content.Substring(0, Math.Min(50, targetMemory.Content.Length))}...' with relationship '{relationshipType}'",
-                Memories = new[] { sourceMemory, targetMemory },
+                Memories = new List<FlexibleMemoryEntry> { sourceMemory, targetMemory },
                 NextSteps = new List<ActionSuggestion>
                 {
                     new ActionSuggestion
@@ -712,7 +708,8 @@ public class UnifiedMemoryService
                 depth,
                 filterTypes,
                 includeOrphans: false,
-                responseMode: ResponseMode.Summary,
+                mode: ResponseMode.Summary,
+                detailRequest: null,
                 cancellationToken
             );
 
@@ -721,7 +718,7 @@ public class UnifiedMemoryService
             {
                 if (jsonResult.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
                 {
-                    var message = jsonResult.TryGetProperty("message", out var msgProp) 
+                    var errorMessage = jsonResult.TryGetProperty("message", out var msgProp) 
                         ? msgProp.GetString() 
                         : "Failed to explore memory graph";
                     
@@ -729,7 +726,7 @@ public class UnifiedMemoryService
                     {
                         Success = false,
                         Action = "explore_failed",
-                        Message = message
+                        Message = errorMessage
                     };
                 }
 
@@ -1386,7 +1383,7 @@ public class UnifiedMemoryService
                 {
                     Success = false,
                     Action = "backup_failed",
-                    Message = backupResult.Message ?? "Failed to backup memories"
+                    Message = backupResult.Error ?? "Backup failed" ?? "Failed to backup memories"
                 };
             }
 
@@ -1394,11 +1391,11 @@ public class UnifiedMemoryService
             {
                 Success = true,
                 Action = "backed_up",
-                Message = $"Backed up {backupResult.BackupCount} memories to {backupResult.BackupFile}",
+                Message = $"Backed up {backupResult.DocumentsBackedUp} memories to {backupResult.BackupPath}",
                 Metadata = new Dictionary<string, object>
                 {
-                    ["backupFile"] = backupResult.BackupFile ?? "",
-                    ["memoryCount"] = backupResult.BackupCount,
+                    ["backupFile"] = backupResult.BackupPath ?? "",
+                    ["memoryCount"] = backupResult.DocumentsBackedUp,
                     ["includesLocal"] = includeLocal
                 },
                 NextSteps = new List<ActionSuggestion>
@@ -1407,7 +1404,7 @@ public class UnifiedMemoryService
                     {
                         Id = "commit_backup",
                         Description = "Commit backup file to git",
-                        Command = $"git add {backupResult.BackupFile} && git commit -m \"Backup project memories\"",
+                        Command = $"git add {backupResult.BackupPath} && git commit -m \"Backup project memories\"",
                         Priority = "high",
                         Category = "version_control"
                     },
@@ -1415,7 +1412,7 @@ public class UnifiedMemoryService
                     {
                         Id = "view_backup",
                         Description = "View backup file contents",
-                        Command = $"Read file: {backupResult.BackupFile}",
+                        Command = $"Read file: {backupResult.BackupPath}",
                         Priority = "low",
                         Category = "inspection"
                     }
@@ -1490,7 +1487,7 @@ public class UnifiedMemoryService
                 {
                     Success = false,
                     Action = "restore_failed",
-                    Message = restoreResult.Message ?? "Failed to restore memories"
+                    Message = restoreResult.Error ?? "Failed to restore memories"
                 };
             }
 
@@ -1498,11 +1495,11 @@ public class UnifiedMemoryService
             {
                 Success = true,
                 Action = "restored",
-                Message = $"Restored {restoreResult.RestoredCount} memories from backup",
+                Message = $"Restored {restoreResult.DocumentsRestored} memories from backup",
                 Metadata = new Dictionary<string, object>
                 {
-                    ["restoredCount"] = restoreResult.RestoredCount,
-                    ["backupFile"] = restoreResult.BackupFile ?? "most recent backup",
+                    ["restoredCount"] = restoreResult.DocumentsRestored,
+                    ["backupFile"] = "most recent backup",
                     ["includesLocal"] = includeLocal
                 },
                 NextSteps = new List<ActionSuggestion>
