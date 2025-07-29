@@ -6,6 +6,7 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 
 - **Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **Smart Memory System**: Persistent architectural knowledge and decision tracking
+- **🆕 Advanced Memory Intelligence**: Natural language commands, semantic search, temporal scoring
 - **AI-Optimized Architecture**: Pattern matching and content analysis for AI assistants
 - **Progressive Disclosure**: Intelligent summarization with drill-down capabilities
 - **Real-time Updates**: File watchers automatically update indexes on changes
@@ -88,6 +89,13 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 - `list_memory_templates` - View templates
 - `create_memory_from_template` - Use templates
 - `get_memory_suggestions` - Context-aware suggestions
+
+### 🆕 Phase 3: Advanced Memory Intelligence
+- `unified_memory` - Natural language memory operations with intent detection
+- `semantic_search` - Find memories by concepts, not just keywords
+- `hybrid_search` - Combine text search with semantic understanding
+- `memory_quality_assessment` - Evaluate and improve memory quality with scoring
+- `load_context` - Auto-load relevant memories for current working environment
 
 ### Task Management
 - `create_checklist` - Create persistent task lists
@@ -206,6 +214,29 @@ find_similar_memories --memoryId "memory_123"
 
 # Backup for version control (team sharing enabled)
 backup_memories  # Creates JSON in .codesearch/backups/
+```
+
+### 🆕 Phase 3: Advanced Memory Intelligence
+```bash
+# Natural language memory operations
+unified_memory --command "remember that UserService has performance issues"
+unified_memory --command "find all technical debt related to authentication"
+unified_memory --command "create checklist for database migration project"
+
+# Semantic search - find by concepts, not keywords
+semantic_search --query "security vulnerabilities in user login systems"
+
+# Hybrid search - combine text and semantic understanding
+hybrid_search --query "authentication patterns"
+
+# Memory quality assessment with scoring
+memory_quality_assessment --memoryId "memory_123"
+
+# Auto-load relevant context for current work
+load_context --workingDirectory "C:/YourProject/Services"
+
+# Advanced temporal scoring for recency-weighted results
+search_memories --query "architecture decisions" --boostRecent true
 ```
 
 ### Advanced Workflows
