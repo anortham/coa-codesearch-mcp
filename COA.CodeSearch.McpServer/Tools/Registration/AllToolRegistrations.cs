@@ -33,17 +33,8 @@ public static class AllToolRegistrations
         RegisterRecallContext(registry, memoryTools);
         RegisterBackupRestore(registry, memoryTools);
         
-        // Flexible Memory System tools
-        FlexibleMemoryToolRegistrations.RegisterFlexibleMemoryTools(registry, serviceProvider);
-        
-        // Phase 3: Unified Memory Interface
-        RegisterUnifiedMemory(registry, serviceProvider.GetRequiredService<UnifiedMemoryTool>());
-        
-        // Memory Linking tools
-        MemoryLinkingToolRegistrations.RegisterAll(registry, serviceProvider.GetRequiredService<MemoryLinkingTools>());
-        
-        // Checklist tools
-        ChecklistToolRegistrations.RegisterChecklistTools(registry, serviceProvider);
+        // Essential Memory Tools (only 6 tools exposed as per design)
+        RegisterEssentialMemoryTools(registry, serviceProvider);
         
         // Batch operations (for multi-search efficiency)
         RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>());
@@ -1637,6 +1628,147 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
                 if (parameters == null) throw new InvalidParametersException("Parameters are required");
                 
                 var result = await tool.ExecuteAsync(parameters);
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    /// <summary>
+    /// Register only the essential memory tools as per the design document
+    /// Exposes 6 tools instead of 40+ individual tools for simplified AI interface
+    /// </summary>
+    private static void RegisterEssentialMemoryTools(ToolRegistry registry, IServiceProvider serviceProvider)
+    {
+        // Get required services
+        var unifiedMemoryTool = serviceProvider.GetRequiredService<UnifiedMemoryTool>();
+        var memorySearchV2 = serviceProvider.GetRequiredService<FlexibleMemorySearchToolV2>();
+        var memoryTools = serviceProvider.GetRequiredService<FlexibleMemoryTools>();
+        var semanticSearchTool = serviceProvider.GetRequiredService<SemanticSearchTool>();
+        var hybridSearchTool = serviceProvider.GetRequiredService<HybridSearchTool>();
+        var qualityAssessmentTool = serviceProvider.GetRequiredService<MemoryQualityAssessmentTool>();
+
+        // Register the 6 essential tools only
+        RegisterUnifiedMemory(registry, unifiedMemoryTool);
+        RegisterSearchMemoriesV2(registry, memorySearchV2);
+        RegisterStoreMemoryOnly(registry, memoryTools);
+        RegisterSemanticSearch(registry, semanticSearchTool);
+        RegisterHybridSearch(registry, hybridSearchTool);
+        RegisterMemoryQualityAssessment(registry, qualityAssessmentTool);
+    }
+
+    /// <summary>
+    /// Register only the store_memory tool from FlexibleMemoryTools
+    /// </summary>
+    private static void RegisterStoreMemoryOnly(ToolRegistry registry, FlexibleMemoryTools tool)
+    {
+        registry.RegisterTool<StoreMemoryParams>(
+            name: ToolNames.StoreMemory,
+            description: @"Stores knowledge permanently in searchable memory system.
+Returns: Created memory with ID and metadata.
+Prerequisites: None - memory system is always available.
+Error handling: Returns VALIDATION_ERROR if memoryType is invalid or content is empty.
+Use cases: Architectural decisions, technical debt, code patterns, project insights.
+Not for: Temporary notes (use store_temporary_memory), file storage (use Write tool).",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    memoryType = new { type = "string", description = "Memory type (TechnicalDebt, Question, ArchitecturalDecision, CodePattern, etc.)" },
+                    content = new { type = "string", description = "Main content of the memory" },
+                    isShared = new { type = "boolean", description = "Whether to share with team (default: true)", @default = true },
+                    sessionId = new { type = "string", description = "Optional session ID" },
+                    files = new { type = "array", items = new { type = "string" }, description = "Related files" },
+                    fields = new { 
+                        type = "object", 
+                        additionalProperties = true, 
+                        description = "Custom fields as JSON object (importance, urgency, category, etc.)",
+                        examples = new object[]
+                        {
+                            new { priority = "high", category = "security", effort = "days" },
+                            new { importance = "critical", impact = "high", urgency = "immediate" },
+                            new { complexity = "medium", owner = "backend-team", deadline = "2024-02-15" }
+                        }
+                    }
+                },
+                required = new[] { "memoryType", "content" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                var result = await tool.StoreMemoryAsync(
+                    ValidateRequired(parameters.MemoryType, "memoryType"),
+                    ValidateRequired(parameters.Content, "content"),
+                    parameters.IsShared ?? true,
+                    parameters.SessionId,
+                    parameters.Files,
+                    parameters.Fields);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+
+    /// <summary>
+    /// Register the search_memories tool with V2 features
+    /// </summary>
+    private static void RegisterSearchMemoriesV2(ToolRegistry registry, FlexibleMemorySearchToolV2 tool)
+    {
+        registry.RegisterTool<SearchMemoriesV2Params>(
+            name: ToolNames.SearchMemories,
+            description: @"Searches stored memories with intelligent query expansion.
+Returns: Matching memories with scores, metadata, and relationships.
+Prerequisites: None - searches existing memory database.
+Error handling: Returns empty results if no matches found.
+Use cases: Finding past decisions, reviewing technical debt, discovering patterns.
+Features: Query expansion, context awareness, faceted filtering, smart ranking.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Search query (* for all)" },
+                    types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
+                    dateRange = new { type = "string", description = "Relative time: 'last-week', 'last-month', 'last-7-days'" },
+                    facets = new { type = "object", additionalProperties = true, description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
+                    orderBy = new { type = "string", description = "Sort field: 'created', 'modified', 'type', 'score', or custom field" },
+                    orderDescending = new { type = "boolean", description = "Sort order (default: true)", @default = true },
+                    maxResults = new { type = "integer", description = "Maximum results (default: 50)", @default = 50 },
+                    includeArchived = new { type = "boolean", description = "Include archived memories (default: false)", @default = false },
+                    boostRecent = new { type = "boolean", description = "Boost recently created memories", @default = false },
+                    boostFrequent = new { type = "boolean", description = "Boost frequently accessed memories", @default = false },
+                    enableQueryExpansion = new { type = "boolean", description = "Enable automatic query expansion with synonyms and related terms", @default = true },
+                    enableContextAwareness = new { type = "boolean", description = "Enable context-aware memory boosting based on current work", @default = true },
+                    currentFile = new { type = "string", description = "Path to current file being worked on (for context awareness)" },
+                    recentFiles = new { type = "array", items = new { type = "string" }, description = "Recently accessed files (for context awareness)" },
+                    mode = new { type = "string", description = "Response mode: 'summary' (default) or 'full'", @default = "summary" }
+                }
+            },
+            handler: async (parameters, ct) =>
+            {
+                var result = await tool.ExecuteAsync(
+                    parameters?.Query,
+                    parameters?.Types,
+                    parameters?.DateRange,
+                    parameters?.Facets,
+                    parameters?.OrderBy,
+                    parameters?.OrderDescending ?? true,
+                    parameters?.MaxResults ?? 50,
+                    parameters?.IncludeArchived ?? false,
+                    parameters?.BoostRecent ?? false,
+                    parameters?.BoostFrequent ?? false,
+                    parameters?.EnableQueryExpansion ?? true,
+                    parameters?.EnableContextAwareness ?? true,
+                    parameters?.CurrentFile,
+                    parameters?.RecentFiles,
+                    Enum.TryParse<ResponseMode>(parameters?.Mode, true, out var mode) ? mode : ResponseMode.Summary,
+                    false, // enableHighlighting
+                    3, // maxFragments 
+                    100, // fragmentSize
+                    parameters?.DetailRequest,
+                    ct);
+                    
                 return CreateSuccessResult(result);
             }
         );
