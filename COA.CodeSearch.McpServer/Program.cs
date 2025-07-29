@@ -50,10 +50,10 @@ var host = Host.CreateDefaultBuilder(args)
             .MinimumLevel.Override("COA.CodeSearch.McpServer.Services.LuceneIndexService", LogEventLevel.Warning)
             .MinimumLevel.Override("COA.CodeSearch.McpServer.Tests", LogEventLevel.Error)
             .WriteTo.File(
-                path: Path.Combine(logDirectory, "codesearch-.log"),
-                rollingInterval: RollingInterval.Day,
-                fileSizeLimitBytes: 10_485_760, // 10MB
-                retainedFileCountLimit: 7,
+                path: Path.Combine(logDirectory, $"codesearch-{DateTime.Now:yyyyMMdd-HHmmss}.log"),
+                rollingInterval: RollingInterval.Infinite,
+                fileSizeLimitBytes: 1_048_576, // 1MB per session (smaller since per-session)
+                retainedFileCountLimit: null, // Keep all session logs
                 shared: true,
                 flushToDiskInterval: TimeSpan.FromSeconds(1),
                 outputTemplate: "[{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz}] [{Level:u3}] [{SourceContext}] {Message:lj}{NewLine}{Exception}"

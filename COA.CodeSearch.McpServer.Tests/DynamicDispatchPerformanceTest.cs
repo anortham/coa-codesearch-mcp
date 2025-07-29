@@ -153,10 +153,10 @@ public class DynamicDispatchPerformanceTest
         var dict = JsonSerializer.Deserialize<Dictionary<string, object>>(json);
         return new Dictionary<string, object>
         {
-            ["query"] = dict["query"],
-            ["summary"] = dict["summary"],
-            ["results"] = dict["results"],
-            ["insights"] = dict["insights"]
+            ["query"] = dict?["query"] ?? "unknown",
+            ["summary"] = dict?["summary"] ?? "unknown",
+            ["results"] = dict?["results"] ?? "unknown",
+            ["insights"] = dict?["insights"] ?? "unknown"
         };
     }
 

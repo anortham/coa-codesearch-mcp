@@ -60,34 +60,17 @@ All code analysis tools now provide AI-optimized responses with:
   - [memory_graph_navigator](#memory_graph_navigator) 🗺️
   - [workflow_discovery](#workflow_discovery) ⚡ **NEW**
   - [tool_usage_analytics](#tool_usage_analytics) 📊
-- [Memory System](#memory-system)
-  - [recall_context](#recall_context)
-  - [flexible_store_memory](#flexible_store_memory)
-  - [flexible_search_memories](#flexible_search_memories)
-  - [flexible_update_memory](#flexible_update_memory)
-  - [flexible_get_memory](#flexible_get_memory)
-  - [flexible_store_working_memory](#flexible_store_working_memory)
-  - [flexible_find_similar_memories](#flexible_find_similar_memories)
-  - [flexible_archive_memories](#flexible_archive_memories)
-  - [flexible_summarize_memories](#flexible_summarize_memories)
-  - [flexible_get_memory_suggestions](#flexible_get_memory_suggestions)
-  - [flexible_list_templates](#flexible_list_templates)
-  - [flexible_create_from_template](#flexible_create_from_template)
-  - [flexible_store_git_commit](#flexible_store_git_commit)
-  - [flexible_memories_for_file](#flexible_memories_for_file)
-  - [flexible_link_memories](#flexible_link_memories)
-  - [flexible_get_related_memories](#flexible_get_related_memories)
-  - [flexible_unlink_memories](#flexible_unlink_memories)
-  - [memory_dashboard](#memory_dashboard)
+- [Essential Memory System (10 Core Tools)](#essential-memory-system-10-core-tools)
+  - [recall_context](#recall_context) **START HERE**
+  - [store_memory](#store_memory)
+  - [search_memories](#search_memories)
+  - [unified_memory](#unified_memory) 🆕 **Natural Language Interface**
+  - [semantic_search](#semantic_search) 🆕 **Concept-Based Search**  
+  - [hybrid_search](#hybrid_search) 🆕 **Text + Semantic Combined**
+  - [memory_quality_assessment](#memory_quality_assessment) 🆕 **AI Quality Scoring**
+  - [load_context](#load_context) 🆕 **Auto-Load Relevant Context**
   - [backup_memories](#backup_memories)
   - [restore_memories](#restore_memories)
-- [Checklist System](#checklist-system)
-  - [create_checklist](#create_checklist)
-  - [add_checklist_items](#add_checklist_items)
-  - [toggle_checklist_item](#toggle_checklist_item)
-  - [update_checklist_item](#update_checklist_item)
-  - [view_checklist](#view_checklist)
-  - [list_checklists](#list_checklists)
 - [Utilities](#utilities)
   - [index_health_check](#index_health_check)
   - [system_health_check](#system_health_check)
@@ -815,11 +798,13 @@ tool_usage_analytics --action "export"
 - Track error patterns to improve reliability
 - Export data for external analysis tools
 
-## Memory System
+## Essential Memory System (10 Core Tools)
+
+The memory system has been streamlined to expose only the most essential tools via MCP, providing a clean interface for AI agents while maintaining all functionality under the hood.
 
 ### recall_context
 
-Load relevant context at session start. Essential first step!
+Load relevant context at session start. **Essential first step!**
 
 **Parameters:**
 - `query` (string, required): What you're working on
@@ -849,11 +834,11 @@ recall_context --query "authentication refactoring"
 ```
 
 **Tips:**
-- ALWAYS use at session start
+- **ALWAYS use at session start**
 - Loads past decisions and context
 - Natural language queries work best
 
-### flexible_store_memory
+### store_memory
 
 Store any type of memory with custom fields.
 
