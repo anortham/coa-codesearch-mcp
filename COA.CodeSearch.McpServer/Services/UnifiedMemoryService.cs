@@ -22,6 +22,9 @@ public class UnifiedMemoryService
     private readonly FastFileSearchToolV2? _fileSearchTool;
     private readonly FastTextSearchToolV2? _textSearchTool;
     private readonly MemoryGraphNavigatorTool? _graphNavigatorTool;
+    private readonly JsonMemoryBackupService? _backupService;
+    private readonly SemanticSearchTool? _semanticSearchTool;
+    private readonly HybridSearchTool? _hybridSearchTool;
 
     public UnifiedMemoryService(
         FlexibleMemoryService memoryService,
@@ -31,7 +34,10 @@ public class UnifiedMemoryService
         MemoryLinkingTools? linkingTools = null,
         FastFileSearchToolV2? fileSearchTool = null,
         FastTextSearchToolV2? textSearchTool = null,
-        MemoryGraphNavigatorTool? graphNavigatorTool = null)
+        MemoryGraphNavigatorTool? graphNavigatorTool = null,
+        JsonMemoryBackupService? backupService = null,
+        SemanticSearchTool? semanticSearchTool = null,
+        HybridSearchTool? hybridSearchTool = null)
     {
         _memoryService = memoryService;
         _logger = logger;
@@ -41,6 +47,9 @@ public class UnifiedMemoryService
         _fileSearchTool = fileSearchTool;
         _textSearchTool = textSearchTool;
         _graphNavigatorTool = graphNavigatorTool;
+        _backupService = backupService;
+        _semanticSearchTool = semanticSearchTool;
+        _hybridSearchTool = hybridSearchTool;
     }
 
     /// <summary>
@@ -162,7 +171,8 @@ public class UnifiedMemoryService
 
         // Strong indicators for MANAGE intent
         if (ContainsAny(content, "update", "delete", "archive", "change", "modify", "remove") ||
-            ContainsAny(content, "mark complete", "mark done", "check off", "complete item", "finish item"))
+            ContainsAny(content, "mark complete", "mark done", "check off", "complete item", "finish item") ||
+            ContainsAny(content, "backup", "restore", "export", "import"))
         {
             return (MemoryIntent.Manage, 0.8f);
         }
@@ -333,10 +343,71 @@ public class UnifiedMemoryService
             var content = command.Content.ToLowerInvariant();
             var results = new List<FlexibleMemoryEntry>();
             var highlights = new Dictionary<string, string[]>();
+            var searchMode = DetermineSearchMode(content);
             
-            // Always search memories first
-            if (_memoryTools != null)
+            // Choose search strategy based on content
+            if (searchMode == SearchMode.Semantic && _semanticSearchTool != null)
             {
+                // Use semantic search for conceptual queries
+                var semanticResult = await _semanticSearchTool.ExecuteAsync(
+                    command.Content,
+                    maxResults: 20,
+                    threshold: 0.2f,
+                    memoryType: null,
+                    isShared: null,
+                    customFilters: null,
+                    cancellationToken
+                );
+                
+                if (semanticResult is JsonElement jsonResult && 
+                    jsonResult.TryGetProperty("success", out var success) && success.GetBoolean() &&
+                    jsonResult.TryGetProperty("results", out var resultsArray))
+                {
+                    foreach (var result in resultsArray.EnumerateArray())
+                    {
+                        if (result.TryGetProperty("memory", out var memoryObj))
+                        {
+                            var memory = DeserializeMemory(memoryObj);
+                            if (memory != null)
+                                results.Add(memory);
+                        }
+                    }
+                }
+            }
+            else if (searchMode == SearchMode.Hybrid && _hybridSearchTool != null)
+            {
+                // Use hybrid search for balanced results
+                var hybridResult = await _hybridSearchTool.ExecuteAsync(
+                    command.Content,
+                    maxResults: 20,
+                    luceneWeight: 0.6f,
+                    semanticWeight: 0.4f,
+                    semanticThreshold: 0.2f,
+                    mergeStrategy: "Linear",
+                    bothFoundBoost: 1.2f,
+                    luceneFilters: null,
+                    semanticFilters: null,
+                    cancellationToken
+                );
+                
+                if (hybridResult is JsonElement jsonResult && 
+                    jsonResult.TryGetProperty("success", out var success) && success.GetBoolean() &&
+                    jsonResult.TryGetProperty("results", out var resultsArray))
+                {
+                    foreach (var result in resultsArray.EnumerateArray())
+                    {
+                        if (result.TryGetProperty("memory", out var memoryObj))
+                        {
+                            var memory = DeserializeMemory(memoryObj);
+                            if (memory != null)
+                                results.Add(memory);
+                        }
+                    }
+                }
+            }
+            else if (_memoryTools != null)
+            {
+                // Default to regular text search
                 var memoryResult = await _memoryTools.SearchMemoriesAsync(
                     command.Content, // query
                     null, // types
@@ -366,7 +437,12 @@ public class UnifiedMemoryService
                 Action = "found",
                 Memories = results,
                 Highlights = highlights,
-                Message = $"Found {results.Count} memories",
+                Message = $"Found {results.Count} memories using {searchMode} search",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["searchMode"] = searchMode.ToString(),
+                    ["resultCount"] = results.Count
+                },
                 NextSteps = GenerateFindNextSteps(results, command)
             };
         }
@@ -385,34 +461,366 @@ public class UnifiedMemoryService
     /// <summary>
     /// Handle CONNECT intent - link memories together
     /// </summary>
-    private Task<UnifiedMemoryResult> HandleConnectAsync(
+    private async Task<UnifiedMemoryResult> HandleConnectAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        // Extract memory IDs or descriptions from command
-        // This would require more sophisticated parsing
-        return Task.FromResult(new UnifiedMemoryResult
+        try
         {
-            Success = false,
-            Action = "connect_not_implemented",
-            Message = "Connect functionality not yet implemented"
-        });
+            if (_linkingTools == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "linking_unavailable",
+                    Message = "Memory linking tools are not available"
+                };
+            }
+
+            var content = command.Content?.ToLowerInvariant() ?? "";
+            
+            // Try to extract memory IDs or descriptions
+            // Pattern: "connect [memory1] to/with/and [memory2]"
+            var patterns = new[]
+            {
+                @"connect\s+(.+?)\s+(?:to|with|and)\s+(.+)",
+                @"link\s+(.+?)\s+(?:to|with|and)\s+(.+)",
+                @"relate\s+(.+?)\s+(?:to|with|and)\s+(.+)"
+            };
+
+            string? source = null;
+            string? target = null;
+            
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(content, pattern, RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    source = match.Groups[1].Value.Trim();
+                    target = match.Groups[2].Value.Trim();
+                    break;
+                }
+            }
+
+            if (string.IsNullOrEmpty(source) || string.IsNullOrEmpty(target))
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "connect_parse_error",
+                    Message = "Unable to parse memories to connect. Try: 'connect [memory description] to [other memory]'",
+                    NextSteps = new List<ActionSuggestion>
+                    {
+                        new ActionSuggestion
+                        {
+                            Id = "connect_example",
+                            Description = "Example connection command",
+                            Command = "memory \"connect authentication bug to security audit\"",
+                            Priority = "high"
+                        }
+                    }
+                };
+            }
+
+            // First, try to find memories by the descriptions
+            var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, maxResults: 1);
+            var targetMemories = await _memoryTools.SearchMemoriesAsync(target, maxResults: 1);
+
+            if (!sourceMemories.Success || sourceMemories.Memories == null || !sourceMemories.Memories.Any())
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "source_not_found",
+                    Message = $"Could not find memory matching: '{source}'"
+                };
+            }
+
+            if (!targetMemories.Success || targetMemories.Memories == null || !targetMemories.Memories.Any())
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "target_not_found",
+                    Message = $"Could not find memory matching: '{target}'"
+                };
+            }
+
+            var sourceMemory = sourceMemories.Memories.First();
+            var targetMemory = targetMemories.Memories.First();
+
+            // Determine relationship type from content
+            var relationshipType = "relatedTo"; // default
+            if (ContainsAny(content, "causes", "caused by"))
+                relationshipType = "causes";
+            else if (ContainsAny(content, "depends on", "requires"))
+                relationshipType = "dependsOn";
+            else if (ContainsAny(content, "blocks", "blocking"))
+                relationshipType = "blocks";
+            else if (ContainsAny(content, "implements", "implementation"))
+                relationshipType = "implements";
+
+            // Link the memories
+            var linkResult = await _linkingTools.LinkMemoriesAsync(
+                sourceMemory.Id,
+                targetMemory.Id,
+                relationshipType,
+                bidirectional: ContainsAny(content, "both", "bidirectional", "mutual")
+            );
+
+            if (!linkResult.Success)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "link_failed",
+                    Message = linkResult.Message ?? "Failed to link memories"
+                };
+            }
+
+            return new UnifiedMemoryResult
+            {
+                Success = true,
+                Action = "connected",
+                Message = $"Connected '{sourceMemory.Content.Substring(0, Math.Min(50, sourceMemory.Content.Length))}...' to '{targetMemory.Content.Substring(0, Math.Min(50, targetMemory.Content.Length))}...' with relationship '{relationshipType}'",
+                Memories = new[] { sourceMemory, targetMemory },
+                NextSteps = new List<ActionSuggestion>
+                {
+                    new ActionSuggestion
+                    {
+                        Id = "explore_connections",
+                        Description = "Explore the connection graph",
+                        Command = $"memory \"explore connections from {sourceMemory.Id}\"",
+                        Priority = "medium",
+                        Category = "exploration"
+                    },
+                    new ActionSuggestion
+                    {
+                        Id = "find_related",
+                        Description = "Find other related memories",
+                        Command = $"memory \"find memories related to {sourceMemory.Id}\"",
+                        Priority = "low",
+                        Category = "discovery"
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling connect command: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "connect_error",
+                Message = $"Error connecting memories: {ex.Message}"
+            };
+        }
     }
 
     /// <summary>
     /// Handle EXPLORE intent - navigate memory relationships
     /// </summary>
-    private Task<UnifiedMemoryResult> HandleExploreAsync(
+    private async Task<UnifiedMemoryResult> HandleExploreAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        // Use memory graph navigator
-        return Task.FromResult(new UnifiedMemoryResult
+        try
         {
-            Success = false,
-            Action = "explore_not_implemented", 
-            Message = "Explore functionality not yet implemented"
-        });
+            if (_graphNavigatorTool == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "graph_navigator_unavailable",
+                    Message = "Memory graph navigator is not available"
+                };
+            }
+
+            var content = command.Content?.ToLowerInvariant() ?? "";
+            
+            // Extract starting point - could be a memory ID or description
+            // Patterns: "explore from [memory]", "explore connections around [memory]", "explore [memory] relationships"
+            var patterns = new[]
+            {
+                @"explore\s+(?:from|connections\s+from|relationships\s+from)\s+(.+)",
+                @"explore\s+(.+?)\s+(?:connections|relationships|graph)",
+                @"explore\s+connections\s+(?:around|for)\s+(.+)",
+                @"navigate\s+(?:from|around)\s+(.+)"
+            };
+
+            string? startPoint = null;
+            
+            foreach (var pattern in patterns)
+            {
+                var match = Regex.Match(content, pattern, RegexOptions.IgnoreCase);
+                if (match.Success)
+                {
+                    startPoint = match.Groups[1].Value.Trim();
+                    break;
+                }
+            }
+
+            // If no pattern matched, try to use the whole content after "explore"
+            if (string.IsNullOrEmpty(startPoint))
+            {
+                var exploreIndex = content.IndexOf("explore");
+                if (exploreIndex >= 0)
+                {
+                    startPoint = content.Substring(exploreIndex + 7).Trim();
+                }
+            }
+
+            if (string.IsNullOrEmpty(startPoint))
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "explore_parse_error",
+                    Message = "Unable to determine what to explore. Try: 'explore connections from [memory description]'",
+                    NextSteps = new List<ActionSuggestion>
+                    {
+                        new ActionSuggestion
+                        {
+                            Id = "explore_example",
+                            Description = "Example exploration command",
+                            Command = "memory \"explore connections from authentication system\"",
+                            Priority = "high"
+                        }
+                    }
+                };
+            }
+
+            // Determine depth from content
+            int depth = 2; // default
+            if (ContainsAny(content, "deep", "all", "complete"))
+                depth = 4;
+            else if (ContainsAny(content, "immediate", "direct", "first"))
+                depth = 1;
+
+            // Determine filter types if specified
+            string[]? filterTypes = null;
+            if (ContainsAny(content, "technical debt", "debt"))
+                filterTypes = new[] { "TechnicalDebt" };
+            else if (ContainsAny(content, "architectural", "architecture", "decision"))
+                filterTypes = new[] { "ArchitecturalDecision" };
+            else if (ContainsAny(content, "security"))
+                filterTypes = new[] { "SecurityRule" };
+
+            // Execute the graph navigation
+            var graphResult = await _graphNavigatorTool.ExecuteAsync(
+                startPoint,
+                depth,
+                filterTypes,
+                includeOrphans: false,
+                responseMode: ResponseMode.Summary,
+                cancellationToken
+            );
+
+            // Parse the result - it should be a JSON object
+            if (graphResult is JsonElement jsonResult)
+            {
+                if (jsonResult.TryGetProperty("success", out var successProp) && !successProp.GetBoolean())
+                {
+                    var message = jsonResult.TryGetProperty("message", out var msgProp) 
+                        ? msgProp.GetString() 
+                        : "Failed to explore memory graph";
+                    
+                    return new UnifiedMemoryResult
+                    {
+                        Success = false,
+                        Action = "explore_failed",
+                        Message = message
+                    };
+                }
+
+                // Extract key information from the graph result
+                var nodeCount = 0;
+                var edgeCount = 0;
+                var clusters = new List<string>();
+                var insights = new List<string>();
+
+                if (jsonResult.TryGetProperty("summary", out var summary))
+                {
+                    if (summary.TryGetProperty("nodeCount", out var nc))
+                        nodeCount = nc.GetInt32();
+                    if (summary.TryGetProperty("edgeCount", out var ec))
+                        edgeCount = ec.GetInt32();
+                }
+
+                if (jsonResult.TryGetProperty("clusters", out var clustersArray))
+                {
+                    foreach (var cluster in clustersArray.EnumerateArray())
+                    {
+                        if (cluster.TryGetProperty("theme", out var theme))
+                            clusters.Add(theme.GetString() ?? "Unknown");
+                    }
+                }
+
+                if (jsonResult.TryGetProperty("insights", out var insightsArray))
+                {
+                    foreach (var insight in insightsArray.EnumerateArray())
+                    {
+                        insights.Add(insight.GetString() ?? "");
+                    }
+                }
+
+                var message = $"Explored {nodeCount} memories with {edgeCount} connections";
+                if (clusters.Any())
+                    message += $". Found {clusters.Count} clusters: {string.Join(", ", clusters.Take(3))}";
+
+                return new UnifiedMemoryResult
+                {
+                    Success = true,
+                    Action = "explored",
+                    Message = message,
+                    // Store the full graph result for potential further processing
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["graphResult"] = jsonResult,
+                        ["nodeCount"] = nodeCount,
+                        ["edgeCount"] = edgeCount,
+                        ["clusters"] = clusters,
+                        ["insights"] = insights
+                    },
+                    NextSteps = new List<ActionSuggestion>
+                    {
+                        new ActionSuggestion
+                        {
+                            Id = "view_details",
+                            Description = "View detailed graph visualization",
+                            Command = $"Use memory_graph_navigator tool directly with startPoint='{startPoint}'",
+                            Priority = "high",
+                            Category = "visualization"
+                        },
+                        new ActionSuggestion
+                        {
+                            Id = "explore_deeper",
+                            Description = "Explore with greater depth",
+                            Command = $"memory \"explore deep connections from {startPoint}\"",
+                            Priority = "medium",
+                            Category = "exploration"
+                        }
+                    }
+                };
+            }
+
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "explore_error",
+                Message = "Unexpected response format from graph navigator"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling explore command: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "explore_error",
+                Message = $"Error exploring memory graph: {ex.Message}"
+            };
+        }
     }
 
     /// <summary>
@@ -438,6 +846,17 @@ public class UnifiedMemoryService
         CancellationToken cancellationToken)
     {
         var content = command.Content?.ToLowerInvariant() ?? "";
+        
+        // Check for backup/restore operations
+        if (ContainsAny(content, "backup", "export"))
+        {
+            return await HandleBackupAsync(command, cancellationToken);
+        }
+        
+        if (ContainsAny(content, "restore", "import"))
+        {
+            return await HandleRestoreAsync(command, cancellationToken);
+        }
         
         // Check for checklist operations
         if (ContainsAny(content, "checklist", "item", "task", "complete", "check", "mark"))
@@ -918,6 +1337,264 @@ public class UnifiedMemoryService
         }
 
         return suggestions;
+    }
+
+    /// <summary>
+    /// Handle backup operations
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleBackupAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_backupService == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "backup_unavailable",
+                    Message = "Backup service is not available"
+                };
+            }
+
+            var content = command.Content?.ToLowerInvariant() ?? "";
+            
+            // Determine what to backup based on content
+            var includeLocal = ContainsAny(content, "all", "everything", "local", "personal", "session");
+            string[]? scopes = null;
+            
+            if (ContainsAny(content, "project", "shared", "team"))
+            {
+                scopes = new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            }
+            else if (ContainsAny(content, "technical debt", "debt"))
+            {
+                scopes = new[] { "TechnicalDebt" };
+            }
+            else if (ContainsAny(content, "checklist", "tasks"))
+            {
+                scopes = new[] { "ChecklistItem" };
+            }
+
+            // Perform the backup
+            var backupResult = await _backupService.BackupMemoriesAsync(scopes, includeLocal);
+
+            if (!backupResult.Success)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "backup_failed",
+                    Message = backupResult.Message ?? "Failed to backup memories"
+                };
+            }
+
+            return new UnifiedMemoryResult
+            {
+                Success = true,
+                Action = "backed_up",
+                Message = $"Backed up {backupResult.BackupCount} memories to {backupResult.BackupFile}",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["backupFile"] = backupResult.BackupFile ?? "",
+                    ["memoryCount"] = backupResult.BackupCount,
+                    ["includesLocal"] = includeLocal
+                },
+                NextSteps = new List<ActionSuggestion>
+                {
+                    new ActionSuggestion
+                    {
+                        Id = "commit_backup",
+                        Description = "Commit backup file to git",
+                        Command = $"git add {backupResult.BackupFile} && git commit -m \"Backup project memories\"",
+                        Priority = "high",
+                        Category = "version_control"
+                    },
+                    new ActionSuggestion
+                    {
+                        Id = "view_backup",
+                        Description = "View backup file contents",
+                        Command = $"Read file: {backupResult.BackupFile}",
+                        Priority = "low",
+                        Category = "inspection"
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling backup command: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "backup_error",
+                Message = $"Error backing up memories: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Handle restore operations
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleRestoreAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_backupService == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "restore_unavailable",
+                    Message = "Backup service is not available"
+                };
+            }
+
+            var content = command.Content?.ToLowerInvariant() ?? "";
+            
+            // Determine what to restore based on content
+            var includeLocal = ContainsAny(content, "all", "everything", "local", "personal", "session");
+            string[]? scopes = null;
+            
+            if (ContainsAny(content, "project", "shared", "team"))
+            {
+                scopes = new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            }
+            else if (ContainsAny(content, "technical debt", "debt"))
+            {
+                scopes = new[] { "TechnicalDebt" };
+            }
+            else if (ContainsAny(content, "checklist", "tasks"))
+            {
+                scopes = new[] { "ChecklistItem" };
+            }
+
+            // Check for specific file path in content
+            string? backupFile = null;
+            var filePattern = @"(?:from|file|path)[:\s]+([^\s]+\.json)";
+            var match = Regex.Match(content, filePattern, RegexOptions.IgnoreCase);
+            if (match.Success)
+            {
+                backupFile = match.Groups[1].Value;
+            }
+
+            // Perform the restore
+            var restoreResult = await _backupService.RestoreMemoriesAsync(backupFile, scopes, includeLocal);
+
+            if (!restoreResult.Success)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "restore_failed",
+                    Message = restoreResult.Message ?? "Failed to restore memories"
+                };
+            }
+
+            return new UnifiedMemoryResult
+            {
+                Success = true,
+                Action = "restored",
+                Message = $"Restored {restoreResult.RestoredCount} memories from backup",
+                Metadata = new Dictionary<string, object>
+                {
+                    ["restoredCount"] = restoreResult.RestoredCount,
+                    ["backupFile"] = restoreResult.BackupFile ?? "most recent backup",
+                    ["includesLocal"] = includeLocal
+                },
+                NextSteps = new List<ActionSuggestion>
+                {
+                    new ActionSuggestion
+                    {
+                        Id = "search_restored",
+                        Description = "Search restored memories",
+                        Command = "memory \"find all\"",
+                        Priority = "high",
+                        Category = "discovery"
+                    },
+                    new ActionSuggestion
+                    {
+                        Id = "recall_context",
+                        Description = "Load relevant memories for current work",
+                        Command = "recall_context --query \"current project\"",
+                        Priority = "medium",
+                        Category = "context"
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error handling restore command: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "restore_error",
+                Message = $"Error restoring memories: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Determine the best search mode based on the query content
+    /// </summary>
+    private SearchMode DetermineSearchMode(string content)
+    {
+        // Use semantic search for conceptual/meaning-based queries
+        if (ContainsAny(content, "concept", "meaning", "similar", "like", "related to", "about"))
+            return SearchMode.Semantic;
+        
+        // Use hybrid search for queries that might benefit from both approaches
+        if (ContainsAny(content, "pattern", "architecture", "design", "issue", "problem", "bug"))
+            return SearchMode.Hybrid;
+        
+        // Default to text search for specific/exact queries
+        return SearchMode.Text;
+    }
+
+    /// <summary>
+    /// Deserialize a JSON element into a FlexibleMemoryEntry
+    /// </summary>
+    private FlexibleMemoryEntry? DeserializeMemory(JsonElement memoryElement)
+    {
+        try
+        {
+            var memory = new FlexibleMemoryEntry
+            {
+                Id = memoryElement.GetProperty("id").GetString() ?? "",
+                Type = memoryElement.GetProperty("type").GetString() ?? "",
+                Content = memoryElement.GetProperty("content").GetString() ?? ""
+            };
+
+            // Parse custom fields if present
+            if (memoryElement.TryGetProperty("fields", out var fields))
+            {
+                foreach (var field in fields.EnumerateObject())
+                {
+                    memory.SetField(field.Name, field.Value);
+                }
+            }
+
+            return memory;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to deserialize memory from JSON");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Search mode enumeration
+    /// </summary>
+    private enum SearchMode
+    {
+        Text,
+        Semantic,
+        Hybrid
     }
 
     #endregion
