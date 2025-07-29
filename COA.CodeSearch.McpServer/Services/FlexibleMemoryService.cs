@@ -512,6 +512,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
+        System.Diagnostics.Debug.WriteLine($"CreateDocumentAsync: searchableContent='{searchableContent}'");
         doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields with proper taxonomy writer integration
@@ -602,6 +603,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
+        System.Diagnostics.Debug.WriteLine($"CreateDocument: searchableContent='{searchableContent}'");
         doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields for efficient faceting (synchronous version - limited support)

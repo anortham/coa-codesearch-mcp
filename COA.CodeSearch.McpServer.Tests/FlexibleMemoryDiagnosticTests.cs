@@ -144,6 +144,22 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
             _output.WriteLine($"Doc {i}: id={id}, type={type}, content='{content}', _all='{all}'");
         }
         
+        // Debug: Try a manual search to test basic functionality
+        try
+        {
+            var termQuery = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("content", "authentication"));
+            var manualHits = indexSearcher.Search(termQuery, 10);
+            _output.WriteLine($"Manual term search for 'authentication' in 'content' field: {manualHits.TotalHits} hits");
+            
+            var termQuery2 = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("_all", "authentication"));
+            var manualHits2 = indexSearcher.Search(termQuery2, 10);
+            _output.WriteLine($"Manual term search for 'authentication' in '_all' field: {manualHits2.TotalHits} hits");
+        }
+        catch (Exception ex)
+        {
+            _output.WriteLine($"Manual search failed: {ex.Message}");
+        }
+        
         var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
         _output.WriteLine($"Found {searchResult.TotalFound} memories for 'authentication'");
         
