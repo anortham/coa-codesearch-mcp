@@ -79,7 +79,6 @@ public abstract class TestBase : IDisposable
         services.AddSingleton<ChecklistTools>();
         
         // Memory intelligence services
-        services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
         services.AddSingleton<AIResponseBuilderService>();

@@ -178,8 +178,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<UnifiedMemoryService>();
         services.AddSingleton<UnifiedMemoryTool>();
         
-        // Query Expansion for Memory Intelligence
-        services.AddSingleton<IQueryExpansionService, QueryExpansionService>();
+        // Context Awareness for Memory Intelligence
         services.AddSingleton<IContextAwarenessService, ContextAwarenessService>();
         
         // Scoring services for improved search relevance

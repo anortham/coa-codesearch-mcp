@@ -4,7 +4,6 @@ using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
-using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -21,7 +20,6 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     public override ToolCategory Category => ToolCategory.Memory;
     private readonly FlexibleMemoryService _memoryService;
     private readonly IConfiguration _configuration;
-    private readonly IQueryExpansionService _queryExpansion;
     private readonly IContextAwarenessService _contextAwareness;
     private readonly AIResponseBuilderService _responseBuilder;
     private readonly MemoryLinkingTools _memoryLinking;
@@ -30,7 +28,6 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         ILogger<FlexibleMemorySearchToolV2> logger,
         FlexibleMemoryService memoryService,
         IConfiguration configuration,
-        IQueryExpansionService queryExpansion,
         IContextAwarenessService contextAwareness,
         AIResponseBuilderService responseBuilder,
         MemoryLinkingTools memoryLinking,
@@ -42,7 +39,6 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     {
         _memoryService = memoryService;
         _configuration = configuration;
-        _queryExpansion = queryExpansion;
         _contextAwareness = contextAwareness;
         _responseBuilder = responseBuilder;
         _memoryLinking = memoryLinking;
@@ -59,8 +55,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         bool includeArchived = false,
         bool boostRecent = false,
         bool boostFrequent = false,
-        // New intelligent features
-        bool enableQueryExpansion = true,
+        // Context awareness feature
         bool enableContextAwareness = true,
         string? currentFile = null,
         string[]? recentFiles = null,
@@ -80,11 +75,11 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
                 return await HandleDetailRequestAsync(detailRequest, cancellationToken);
             }
 
-            Logger.LogInformation("Memory search request: query={Query}, types={Types}, expansion={Expansion}, context={Context}", 
-                query, types, enableQueryExpansion, enableContextAwareness);
+            Logger.LogInformation("Memory search request: query={Query}, types={Types}, context={Context}", 
+                query, types, enableContextAwareness);
 
-            // Process query with intelligence
-            var processedQuery = await ProcessIntelligentQueryAsync(query, enableQueryExpansion, enableContextAwareness, currentFile, recentFiles);
+            // Process query with context awareness
+            var processedQuery = await ProcessIntelligentQueryAsync(query, enableContextAwareness, currentFile, recentFiles);
             
             var request = new FlexibleMemorySearchRequest
             {
@@ -368,11 +363,10 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     }
 
     /// <summary>
-    /// Process query with intelligent expansion and context awareness
+    /// Process query with context awareness
     /// </summary>
     private async Task<ProcessedQueryResult> ProcessIntelligentQueryAsync(
         string? originalQuery, 
-        bool enableExpansion, 
         bool enableContext, 
         string? currentFile, 
         string[]? recentFiles)
@@ -391,18 +385,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
 
         try
         {
-            // Step 1: Query Expansion
-            if (enableExpansion)
-            {
-                var expandedQuery = await _queryExpansion.ExpandQueryAsync(originalQuery);
-                result.ExpandedTerms = expandedQuery.WeightedTerms.Keys.ToArray();
-                result.FinalQuery = expandedQuery.ExpandedLuceneQuery;
-                
-                Logger.LogDebug("Query expanded from '{Original}' to '{Final}' with {TermCount} terms", 
-                    originalQuery, result.FinalQuery, expandedQuery.WeightedTerms.Count);
-            }
-
-            // Step 2: Context Awareness
+            // Context Awareness
             if (enableContext)
             {
                 // Update context tracking
@@ -423,26 +406,16 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
                 var context = await _contextAwareness.GetCurrentContextAsync();
                 result.ContextKeywords = context.ContextKeywords;
 
-                // Apply context boosts (this would integrate with Lucene scoring)
-                if (result.ExpandedTerms.Length > 0)
-                {
-                    var contextBoosts = _contextAwareness.GetContextBoosts(context, result.ExpandedTerms);
-                    result.ContextBoosts = contextBoosts;
-                    
-                    Logger.LogDebug("Applied context boosts to {TermCount} terms, max boost: {MaxBoost:F2}", 
-                        contextBoosts.Count, contextBoosts.Values.DefaultIfEmpty(1.0f).Max());
-                }
+                // Track this search for future context
+                // Note: ResultsFound will be updated after the actual search
+                await _contextAwareness.TrackSearchQueryAsync(originalQuery, 0);
             }
-
-            // Track this search for future context
-            // Note: ResultsFound will be updated after the actual search
-            await _contextAwareness.TrackSearchQueryAsync(originalQuery, 0);
 
             return result;
         }
         catch (Exception ex)
         {
-            Logger.LogWarning(ex, "Error processing intelligent query, falling back to original");
+            Logger.LogWarning(ex, "Error processing query with context, falling back to original");
             return result; // Return with original query on error
         }
     }
@@ -454,9 +427,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
     {
         public string OriginalQuery { get; set; } = string.Empty;
         public string FinalQuery { get; set; } = string.Empty;
-        public string[] ExpandedTerms { get; set; } = Array.Empty<string>();
         public string[] ContextKeywords { get; set; } = Array.Empty<string>();
-        public Dictionary<string, float> ContextBoosts { get; set; } = new();
     }
 
 }
