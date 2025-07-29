@@ -1843,6 +1843,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 // Also commit through the service to ensure test implementations refresh their searchers
                 await _indexService.CommitAsync(workspace);
                 
+                
                 return true;
             }, context, ErrorSeverity.Recoverable);
         }
