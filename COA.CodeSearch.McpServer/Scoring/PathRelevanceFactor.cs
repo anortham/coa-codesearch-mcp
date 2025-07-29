@@ -102,11 +102,10 @@ public class PathRelevanceFactor : IScoringFactor
 
             // Second check: Is this in test-related directories?
             var hasTestDirectory = pathParts.Any(part => 
-                _directoryWeights.ContainsKey(part) && 
-                (part.Equals("test", StringComparison.OrdinalIgnoreCase) || 
-                 part.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
-                 part.Equals("spec", StringComparison.OrdinalIgnoreCase) ||
-                 part.Equals("specs", StringComparison.OrdinalIgnoreCase)));
+                part.Equals("test", StringComparison.OrdinalIgnoreCase) || 
+                part.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("spec", StringComparison.OrdinalIgnoreCase) ||
+                part.Equals("specs", StringComparison.OrdinalIgnoreCase));
 
             if (hasTestDirectory)
             {
