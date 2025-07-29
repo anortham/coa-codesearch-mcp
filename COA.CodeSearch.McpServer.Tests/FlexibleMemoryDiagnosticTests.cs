@@ -144,6 +144,37 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
             _output.WriteLine($"Doc {i}: id={id}, type={type}, content='{content}', _all='{all}'");
         }
         
+        // Debug: Check what terms are actually in the index after analysis
+        var reader = indexSearcher.IndexReader;
+        var fields = Lucene.Net.Index.MultiFields.GetFields(reader);
+        var terms = fields.GetTerms("content");
+        if (terms != null)
+        {
+            var termsEnum = terms.GetEnumerator();
+            _output.WriteLine("=== ACTUAL TERMS IN 'content' FIELD ===");
+            int termCount = 0;
+            while (termsEnum.MoveNext() && termCount < 20) // Limit output
+            {
+                var term = termsEnum.Current.Term;
+                _output.WriteLine($"Term: '{term.Utf8ToString()}'");
+                termCount++;
+            }
+        }
+        
+        var allTerms = fields.GetTerms("_all");
+        if (allTerms != null)
+        {
+            var allTermsEnum = allTerms.GetEnumerator();
+            _output.WriteLine("=== ACTUAL TERMS IN '_all' FIELD ===");
+            int termCount = 0;
+            while (allTermsEnum.MoveNext() && termCount < 20) // Limit output
+            {
+                var term = allTermsEnum.Current.Term;
+                _output.WriteLine($"Term: '{term.Utf8ToString()}'");
+                termCount++;
+            }
+        }
+        
         // Debug: Try a manual search to test basic functionality
         try
         {
@@ -176,8 +207,9 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
             _output.WriteLine($"Manual search failed: {ex.Message}");
         }
         
+        _output.WriteLine("=== ABOUT TO CALL FlexibleMemoryService.SearchMemoriesAsync ===");
         var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
-        _output.WriteLine($"Found {searchResult.TotalFound} memories for 'authentication'");
+        _output.WriteLine($"=== SearchMemoriesAsync COMPLETED: Found {searchResult.TotalFound} memories for 'authentication' ===");
         
         var searchResult2 = await _memoryService.SearchMemoriesAsync(searchRequest2);
         _output.WriteLine($"Found {searchResult2.TotalFound} memories for 'refactor'");

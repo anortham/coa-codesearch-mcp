@@ -364,7 +364,7 @@ public class FlexibleMemorySearchRequest
     /// <summary>
     /// Temporal scoring mode to apply (None = no temporal boost, Default = moderate decay)
     /// </summary>
-    public TemporalScoringMode TemporalScoring { get; set; } = TemporalScoringMode.Default;
+    public TemporalScoringMode TemporalScoring { get; set; } = TemporalScoringMode.None;
 }
 
 /// <summary>

@@ -22,18 +22,15 @@ public class InMemoryTestIndexService : ILuceneIndexService
     
     public InMemoryTestIndexService()
     {
-        // TEMPORARY: Use StandardAnalyzer to test if MemoryAnalyzer is the issue
-        // var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        // var logger = loggerFactory.CreateLogger<MemoryAnalyzer>();
-        // _analyzer = new MemoryAnalyzer(logger);
-        
-        // For now, use a simple StandardAnalyzer that should work
-        _analyzer = null!; // Will be set below
+        // Use MemoryAnalyzer to match production behavior
+        var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        var logger = loggerFactory.CreateLogger<MemoryAnalyzer>();
+        _analyzer = new MemoryAnalyzer(logger);
     }
     
     private Analyzer GetAnalyzer()
     {
-        return new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        return _analyzer;
     }
     
     private class InMemoryIndex
