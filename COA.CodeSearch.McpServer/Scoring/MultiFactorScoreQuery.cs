@@ -1,6 +1,7 @@
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Util;
+using Microsoft.Extensions.Logging;
 using System.Text;
 
 namespace COA.CodeSearch.McpServer.Scoring;
@@ -14,12 +15,14 @@ public class MultiFactorScoreQuery : Query
     private readonly Query _baseQuery;
     private readonly List<IScoringFactor> _scoringFactors;
     private readonly ScoringContext _searchContext;
+    private readonly ILogger? _logger;
 
-    public MultiFactorScoreQuery(Query baseQuery, ScoringContext searchContext, params IScoringFactor[] scoringFactors)
+    public MultiFactorScoreQuery(Query baseQuery, ScoringContext searchContext, ILogger? logger, params IScoringFactor[] scoringFactors)
     {
         _baseQuery = baseQuery ?? throw new ArgumentNullException(nameof(baseQuery));
         _searchContext = searchContext ?? throw new ArgumentNullException(nameof(searchContext));
         _scoringFactors = scoringFactors?.ToList() ?? new List<IScoringFactor>();
+        _logger = logger;
     }
 
     public override Weight CreateWeight(IndexSearcher searcher)
@@ -33,19 +36,19 @@ public class MultiFactorScoreQuery : Query
             if (!ReferenceEquals(rewrittenQuery, _baseQuery))
             {
                 var baseWeight = rewrittenQuery.CreateWeight(searcher);
-                return new MultiFactorWeight(this, baseWeight, searcher);
+                return new MultiFactorWeight(this, baseWeight, searcher, _logger);
             }
             
             // Otherwise, use the original query
             var weight = _baseQuery.CreateWeight(searcher);
-            return new MultiFactorWeight(this, weight, searcher);
+            return new MultiFactorWeight(this, weight, searcher, _logger);
         }
         catch (NotSupportedException ex) when (ex.Message.Contains("does not implement createWeight"))
         {
             // If CreateWeight fails, try to rewrite more aggressively
             var rewrittenQuery = _baseQuery.Rewrite(searcher.IndexReader);
             var baseWeight = rewrittenQuery.CreateWeight(searcher);
-            return new MultiFactorWeight(this, baseWeight, searcher);
+            return new MultiFactorWeight(this, baseWeight, searcher, _logger);
         }
     }
 
@@ -77,12 +80,14 @@ public class MultiFactorScoreQuery : Query
         private readonly MultiFactorScoreQuery _query;
         private readonly Weight _baseWeight;
         private readonly IndexSearcher _searcher;
+        private readonly ILogger? _logger;
 
-        public MultiFactorWeight(MultiFactorScoreQuery query, Weight baseWeight, IndexSearcher searcher)
+        public MultiFactorWeight(MultiFactorScoreQuery query, Weight baseWeight, IndexSearcher searcher, ILogger? logger)
         {
             _query = query;
             _baseWeight = baseWeight;
             _searcher = searcher;
+            _logger = logger;
         }
 
         public override Query Query => _query;
@@ -102,7 +107,7 @@ public class MultiFactorScoreQuery : Query
             var baseScorer = _baseWeight.GetScorer(context, acceptDocs);
             if (baseScorer == null) return null;
 
-            return new MultiFactorScorer(this, baseScorer, context.Reader, _query._scoringFactors, _query._searchContext);
+            return new MultiFactorScorer(this, baseScorer, context.Reader, _query._scoringFactors, _query._searchContext, _logger);
         }
 
         public override Explanation Explain(AtomicReaderContext context, int doc)
@@ -147,15 +152,17 @@ public class MultiFactorScoreQuery : Query
         private readonly IndexReader _reader;
         private readonly List<IScoringFactor> _scoringFactors;
         private readonly ScoringContext _searchContext;
+        private readonly ILogger? _logger;
 
         public MultiFactorScorer(Weight weight, Scorer baseScorer, IndexReader reader, 
-            List<IScoringFactor> scoringFactors, ScoringContext searchContext) 
+            List<IScoringFactor> scoringFactors, ScoringContext searchContext, ILogger? logger) 
             : base(weight)
         {
             _baseScorer = baseScorer;
             _reader = reader;
             _scoringFactors = scoringFactors;
             _searchContext = searchContext;
+            _logger = logger;
         }
 
         public override int DocID => _baseScorer.DocID;
@@ -179,12 +186,16 @@ public class MultiFactorScoreQuery : Query
             // Calculate factor scores
             var factorScore = 0f;
             var totalWeight = 0f;
+            var factorDetails = new List<string>();
             
             foreach (var factor in _scoringFactors)
             {
                 var score = factor.CalculateScore(_reader, DocID, _searchContext);
-                factorScore += score * factor.Weight;
+                var weightedScore = score * factor.Weight;
+                factorScore += weightedScore;
                 totalWeight += factor.Weight;
+                
+                factorDetails.Add($"{factor.Name}={score:F3}*{factor.Weight:F2}={weightedScore:F3}");
             }
             
             if (totalWeight > 0)
@@ -195,7 +206,27 @@ public class MultiFactorScoreQuery : Query
             // Combine base score with factor scores
             // For codebase searches, give more weight to factor scores to prioritize structure over pure text matching
             // Use weighted average: 40% base score, 60% factor-adjusted score
-            return (baseScore * 0.4f) + (factorScore * baseScore * 0.6f);
+            var finalScore = (baseScore * 0.4f) + (factorScore * baseScore * 0.6f);
+            
+            // Debug logging to understand scoring issues
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                try
+                {
+                    var doc = _reader.Document(DocID);
+                    var relativePath = doc.Get("relativePath") ?? "unknown";
+                    var filename = doc.Get("filename") ?? "unknown";
+                    
+                    _logger.LogDebug("MultiFactorScore: File {FilePath}, BaseScore: {BaseScore:F3}, FactorDetails: [{FactorDetails}], NormalizedFactors: {NormalizedFactors:F3}, FinalScore: {FinalScore:F3}", 
+                        relativePath, baseScore, string.Join(", ", factorDetails), factorScore, finalScore);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error in MultiFactorScorer debug logging");
+                }
+            }
+            
+            return finalScore;
         }
 
         public override long GetCost()

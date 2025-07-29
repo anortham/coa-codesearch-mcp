@@ -25,8 +25,8 @@ public class ScoringService : IScoringService
         {
             { "ExactMatch", new ExactMatchBoostFactor() },
             { "FilenameRelevance", new FilenameRelevanceFactor() },
-            { "PathRelevance", new PathRelevanceFactor() },
-            { "InterfaceImplementation", new InterfaceImplementationFactor() },
+            { "PathRelevance", new PathRelevanceFactor(logger) },
+            { "InterfaceImplementation", new InterfaceImplementationFactor(logger) },
             { "RecencyBoost", new RecencyBoostFactor() },
             { "FileTypeRelevance", new FileTypeRelevanceFactor() },
             { "TemporalScoring", new TemporalScoringFactor(null, logger) }
@@ -60,7 +60,7 @@ public class ScoringService : IScoringService
             string.Join(", ", activeScoringFactors.Select(f => $"{f.Name}:{f.Weight:F2}")));
 
         // Wrap the base query with multi-factor scoring
-        return new MultiFactorScoreQuery(baseQuery, searchContext, activeScoringFactors);
+        return new MultiFactorScoreQuery(baseQuery, searchContext, _logger, activeScoringFactors);
     }
 
     public Dictionary<string, IScoringFactor> GetAvailableFactors()
