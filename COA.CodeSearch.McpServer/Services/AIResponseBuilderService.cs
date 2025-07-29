@@ -1842,6 +1842,526 @@ public class AIResponseBuilderService
     }
 
     #endregion
+
+    #region Batch Operations Response Building
+
+    /// <summary>
+    /// Build AI-optimized response for batch operations results
+    /// </summary>
+    public object BuildBatchOperationsResponse(
+        BatchOperationRequest request,
+        BatchOperationResult result,
+        ResponseMode mode = ResponseMode.Summary)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+        
+        // Analyze batch results
+        var analysis = AnalyzeBatchResults(result);
+        
+        // Generate insights
+        var insights = GenerateBatchInsights(analysis);
+        
+        // Generate actions
+        var actions = GenerateBatchActions(analysis);
+        
+        // Prepare operation results based on mode
+        var operationResults = mode == ResponseMode.Full 
+            ? PrepareFullBatchResults(result.Operations)
+            : PrepareSummaryBatchResults(result.Operations, analysis);
+        
+        // Calculate estimated tokens
+        var estimatedTokens = EstimateBatchResponseTokens(analysis, operationResults);
+        
+        // Store in cache for detail requests if summary mode
+        string? detailRequestToken = null;
+        List<DetailLevel>? availableDetailLevels = null;
+        
+        if (mode == ResponseMode.Summary && _detailCache != null && estimatedTokens > tokenBudget)
+        {
+            detailRequestToken = _detailCache.StoreDetailData(result);
+            availableDetailLevels = CreateBatchDetailLevels(result);
+        }
+        
+        return new
+        {
+            success = true,
+            operation = "batch_operations",
+            batch = new
+            {
+                totalOperations = analysis.TotalOperations,
+                successCount = analysis.SuccessCount,
+                failureCount = analysis.FailureCount,
+                operationTypes = analysis.OperationTypeCounts
+            },
+            summary = new
+            {
+                executionTime = analysis.EstimatedExecutionTime,
+                successRate = analysis.SuccessRate,
+                topOperations = analysis.OperationTypeCounts
+                    .OrderByDescending(kv => kv.Value)
+                    .Take(3)
+                    .Select(kv => new { type = kv.Key, count = kv.Value })
+                    .ToList(),
+                errorSummary = analysis.ErrorSummary.Any() ? analysis.ErrorSummary : null
+            },
+            analysis = new
+            {
+                patterns = analysis.Patterns.Take(3).ToList(),
+                hotspots = analysis.FileReferences.Any() ? new
+                {
+                    byFile = analysis.FileReferences
+                        .OrderByDescending(kv => kv.Value)
+                        .Take(5)
+                        .Select(kv => new { file = kv.Key, operations = kv.Value })
+                        .ToList()
+                } : null,
+                correlations = analysis.Correlations.Take(3).ToList()
+            },
+            results = operationResults,
+            insights = insights,
+            actions = actions.Select(a => new
+            {
+                id = a.Id,
+                description = a.Description,
+                command = a.Command.Tool,
+                parameters = a.Command.Parameters,
+                tokens = a.EstimatedTokens,
+                priority = a.Priority.ToString().ToLowerInvariant()
+            }),
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                avgTokensPerOp = analysis.AverageTokensPerOperation,
+                totalTokens = estimatedTokens,
+                cached = GenerateCacheKey("batch_operations"),
+                detailRequestToken = detailRequestToken,
+                availableDetailLevels = availableDetailLevels
+            }
+        };
+    }
+
+    private BatchAnalysis AnalyzeBatchResults(BatchOperationResult result)
+    {
+        var analysis = new BatchAnalysis
+        {
+            TotalOperations = result.Operations.Count,
+            SuccessCount = result.Operations.Count(op => op.Success),
+            FailureCount = result.Operations.Count(op => !op.Success)
+        };
+        
+        // Count operation types
+        foreach (var op in result.Operations)
+        {
+            if (!analysis.OperationTypeCounts.ContainsKey(op.OperationType))
+                analysis.OperationTypeCounts[op.OperationType] = 0;
+            analysis.OperationTypeCounts[op.OperationType]++;
+            
+            // Track errors
+            if (!op.Success && !string.IsNullOrEmpty(op.Error))
+            {
+                if (!analysis.ErrorSummary.ContainsKey(op.Error))
+                    analysis.ErrorSummary[op.Error] = 0;
+                analysis.ErrorSummary[op.Error]++;
+            }
+            
+            // Extract file references
+            ExtractFileReferences(op, analysis);
+        }
+        
+        // Calculate metrics
+        analysis.SuccessRate = analysis.TotalOperations > 0
+            ? (double)analysis.SuccessCount / analysis.TotalOperations
+            : 0.0;
+        
+        analysis.EstimatedExecutionTime = EstimateExecutionTime(analysis.OperationTypeCounts);
+        analysis.AverageTokensPerOperation = 150; // Simplified estimate
+        
+        // Detect patterns
+        DetectBatchPatterns(result, analysis);
+        
+        // Find correlations
+        FindBatchCorrelations(analysis);
+        
+        return analysis;
+    }
+    
+    private void ExtractFileReferences(BatchOperationEntry operation, BatchAnalysis analysis)
+    {
+        if (!operation.Success || operation.Result == null)
+            return;
+        
+        // Try to extract file references from the result
+        if (operation.Result is JsonElement jsonResult)
+        {
+            ExtractFilesFromJson(jsonResult, analysis);
+        }
+        else
+        {
+            // For non-JSON results, try reflection or dynamic
+            dynamic d = operation.Result;
+            try
+            {
+                if (d.files != null)
+                {
+                    foreach (var file in d.files)
+                    {
+                        string? filePath = file is string s ? s : file?.path?.ToString();
+                        if (!string.IsNullOrEmpty(filePath))
+                        {
+                            if (!analysis.FileReferences.ContainsKey(filePath))
+                                analysis.FileReferences[filePath] = 0;
+                            analysis.FileReferences[filePath]++;
+                        }
+                    }
+                }
+            }
+            catch { /* Ignore extraction errors */ }
+        }
+    }
+    
+    private void ExtractFilesFromJson(JsonElement element, BatchAnalysis analysis)
+    {
+        if (element.TryGetProperty("files", out var files) && files.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var file in files.EnumerateArray())
+            {
+                string? filePath = null;
+                if (file.ValueKind == JsonValueKind.String)
+                {
+                    filePath = file.GetString();
+                }
+                else if (file.ValueKind == JsonValueKind.Object && file.TryGetProperty("path", out var path))
+                {
+                    filePath = path.GetString();
+                }
+                
+                if (!string.IsNullOrEmpty(filePath))
+                {
+                    if (!analysis.FileReferences.ContainsKey(filePath))
+                        analysis.FileReferences[filePath] = 0;
+                    analysis.FileReferences[filePath]++;
+                }
+            }
+        }
+    }
+    
+    private void DetectBatchPatterns(BatchOperationResult result, BatchAnalysis analysis)
+    {
+        // Pattern: Multiple search operations
+        var searchOps = analysis.OperationTypeCounts.Where(kv =>
+            kv.Key.Contains("search", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value);
+        if (searchOps > 2)
+        {
+            analysis.Patterns.Add($"Comprehensive search strategy: {searchOps} search operations");
+        }
+        
+        // Pattern: File analysis workflow
+        var fileAnalysisOps = analysis.OperationTypeCounts.Where(kv =>
+            kv.Key.Contains("file", StringComparison.OrdinalIgnoreCase) ||
+            kv.Key.Contains("recent", StringComparison.OrdinalIgnoreCase) ||
+            kv.Key.Contains("similar", StringComparison.OrdinalIgnoreCase)).Sum(kv => kv.Value);
+        if (fileAnalysisOps > 1)
+        {
+            analysis.Patterns.Add("File discovery and analysis workflow");
+        }
+        
+        // Pattern: Size and structure analysis
+        if (analysis.OperationTypeCounts.ContainsKey("file_size_analysis") &&
+            analysis.OperationTypeCounts.ContainsKey("directory_search"))
+        {
+            analysis.Patterns.Add("Project structure analysis pattern");
+        }
+    }
+    
+    private void FindBatchCorrelations(BatchAnalysis analysis)
+    {
+        if (analysis.FileReferences.Count > 5 && analysis.OperationTypeCounts.Count > 2)
+        {
+            analysis.Correlations.Add("Multiple search types across many files - comprehensive discovery");
+        }
+        
+        if (analysis.FailureCount > 0 && analysis.FailureCount < analysis.TotalOperations / 2)
+        {
+            analysis.Correlations.Add($"Partial failures ({analysis.FailureCount}/{analysis.TotalOperations}) - some search targets may be invalid");
+        }
+        
+        if (analysis.TotalResultItems > 100)
+        {
+            analysis.Correlations.Add("High result volume - consider refining search criteria");
+        }
+    }
+    
+    private string EstimateExecutionTime(Dictionary<string, int> operationTypeCounts)
+    {
+        // Rough estimates in milliseconds
+        var timeEstimates = new Dictionary<string, int>
+        {
+            ["text_search"] = 50,
+            ["file_search"] = 30,
+            ["recent_files"] = 25,
+            ["file_size_analysis"] = 40,
+            ["similar_files"] = 100,
+            ["directory_search"] = 20
+        };
+        
+        var totalMs = operationTypeCounts.Sum(kv =>
+            timeEstimates.GetValueOrDefault(kv.Key, 50) * kv.Value);
+        
+        if (totalMs < 1000)
+            return $"{totalMs}ms";
+        else if (totalMs < 60000)
+            return $"{totalMs / 1000.0:F1}s";
+        else
+            return $"{totalMs / 60000.0:F1}m";
+    }
+    
+    private List<object> PrepareSummaryBatchResults(List<BatchOperationEntry> operations, BatchAnalysis analysis)
+    {
+        var summaryResults = new List<object>();
+        var resultsByType = operations.GroupBy(op => op.OperationType);
+        
+        foreach (var group in resultsByType)
+        {
+            var successCount = group.Count(op => op.Success);
+            var failureCount = group.Count() - successCount;
+            
+            summaryResults.Add(new
+            {
+                operation = group.Key,
+                count = group.Count(),
+                success = successCount,
+                failures = failureCount,
+                examples = group.Take(2).Select(op => new
+                {
+                    success = op.Success,
+                    summary = CreateOperationSummary(op)
+                }).ToList()
+            });
+        }
+        
+        return summaryResults;
+    }
+    
+    private object CreateOperationSummary(BatchOperationEntry operation)
+    {
+        if (!operation.Success)
+        {
+            return new { error = operation.Error };
+        }
+        
+        // Create operation-specific summaries based on type
+        return operation.OperationType switch
+        {
+            "text_search" => new { matches = ExtractCount(operation.Result, "totalMatches"), files = ExtractCount(operation.Result, "files") },
+            "file_search" => new { found = ExtractCount(operation.Result, "files") },
+            "recent_files" => new { found = ExtractCount(operation.Result, "files") },
+            "file_size_analysis" => new { analyzed = ExtractCount(operation.Result, "totalFiles") },
+            "similar_files" => new { found = ExtractCount(operation.Result, "similarFiles") },
+            "directory_search" => new { found = ExtractCount(operation.Result, "directories") },
+            _ => new { hasResult = true }
+        };
+    }
+    
+    private int ExtractCount(object? result, string propertyName)
+    {
+        if (result == null) return 0;
+        
+        try
+        {
+            if (result is JsonElement json)
+            {
+                if (json.TryGetProperty(propertyName, out var prop))
+                {
+                    if (prop.ValueKind == JsonValueKind.Number)
+                        return prop.GetInt32();
+                    if (prop.ValueKind == JsonValueKind.Array)
+                        return prop.GetArrayLength();
+                }
+            }
+            else
+            {
+                // Use dynamic for non-JSON results
+                dynamic d = result;
+                var value = d.GetType().GetProperty(propertyName)?.GetValue(d);
+                if (value is int count) return count;
+                if (value is IEnumerable<object> list) return list.Count();
+            }
+        }
+        catch { /* Ignore extraction errors */ }
+        
+        return 0;
+    }
+    
+    private List<object> PrepareFullBatchResults(List<BatchOperationEntry> operations)
+    {
+        return operations.Select(op => new
+        {
+            operation = op.OperationType,
+            success = op.Success,
+            result = op.Success ? op.Result : null,
+            error = !op.Success ? op.Error : null
+        }).Cast<object>().ToList();
+    }
+    
+    private List<string> GenerateBatchInsights(BatchAnalysis analysis)
+    {
+        var insights = new List<string>();
+        
+        // Success rate insight
+        if (analysis.SuccessRate < 1.0)
+        {
+            insights.Add($"{analysis.FailureCount} operations failed ({(1 - analysis.SuccessRate) * 100:F0}%)");
+            if (analysis.ErrorSummary.Any())
+            {
+                var topError = analysis.ErrorSummary.OrderByDescending(kv => kv.Value).First();
+                insights.Add($"Most common error: {topError.Key}");
+            }
+        }
+        else
+        {
+            insights.Add($"All {analysis.TotalOperations} operations completed successfully");
+        }
+        
+        // Operation distribution insight
+        if (analysis.OperationTypeCounts.Count > 1)
+        {
+            var topOp = analysis.OperationTypeCounts.OrderByDescending(kv => kv.Value).First();
+            insights.Add($"Primary focus: {topOp.Key} ({topOp.Value} operations)");
+        }
+        
+        // File hotspot insight
+        if (analysis.FileReferences.Any())
+        {
+            var fileCount = analysis.FileReferences.Count;
+            var totalFileOps = analysis.FileReferences.Sum(kv => kv.Value);
+            insights.Add($"Discovered {fileCount} files across {totalFileOps} operations");
+        }
+        
+        // Pattern insights
+        foreach (var pattern in analysis.Patterns.Take(2))
+        {
+            insights.Add(pattern);
+        }
+        
+        // Performance insight
+        insights.Add($"Estimated execution time: {analysis.EstimatedExecutionTime}");
+        
+        return insights;
+    }
+    
+    private List<AIAction> GenerateBatchActions(BatchAnalysis analysis)
+    {
+        var actions = new List<AIAction>();
+        
+        // Retry failed operations
+        if (analysis.FailureCount > 0)
+        {
+            actions.Add(new AIAction
+            {
+                Id = "retry_failures",
+                Description = "Retry failed operations",
+                Command = new AIActionCommand
+                {
+                    Tool = "batch_operations",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "filterBy", "failed" },
+                        { "maxRetries", 1 }
+                    }
+                },
+                EstimatedTokens = analysis.FailureCount * 200,
+                Priority = ActionPriority.High,
+                Context = ActionContext.Always
+            });
+        }
+        
+        // Expand search scope
+        if (analysis.TotalResultItems < 10 && analysis.OperationTypeCounts.ContainsKey("text_search"))
+        {
+            actions.Add(new AIAction
+            {
+                Id = "expand_search",
+                Description = "Broaden search criteria",
+                Command = new AIActionCommand
+                {
+                    Tool = "batch_operations",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "broaderTerms", true },
+                        { "includeComments", true }
+                    }
+                },
+                EstimatedTokens = 1500,
+                Priority = ActionPriority.Medium,
+                Context = ActionContext.ManyResults
+            });
+        }
+        
+        // Analyze discovered files
+        if (analysis.FileReferences.Count > 5)
+        {
+            actions.Add(new AIAction
+            {
+                Id = "analyze_files",
+                Description = "Analyze discovered files",
+                Command = new AIActionCommand
+                {
+                    Tool = "batch_operations",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "operations", new[] { "file_size_analysis", "similar_files" } }
+                    }
+                },
+                EstimatedTokens = 2000,
+                Priority = ActionPriority.Low,
+                Context = ActionContext.Exploration
+            });
+        }
+        
+        return actions;
+    }
+    
+    private int EstimateBatchResponseTokens(BatchAnalysis analysis, List<object> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 300;
+        
+        // Per operation tokens
+        var perOpTokens = 80;
+        
+        // Additional tokens for file references
+        var fileTokens = analysis.FileReferences.Count * 15;
+        
+        // Results tokens
+        var resultsTokens = _tokenEstimator.EstimateTokens(results);
+        
+        return baseTokens + (analysis.TotalOperations * perOpTokens) + fileTokens + resultsTokens;
+    }
+    
+    private List<DetailLevel> CreateBatchDetailLevels(BatchOperationResult result)
+    {
+        return new List<DetailLevel>
+        {
+            new DetailLevel
+            {
+                Id = "full_results",
+                Name = "Full Results",
+                Description = "Complete results for all batch operations",
+                EstimatedTokens = result.Operations.Count * 250,
+                IsActive = false
+            },
+            new DetailLevel
+            {
+                Id = "failed_operations",
+                Name = "Failed Operations Details",
+                Description = "Detailed information about failed operations",
+                EstimatedTokens = result.Operations.Count(op => !op.Success) * 150,
+                IsActive = false
+            }
+        };
+    }
+
+    #endregion
 }
 
 /// <summary>
@@ -1916,3 +2436,66 @@ public class TokenEstimationService : ITokenEstimationService
         return EstimateTokens(json);
     }
 }
+
+#region Batch Operations Support Classes
+
+/// <summary>
+/// Request data for batch operations
+/// </summary>
+public class BatchOperationRequest
+{
+    public List<BatchOperationDefinition> Operations { get; set; } = new();
+    public string? DefaultWorkspacePath { get; set; }
+}
+
+/// <summary>
+/// Definition of a single operation in a batch
+/// </summary>
+public class BatchOperationDefinition
+{
+    public string OperationType { get; set; } = string.Empty;
+    public Dictionary<string, object> Parameters { get; set; } = new();
+}
+
+/// <summary>
+/// Result of batch operations execution
+/// </summary>
+public class BatchOperationResult
+{
+    public List<BatchOperationEntry> Operations { get; set; } = new();
+    public TimeSpan TotalExecutionTime { get; set; }
+}
+
+/// <summary>
+/// Individual operation result in a batch
+/// </summary>
+public class BatchOperationEntry
+{
+    public string OperationType { get; set; } = string.Empty;
+    public bool Success { get; set; }
+    public object? Result { get; set; }
+    public string? Error { get; set; }
+    public int Index { get; set; }
+}
+
+/// <summary>
+/// Analysis data for batch operations
+/// </summary>
+public class BatchAnalysis
+{
+    public int TotalOperations { get; set; }
+    public int SuccessCount { get; set; }
+    public int FailureCount { get; set; }
+    public double SuccessRate { get; set; }
+    public string EstimatedExecutionTime { get; set; } = "0ms";
+    public int TotalResultItems { get; set; }
+    public int AverageTokensPerOperation { get; set; }
+    
+    public Dictionary<string, int> OperationTypeCounts { get; set; } = new();
+    public Dictionary<string, int> ErrorSummary { get; set; } = new();
+    public Dictionary<string, int> FileReferences { get; set; } = new();
+    public List<string> Patterns { get; set; } = new();
+    public List<string> Correlations { get; set; } = new();
+}
+
+#endregion
