@@ -54,16 +54,29 @@ public class InMemoryTestIndexService : ILuceneIndexService
                     Writer.Commit();
                     Writer.Flush(true, true);
                     
-                    // Always dispose and recreate to ensure we see latest changes
-                    Searcher = null;
-                    Reader?.Dispose();
-                    
-                    // Create completely fresh reader from directory
-                    Reader = DirectoryReader.Open(Directory);
-                    Searcher = new IndexSearcher(Reader);
-                    
-                    // Debug logging for tests
-                    System.Diagnostics.Debug.WriteLine($"RefreshSearcher: Index now has {Reader.NumDocs} documents");
+                    // Use DirectoryReader.OpenIfChanged to get latest changes
+                    if (Reader != null)
+                    {
+                        var newReader = DirectoryReader.OpenIfChanged(Reader);
+                        if (newReader != null)
+                        {
+                            Reader.Dispose();
+                            Reader = newReader;
+                            Searcher = new IndexSearcher(Reader);
+                            System.Diagnostics.Debug.WriteLine($"RefreshSearcher: Updated reader, index now has {Reader.NumDocs} documents");
+                        }
+                        else
+                        {
+                            System.Diagnostics.Debug.WriteLine($"RefreshSearcher: No changes, index still has {Reader.NumDocs} documents");
+                        }
+                    }
+                    else
+                    {
+                        // First time - create new reader
+                        Reader = DirectoryReader.Open(Directory);
+                        Searcher = new IndexSearcher(Reader);
+                        System.Diagnostics.Debug.WriteLine($"RefreshSearcher: Created new reader, index has {Reader.NumDocs} documents");
+                    }
                 }
                 else if (Reader == null)
                 {

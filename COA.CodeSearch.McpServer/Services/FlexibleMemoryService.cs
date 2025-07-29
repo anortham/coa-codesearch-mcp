@@ -73,6 +73,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     /// </summary>
     public async Task<FlexibleMemorySearchResult> SearchMemoriesAsync(FlexibleMemorySearchRequest request)
     {
+        System.Diagnostics.Debug.WriteLine($"🔍 SearchMemoriesAsync ENTRY: Query='{request.Query}'");
+        Console.WriteLine($"🔍 SearchMemoriesAsync ENTRY: Query='{request.Query}'");
+        
         var result = new FlexibleMemorySearchResult();
         var allMemories = new List<FlexibleMemoryEntry>();
         
@@ -773,6 +776,11 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Execute search  
             System.Diagnostics.Debug.WriteLine($"Final query: {finalQuery}");
             Console.WriteLine($"Final query: {finalQuery}");
+            System.Diagnostics.Debug.WriteLine($"About to search with searcher: {searcher.GetType().Name}");
+            Console.WriteLine($"About to search with searcher: {searcher.GetType().Name}");
+            System.Diagnostics.Debug.WriteLine($"Searcher IndexReader.NumDocs: {searcher.IndexReader.NumDocs}");
+            Console.WriteLine($"Searcher IndexReader.NumDocs: {searcher.IndexReader.NumDocs}");
+            
             var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
             System.Diagnostics.Debug.WriteLine($"Search returned {topDocs.TotalHits} hits");
