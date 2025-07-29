@@ -240,24 +240,23 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                         timestamp = DateTime.UtcNow
                     });
 
-                // Add resource URI to response
-                var dynamicResponse = (dynamic)response;
-                var enhancedResponse = new
+                // Add resource URI to response using fast dynamic pattern
+                dynamic d = response;
+                return new
                 {
-                    success = dynamicResponse.success,
-                    operation = dynamicResponse.operation,
-                    query = dynamicResponse.query,
-                    summary = dynamicResponse.summary,
-                    results = dynamicResponse.results,
-                    resultsSummary = dynamicResponse.resultsSummary,
-                    distribution = dynamicResponse.distribution,
-                    hotspots = dynamicResponse.hotspots,
-                    insights = dynamicResponse.insights,
-                    actions = dynamicResponse.actions,
-                    meta = dynamicResponse.meta,
+                    success = d.success,
+                    operation = d.operation,
+                    query = d.query,
+                    summary = d.summary,
+                    results = d.results,
+                    resultsSummary = d.resultsSummary,
+                    distribution = d.distribution,
+                    hotspots = d.hotspots,
+                    insights = d.insights,
+                    actions = d.actions,
+                    meta = d.meta,
                     resourceUri = resourceUri
                 };
-                return enhancedResponse;
             }
 
             return response;

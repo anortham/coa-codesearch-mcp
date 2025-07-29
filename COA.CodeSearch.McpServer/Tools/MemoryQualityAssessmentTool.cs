@@ -338,8 +338,17 @@ public class MemoryQualityAssessmentTool
     private string GenerateAssessmentSummary(List<object> results)
     {
         var total = results.Count;
-        var passing = results.Count(r => ((dynamic)r).passesThreshold);
-        var avgScore = results.Average(r => (double)((dynamic)r).overallScore);
+        // Using consistent dynamic pattern - declare once, use multiple times
+        var passing = results.Count(r => 
+        {
+            dynamic d = r;
+            return d.passesThreshold;
+        });
+        var avgScore = results.Average(r => 
+        {
+            dynamic d = r;
+            return (double)d.overallScore;
+        });
         
         return $"{passing}/{total} memories pass quality threshold. Average score: {avgScore:F2}";
     }
@@ -369,15 +378,27 @@ public class MemoryQualityAssessmentTool
     {
         var recommendations = new List<string>();
         
-        var overallPassingRate = (double)results.Count(r => ((dynamic)r).passesThreshold) / results.Count;
+        // Using consistent dynamic pattern
+        var overallPassingRate = (double)results.Count(r => 
+        {
+            dynamic d = r;
+            return d.passesThreshold;
+        }) / results.Count;
+        
         if (overallPassingRate < 0.7)
         {
             recommendations.Add($"Overall quality is below target ({overallPassingRate:P}). Focus on improving memory completeness and relevance.");
         }
 
-        var poorPerformingTypes = typeAnalysis.Where(t => (double)((dynamic)t).passingRate < 0.6).ToList();
-        foreach (dynamic type in poorPerformingTypes)
+        var poorPerformingTypes = typeAnalysis.Where(t => 
         {
+            dynamic d = t;
+            return (double)d.passingRate < 0.6;
+        }).ToList();
+        
+        foreach (var typeObj in poorPerformingTypes)
+        {
+            dynamic type = typeObj;
             recommendations.Add($"Memory type '{type.memoryType}' has low quality ({type.passingRate:P} passing). Review guidelines for this type.");
         }
 
@@ -424,7 +445,12 @@ public class MemoryQualityAssessmentTool
 
         if (suggestionAnalysis.Any())
         {
-            var autoSuggestion = suggestionAnalysis.FirstOrDefault(s => (int)((dynamic)s).autoImplementableCount > 0);
+            var autoSuggestion = suggestionAnalysis.FirstOrDefault(s => 
+            {
+                dynamic d = s;
+                return (int)d.autoImplementableCount > 0;
+            });
+            
             if (autoSuggestion != null)
             {
                 dynamic suggestion = autoSuggestion;

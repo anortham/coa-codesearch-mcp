@@ -1886,7 +1886,6 @@ public class TextSearchHotspot
     public int Lines { get; set; }
 }
 
-
 /// <summary>
 /// Token estimation service interface
 /// </summary>
