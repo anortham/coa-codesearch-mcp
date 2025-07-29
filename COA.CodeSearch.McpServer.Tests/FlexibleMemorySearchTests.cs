@@ -181,10 +181,10 @@ public class FlexibleMemorySearchTests : IDisposable
     [Fact]
     public async Task SearchMemories_WithTextQuery_FindsMatches()
     {
-        // Arrange
-        var memory1 = CreateMemory(MemoryTypes.CodePattern, "Repository pattern for data access");
-        var memory2 = CreateMemory(MemoryTypes.ArchitecturalDecision, "Use repository pattern throughout");
-        var memory3 = CreateMemory(MemoryTypes.Learning, "Factory pattern is useful for object creation");
+        // Arrange - Use terms that won't trigger synonym expansion
+        var memory1 = CreateMemory(MemoryTypes.CodePattern, "The quick brown fox jumps");
+        var memory2 = CreateMemory(MemoryTypes.ArchitecturalDecision, "A quick solution was implemented");
+        var memory3 = CreateMemory(MemoryTypes.Learning, "Slow and steady wins the race");
         
         await _memoryService.StoreMemoryAsync(memory1);
         await _memoryService.StoreMemoryAsync(memory2);
@@ -193,14 +193,22 @@ public class FlexibleMemorySearchTests : IDisposable
         // Act
         var searchRequest = new FlexibleMemorySearchRequest
         {
-            Query = "repository"
+            Query = "quick"
         };
         
         var result = await _memoryService.SearchMemoriesAsync(searchRequest);
         
+        // Debug: Show what memories were found
+        _output.WriteLine($"Found {result.TotalFound} memories:");
+        for (int i = 0; i < result.Memories.Count; i++)
+        {
+            var memory = result.Memories[i];
+            _output.WriteLine($"  {i + 1}. {memory.Type}: '{memory.Content}'");
+        }
+        
         // Assert
         Assert.Equal(2, result.TotalFound);
-        Assert.All(result.Memories, m => Assert.Contains("repository", m.Content.ToLower()));
+        Assert.All(result.Memories, m => Assert.Contains("quick", m.Content.ToLower()));
     }
     
     [Fact(Skip = "Faceting requires real file system for taxonomy - not supported in InMemoryTestIndexService")]
