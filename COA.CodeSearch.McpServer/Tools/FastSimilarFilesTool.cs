@@ -116,8 +116,8 @@ public class FastSimilarFilesTool : ITool
             }
 
             var sourceDocId = sourceHits.ScoreDocs[0].Doc;
-            // Load only essential fields for source document analysis
-            var sourceDoc = _fieldSelectorService.LoadDocument(searcher, sourceDocId, "filename", "extension", "language");
+            // Load essential fields including content for MoreLikeThis analysis
+            var sourceDoc = _fieldSelectorService.LoadDocument(searcher, sourceDocId, "filename", "extension", "language", "content");
             
             // Set up MoreLikeThis query
             var mlt = new MoreLikeThis(searcher.IndexReader)
