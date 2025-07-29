@@ -192,6 +192,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IVectorIndex, InMemoryVectorIndex>();
         services.AddSingleton<SemanticMemoryIndex>();
         services.AddSingleton<HybridMemorySearch>();
+        services.AddSingleton<MemoryStorageOrchestrator>();
         
         // Phase 3: Memory Quality Validation
         services.AddSingleton<IQualityValidator, COA.CodeSearch.McpServer.Services.Quality.CompletenessValidator>();

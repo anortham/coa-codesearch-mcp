@@ -61,6 +61,7 @@ public class FlexibleMemoryQueryTests
         
         var facetingServiceMock = new Mock<MemoryFacetingService>(Mock.Of<ILogger<MemoryFacetingService>>(), Mock.Of<IPathResolutionService>());
         var scoringServiceMock = Mock.Of<IScoringService>();
+        
         _memoryService = new FlexibleMemoryService(_loggerMock.Object, _configMock.Object, _indexServiceMock.Object, _pathResolutionMock.Object, errorHandlingMock.Object, validationMock.Object, facetingServiceMock.Object, scoringServiceMock);
     }
     
