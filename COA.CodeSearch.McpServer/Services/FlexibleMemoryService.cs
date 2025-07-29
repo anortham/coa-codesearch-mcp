@@ -512,7 +512,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
-        doc.Add(new TextField("_all", searchableContent, Field.Store.NO));
+        doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields with proper taxonomy writer integration
         doc = await _facetingService.AddFacetFieldsAsync(doc, memory, workspacePath);
@@ -602,7 +602,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
-        doc.Add(new TextField("_all", searchableContent, Field.Store.NO));
+        doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields for efficient faceting (synchronous version - limited support)
         doc = _facetingService.AddFacetFields(doc, memory);
@@ -726,6 +726,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Build the query
             var baseQuery = await BuildQueryAsync(request);
             _logger.LogInformation("Built base query: {Query}", baseQuery.ToString());
+            System.Diagnostics.Debug.WriteLine($"Built base query: {baseQuery}");
+            Console.WriteLine($"Built base query: {baseQuery}");
             
             // Apply scoring based on temporal scoring mode
             var finalQuery = baseQuery;
@@ -769,6 +771,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Execute search
             var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
+            System.Diagnostics.Debug.WriteLine($"Search returned {topDocs.TotalHits} hits");
+            Console.WriteLine($"Search returned {topDocs.TotalHits} hits");
             
             // Setup highlighting if enabled
             Highlighter? highlighter = null;

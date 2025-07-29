@@ -8,6 +8,7 @@ using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
+using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tests.Helpers;
 
@@ -17,7 +18,23 @@ namespace COA.CodeSearch.McpServer.Tests.Helpers;
 public class InMemoryTestIndexService : ILuceneIndexService
 {
     private readonly ConcurrentDictionary<string, InMemoryIndex> _indexes = new();
-    private readonly StandardAnalyzer _analyzer = new(LuceneVersion.LUCENE_48);
+    private readonly MemoryAnalyzer _analyzer;
+    
+    public InMemoryTestIndexService()
+    {
+        // TEMPORARY: Use StandardAnalyzer to test if MemoryAnalyzer is the issue
+        // var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        // var logger = loggerFactory.CreateLogger<MemoryAnalyzer>();
+        // _analyzer = new MemoryAnalyzer(logger);
+        
+        // For now, use a simple StandardAnalyzer that should work
+        _analyzer = null!; // Will be set below
+    }
+    
+    private Analyzer GetAnalyzer()
+    {
+        return new StandardAnalyzer(LuceneVersion.LUCENE_48);
+    }
     
     private class InMemoryIndex
     {
@@ -96,7 +113,7 @@ public class InMemoryTestIndexService : ILuceneIndexService
         {
             if (index.Writer == null)
             {
-                var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
+                var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, GetAnalyzer());
                 index.Writer = new IndexWriter(index.Directory, config);
             }
             
@@ -126,7 +143,7 @@ public class InMemoryTestIndexService : ILuceneIndexService
                     // Index doesn't exist yet, create empty writer first
                     if (index.Writer == null)
                     {
-                        var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _analyzer);
+                        var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, GetAnalyzer());
                         index.Writer = new IndexWriter(index.Directory, config);
                         index.Writer.Commit();
                     }
@@ -186,7 +203,7 @@ public class InMemoryTestIndexService : ILuceneIndexService
     
     public Task<Analyzer> GetAnalyzerAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
-        return Task.FromResult<Analyzer>(_analyzer);
+        return Task.FromResult<Analyzer>(GetAnalyzer());
     }
     
     public Task<Dictionary<string, string>> GetAllIndexMappingsAsync()
