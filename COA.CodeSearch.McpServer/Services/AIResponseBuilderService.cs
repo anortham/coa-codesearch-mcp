@@ -190,7 +190,7 @@ public class AIResponseBuilderService
             RelativePath = r.relativePath,
             Extension = r.extension,
             Score = r.similarity ?? 0.0f,
-            MatchingTerms = r.matchingTerms ?? 0,
+            MatchingTerms = 0, // Tool doesn't provide this
             FileSize = 0 // Tool doesn't provide this
         }).ToList();
 
