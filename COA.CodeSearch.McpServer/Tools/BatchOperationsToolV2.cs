@@ -214,9 +214,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     
     private async Task<object> ExecuteTextSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("searchQuery", out var queryProp))
+        if (!operation.TryGetProperty("query", out var queryProp))
         {
-            throw new InvalidOperationException("text_search operation requires 'searchQuery'");
+            throw new InvalidOperationException("text_search operation requires 'query'");
         }
 
         return await _fastTextSearchToolV2.ExecuteAsync(
@@ -237,9 +237,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private async Task<object> ExecuteFileSearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("nameQuery", out var queryProp))
+        if (!operation.TryGetProperty("query", out var queryProp))
         {
-            throw new InvalidOperationException("file_search operation requires 'nameQuery'");
+            throw new InvalidOperationException("file_search operation requires 'query'");
         }
 
         return await _fastFileSearchToolV2.ExecuteAsync(
@@ -307,9 +307,9 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 
     private async Task<object> ExecuteDirectorySearchAsync(JsonElement operation, string? defaultWorkspacePath, CancellationToken cancellationToken)
     {
-        if (!operation.TryGetProperty("directoryQuery", out var queryProp))
+        if (!operation.TryGetProperty("query", out var queryProp))
         {
-            throw new InvalidOperationException("directory_search operation requires 'directoryQuery'");
+            throw new InvalidOperationException("directory_search operation requires 'query'");
         }
 
         return await _fastDirectorySearchTool.ExecuteAsync(
