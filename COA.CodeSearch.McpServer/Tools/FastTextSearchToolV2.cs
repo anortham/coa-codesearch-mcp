@@ -222,16 +222,19 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             // Store search results as a resource if provider is available
             if (_searchResultResourceProvider != null && results.Count > 0)
             {
+                // Use consistent dynamic pattern - declare once, use multiple times
+                dynamic d = response;
+                
                 var resourceUri = _searchResultResourceProvider.StoreSearchResult(
                     query, 
                     new
                     {
                         results = results,
-                        query = ((dynamic)response).query,
-                        summary = ((dynamic)response).summary,
-                        distribution = ((dynamic)response).distribution,
-                        hotspots = ((dynamic)response).hotspots,
-                        insights = ((dynamic)response).insights
+                        query = d.query,
+                        summary = d.summary,
+                        distribution = d.distribution,
+                        hotspots = d.hotspots,
+                        insights = d.insights
                     },
                     new
                     {
@@ -239,9 +242,6 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                         workspacePath = workspacePath,
                         timestamp = DateTime.UtcNow
                     });
-
-                // Add resource URI to response using fast dynamic pattern
-                dynamic d = response;
                 return new
                 {
                     success = d.success,

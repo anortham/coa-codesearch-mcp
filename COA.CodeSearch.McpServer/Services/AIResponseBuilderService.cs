@@ -1669,6 +1669,7 @@ public class AIResponseBuilderService
             if (byExtension.Count > 1)
             {
                 var topExt = byExtension.OrderByDescending(kvp => ((dynamic)kvp.Value).count).First();
+                dynamic topExtValue = topExt.Value;
                 actions.Add(new AIAction
                 {
                     Id = "filter_by_type",
@@ -1682,7 +1683,7 @@ public class AIResponseBuilderService
                             { "extensions", new[] { topExt.Key } }
                         }
                     },
-                    EstimatedTokens = Math.Min(2000, ((dynamic)topExt.Value).count * 50),
+                    EstimatedTokens = Math.Min(2000, topExtValue.count * 50),
                     Priority = ActionPriority.High,
                     Context = ActionContext.ManyResults
                 });
