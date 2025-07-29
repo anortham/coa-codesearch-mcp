@@ -1,4 +1,5 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Events;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
 using Lucene.Net.Analysis;
@@ -31,6 +32,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     private readonly IMemoryValidationService _validation;
     private readonly MemoryFacetingService _facetingService;
     private readonly IScoringService _scoringService;
+    private readonly IMemoryEventPublisher _eventPublisher;
     private readonly string _projectMemoryWorkspace;
     private readonly string _localMemoryWorkspace;
     
@@ -52,7 +54,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         IErrorHandlingService errorHandling,
         IMemoryValidationService validation,
         MemoryFacetingService facetingService,
-        IScoringService scoringService)
+        IScoringService scoringService,
+        IMemoryEventPublisher eventPublisher)
     {
         _logger = logger;
         _configuration = configuration;
@@ -60,8 +63,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         _pathResolution = pathResolution;
         _errorHandling = errorHandling;
         _validation = validation;
-        _facetingService = facetingService;
+        _facetingService = facetingService;  
         _scoringService = scoringService;
+        _eventPublisher = eventPublisher;
         
         // Initialize workspace paths from PathResolutionService
         _projectMemoryWorkspace = _pathResolution.GetProjectMemoryPath();
@@ -1843,6 +1847,20 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 // Also commit through the service to ensure test implementations refresh their searchers
                 await _indexService.CommitAsync(workspace);
                 
+                // Publish memory storage event for semantic indexing and other subscribers
+                try
+                {
+                    var eventData = new MemoryStorageEvent
+                    {
+                        Memory = memory,
+                        Action = existingHits.TotalHits > 0 ? MemoryStorageAction.Updated : MemoryStorageAction.Created
+                    };
+                    await _eventPublisher.PublishMemoryStorageEventAsync(eventData);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to publish memory storage event for {MemoryId} (non-blocking)", memory.Id);
+                }
                 
                 return true;
             }, context, ErrorSeverity.Recoverable);
