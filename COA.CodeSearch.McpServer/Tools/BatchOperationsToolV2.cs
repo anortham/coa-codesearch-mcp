@@ -110,10 +110,34 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             // Create request model for response builder
             var batchRequest = new BatchOperationRequest
             {
-                Operations = operationArray.Select(op => new BatchOperationDefinition
+                Operations = operationArray.Select(op => 
                 {
-                    OperationType = op.GetProperty("operation").GetString() ?? op.GetProperty("type").GetString() ?? "unknown",
-                    Parameters = new Dictionary<string, object>()
+                    var opType = op.GetProperty("operation").GetString() ?? op.GetProperty("type").GetString() ?? "unknown";
+                    var parameters = new Dictionary<string, object>();
+                    
+                    // Extract all properties except 'operation' and 'type' as parameters
+                    foreach (var prop in op.EnumerateObject())
+                    {
+                        if (prop.Name != "operation" && prop.Name != "type")
+                        {
+                            parameters[prop.Name] = prop.Value.ValueKind switch
+                            {
+                                JsonValueKind.String => prop.Value.GetString() ?? string.Empty,
+                                JsonValueKind.Number => prop.Value.GetDouble(),
+                                JsonValueKind.True => true,
+                                JsonValueKind.False => false,
+                                JsonValueKind.Array => prop.Value.ToString(),
+                                JsonValueKind.Object => prop.Value.ToString(),
+                                _ => prop.Value.ToString()
+                            };
+                        }
+                    }
+                    
+                    return new BatchOperationDefinition
+                    {
+                        OperationType = opType,
+                        Parameters = parameters
+                    };
                 }).ToList(),
                 DefaultWorkspacePath = workspacePath
             };
