@@ -72,6 +72,4 @@ public static class ToolNames
     // Phase 3: Unified Memory Interface
     public const string UnifiedMemory = "unified_memory";
     
-    // Phase 3: Multi-level Caching Strategy
-    public const string CacheManagement = "cache_management";
 }
