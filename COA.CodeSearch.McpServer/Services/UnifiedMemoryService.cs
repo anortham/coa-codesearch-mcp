@@ -519,10 +519,20 @@ public class UnifiedMemoryService
             }
 
             // First, try to find memories by the descriptions
+            if (_memoryTools == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "memory_tools_unavailable",
+                    Message = "Memory tools are not available"
+                };
+            }
+
             var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, null, null, null, null, true, 1);
             var targetMemories = await _memoryTools.SearchMemoriesAsync(target, null, null, null, null, true, 1);
 
-            if (sourceMemories.Memories == null || !sourceMemories.Memories.Any())
+            if (sourceMemories?.Memories == null || !sourceMemories.Memories.Any())
             {
                 return new UnifiedMemoryResult
                 {
@@ -532,7 +542,7 @@ public class UnifiedMemoryService
                 };
             }
 
-            if (targetMemories.Memories == null || !targetMemories.Memories.Any())
+            if (targetMemories?.Memories == null || !targetMemories.Memories.Any())
             {
                 return new UnifiedMemoryResult
                 {
@@ -726,7 +736,7 @@ public class UnifiedMemoryService
                     {
                         Success = false,
                         Action = "explore_failed",
-                        Message = errorMessage
+                        Message = errorMessage ?? "Unknown error occurred"
                     };
                 }
 
@@ -972,12 +982,12 @@ public class UnifiedMemoryService
     /// <summary>
     /// Handle checklist item completion
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleChecklistCompletionAsync(
+    private Task<UnifiedMemoryResult> HandleChecklistCompletionAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         // This is a simplified implementation - in practice you'd want to parse the checklist name and item
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "checklist_completion_not_fully_implemented",
@@ -992,17 +1002,17 @@ public class UnifiedMemoryService
                     Priority = "high"
                 }
             }
-        };
+        });
     }
 
     /// <summary>
     /// Handle adding items to checklist
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleChecklistAddItemAsync(
+    private Task<UnifiedMemoryResult> HandleChecklistAddItemAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "checklist_add_not_fully_implemented",
@@ -1017,17 +1027,17 @@ public class UnifiedMemoryService
                     Priority = "high"
                 }
             }
-        };
+        });
     }
 
     /// <summary>
     /// Handle updating checklist items
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleChecklistUpdateItemAsync(
+    private Task<UnifiedMemoryResult> HandleChecklistUpdateItemAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "checklist_update_not_fully_implemented",
@@ -1042,7 +1052,7 @@ public class UnifiedMemoryService
                     Priority = "high"
                 }
             }
-        };
+        });
     }
 
     #region Helper Methods

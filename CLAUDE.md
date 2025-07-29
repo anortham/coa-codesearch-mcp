@@ -78,11 +78,11 @@ mcp__codesearch__workflow_discovery --goal "search code"       # Learn tool depe
 | Analyze Files     | `recent_files`, `file_size_analysis`        | -                                         | -                                      |
 | Discover Code     | `similar_files`, `directory_search`         | -                                         | -                                      |
 | Index & Search    | `index_workspace`, `batch_operations`       | -                                         | -                                      |
-| Store Knowledge   | -                                            | `store_memory`, `store_temporary_memory`  | -                                      |
-| Find Knowledge    | -                                            | `search_memories`, `recall_context`      | `workflow_discovery` (NEW)             |
-| **🆕 Smart Search** | -                                            | `unified_memory`, `semantic_search`, `hybrid_search` | -                        |
-| **🆕 AI Intelligence** | -                                         | `memory_quality_assessment`, `load_context` | -                                 |
-| Explore Memory    | -                                            | `memory_graph_navigator`, `memory_timeline` | -                                    |
+| Store Knowledge   | -                                            | `store_memory`                            | -                                      |
+| Find Knowledge    | -                                            | `search_memories`, `recall_context`      | `workflow_discovery`                   |
+| **Smart Search**  | -                                            | `unified_memory`, `semantic_search`, `hybrid_search` | -                        |
+| **AI Intelligence** | -                                         | `memory_quality_assessment`, `load_context` | -                                 |
+| Explore Memory    | -                                            | `memory_graph_navigator`                  | -                                    |
 | Manage Data       | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
 
 ### Memory System Essentials

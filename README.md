@@ -57,67 +57,39 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 ## 🛠️ Available Tools
 
 ### Text Search & Analysis
-- `index_workspace` - Build search index (required for fast search tools)
-- `text_search` - Search text across codebase with advanced filters
-- `file_search` - Find files by name with fuzzy matching
-- `directory_search` - Find directories with pattern matching
-- `recent_files` - Find recently modified files
-- `similar_files` - Find files with similar content
+- `index_workspace` - Build search index (required for all search operations)
+- `text_search` - Search text across codebase with advanced filters and context
+- `file_search` - Find files by name with fuzzy matching and patterns
+- `directory_search` - Find directories with pattern matching support
+- `recent_files` - Find recently modified files with time filters
+- `similar_files` - Find files with similar content using MLT algorithm
 - `file_size_analysis` - Analyze file sizes and distributions
 
-### Memory System
-- `recall_context` - Load relevant context (use at session start!)
+### Essential Memory System (6 Core Tools)
+- `recall_context` - Load relevant context from previous sessions (**use at session start!**)
 - `store_memory` - Store any type of memory with custom fields
-- `store_temporary_memory` - Store session-only memories
-- `search_memories` - Search with AI-powered understanding
-- `update_memory` - Update existing memories
-- `get_memory` - Retrieve by ID
-- `find_similar_memories` - Find related memories
-- `archive_memories` - Archive old memories
-- `summarize_memories` - Compress old memories
-- `memory_dashboard` - View statistics
-- `memory_timeline` - Chronological view
-- `backup_memories` - Export to JSON
-- `restore_memories` - Import from JSON
-
-### Memory Tools (Specialized)
-- `store_git_commit_memory` - Link memories to commits
-- `get_memories_for_file` - Get file-related memories
-- `link_memories` - Create memory relationships
-- `get_related_memories` - Traverse relationships
-- `unlink_memories` - Remove relationships
-- `list_memory_templates` - View templates
-- `create_memory_from_template` - Use templates
-- `get_memory_suggestions` - Context-aware suggestions
-
-### 🆕 Phase 3: Advanced Memory Intelligence
+- `search_memories` - Search stored memories with intelligent query expansion
 - `unified_memory` - Natural language memory operations with intent detection
-- `semantic_search` - Find memories by concepts, not just keywords
+- `semantic_search` - Find memories by concepts and meaning, not just keywords
 - `hybrid_search` - Combine text search with semantic understanding
 - `memory_quality_assessment` - Evaluate and improve memory quality with scoring
 - `load_context` - Auto-load relevant memories for current working environment
+- `backup_memories` - Export memories to JSON for team sharing and version control
+- `restore_memories` - Import memories from JSON backup files
 
-### Task Management
-- `create_checklist` - Create persistent task lists
-- `add_checklist_items` - Add one or more tasks
-- `toggle_checklist_item` - Mark complete/incomplete
-- `update_checklist_item` - Update task details
-- `view_checklist` - View with progress
-- `list_checklists` - List all checklists
-
-### Advanced Tools
+### Advanced Analysis Tools
 - `search_assistant` - Orchestrate multi-step search operations with AI guidance
 - `pattern_detector` - Analyze code for patterns and anti-patterns with severity levels
 - `memory_graph_navigator` - Explore memory relationships visually with graph insights
 - `tool_usage_analytics` - View tool performance and usage patterns
-- `workflow_discovery` - 🆕 Discover tool dependencies and suggested workflows for AI agents
+- `workflow_discovery` - Discover tool dependencies and suggested workflows for AI agents
 
 ### Utilities
-- `batch_operations` - Execute multiple search operations in parallel
-- `index_health_check` - Check index status and performance
+- `batch_operations` - Execute multiple search operations in parallel for efficiency
+- `index_health_check` - Check Lucene index status and performance metrics
 - `system_health_check` - Comprehensive system health monitoring
-- `log_diagnostics` - Manage debug logs
-- `get_version` - Get server version info
+- `log_diagnostics` - Manage debug logs and cleanup old log files
+- `get_version` - Get server version info and build details
 
 ## ⚙️ Configuration
 
@@ -206,11 +178,8 @@ store_memory --type "TechnicalDebt" \
 # Search memories with AI-powered understanding
 search_memories --query "authentication decisions"
 
-# NEW: Navigate memory relationships visually
+# Navigate memory relationships visually
 memory_graph_navigator --startPoint "authentication patterns"
-
-# NEW: Find similar memories
-find_similar_memories --memoryId "memory_123"
 
 # Backup for version control (team sharing enabled)
 backup_memories  # Creates JSON in .codesearch/backups/

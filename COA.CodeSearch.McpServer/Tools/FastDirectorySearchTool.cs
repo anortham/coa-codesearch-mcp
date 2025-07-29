@@ -197,7 +197,7 @@ public class FastDirectorySearchTool : ITool
                 var mode = results.Count > 20 ? ResponseMode.Summary : ResponseMode.Full;
                 var response = _aiResponseBuilder.BuildDirectorySearchResponse(
                     query,
-                    searchType,
+                    searchType ?? "standard",
                     workspacePath,
                     results.Cast<dynamic>().ToList(),
                     searchDuration,
@@ -275,7 +275,7 @@ public class FastDirectorySearchTool : ITool
                 var mode = results.Count > 20 ? ResponseMode.Summary : ResponseMode.Full;
                 var response = _aiResponseBuilder.BuildDirectorySearchResponse(
                     query,
-                    searchType,
+                    searchType ?? "standard",
                     workspacePath,
                     results,
                     searchDuration,
