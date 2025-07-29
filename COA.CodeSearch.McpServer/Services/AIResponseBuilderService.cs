@@ -3,6 +3,7 @@ using COA.CodeSearch.McpServer.Models;
 using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace COA.CodeSearch.McpServer.Services;
 
@@ -278,6 +279,249 @@ public class AIResponseBuilderService
                 detailRequestToken = detailRequestToken
             }
         };
+
+        return response;
+    }
+
+    /// <summary>
+    /// Build AI-optimized response for text search results using JsonNode (POC)
+    /// </summary>
+    public JsonNode BuildTextSearchResponseAsJsonNode(
+        string query,
+        string searchType,
+        string workspacePath,
+        List<TextSearchResult> results,
+        long totalHits,
+        string? filePattern,
+        string[]? extensions,
+        ResponseMode mode,
+        ProjectContext? projectContext,
+        long? alternateHits,
+        Dictionary<string, int>? alternateExtensions)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Create response using JsonNode
+        var response = new JsonObject
+        {
+            ["success"] = true,
+            ["operation"] = "text_search"
+        };
+
+        // Build query object
+        var queryObj = new JsonObject
+        {
+            ["text"] = query,
+            ["type"] = searchType,
+            ["workspace"] = workspacePath
+        };
+        if (filePattern != null) queryObj["filePattern"] = filePattern;
+        if (extensions != null) queryObj["extensions"] = JsonValue.Create(extensions);
+        response["query"] = queryObj;
+
+        // Build summary
+        var summary = new JsonObject
+        {
+            ["totalHits"] = totalHits,
+            ["returnedResults"] = results.Count,
+            ["filesMatched"] = results.Select(r => r.FilePath).Distinct().Count(),
+            ["truncated"] = totalHits > results.Count
+        };
+        response["summary"] = summary;
+
+        // Group by extension
+        var byExtension = results
+            .GroupBy(r => r.Extension)
+            .ToDictionary(
+                g => g.Key,
+                g => new { count = g.Count(), files = g.Select(r => r.FileName).Distinct().Count() }
+            );
+
+        // Group by directory
+        var byDirectory = results
+            .GroupBy(r => Path.GetDirectoryName(r.RelativePath) ?? "root")
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Count()
+            );
+
+        // Build distribution
+        var distribution = new JsonObject();
+        
+        // Extension distribution
+        var extDistribution = new JsonObject();
+        foreach (var (ext, data) in byExtension)
+        {
+            extDistribution[ext] = new JsonObject
+            {
+                ["count"] = data.count,
+                ["files"] = data.files
+            };
+        }
+        distribution["byExtension"] = extDistribution;
+        
+        // Directory distribution
+        var dirDistribution = new JsonObject();
+        foreach (var (dir, count) in byDirectory)
+        {
+            dirDistribution[dir] = count;
+        }
+        distribution["byDirectory"] = dirDistribution;
+        
+        response["distribution"] = distribution;
+
+        // Find hotspot files
+        var hotspots = results
+            .GroupBy(r => r.RelativePath)
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .Select(g => new
+            { 
+                file = g.Key, 
+                matches = g.Count(),
+                lines = g.SelectMany(r => r.Context?.Where(c => c.IsMatch).Select(c => c.LineNumber) ?? Enumerable.Empty<int>()).Distinct().Count()
+            });
+
+        // Build hotspots array
+        var hotspotsArray = new JsonArray();
+        foreach (var hotspot in hotspots)
+        {
+            hotspotsArray.Add(new JsonObject
+            {
+                ["file"] = hotspot.file,
+                ["matches"] = hotspot.matches,
+                ["lines"] = hotspot.lines
+            });
+        }
+        response["hotspots"] = hotspotsArray;
+
+        // Generate insights
+        var insights = GenerateTextSearchInsights(query, searchType, workspacePath, results, totalHits, filePattern, extensions, projectContext, alternateHits, alternateExtensions);
+        var insightsArray = new JsonArray();
+        foreach (var insight in insights)
+        {
+            insightsArray.Add(insight);
+        }
+        response["insights"] = insightsArray;
+
+        // Generate actions
+        var actions = GenerateTextSearchActions(query, searchType, results, totalHits, 
+            hotspots.Select(h => new TextSearchHotspot { File = h.file, Matches = h.matches, Lines = h.lines }).ToList(),
+            byExtension.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value), mode);
+
+        // Build actions array
+        var actionsArray = new JsonArray();
+        foreach (var action in actions)
+        {
+            if (action is AIAction aiAction)
+            {
+                actionsArray.Add(new JsonObject
+                {
+                    ["id"] = aiAction.Id,
+                    ["cmd"] = JsonNode.Parse(JsonSerializer.Serialize(aiAction.Command.Parameters)),
+                    ["tokens"] = aiAction.EstimatedTokens,
+                    ["priority"] = aiAction.Priority.ToString().ToLowerInvariant()
+                });
+            }
+            else
+            {
+                // Handle legacy action format
+                actionsArray.Add(JsonNode.Parse(JsonSerializer.Serialize(action)));
+            }
+        }
+        response["actions"] = actionsArray;
+
+        // Determine how many results to include inline
+        var hasContext = results.Any(r => r.Context?.Any() == true);
+        var maxInlineResults = hasContext ? 5 : 10;
+        var includeResults = mode == ResponseMode.Full || results.Count <= maxInlineResults;
+        var inlineResults = includeResults ? results : results.Take(maxInlineResults).ToList();
+        
+        // Pre-estimate response size and apply safety limit
+        var preEstimatedTokens = EstimateTextSearchResponseTokens(inlineResults) + 500;
+        var safetyLimitApplied = false;
+        if (preEstimatedTokens > 5000)
+        {
+            _logger.LogWarning("Pre-estimated response ({Tokens} tokens) exceeds safety threshold. Forcing minimal results.", preEstimatedTokens);
+            inlineResults = results.Take(3).ToList();
+            foreach (var result in inlineResults)
+            {
+                result.Context = null;
+            }
+            safetyLimitApplied = true;
+            insightsArray.Insert(0, JsonValue.Create($"⚠️ Response size limit applied ({preEstimatedTokens} tokens). Showing 3 results without context."));
+        }
+
+        // Build results array
+        var resultsArray = new JsonArray();
+        foreach (var result in inlineResults)
+        {
+            var resultObj = new JsonObject
+            {
+                ["file"] = result.FileName,
+                ["path"] = result.RelativePath,
+                ["score"] = Math.Round(result.Score, 2)
+            };
+            
+            // Add context if available
+            if (result.Context?.Any() == true)
+            {
+                var contextArray = new JsonArray();
+                foreach (var ctx in result.Context)
+                {
+                    contextArray.Add(new JsonObject
+                    {
+                        ["line"] = ctx.LineNumber,
+                        ["content"] = ctx.Content,
+                        ["match"] = ctx.IsMatch
+                    });
+                }
+                resultObj["context"] = contextArray;
+            }
+            
+            resultsArray.Add(resultObj);
+        }
+        response["results"] = resultsArray;
+
+        // Results summary
+        response["resultsSummary"] = new JsonObject
+        {
+            ["included"] = inlineResults.Count,
+            ["total"] = results.Count,
+            ["hasMore"] = results.Count > inlineResults.Count
+        };
+
+        // Meta information
+        response["meta"] = new JsonObject
+        {
+            ["mode"] = safetyLimitApplied ? "safety-limited" : mode.ToString().ToLowerInvariant(),
+            ["indexed"] = true,
+            ["tokens"] = EstimateTextSearchResponseTokens(inlineResults),
+            ["cached"] = $"txt_{Guid.NewGuid().ToString("N")[..8]}",
+            ["safetyLimitApplied"] = safetyLimitApplied
+        };
+        
+        if (safetyLimitApplied)
+        {
+            response["meta"]["originalEstimatedTokens"] = preEstimatedTokens;
+        }
+
+        // Store detail request token if applicable
+        if (mode == ResponseMode.Summary && _detailCache != null && results.Count > inlineResults.Count)
+        {
+            var detailData = new
+            {
+                results,
+                query = response["query"],
+                summary = response["summary"],
+                distribution = response["distribution"],
+                hotspots = response["hotspots"]
+            };
+            var detailRequestToken = _detailCache.StoreDetailData(detailData);
+            response["meta"]["detailRequestToken"] = detailRequestToken;
+        }
 
         return response;
     }

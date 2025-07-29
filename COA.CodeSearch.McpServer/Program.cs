@@ -210,6 +210,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Register remaining tools
         services.AddSingleton<FastTextSearchToolV2>();
+        services.AddSingleton<FastTextSearchToolV3>(); // POC JsonNode version
         services.AddSingleton<FastFileSearchToolV2>();
         services.AddSingleton<FastRecentFilesTool>();
         services.AddSingleton<FastFileSizeAnalysisTool>();

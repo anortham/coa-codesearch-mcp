@@ -1,6 +1,7 @@
 using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Protocol;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace COA.CodeSearch.McpServer.Tools.Registration;
 
@@ -14,12 +15,26 @@ public static class ToolRegistrationHelper
     /// </summary>
     public static CallToolResult CreateSuccessResult(object result)
     {
-        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
-        { 
-            WriteIndented = false,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-            DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
-        });
+        string json;
+        
+        // Handle JsonNode directly without double serialization
+        if (result is JsonNode jsonNode)
+        {
+            json = jsonNode.ToJsonString(new JsonSerializerOptions 
+            { 
+                WriteIndented = false 
+            });
+        }
+        else
+        {
+            json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+            { 
+                WriteIndented = false,
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                DefaultIgnoreCondition = System.Text.Json.Serialization.JsonIgnoreCondition.WhenWritingNull
+            });
+        }
+        
         return new CallToolResult
         {
             Content = new List<ToolContent>
