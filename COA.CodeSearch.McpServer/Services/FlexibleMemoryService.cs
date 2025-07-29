@@ -73,8 +73,6 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     /// </summary>
     public async Task<FlexibleMemorySearchResult> SearchMemoriesAsync(FlexibleMemorySearchRequest request)
     {
-        System.Diagnostics.Debug.WriteLine($"🔍 SearchMemoriesAsync ENTRY: Query='{request.Query}'");
-        Console.WriteLine($"🔍 SearchMemoriesAsync ENTRY: Query='{request.Query}'");
         
         var result = new FlexibleMemorySearchResult();
         var allMemories = new List<FlexibleMemoryEntry>();
@@ -515,7 +513,6 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
-        System.Diagnostics.Debug.WriteLine($"CreateDocumentAsync: searchableContent='{searchableContent}'");
         doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields with proper taxonomy writer integration
@@ -606,7 +603,6 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Create searchable content
         var searchableContent = BuildSearchableContent(memory);
-        System.Diagnostics.Debug.WriteLine($"CreateDocument: searchableContent='{searchableContent}'");
         doc.Add(new TextField("_all", searchableContent, Field.Store.YES)); // Temporarily store for debugging
         
         // Add native Lucene facet fields for efficient faceting (synchronous version - limited support)
@@ -681,8 +677,6 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             string.Join(" ", memory.FilesInvolved)
         };
         
-        // Debug logging for tests
-        System.Diagnostics.Debug.WriteLine($"BuildSearchableContent: Content='{memory.Content}', Type='{memory.Type}', Files=[{string.Join(",", memory.FilesInvolved)}]");
         
         // Add string values from extended fields
         foreach (var (key, value) in memory.Fields)
@@ -704,7 +698,6 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         }
         
         var result = string.Join(" ", parts.Where(p => !string.IsNullOrWhiteSpace(p)));
-        System.Diagnostics.Debug.WriteLine($"BuildSearchableContent result: '{result}'");
         return result;
     }
     
@@ -717,6 +710,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         try
         {
+            
             // Get searcher from index service
             var searcher = await _indexService.GetIndexSearcherAsync(workspacePath);
             if (searcher == null)
@@ -729,13 +723,14 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 searcher.IndexReader.NumDocs);
             
             // Build the query
+            
             var baseQuery = await BuildQueryAsync(request);
             _logger.LogInformation("Built base query: {Query}", baseQuery.ToString());
-            System.Diagnostics.Debug.WriteLine($"Built base query: {baseQuery}");
-            Console.WriteLine($"Built base query: {baseQuery}");
+            
             
             // Apply scoring based on temporal scoring mode
             var finalQuery = baseQuery;
+            
             if (request.TemporalScoring != TemporalScoringMode.None)
             {
                 // Configure temporal scoring factor based on mode
@@ -773,18 +768,11 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                     request.TemporalScoring, finalQuery.ToString());
             }
             
+            
             // Execute search  
-            System.Diagnostics.Debug.WriteLine($"Final query: {finalQuery}");
-            Console.WriteLine($"Final query: {finalQuery}");
-            System.Diagnostics.Debug.WriteLine($"About to search with searcher: {searcher.GetType().Name}");
-            Console.WriteLine($"About to search with searcher: {searcher.GetType().Name}");
-            System.Diagnostics.Debug.WriteLine($"Searcher IndexReader.NumDocs: {searcher.IndexReader.NumDocs}");
-            Console.WriteLine($"Searcher IndexReader.NumDocs: {searcher.IndexReader.NumDocs}");
             
             var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
-            System.Diagnostics.Debug.WriteLine($"Search returned {topDocs.TotalHits} hits");
-            Console.WriteLine($"Search returned {topDocs.TotalHits} hits");
             
             // Setup highlighting if enabled
             Highlighter? highlighter = null;
