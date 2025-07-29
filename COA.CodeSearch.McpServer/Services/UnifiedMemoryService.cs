@@ -540,18 +540,142 @@ public class UnifiedMemoryService
     /// <summary>
     /// Create a checklist from a command
     /// </summary>
-    private Task<UnifiedMemoryResult> CreateChecklistFromCommand(
+    private async Task<UnifiedMemoryResult> CreateChecklistFromCommand(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        // Extract checklist title and items from command
-        // This would require more sophisticated parsing
-        return Task.FromResult(new UnifiedMemoryResult
+        if (_checklistTools == null)
         {
-            Success = false,
-            Action = "checklist_not_implemented",
-            Message = "Checklist creation not yet implemented"
-        });
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "checklist_unavailable",
+                Message = "Checklist functionality not available"
+            };
+        }
+
+        try
+        {
+            // Extract title from command - look for patterns like "create checklist for X" or "checklist X"
+            var commandText = command.Content.ToLowerInvariant();
+            var title = ExtractChecklistTitle(commandText);
+            
+            if (string.IsNullOrEmpty(title))
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "checklist_title_missing",
+                    Message = "Could not extract checklist title from command. Try: 'create checklist for [title]'"
+                };
+            }
+
+            // Create the checklist
+            Dictionary<string, JsonElement>? customFields = null;
+            if (command.Context.RelatedFiles?.Any() == true)
+            {
+                customFields = new Dictionary<string, JsonElement> 
+                { 
+                    ["relatedFiles"] = JsonSerializer.SerializeToElement(command.Context.RelatedFiles) 
+                };
+            }
+
+            var result = await _checklistTools.CreateChecklistAsync(
+                title,
+                description: $"Created via unified memory interface from: {command.Content}",
+                isShared: true,
+                sessionId: command.Context.SessionId,
+                customFields: customFields
+            );
+
+            if (result.Success && !string.IsNullOrEmpty(result.ChecklistId))
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = true,
+                    Action = "checklist_created",
+                    Message = $"Created checklist '{title}' with ID: {result.ChecklistId}",
+                    NextSteps = new List<ActionSuggestion>
+                    {
+                        new ActionSuggestion
+                        {
+                            Id = "add_items",
+                            Description = "Add items to checklist",
+                            Command = $"memory \"add items to checklist {result.ChecklistId}: item 1, item 2, item 3\"",
+                            Priority = "high",
+                            Category = "checklist_management"
+                        },
+                        new ActionSuggestion
+                        {
+                            Id = "view_checklist",
+                            Description = "View checklist",
+                            Command = $"memory \"view checklist {result.ChecklistId}\"",
+                            Priority = "medium",
+                            Category = "checklist_management"
+                        }
+                    },
+                    Metadata = new Dictionary<string, object>
+                    {
+                        ["checklistId"] = result.ChecklistId,
+                        ["title"] = title
+                    }
+                };
+            }
+            else
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "checklist_creation_failed",
+                    Message = result.Message ?? "Failed to create checklist"
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error creating checklist from command: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "checklist_error",
+                Message = $"Error creating checklist: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Extract checklist title from command text
+    /// </summary>
+    private static string ExtractChecklistTitle(string commandText)
+    {
+        // Patterns to match:
+        // "create checklist for X" -> X
+        // "checklist for X" -> X  
+        // "make checklist X" -> X
+        // "new checklist X" -> X
+        
+        var patterns = new[]
+        {
+            @"create\s+checklist\s+for\s+(.+)",
+            @"checklist\s+for\s+(.+)",
+            @"make\s+checklist\s+(.+)",
+            @"new\s+checklist\s+(.+)",
+            @"checklist\s+(.+)"
+        };
+
+        foreach (var pattern in patterns)
+        {
+            var match = System.Text.RegularExpressions.Regex.Match(commandText, pattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            if (match.Success && match.Groups.Count > 1)
+            {
+                var title = match.Groups[1].Value.Trim();
+                // Clean up common endings
+                title = System.Text.RegularExpressions.Regex.Replace(title, @"\s+(please|now|today)$", "", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                return title;
+            }
+        }
+
+        return "";
     }
 
     /// <summary>
