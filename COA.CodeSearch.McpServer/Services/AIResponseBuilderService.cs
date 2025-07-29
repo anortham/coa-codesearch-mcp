@@ -189,8 +189,9 @@ public class AIResponseBuilderService
             FileName = r.filename,
             RelativePath = r.relativePath,
             Extension = r.extension,
-            Score = (float)r.score,
-            MatchingTerms = r.matchingTerms ?? 0
+            Score = r.similarity ?? 0.0f,
+            MatchingTerms = r.matchingTerms ?? 0,
+            FileSize = 0 // Tool doesn't provide this
         }).ToList();
 
         // Create FileInfo from dynamic
