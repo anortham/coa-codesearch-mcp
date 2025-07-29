@@ -1,4 +1,5 @@
 using Lucene.Net.Index;
+using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Scoring;
 
@@ -11,12 +12,15 @@ public class PathRelevanceFactor : IScoringFactor
     private readonly Dictionary<string, float> _directoryWeights;
     private readonly HashSet<string> _preferredPaths;
     private readonly HashSet<string> _deprioritizedPaths;
+    private readonly ILogger? _logger;
 
     public string Name => "PathRelevance";
-    public float Weight { get; set; } = 0.5f;
+    public float Weight { get; set; } = 0.7f; // Increased weight for codebase-aware path scoring
 
-    public PathRelevanceFactor()
+    public PathRelevanceFactor(ILogger? logger = null)
     {
+        _logger = logger;
+        
         // Default directory weights
         _directoryWeights = new Dictionary<string, float>(StringComparer.OrdinalIgnoreCase)
         {
@@ -85,53 +89,107 @@ public class PathRelevanceFactor : IScoringFactor
                 return 0.1f; // Very low score for deprioritized paths
             }
 
-            var totalScore = 0f;
-            var componentCount = 0;
+            // Codebase-aware scoring: Start with production code assumption
+            var baseScore = 1.0f;
+            var isTestRelated = false;
+            var filename = pathParts.LastOrDefault() ?? "";
 
-            // Calculate weighted average of path components
+            // First check: Is this a test file by filename?
+            if (IsTestFile(filename))
+            {
+                isTestRelated = true;
+            }
+
+            // Second check: Is this in test-related directories?
+            var hasTestDirectory = pathParts.Any(part => 
+                _directoryWeights.ContainsKey(part) && 
+                (part.Equals("test", StringComparison.OrdinalIgnoreCase) || 
+                 part.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
+                 part.Equals("spec", StringComparison.OrdinalIgnoreCase) ||
+                 part.Equals("specs", StringComparison.OrdinalIgnoreCase)));
+
+            if (hasTestDirectory)
+            {
+                isTestRelated = true;
+            }
+
+            // Apply strong test penalty for codebase searches (not searching for "test")
+            if (isTestRelated && !searchContext.QueryText.Contains("test", StringComparison.OrdinalIgnoreCase))
+            {
+                // Much stronger penalty for test files - they should rank significantly lower
+                baseScore *= 0.15f; // Reduced from 0.5f to 0.15f for stronger de-prioritization
+            }
+
+            // Calculate directory path score with multiplicative approach for test paths
+            var pathScore = 1.0f;
+
             foreach (var part in pathParts.Take(pathParts.Length - 1)) // Exclude filename
             {
                 if (_directoryWeights.TryGetValue(part, out var weight))
                 {
-                    totalScore += weight;
-                    componentCount++;
+                    if (weight < 0.5f) // Test directories get multiplicative penalty
+                    {
+                        pathScore *= weight;
+                    }
+                    else
+                    {
+                        pathScore = Math.Max(pathScore, weight); // Production directories get boost
+                    }
                 }
                 else if (_preferredPaths.Contains(part))
                 {
-                    totalScore += 0.8f;
-                    componentCount++;
-                }
-                else
-                {
-                    // Neutral weight for unknown directories
-                    totalScore += 0.5f;
-                    componentCount++;
+                    pathScore = Math.Max(pathScore, 0.9f); // Strong boost for preferred paths
                 }
             }
 
-            // Special handling for test files
-            var filename = pathParts.LastOrDefault() ?? "";
-            if (IsTestFile(filename))
+            // Special boost for main production code patterns
+            if (HasProductionCodePatterns(relativePath, filename))
             {
-                // Reduce score for test files unless searching for tests
-                if (!searchContext.QueryText.Contains("test", StringComparison.OrdinalIgnoreCase))
-                {
-                    totalScore *= 0.5f;
-                }
+                pathScore *= 1.2f; // 20% boost for clearly production code
             }
 
-            // Calculate average score
-            var averageScore = componentCount > 0 ? totalScore / componentCount : 0.5f;
+            // Combine base score (test penalty) with path score
+            var finalScore = baseScore * pathScore;
 
-            // Boost for shorter paths (less nesting usually means more important)
-            var depthPenalty = Math.Max(0.7f, 1.0f - (pathParts.Length - 2) * 0.05f);
+            // Boost for shorter paths in production code, penalty for deep test paths
+            var depthFactor = isTestRelated 
+                ? Math.Max(0.5f, 1.0f - (pathParts.Length - 2) * 0.1f) // Stronger depth penalty for tests
+                : Math.Max(0.8f, 1.0f - (pathParts.Length - 2) * 0.05f); // Gentler penalty for production
             
-            return Math.Min(1.0f, averageScore * depthPenalty);
+            finalScore *= depthFactor;
+
+            var result = Math.Min(1.0f, Math.Max(0.05f, finalScore));
+
+            // Debug logging for troubleshooting
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("PathRelevance scoring: {Path} -> base={BaseScore:F3}, path={PathScore:F3}, depth={DepthFactor:F3}, final={FinalScore:F3}, testRelated={TestRelated}", 
+                    relativePath, baseScore, pathScore, depthFactor, result, isTestRelated);
+            }
+
+            return result;
         }
         catch (Exception)
         {
             return 0.5f; // Neutral score on error
         }
+    }
+
+    private bool HasProductionCodePatterns(string relativePath, string filename)
+    {
+        var lowerPath = relativePath.ToLowerInvariant();
+        var lowerFile = filename.ToLowerInvariant();
+        
+        // Look for patterns that indicate production/implementation code
+        return lowerPath.Contains("\\services\\") ||
+               lowerPath.Contains("\\controllers\\") ||
+               lowerPath.Contains("\\models\\") ||
+               lowerPath.Contains("\\core\\") ||
+               lowerPath.Contains("\\domain\\") ||
+               lowerPath.Contains("\\infrastructure\\") ||
+               (lowerFile.EndsWith("service.cs") && !lowerFile.Contains("mock") && !lowerFile.Contains("test")) ||
+               (lowerFile.EndsWith("controller.cs") && !lowerFile.Contains("mock") && !lowerFile.Contains("test")) ||
+               (lowerFile.EndsWith("repository.cs") && !lowerFile.Contains("mock") && !lowerFile.Contains("test"));
     }
 
     private bool IsTestFile(string filename)

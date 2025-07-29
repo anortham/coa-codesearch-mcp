@@ -132,8 +132,9 @@ public class MultiFactorScoreQuery : Query
             }
 
             // Combine base score with factor scores
-            // Use weighted average: 60% base score, 40% factor scores
-            var finalScore = (baseExplanation.Value * 0.6f) + (factorScore * baseExplanation.Value * 0.4f);
+            // For codebase searches, give more weight to factor scores to prioritize structure over pure text matching
+            // Use weighted average: 40% base score, 60% factor-adjusted score
+            var finalScore = (baseExplanation.Value * 0.4f) + (factorScore * baseExplanation.Value * 0.6f);
             result.Value = finalScore;
 
             return result;
@@ -192,8 +193,9 @@ public class MultiFactorScoreQuery : Query
             }
             
             // Combine base score with factor scores
-            // Use weighted average: 60% base score, 40% factor scores
-            return (baseScore * 0.6f) + (factorScore * baseScore * 0.4f);
+            // For codebase searches, give more weight to factor scores to prioritize structure over pure text matching
+            // Use weighted average: 40% base score, 60% factor-adjusted score
+            return (baseScore * 0.4f) + (factorScore * baseScore * 0.6f);
         }
 
         public override long GetCost()

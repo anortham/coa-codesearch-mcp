@@ -26,6 +26,7 @@ public class ScoringService : IScoringService
             { "ExactMatch", new ExactMatchBoostFactor() },
             { "FilenameRelevance", new FilenameRelevanceFactor() },
             { "PathRelevance", new PathRelevanceFactor() },
+            { "InterfaceImplementation", new InterfaceImplementationFactor() },
             { "RecencyBoost", new RecencyBoostFactor() },
             { "FileTypeRelevance", new FileTypeRelevanceFactor() },
             { "TemporalScoring", new TemporalScoringFactor(null, logger) }
