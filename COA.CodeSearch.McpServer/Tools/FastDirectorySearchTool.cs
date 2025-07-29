@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
@@ -22,6 +23,7 @@ public class FastDirectorySearchTool : ITool
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly AIResponseBuilderService _aiResponseBuilder;
     private readonly IScoringService? _scoringService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
     private readonly IResultConfidenceService? _resultConfidenceService;
@@ -32,6 +34,7 @@ public class FastDirectorySearchTool : ITool
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
         IErrorRecoveryService errorRecoveryService,
+        AIResponseBuilderService aiResponseBuilder,
         IScoringService? scoringService = null,
         SearchResultResourceProvider? searchResultResourceProvider = null,
         IResultConfidenceService? resultConfidenceService = null)
@@ -40,6 +43,7 @@ public class FastDirectorySearchTool : ITool
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _aiResponseBuilder = aiResponseBuilder;
         _scoringService = scoringService;
         _searchResultResourceProvider = searchResultResourceProvider;
         _resultConfidenceService = resultConfidenceService;
@@ -189,37 +193,17 @@ public class FastDirectorySearchTool : ITool
                 _logger.LogInformation("Found {Count} directories in {Duration}ms - high performance search!", 
                     results.Count, searchDuration);
 
-                var response = new
-                {
-                    success = true,
-                    operation = "directory_search",
-                    query = new
-                    {
-                        text = query,
-                        type = searchType ?? "standard",
-                        workspace = workspacePath
-                    },
-                    summary = new
-                    {
-                        totalHits = topDocs.TotalHits,
-                        returnedResults = results.Count,
-                        searchTime = $"{searchDuration}ms",
-                        performance = searchDuration < 20 ? "excellent" : "very fast"
-                    },
-                    results = results,
-                    resultsSummary = new
-                    {
-                        included = results.Count,
-                        total = topDocs.TotalHits,
-                        hasMore = topDocs.TotalHits > results.Count
-                    },
-                    meta = new
-                    {
-                        mode = "grouped",
-                        indexed = true,
-                        searchTime = $"{searchDuration}ms"
-                    }
-                };
+                // Use AIResponseBuilderService to build the response
+                var mode = results.Count > 20 ? ResponseMode.Summary : ResponseMode.Full;
+                var response = _aiResponseBuilder.BuildDirectorySearchResponse(
+                    query,
+                    searchType,
+                    workspacePath,
+                    results.Cast<dynamic>().ToList(),
+                    searchDuration,
+                    mode,
+                    groupByDirectory,
+                    topDocs.TotalHits);
 
                 // Store search results as a resource if provider is available
                 if (_searchResultResourceProvider != null && results.Count > 0)
@@ -229,8 +213,8 @@ public class FastDirectorySearchTool : ITool
                         new
                         {
                             results = results,
-                            query = response.query,
-                            summary = response.summary,
+                            query = ((dynamic)response).query,
+                            summary = ((dynamic)response).summary,
                             searchType = searchType,
                             workspacePath = workspacePath,
                             groupByDirectory = groupByDirectory
@@ -238,22 +222,29 @@ public class FastDirectorySearchTool : ITool
                         new { tool = "directory_search", timestamp = DateTime.UtcNow }
                     );
 
-                    return new
+                    // Add resourceUri to meta
+                    var responseWithResource = new
                     {
-                        success = response.success,
-                        operation = response.operation,
-                        query = response.query,
-                        summary = response.summary,
-                        results = response.results,
-                        resultsSummary = response.resultsSummary,
+                        success = ((dynamic)response).success,
+                        operation = ((dynamic)response).operation,
+                        query = ((dynamic)response).query,
+                        summary = ((dynamic)response).summary,
+                        analysis = ((dynamic)response).analysis,
+                        results = ((dynamic)response).results,
+                        resultsSummary = ((dynamic)response).resultsSummary,
+                        insights = ((dynamic)response).insights,
+                        actions = ((dynamic)response).actions,
                         meta = new
                         {
-                            mode = response.meta.mode,
-                            indexed = response.meta.indexed,
-                            searchTime = response.meta.searchTime,
+                            mode = ((dynamic)response).meta.mode,
+                            truncated = ((dynamic)response).meta.truncated,
+                            tokens = ((dynamic)response).meta.tokens,
+                            cached = ((dynamic)response).meta.cached,
                             resourceUri = resourceUri
                         }
                     };
+
+                    return responseWithResource;
                 }
 
                 return response;
@@ -261,50 +252,36 @@ public class FastDirectorySearchTool : ITool
             else
             {
                 // Return individual file results
-                var results = new List<object>();
+                var results = new List<dynamic>();
                 foreach (var scoreDoc in topDocs.ScoreDocs.Take(effectiveMaxResults))
                 {
                     // Use field selector to load only directory-related fields for better performance
                     var doc = _fieldSelectorService.LoadDocument(searcher, scoreDoc.Doc, FieldSetType.DirectoryListing);
                     
+                    var relativePath = doc.Get("relativeDirectory") ?? doc.Get("directory") ?? "";
                     results.Add(new
                     {
-                        path = doc.Get("relativeDirectory") ?? doc.Get("directory"),
-                        score = scoreDoc.Score
+                        path = doc.Get("directory") ?? "",
+                        relativePath = relativePath,
+                        directoryName = Path.GetFileName(relativePath.TrimEnd(Path.DirectorySeparatorChar)) ?? "",
+                        fileCount = 1, // Individual file entries
+                        fileTypes = new List<string> { doc.Get("extension") ?? "" }.Where(e => !string.IsNullOrEmpty(e)).ToList(),
+                        score = scoreDoc.Score,
+                        depth = relativePath.Count(c => c == Path.DirectorySeparatorChar)
                     });
                 }
 
-                var response = new
-                {
-                    success = true,
-                    operation = "directory_search",
-                    query = new
-                    {
-                        text = query,
-                        type = searchType ?? "standard",
-                        workspace = workspacePath
-                    },
-                    summary = new
-                    {
-                        totalHits = topDocs.TotalHits,
-                        returnedResults = results.Count,
-                        searchTime = $"{searchDuration}ms",
-                        performance = searchDuration < 20 ? "excellent" : "very fast"
-                    },
-                    results = results,
-                    resultsSummary = new
-                    {
-                        included = results.Count,
-                        total = topDocs.TotalHits,
-                        hasMore = topDocs.TotalHits > results.Count
-                    },
-                    meta = new
-                    {
-                        mode = "standard",
-                        indexed = true,
-                        searchTime = $"{searchDuration}ms"
-                    }
-                };
+                // Use AIResponseBuilderService to build the response
+                var mode = results.Count > 20 ? ResponseMode.Summary : ResponseMode.Full;
+                var response = _aiResponseBuilder.BuildDirectorySearchResponse(
+                    query,
+                    searchType,
+                    workspacePath,
+                    results,
+                    searchDuration,
+                    mode,
+                    groupByDirectory,
+                    topDocs.TotalHits);
 
                 // Store search results as a resource if provider is available
                 if (_searchResultResourceProvider != null && results.Count > 0)
@@ -314,8 +291,8 @@ public class FastDirectorySearchTool : ITool
                         new
                         {
                             results = results,
-                            query = response.query,
-                            summary = response.summary,
+                            query = ((dynamic)response).query,
+                            summary = ((dynamic)response).summary,
                             searchType = searchType,
                             workspacePath = workspacePath,
                             groupByDirectory = groupByDirectory
@@ -323,22 +300,29 @@ public class FastDirectorySearchTool : ITool
                         new { tool = "directory_search", timestamp = DateTime.UtcNow }
                     );
 
-                    return new
+                    // Add resourceUri to meta
+                    var responseWithResource = new
                     {
-                        success = response.success,
-                        operation = response.operation,
-                        query = response.query,
-                        summary = response.summary,
-                        results = response.results,
-                        resultsSummary = response.resultsSummary,
+                        success = ((dynamic)response).success,
+                        operation = ((dynamic)response).operation,
+                        query = ((dynamic)response).query,
+                        summary = ((dynamic)response).summary,
+                        analysis = ((dynamic)response).analysis,
+                        results = ((dynamic)response).results,
+                        resultsSummary = ((dynamic)response).resultsSummary,
+                        insights = ((dynamic)response).insights,
+                        actions = ((dynamic)response).actions,
                         meta = new
                         {
-                            mode = response.meta.mode,
-                            indexed = response.meta.indexed,
-                            searchTime = response.meta.searchTime,
+                            mode = ((dynamic)response).meta.mode,
+                            truncated = ((dynamic)response).meta.truncated,
+                            tokens = ((dynamic)response).meta.tokens,
+                            cached = ((dynamic)response).meta.cached,
                             resourceUri = resourceUri
                         }
                     };
+
+                    return responseWithResource;
                 }
 
                 return response;
