@@ -83,6 +83,13 @@ public class PathRelevanceFactor : IScoringFactor
             // Split path into components
             var pathParts = relativePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
             
+            // Debug logging for path parsing
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("PathRelevance: Path parsing - RelativePath: '{RelativePath}', PathParts: [{PathParts}]", 
+                    relativePath, string.Join(", ", pathParts.Select(p => $"'{p}'")));
+            }
+            
             // Check for deprioritized paths
             if (pathParts.Any(part => _deprioritizedPaths.Contains(part)))
             {
@@ -105,7 +112,32 @@ public class PathRelevanceFactor : IScoringFactor
                 part.Equals("test", StringComparison.OrdinalIgnoreCase) || 
                 part.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
                 part.Equals("spec", StringComparison.OrdinalIgnoreCase) ||
-                part.Equals("specs", StringComparison.OrdinalIgnoreCase));
+                part.Equals("specs", StringComparison.OrdinalIgnoreCase) ||
+                part.EndsWith(".test", StringComparison.OrdinalIgnoreCase) ||
+                part.EndsWith(".tests", StringComparison.OrdinalIgnoreCase) ||
+                part.EndsWith(".spec", StringComparison.OrdinalIgnoreCase) ||
+                part.EndsWith(".specs", StringComparison.OrdinalIgnoreCase) ||
+                part.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                part.Contains("spec", StringComparison.OrdinalIgnoreCase));
+
+            // Debug logging for test directory detection
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                var testParts = pathParts.Where(part => 
+                    part.Equals("test", StringComparison.OrdinalIgnoreCase) || 
+                    part.Equals("tests", StringComparison.OrdinalIgnoreCase) ||
+                    part.Equals("spec", StringComparison.OrdinalIgnoreCase) ||
+                    part.Equals("specs", StringComparison.OrdinalIgnoreCase) ||
+                    part.EndsWith(".test", StringComparison.OrdinalIgnoreCase) ||
+                    part.EndsWith(".tests", StringComparison.OrdinalIgnoreCase) ||
+                    part.EndsWith(".spec", StringComparison.OrdinalIgnoreCase) ||
+                    part.EndsWith(".specs", StringComparison.OrdinalIgnoreCase) ||
+                    part.Contains("test", StringComparison.OrdinalIgnoreCase) ||
+                    part.Contains("spec", StringComparison.OrdinalIgnoreCase)).ToList();
+                
+                _logger.LogDebug("PathRelevance: Test detection - HasTestDirectory: {HasTestDirectory}, MatchingParts: [{MatchingParts}]", 
+                    hasTestDirectory, string.Join(", ", testParts.Select(p => $"'{p}'")));
+            }
 
             if (hasTestDirectory)
             {
