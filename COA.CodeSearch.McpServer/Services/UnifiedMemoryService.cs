@@ -378,64 +378,64 @@ public class UnifiedMemoryService
     /// <summary>
     /// Handle CONNECT intent - link memories together
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleConnectAsync(
+    private Task<UnifiedMemoryResult> HandleConnectAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         // Extract memory IDs or descriptions from command
         // This would require more sophisticated parsing
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "connect_not_implemented",
             Message = "Connect functionality not yet implemented"
-        };
+        });
     }
 
     /// <summary>
     /// Handle EXPLORE intent - navigate memory relationships
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleExploreAsync(
+    private Task<UnifiedMemoryResult> HandleExploreAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         // Use memory graph navigator
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "explore_not_implemented", 
             Message = "Explore functionality not yet implemented"
-        };
+        });
     }
 
     /// <summary>
     /// Handle SUGGEST intent - provide recommendations
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleSuggestAsync(
+    private Task<UnifiedMemoryResult> HandleSuggestAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "suggest_not_implemented",
             Message = "Suggest functionality not yet implemented"
-        };
+        });
     }
 
     /// <summary>
     /// Handle MANAGE intent - update, delete, archive memories
     /// </summary>
-    private async Task<UnifiedMemoryResult> HandleManageAsync(
+    private Task<UnifiedMemoryResult> HandleManageAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "manage_not_implemented",
             Message = "Manage functionality not yet implemented"
-        };
+        });
     }
 
     #region Helper Methods
@@ -540,18 +540,18 @@ public class UnifiedMemoryService
     /// <summary>
     /// Create a checklist from a command
     /// </summary>
-    private async Task<UnifiedMemoryResult> CreateChecklistFromCommand(
+    private Task<UnifiedMemoryResult> CreateChecklistFromCommand(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         // Extract checklist title and items from command
         // This would require more sophisticated parsing
-        return new UnifiedMemoryResult
+        return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
             Action = "checklist_not_implemented",
             Message = "Checklist creation not yet implemented"
-        };
+        });
     }
 
     /// <summary>
