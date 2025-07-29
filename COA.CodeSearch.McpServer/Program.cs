@@ -2,6 +2,7 @@ using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.ResponseBuilders;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tools.Registration;
 using Microsoft.Extensions.Configuration;
@@ -166,8 +167,20 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IMemoryService>(sp => sp.GetRequiredService<FlexibleMemoryService>());
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<FlexibleMemorySearchToolV2>();
-        services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
         services.AddSingleton<AIResponseBuilderService>();
+        
+        // Response Builders
+        services.AddSingleton<IResponseBuilderFactory, ResponseBuilderFactory>();
+        services.AddSingleton<TextSearchResponseBuilder>();
+        services.AddSingleton<FileSearchResponseBuilder>();
+        services.AddSingleton<MemorySearchResponseBuilder>();
+        services.AddSingleton<DirectorySearchResponseBuilder>();
+        services.AddSingleton<SimilarFilesResponseBuilder>();
+        services.AddSingleton<RecentFilesResponseBuilder>();
+        services.AddSingleton<FileSizeAnalysisResponseBuilder>();
+        services.AddSingleton<FileSizeDistributionResponseBuilder>();
+        services.AddSingleton<BatchOperationsResponseBuilder>();
+        
         services.AddSingleton<MemoryLinkingTools>();
         services.AddSingleton<ChecklistTools>();
         services.AddSingleton<TimelineTool>();

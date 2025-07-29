@@ -167,7 +167,8 @@ public class FastRecentFilesTool : ITool
                 searchDuration,
                 extensionCounts,
                 totalSize,
-                mode);
+                mode,
+                null);
         }
         catch (CircuitBreakerOpenException cbEx)
         {

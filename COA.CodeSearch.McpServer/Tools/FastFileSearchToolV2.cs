@@ -227,23 +227,25 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
                 searchResults.Results.Count, searchDuration);
 
             // Convert internal results to FileSearchResult format for AIResponseBuilder
-            var fileSearchResults = searchResults.Results.Select(r => new COA.CodeSearch.McpServer.Services.FileSearchResult
+            var fileSearchResults = searchResults.Results.Select(r => new FileSearchResult
             {
-                Path = r.Path,
+                FilePath = r.Path,
+                FileName = System.IO.Path.GetFileName(r.Path),
+                RelativePath = r.Path,
+                Extension = System.IO.Path.GetExtension(r.Path),
+                Language = "", // TODO: Add language detection if needed
                 Score = r.Score
             }).ToList();
 
             // Create AI-optimized response using centralized builder
             return _aiResponseBuilder.BuildFileSearchResponse(
                 query,
-                searchType,
+                searchType ?? "standard",
                 workspacePath,
                 fileSearchResults,
                 searchResults.SearchDurationMs,
-                searchResults.ExtensionCounts,
-                searchResults.DirectoryCounts,
-                searchResults.LanguageCounts,
-                mode);
+                mode,
+                null); // ProjectContext
         }
         catch (CircuitBreakerOpenException cbEx)
         {
