@@ -62,12 +62,7 @@ public static class AllToolRegistrations
         // Workflow discovery
         RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
         
-        // Phase 3: Semantic Search Layer
-        RegisterSemanticSearch(registry, serviceProvider.GetRequiredService<SemanticSearchTool>());
-        RegisterHybridSearch(registry, serviceProvider.GetRequiredService<HybridSearchTool>());
-        
-        // Phase 3: Memory Quality Validation
-        RegisterMemoryQualityAssessment(registry, serviceProvider.GetRequiredService<MemoryQualityAssessmentTool>());
+        // Phase 3: Advanced tools now handled by RegisterEssentialMemoryTools
         
         
         // AI Context loading
@@ -1773,6 +1768,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             }
         );
     }
+
 
 
 }
