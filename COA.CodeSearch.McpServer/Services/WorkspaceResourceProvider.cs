@@ -500,9 +500,11 @@ public class WorkspaceResourceProvider : IResourceProvider
 
     private async Task<object> GetRecentChangesAsync(string workspacePath, CancellationToken cancellationToken)
     {
-        var recentFiles = new List<object>();
         var cutoffTime = DateTime.UtcNow.AddDays(-7);
         var files = Directory.GetFiles(workspacePath, "*", SearchOption.AllDirectories);
+        
+        // Create strongly-typed collection to avoid dynamic casts
+        var recentFilesList = new List<(string path, string relativePath, DateTime lastModified, long sizeBytes, string extension)>();
 
         foreach (var file in files.Take(1000)) // Limit to prevent overwhelming
         {
@@ -514,25 +516,32 @@ public class WorkspaceResourceProvider : IResourceProvider
                 var fileInfo = new FileInfo(file);
                 if (fileInfo.LastWriteTimeUtc >= cutoffTime)
                 {
-                    recentFiles.Add(new
-                    {
-                        path = file,
-                        relativePath = Path.GetRelativePath(workspacePath, file),
-                        lastModified = fileInfo.LastWriteTimeUtc,
-                        sizeBytes = fileInfo.Length,
-                        extension = fileInfo.Extension
-                    });
+                    recentFilesList.Add((
+                        path: file,
+                        relativePath: Path.GetRelativePath(workspacePath, file),
+                        lastModified: fileInfo.LastWriteTimeUtc,
+                        sizeBytes: fileInfo.Length,
+                        extension: fileInfo.Extension
+                    ));
                 }
             }
         }
 
-        var orderedFiles = recentFiles
-            .OrderByDescending(f => ((dynamic)f).lastModified)
+        var orderedFiles = recentFilesList
+            .OrderByDescending(f => f.lastModified)
             .Take(50)
+            .Select(f => new
+            {
+                path = f.path,
+                relativePath = f.relativePath,
+                lastModified = f.lastModified,
+                sizeBytes = f.sizeBytes,
+                extension = f.extension
+            })
             .ToList();
 
         var hotspots = orderedFiles
-            .GroupBy(f => Path.GetDirectoryName(((dynamic)f).relativePath))
+            .GroupBy(f => Path.GetDirectoryName(f.relativePath))
             .OrderByDescending(g => g.Count())
             .Take(5)
             .Select(g => new { directory = g.Key, changeCount = g.Count() })
@@ -544,7 +553,7 @@ public class WorkspaceResourceProvider : IResourceProvider
         {
             workspacePath = workspacePath,
             timeRange = "last7days",
-            totalChangedFiles = recentFiles.Count,
+            totalChangedFiles = recentFilesList.Count,
             recentFiles = orderedFiles,
             hotspots = hotspots
         };
