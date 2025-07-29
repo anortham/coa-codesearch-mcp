@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Analysis;
@@ -22,18 +23,21 @@ public class FastSimilarFilesTool : ITool
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly AIResponseBuilderService _aiResponseBuilder;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastSimilarFilesTool(
         ILogger<FastSimilarFilesTool> logger,
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
-        IErrorRecoveryService errorRecoveryService)
+        IErrorRecoveryService errorRecoveryService,
+        AIResponseBuilderService aiResponseBuilder)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _aiResponseBuilder = aiResponseBuilder;
     }
 
     public async Task<object> ExecuteAsync(
@@ -184,7 +188,7 @@ public class FastSimilarFilesTool : ITool
             var searchDuration = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
             // Process results
-            var results = new List<object>();
+            var results = new List<dynamic>();
             var topTerms = GetTopTermsFromDocument(mlt, sourceDocId, 10);
             
             // Define fields needed for similarity results
@@ -209,33 +213,25 @@ public class FastSimilarFilesTool : ITool
             _logger.LogInformation("Found {Count} similar files in {Duration}ms - high performance search!", 
                 results.Count, searchDuration);
 
-            return new
+            // Prepare source file info
+            var sourceFileInfo = new
             {
-                success = true,
-                sourceFile = new
-                {
-                    path = sourceFilePath,
-                    filename = sourceDoc.Get("filename"),
-                    extension = sourceDoc.Get("extension"),
-                    language = sourceDoc.Get("language") ?? ""
-                },
-                workspacePath = workspacePath,
-                totalResults = results.Count,
-                searchDurationMs = searchDuration,
-                results = results,
-                analysis = new
-                {
-                    topTerms = topTerms,
-                    parameters = new
-                    {
-                        minTermFreq = minTermFreq,
-                        minDocFreq = minDocFreq,
-                        minWordLength = minWordLength,
-                        maxWordLength = maxWordLength
-                    }
-                },
-                performance = searchDuration < 50 ? "excellent" : "very fast"
+                path = sourceFilePath,
+                filename = sourceDoc.Get("filename"),
+                extension = sourceDoc.Get("extension"),
+                language = sourceDoc.Get("language") ?? ""
             };
+
+            // Use AIResponseBuilderService to build the response
+            var mode = results.Count > 20 ? ResponseMode.Summary : ResponseMode.Full;
+            return _aiResponseBuilder.BuildSimilarFilesResponse(
+                sourceFilePath,
+                workspacePath,
+                results,
+                searchDuration,
+                sourceFileInfo,
+                topTerms,
+                mode);
         }
         catch (CircuitBreakerOpenException cbEx)
         {
