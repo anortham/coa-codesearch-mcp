@@ -140,7 +140,8 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
                 tokens = EstimateResponseTokens(displayResults),
-                format = "ai-optimized"
+                format = "ai-optimized",
+                cached = $"dirsearch_{Guid.NewGuid().ToString("N")[..16]}_{BitConverter.ToString(System.Security.Cryptography.MD5.HashData(System.Text.Encoding.UTF8.GetBytes(query + searchType))).Replace("-", "").ToLowerInvariant()}"
             }
         };
     }
