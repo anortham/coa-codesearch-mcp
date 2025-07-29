@@ -1,4 +1,5 @@
 using Lucene.Net.Index;
+using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Scoring;
 
@@ -8,8 +9,15 @@ namespace COA.CodeSearch.McpServer.Scoring;
 /// </summary>
 public class InterfaceImplementationFactor : IScoringFactor
 {
+    private readonly ILogger? _logger;
+    
     public string Name => "InterfaceImplementation";
     public float Weight { get; set; } = 0.3f; // Moderate weight
+
+    public InterfaceImplementationFactor(ILogger? logger = null)
+    {
+        _logger = logger;
+    }
 
     public float CalculateScore(IndexReader reader, int docId, ScoringContext searchContext)
     {
@@ -32,29 +40,47 @@ public class InterfaceImplementationFactor : IScoringFactor
             var isInterfaceSearch = IsLikelyInterfaceSearch(searchContext.QueryText);
 
             if (!isInterfaceSearch)
+            {
+                if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+                {
+                    _logger.LogDebug("InterfaceImplementation: File {FilePath}, NotInterfaceSearch: {Query}, Score: 0.5 (neutral)", 
+                        relativePath, searchContext.QueryText);
+                }
                 return 0.5f; // Neutral - not an interface search
+            }
 
             var score = 0.5f; // Start neutral
+            var reason = "neutral";
 
             // Strong penalty for obvious mocks and test implementations
             if (IsMockOrTestImplementation(filenameLower, pathLower, contentLower))
             {
                 score = 0.2f; // Strong penalty
+                reason = "mock/test detected";
             }
             // Strong boost for actual implementations
             else if (IsActualImplementation(filenameLower, pathLower, contentLower, queryLower))
             {
                 score = 1.0f; // Maximum boost for real implementations
+                reason = "actual implementation";
             }
             // Moderate boost for service/component files that might be implementations
             else if (IsLikelyImplementationFile(filenameLower, pathLower))
             {
                 score = 0.8f; // Good boost for likely implementations
+                reason = "likely implementation file";
             }
             // Slight penalty for files that just reference the interface but don't implement it
             else if (IsJustReference(contentLower, queryLower))
             {
                 score = 0.4f; // Slight penalty for mere references
+                reason = "just reference";
+            }
+
+            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            {
+                _logger.LogDebug("InterfaceImplementation: File {FilePath}, Query: {Query}, Reason: {Reason}, Score: {Score:F3}", 
+                    relativePath, searchContext.QueryText, reason, score);
             }
 
             return score;

@@ -73,6 +73,10 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         _scoringService = scoringService;
         _resultConfidenceService = resultConfidenceService;
         _aiResponseBuilder = aiResponseBuilder;
+        
+        // DEBUG: Log if scoring service was injected
+        logger.LogInformation("FastTextSearchToolV2 initialized with ScoringService: {ScoringServiceStatus}", 
+            scoringService != null ? "INJECTED" : "NULL");
     }
 
     public async Task<object> ExecuteAsync(
@@ -162,7 +166,12 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 
                 // Wrap query with multi-factor scoring
                 luceneQuery = _scoringService.CreateScoredQuery(luceneQuery, searchContext);
-                Logger.LogDebug("Applied multi-factor scoring to text search query");
+                Logger.LogInformation("SCORING DEBUG: Applied multi-factor scoring to query '{Query}' - Scored query type: {QueryType}", 
+                    query, luceneQuery.GetType().Name);
+            }
+            else
+            {
+                Logger.LogWarning("SCORING DEBUG: ScoringService is NULL - scoring not applied to query '{Query}'", query);
             }
 
             // Execute search

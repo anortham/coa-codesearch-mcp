@@ -163,8 +163,8 @@ public class PathRelevanceFactor : IScoringFactor
             // Debug logging for troubleshooting
             if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
             {
-                _logger.LogDebug("PathRelevance scoring: {Path} -> base={BaseScore:F3}, path={PathScore:F3}, depth={DepthFactor:F3}, final={FinalScore:F3}, testRelated={TestRelated}", 
-                    relativePath, baseScore, pathScore, depthFactor, result, isTestRelated);
+                _logger.LogDebug("PathRelevance: File {FilePath}, IsTest: {IsTest}, HasTestDir: {HasTestDir}, TestPenalty: {TestPenalty:F3}, PathScore: {PathScore:F3}, DepthFactor: {DepthFactor:F3}, FinalScore: {FinalScore:F3}", 
+                    relativePath, isTestRelated, hasTestDirectory, baseScore, pathScore, depthFactor, result);
             }
 
             return result;
