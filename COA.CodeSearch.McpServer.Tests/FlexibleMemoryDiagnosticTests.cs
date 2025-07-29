@@ -154,6 +154,22 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
             var termQuery2 = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("_all", "authentication"));
             var manualHits2 = indexSearcher.Search(termQuery2, 10);
             _output.WriteLine($"Manual term search for 'authentication' in '_all' field: {manualHits2.TotalHits} hits");
+            
+            // Test the EXACT query that FlexibleMemoryService builds
+            var boolQuery = new Lucene.Net.Search.BooleanQuery();
+            var contentQuery = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("content", "authentication"));
+            contentQuery.Boost = 2.0f;
+            var typeQuery = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("type", "authentication"));
+            typeQuery.Boost = 1.5f;
+            var allQuery = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("_all", "authentication"));
+            allQuery.Boost = 1.0f;
+            
+            boolQuery.Add(contentQuery, Lucene.Net.Search.Occur.SHOULD);
+            boolQuery.Add(typeQuery, Lucene.Net.Search.Occur.SHOULD);
+            boolQuery.Add(allQuery, Lucene.Net.Search.Occur.SHOULD);
+            
+            var complexHits = indexSearcher.Search(boolQuery, 10);
+            _output.WriteLine($"Manual complex query (like FlexibleMemoryService): {complexHits.TotalHits} hits");
         }
         catch (Exception ex)
         {
@@ -199,6 +215,59 @@ public class FlexibleMemoryDiagnosticTests : IDisposable
         // Assert - Should find the memory
         _output.WriteLine($"Found {searchResult.TotalFound} memories by type");
         Assert.Equal(1, searchResult.TotalFound);
+    }
+    
+    [Fact]
+    public async Task ReproduceBug_ManualQueryWorksServiceFails()
+    {
+        // This test reproduces the exact bug: manual Lucene queries work, FlexibleMemoryService fails
+        
+        // Arrange - Store a simple memory
+        var memory = new FlexibleMemoryEntry
+        {
+            Id = "bug-test",
+            Type = MemoryTypes.TechnicalDebt,
+            Content = "Authentication bug needs fixing",
+            IsShared = true
+        };
+        
+        _output.WriteLine($"Storing memory: {memory.Content}");
+        var storeResult = await _memoryService.StoreMemoryAsync(memory);
+        Assert.True(storeResult, "Store should succeed");
+        
+        await Task.Delay(100); // Wait for indexing
+        
+        // Get the searcher directly 
+        var projectPath = _pathResolutionMock.Object.GetProjectMemoryPath();
+        var searcher = await _indexService.GetIndexSearcherAsync(projectPath);
+        
+        _output.WriteLine($"Index has {searcher.IndexReader.NumDocs} documents");
+        
+        // Test 1: Manual simple term query (WORKS)
+        var manualTermQuery = new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("_all", "authentication"));
+        var manualHits = searcher.Search(manualTermQuery, 10);
+        _output.WriteLine($"✅ Manual term query: {manualHits.TotalHits} hits");
+        
+        // Test 2: Manual complex query like FlexibleMemoryService builds (WORKS)
+        var manualComplexQuery = new Lucene.Net.Search.BooleanQuery();
+        manualComplexQuery.Add(new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("content", "authentication")) { Boost = 2.0f }, Lucene.Net.Search.Occur.SHOULD);
+        manualComplexQuery.Add(new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("type", "authentication")) { Boost = 1.5f }, Lucene.Net.Search.Occur.SHOULD);
+        manualComplexQuery.Add(new Lucene.Net.Search.TermQuery(new Lucene.Net.Index.Term("_all", "authentication")) { Boost = 1.0f }, Lucene.Net.Search.Occur.SHOULD);
+        
+        var manualComplexHits = searcher.Search(manualComplexQuery, 10);
+        _output.WriteLine($"✅ Manual complex query: {manualComplexHits.TotalHits} hits");
+        
+        // Test 3: FlexibleMemoryService search (FAILS)
+        var serviceRequest = new FlexibleMemorySearchRequest { Query = "authentication" };
+        var serviceResult = await _memoryService.SearchMemoriesAsync(serviceRequest);
+        _output.WriteLine($"❌ FlexibleMemoryService: {serviceResult.TotalFound} hits");
+        
+        // The bug: Manual queries work, service fails
+        Assert.True(manualHits.TotalHits > 0, "Manual term query should work");
+        Assert.True(manualComplexHits.TotalHits > 0, "Manual complex query should work");
+        
+        // This assertion will FAIL, demonstrating the bug
+        Assert.True(serviceResult.TotalFound > 0, "🐛 BUG: FlexibleMemoryService should work but doesn't!");
     }
     
     [Fact]

@@ -770,7 +770,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                     request.TemporalScoring, finalQuery.ToString());
             }
             
-            // Execute search
+            // Execute search  
+            System.Diagnostics.Debug.WriteLine($"Final query: {finalQuery}");
+            Console.WriteLine($"Final query: {finalQuery}");
             var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
             System.Diagnostics.Debug.WriteLine($"Search returned {topDocs.TotalHits} hits");
