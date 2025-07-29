@@ -2139,6 +2139,372 @@ public class AIResponseBuilderService
 
     #endregion
 
+    #region Recent Files Implementation
+
+    /// <summary>
+    /// Build AI-optimized response for recent files search results
+    /// </summary>
+    public object BuildRecentFilesResponse(
+        string workspacePath,
+        string timeFrame,
+        DateTime cutoffTime,
+        List<dynamic> results,
+        double searchDurationMs,
+        Dictionary<string, int> extensionCounts,
+        long totalSize,
+        ResponseMode mode)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Generate insights
+        var insights = GenerateRecentFilesInsights(results, timeFrame, searchDurationMs, extensionCounts);
+
+        // Analyze temporal patterns
+        var temporalGroups = new Dictionary<string, List<dynamic>>();
+        var now = DateTime.UtcNow;
+        
+        foreach (var result in results)
+        {
+            DateTime lastModified = result.lastModified;
+            var age = now - lastModified;
+            
+            var groupKey = age.TotalHours < 1 ? "last_hour" :
+                          age.TotalHours < 24 ? "today" :
+                          age.TotalDays < 7 ? "this_week" :
+                          age.TotalDays < 30 ? "this_month" : "older";
+            
+            if (!temporalGroups.ContainsKey(groupKey))
+                temporalGroups[groupKey] = new List<dynamic>();
+            
+            temporalGroups[groupKey].Add(result);
+        }
+
+        // Find activity patterns
+        var activityPatterns = AnalyzeActivityPatterns(results, temporalGroups);
+
+        // Generate actions
+        var actions = GenerateRecentFilesActions(workspacePath, timeFrame, results, extensionCounts, temporalGroups);
+
+        // Prepare results based on mode
+        var resultsToInclude = mode == ResponseMode.Full 
+            ? results
+            : results.Take(20).ToList();
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "recent_files",
+            query = new
+            {
+                workspace = Path.GetFileName(workspacePath),
+                timeFrame = timeFrame,
+                cutoffTime = cutoffTime
+            },
+            summary = new
+            {
+                totalFound = results.Count,
+                totalSize = totalSize,
+                totalSizeFormatted = FormatFileSize(totalSize),
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 10 ? "excellent" : searchDurationMs < 50 ? "fast" : "normal",
+                fileTypes = extensionCounts
+                    .Select(kvp => new { extension = kvp.Key, count = kvp.Value })
+                    .OrderByDescending(x => x.count)
+                    .ToList()
+            },
+            analysis = new
+            {
+                patterns = activityPatterns.Take(3).ToList(),
+                temporalDistribution = temporalGroups.ToDictionary(
+                    g => g.Key,
+                    g => new { count = g.Value.Count, percentage = $"{(g.Value.Count * 100.0 / results.Count):F0}%" }
+                ),
+                hotspots = FindHotspotDirectories(results).Take(5).ToList()
+            },
+            results = resultsToInclude,
+            resultsSummary = new
+            {
+                included = resultsToInclude.Count,
+                total = results.Count,
+                hasMore = results.Count > resultsToInclude.Count
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                truncated = false,
+                tokens = EstimateRecentFilesResponseTokens(results),
+                cached = GenerateCacheKey("recent")
+            }
+        };
+
+        return response;
+    }
+
+    private List<string> GenerateRecentFilesInsights(
+        List<dynamic> results, 
+        string timeFrame, 
+        double searchDurationMs,
+        Dictionary<string, int> extensionCounts)
+    {
+        var insights = new List<string>();
+
+        // Basic result insight
+        if (results.Count == 0)
+        {
+            insights.Add($"No files modified in the last {timeFrame}");
+            insights.Add("Try extending the time frame or checking a different directory");
+        }
+        else
+        {
+            insights.Add($"Found {results.Count} files modified in the last {timeFrame}");
+            
+            // Activity level insight
+            if (results.Count > 50)
+            {
+                insights.Add("High activity detected - many recent changes");
+            }
+            else if (results.Count < 5)
+            {
+                insights.Add("Low activity - few recent modifications");
+            }
+            
+            // File type insights
+            if (extensionCounts.Count > 0)
+            {
+                var topType = extensionCounts.OrderByDescending(kv => kv.Value).First();
+                if (topType.Value > results.Count * 0.5)
+                {
+                    insights.Add($"Mostly {topType.Key} files modified ({topType.Value} files)");
+                }
+            }
+            
+            // Most recent file
+            if (results.Any())
+            {
+                var mostRecent = results.First();
+                insights.Add($"Most recent: {mostRecent.filename} ({mostRecent.timeAgo})");
+            }
+        }
+
+        // Performance insight
+        if (searchDurationMs < 10)
+        {
+            insights.Add("⚡ Excellent timestamp-based search performance");
+        }
+
+        return insights;
+    }
+
+    private List<object> GenerateRecentFilesActions(
+        string workspacePath,
+        string timeFrame,
+        List<dynamic> results,
+        Dictionary<string, int> extensionCounts,
+        Dictionary<string, List<dynamic>> temporalGroups)
+    {
+        var actions = new List<object>();
+
+        if (results.Any())
+        {
+            // View most recent file
+            var mostRecent = results.First();
+            actions.Add(new
+            {
+                id = "view_most_recent",
+                cmd = new { file = mostRecent.path },
+                tokens = 1000,
+                priority = "recommended"
+            });
+
+            // Search in recent files
+            if (results.Count > 1 && results.Count <= 20)
+            {
+                actions.Add(new
+                {
+                    id = "search_in_recent",
+                    cmd = new
+                    {
+                        operation = "text_search",
+                        query = "TODO|FIXME|HACK",
+                        files = results.Take(10).Select(r => r.path).ToList()
+                    },
+                    tokens = 1500,
+                    priority = "available"
+                });
+            }
+
+            // Filter by most active file type
+            if (extensionCounts.Count > 1)
+            {
+                var topExt = extensionCounts.OrderByDescending(kv => kv.Value).First();
+                actions.Add(new
+                {
+                    id = "filter_by_type",
+                    cmd = new
+                    {
+                        operation = "recent_files",
+                        workspacePath = workspacePath,
+                        timeFrame = timeFrame,
+                        extensions = new[] { topExt.Key }
+                    },
+                    tokens = 500,
+                    priority = "available"
+                });
+            }
+
+            // Narrow time window if many results
+            if (results.Count > 50 && temporalGroups.ContainsKey("today"))
+            {
+                actions.Add(new
+                {
+                    id = "today_only",
+                    cmd = new
+                    {
+                        operation = "recent_files",
+                        workspacePath = workspacePath,
+                        timeFrame = "24h"
+                    },
+                    tokens = 300,
+                    priority = "recommended"
+                });
+            }
+        }
+        else
+        {
+            // Suggest broader time frame
+            var broaderTimeFrame = timeFrame switch
+            {
+                "1h" => "24h",
+                "24h" => "7d",
+                "7d" => "30d",
+                _ => "7d"
+            };
+            
+            actions.Add(new
+            {
+                id = "broaden_timeframe",
+                cmd = new
+                {
+                    operation = "recent_files",
+                    workspacePath = workspacePath,
+                    timeFrame = broaderTimeFrame
+                },
+                tokens = 1000,
+                priority = "recommended"
+            });
+        }
+
+        // Git status integration hint
+        actions.Add(new
+        {
+            id = "check_git_status",
+            cmd = new
+            {
+                operation = "bash",
+                command = "git status --short"
+            },
+            tokens = 200,
+            priority = "available"
+        });
+
+        return actions;
+    }
+
+    private List<string> AnalyzeActivityPatterns(
+        List<dynamic> results,
+        Dictionary<string, List<dynamic>> temporalGroups)
+    {
+        var patterns = new List<string>();
+
+        if (results.Count == 0)
+        {
+            patterns.Add("No recent file activity detected");
+        }
+        else
+        {
+            // Temporal concentration
+            if (temporalGroups.ContainsKey("last_hour") && temporalGroups["last_hour"].Count > results.Count * 0.5)
+            {
+                patterns.Add("Burst of activity in the last hour");
+            }
+            else if (temporalGroups.ContainsKey("today") && temporalGroups["today"].Count > results.Count * 0.7)
+            {
+                patterns.Add("Most activity concentrated today");
+            }
+            
+            // File type patterns
+            var extensionGroups = results.GroupBy(r => (string)r.extension).ToList();
+            if (extensionGroups.Count == 1)
+            {
+                patterns.Add($"All modifications in {extensionGroups.First().Key} files");
+            }
+            else if (extensionGroups.Count > 5)
+            {
+                patterns.Add("Diverse file types modified - broad changes");
+            }
+            
+            // Directory patterns
+            var directoryGroups = results
+                .GroupBy(r => Path.GetDirectoryName((string)r.relativePath))
+                .OrderByDescending(g => g.Count())
+                .ToList();
+                
+            if (directoryGroups.Any() && directoryGroups.First().Count() > results.Count * 0.5)
+            {
+                patterns.Add($"Concentrated activity in {directoryGroups.First().Key}");
+            }
+        }
+
+        return patterns;
+    }
+
+    private List<object> FindHotspotDirectories(List<dynamic> results)
+    {
+        return results
+            .GroupBy(r => Path.GetDirectoryName((string)r.relativePath) ?? "root")
+            .OrderByDescending(g => g.Count())
+            .Select(g => new
+            {
+                directory = g.Key,
+                fileCount = g.Count(),
+                mostRecent = g.OrderByDescending(r => (DateTime)r.lastModified).First().timeAgo
+            })
+            .Cast<object>()
+            .ToList();
+    }
+
+    private string FormatFileSize(long bytes)
+    {
+        string[] sizes = { "B", "KB", "MB", "GB", "TB" };
+        double len = bytes;
+        int order = 0;
+        while (len >= 1024 && order < sizes.Length - 1)
+        {
+            order++;
+            len = len / 1024;
+        }
+        return $"{len:0.##} {sizes[order]}";
+    }
+
+    private int EstimateRecentFilesResponseTokens(List<dynamic> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 250;
+        
+        // Per result tokens (recent files include timestamps)
+        var perResultTokens = 45;
+        
+        // Additional for analysis
+        var analysisTokens = 150;
+        
+        return baseTokens + (results.Count * perResultTokens) + analysisTokens;
+    }
+
+    #endregion
+
     #region Text Search Implementation
 
     private List<string> GenerateTextSearchInsights(

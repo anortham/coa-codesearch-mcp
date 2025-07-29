@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Index;
@@ -19,18 +20,21 @@ public class FastRecentFilesTool : ITool
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly AIResponseBuilderService _aiResponseBuilder;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastRecentFilesTool(
         ILogger<FastRecentFilesTool> logger,
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
-        IErrorRecoveryService errorRecoveryService)
+        IErrorRecoveryService errorRecoveryService,
+        AIResponseBuilderService aiResponseBuilder)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _aiResponseBuilder = aiResponseBuilder;
     }
 
     public async Task<object> ExecuteAsync(
@@ -113,7 +117,7 @@ public class FastRecentFilesTool : ITool
             var searchDuration = (DateTime.UtcNow - startTime).TotalMilliseconds;
 
             // Process results
-            var results = new List<object>();
+            var results = new List<dynamic>();
             var totalSize = 0L;
             var extensionCounts = new Dictionary<string, int>();
             
@@ -153,27 +157,17 @@ public class FastRecentFilesTool : ITool
             _logger.LogInformation("Found {Count} recent files in {Duration}ms - high performance search!", 
                 results.Count, searchDuration);
 
-            return new
-            {
-                success = true,
-                workspacePath = workspacePath,
-                timeFrame = timeFrame,
-                cutoffTime = cutoffTime,
-                totalResults = results.Count,
-                searchDurationMs = searchDuration,
-                results = results,
-                summary = new
-                {
-                    totalFiles = results.Count,
-                    totalSize = includeSize ? totalSize : (long?)null,
-                    totalSizeFormatted = includeSize ? FormatFileSize(totalSize) : null,
-                    fileTypes = extensionCounts
-                        .Select(kvp => new { extension = kvp.Key, count = kvp.Value })
-                        .OrderByDescending(x => x.count)
-                        .ToList()
-                },
-                performance = searchDuration < 10 ? "excellent" : "very fast"
-            };
+            // Use AIResponseBuilderService to build the response
+            var mode = results.Count > 50 ? ResponseMode.Summary : ResponseMode.Full;
+            return _aiResponseBuilder.BuildRecentFilesResponse(
+                workspacePath,
+                timeFrame ?? "24h",
+                cutoffTime,
+                results,
+                searchDuration,
+                extensionCounts,
+                totalSize,
+                mode);
         }
         catch (CircuitBreakerOpenException cbEx)
         {
