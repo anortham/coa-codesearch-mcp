@@ -1830,6 +1830,315 @@ public class AIResponseBuilderService
 
     #endregion
 
+    #region Similar Files Implementation
+
+    /// <summary>
+    /// Build AI-optimized response for similar files search results
+    /// </summary>
+    public object BuildSimilarFilesResponse(
+        string sourceFilePath,
+        string workspacePath,
+        List<dynamic> results,
+        double searchDurationMs,
+        dynamic sourceFileInfo,
+        List<string> topTerms,
+        ResponseMode mode)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Generate insights
+        var insights = GenerateSimilarFilesInsights(results, sourceFilePath, searchDurationMs);
+
+        // Analyze similarity distribution
+        var similarityGroups = new Dictionary<string, List<dynamic>>();
+        foreach (var result in results)
+        {
+            float similarity = result.similarity ?? 0f;
+            var groupKey = similarity >= 0.8f ? "high" :
+                          similarity >= 0.6f ? "medium" :
+                          similarity >= 0.4f ? "moderate" : "low";
+            
+            if (!similarityGroups.ContainsKey(groupKey))
+                similarityGroups[groupKey] = new List<dynamic>();
+            
+            similarityGroups[groupKey].Add(result);
+        }
+
+        // Find patterns in similar files
+        var extensionDistribution = results
+            .GroupBy(r => (string)r.extension)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        var languageDistribution = results
+            .Where(r => !string.IsNullOrEmpty((string)r.language))
+            .GroupBy(r => (string)r.language)
+            .ToDictionary(g => g.Key, g => g.Count());
+
+        // Generate actions
+        var actions = GenerateSimilarFilesActions(sourceFilePath, results, similarityGroups);
+
+        // Prepare results based on mode
+        var resultsToInclude = mode == ResponseMode.Full 
+            ? results
+            : results.Take(10).ToList();
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "similar_files",
+            query = new
+            {
+                sourceFile = sourceFilePath,
+                workspace = Path.GetFileName(workspacePath)
+            },
+            sourceFile = sourceFileInfo,
+            summary = new
+            {
+                totalFound = results.Count,
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 50 ? "excellent" : searchDurationMs < 100 ? "fast" : "normal",
+                similarityDistribution = similarityGroups.ToDictionary(
+                    g => g.Key,
+                    g => new { count = g.Value.Count, percentage = $"{(g.Value.Count * 100.0 / results.Count):F0}%" }
+                )
+            },
+            analysis = new
+            {
+                patterns = AnalyzeSimilarityPatterns(results, extensionDistribution, languageDistribution).Take(3).ToList(),
+                topTerms = topTerms,
+                distribution = new
+                {
+                    byExtension = extensionDistribution,
+                    byLanguage = languageDistribution,
+                    bySimilarity = similarityGroups.ToDictionary(g => g.Key, g => g.Value.Count)
+                }
+            },
+            results = resultsToInclude,
+            resultsSummary = new
+            {
+                included = resultsToInclude.Count,
+                total = results.Count,
+                hasMore = results.Count > resultsToInclude.Count
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                truncated = false,
+                tokens = EstimateSimilarFilesResponseTokens(results),
+                cached = GenerateCacheKey("similar")
+            }
+        };
+
+        return response;
+    }
+
+    private List<string> GenerateSimilarFilesInsights(List<dynamic> results, string sourceFilePath, double searchDurationMs)
+    {
+        var insights = new List<string>();
+
+        // Basic result insight
+        if (results.Count == 0)
+        {
+            insights.Add("No similar files found - source file may have unique content");
+            insights.Add("Try adjusting similarity parameters for broader matches");
+        }
+        else
+        {
+            insights.Add($"Found {results.Count} similar files in {searchDurationMs:F0}ms");
+            
+            // Similarity level insights
+            var highSimilarity = results.Count(r => (float)(r.similarity ?? 0f) >= 0.8f);
+            if (highSimilarity > 0)
+            {
+                insights.Add($"{highSimilarity} files have high similarity (80%+) - possible duplicates");
+            }
+            
+            // Extension pattern insights
+            var sourceExt = Path.GetExtension(sourceFilePath);
+            var sameExtCount = results.Count(r => r.extension == sourceExt);
+            if (sameExtCount == results.Count)
+            {
+                insights.Add("All similar files share the same file type");
+            }
+            else if (sameExtCount == 0)
+            {
+                insights.Add("Similar content found in different file types - cross-language patterns");
+            }
+        }
+
+        // Performance insight
+        if (searchDurationMs < 50)
+        {
+            insights.Add("⚡ Excellent similarity analysis performance");
+        }
+
+        return insights;
+    }
+
+    private List<object> GenerateSimilarFilesActions(
+        string sourceFilePath,
+        List<dynamic> results,
+        Dictionary<string, List<dynamic>> similarityGroups)
+    {
+        var actions = new List<object>();
+
+        if (results.Any())
+        {
+            // View most similar file
+            var mostSimilar = results.First();
+            actions.Add(new
+            {
+                id = "view_most_similar",
+                cmd = new { file = mostSimilar.path },
+                tokens = 1000,
+                priority = "recommended"
+            });
+
+            // Compare with source
+            if (results.Count > 0 && mostSimilar.similarity >= 0.7f)
+            {
+                actions.Add(new
+                {
+                    id = "compare_files",
+                    cmd = new
+                    {
+                        file1 = sourceFilePath,
+                        file2 = mostSimilar.path,
+                        tool = "diff"
+                    },
+                    tokens = 1500,
+                    priority = "recommended"
+                });
+            }
+
+            // Search for duplicates
+            if (similarityGroups.ContainsKey("high") && similarityGroups["high"].Count > 1)
+            {
+                actions.Add(new
+                {
+                    id = "find_duplicates",
+                    cmd = new
+                    {
+                        operation = "similar_files",
+                        minSimilarity = 0.9f,
+                        sourcePath = sourceFilePath
+                    },
+                    tokens = 500,
+                    priority = "available"
+                });
+            }
+
+            // Analyze pattern across similar files
+            if (results.Count >= 3)
+            {
+                actions.Add(new
+                {
+                    id = "analyze_pattern",
+                    cmd = new
+                    {
+                        operation = "batch_operations",
+                        operations = results.Take(5).Select(r => new
+                        {
+                            operation = "text_search",
+                            query = "TODO|FIXME|HACK",
+                            files = new[] { r.path }
+                        }).ToList()
+                    },
+                    tokens = 2000,
+                    priority = "available"
+                });
+            }
+        }
+        else
+        {
+            // Suggest parameter adjustments
+            actions.Add(new
+            {
+                id = "adjust_parameters",
+                cmd = new
+                {
+                    operation = "similar_files",
+                    sourcePath = sourceFilePath,
+                    minTermFreq = 1,
+                    minDocFreq = 1,
+                    minWordLength = 3
+                },
+                tokens = 1000,
+                priority = "recommended"
+            });
+        }
+
+        return actions;
+    }
+
+    private List<string> AnalyzeSimilarityPatterns(
+        List<dynamic> results,
+        Dictionary<string, int> extensionDistribution,
+        Dictionary<string, int> languageDistribution)
+    {
+        var patterns = new List<string>();
+
+        if (results.Count == 0)
+        {
+            patterns.Add("No similar files found - content appears unique");
+        }
+        else
+        {
+            // Similarity concentration
+            var avgSimilarity = results.Average(r => (float)(r.similarity ?? 0f));
+            if (avgSimilarity > 0.8f)
+            {
+                patterns.Add("High similarity concentration - likely code duplication");
+            }
+            else if (avgSimilarity > 0.6f)
+            {
+                patterns.Add("Moderate similarity - shared patterns or templates");
+            }
+            else
+            {
+                patterns.Add("Low similarity - loose content relationships");
+            }
+
+            // File type patterns
+            if (extensionDistribution.Count == 1)
+            {
+                patterns.Add($"All similar files are {extensionDistribution.First().Key} files");
+            }
+            else if (extensionDistribution.Count > 3)
+            {
+                patterns.Add("Similar patterns found across multiple file types");
+            }
+
+            // Language patterns
+            if (languageDistribution.Count > 1)
+            {
+                var topLang = languageDistribution.OrderByDescending(kv => kv.Value).First();
+                patterns.Add($"Cross-language similarity, primarily {topLang.Key}");
+            }
+        }
+
+        return patterns;
+    }
+
+    private int EstimateSimilarFilesResponseTokens(List<dynamic> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 250;
+        
+        // Per result tokens (similar files include more metadata)
+        var perResultTokens = 40;
+        
+        // Additional for analysis
+        var analysisTokens = 150;
+        
+        return baseTokens + (results.Count * perResultTokens) + analysisTokens;
+    }
+
+    #endregion
+
     #region Text Search Implementation
 
     private List<string> GenerateTextSearchInsights(
