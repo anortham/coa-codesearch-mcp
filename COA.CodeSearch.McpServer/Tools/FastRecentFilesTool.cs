@@ -115,6 +115,7 @@ public class FastRecentFilesTool : ITool
             // Process results
             var results = new List<object>();
             var totalSize = 0L;
+            var extensionCounts = new Dictionary<string, int>();
             
             // Define fields needed for recent files analysis
             var recentFilesFields = new[] { "path", "filename", "relativePath", "extension", "lastModified", "size", "language" };
@@ -127,12 +128,18 @@ public class FastRecentFilesTool : ITool
                 var size = long.Parse(doc.Get("size") ?? "0");
                 totalSize += size;
                 
+                var extension = doc.Get("extension");
+                if (!string.IsNullOrEmpty(extension))
+                {
+                    extensionCounts[extension] = extensionCounts.TryGetValue(extension, out var count) ? count + 1 : 1;
+                }
+                
                 var result = new
                 {
                     path = doc.Get("path"),
                     filename = doc.Get("filename"),
                     relativePath = doc.Get("relativePath"),
-                    extension = doc.Get("extension"),
+                    extension = extension,
                     lastModified = lastModified,
                     timeAgo = GetFriendlyTimeAgo(lastModified),
                     size = includeSize ? size : (long?)null,
@@ -160,8 +167,8 @@ public class FastRecentFilesTool : ITool
                     totalFiles = results.Count,
                     totalSize = includeSize ? totalSize : (long?)null,
                     totalSizeFormatted = includeSize ? FormatFileSize(totalSize) : null,
-                    fileTypes = results.GroupBy(r => ((dynamic)r).extension)
-                        .Select(g => new { extension = g.Key, count = g.Count() })
+                    fileTypes = extensionCounts
+                        .Select(kvp => new { extension = kvp.Key, count = kvp.Value })
                         .OrderByDescending(x => x.count)
                         .ToList()
                 },
