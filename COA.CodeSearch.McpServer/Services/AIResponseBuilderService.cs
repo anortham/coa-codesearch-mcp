@@ -2505,6 +2505,682 @@ public class AIResponseBuilderService
 
     #endregion
 
+    #region File Size Analysis Implementation
+
+    /// <summary>
+    /// Build AI-optimized response for file size analysis results
+    /// </summary>
+    public object BuildFileSizeAnalysisResponse(
+        string workspacePath,
+        string mode,
+        List<dynamic> results,
+        double searchDurationMs,
+        long totalSize,
+        Dictionary<string, int> sizeGroups,
+        ResponseMode responseMode)
+    {
+        var tokenBudget = responseMode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Generate insights based on mode
+        var insights = GenerateFileSizeInsights(results, mode, totalSize, sizeGroups);
+
+        // Analyze size patterns
+        var sizePatterns = AnalyzeFileSizePatterns(results, sizeGroups);
+
+        // Find extension distribution
+        var extensionStats = new Dictionary<string, (int count, long totalSize)>();
+        foreach (var result in results)
+        {
+            string ext = result.extension ?? "unknown";
+            long size = result.size;
+            
+            if (!extensionStats.ContainsKey(ext))
+                extensionStats[ext] = (0, 0);
+                
+            var current = extensionStats[ext];
+            extensionStats[ext] = (current.count + 1, current.totalSize + size);
+        }
+
+        // Generate actions
+        var actions = GenerateFileSizeActions(workspacePath, mode, results, extensionStats);
+
+        // Prepare results based on response mode
+        var resultsToInclude = responseMode == ResponseMode.Full 
+            ? results
+            : results.Take(20).ToList();
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "file_size_analysis",
+            query = new
+            {
+                workspace = Path.GetFileName(workspacePath),
+                mode = mode
+            },
+            summary = new
+            {
+                totalFound = results.Count,
+                totalSize = totalSize,
+                totalSizeFormatted = FormatFileSize(totalSize),
+                averageSize = results.Count > 0 ? totalSize / results.Count : 0,
+                averageSizeFormatted = results.Count > 0 ? FormatFileSize(totalSize / results.Count) : "0 B",
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 10 ? "excellent" : searchDurationMs < 50 ? "fast" : "normal"
+            },
+            analysis = new
+            {
+                patterns = sizePatterns.Take(3).ToList(),
+                sizeDistribution = sizeGroups.OrderByDescending(kvp => kvp.Value)
+                    .ToDictionary(kvp => kvp.Key, kvp => kvp.Value),
+                largestFile = results.Count > 0 && mode == "largest" ? new
+                {
+                    file = results.First().filename,
+                    size = results.First().sizeFormatted,
+                    path = results.First().relativePath
+                } : null,
+                extensionStats = extensionStats
+                    .OrderByDescending(kvp => kvp.Value.totalSize)
+                    .Take(5)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new 
+                        { 
+                            count = kvp.Value.count,
+                            totalSize = FormatFileSize(kvp.Value.totalSize),
+                            avgSize = FormatFileSize(kvp.Value.totalSize / kvp.Value.count)
+                        }
+                    )
+            },
+            results = resultsToInclude,
+            resultsSummary = new
+            {
+                included = resultsToInclude.Count,
+                total = results.Count,
+                hasMore = results.Count > resultsToInclude.Count
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = responseMode.ToString().ToLowerInvariant(),
+                truncated = false,
+                tokens = EstimateFileSizeAnalysisResponseTokens(results),
+                cached = GenerateCacheKey("filesize")
+            }
+        };
+
+        return response;
+    }
+
+    /// <summary>
+    /// Build AI-optimized response for file size distribution analysis
+    /// </summary>
+    public object BuildFileSizeDistributionResponse(
+        string workspacePath,
+        double searchDurationMs,
+        int totalFiles,
+        long totalSize,
+        Dictionary<string, (int count, long totalSize)> distribution,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        // Generate distribution insights
+        var insights = GenerateDistributionInsights(totalFiles, totalSize, distribution, extensionStats);
+
+        // Analyze patterns
+        var patterns = AnalyzeDistributionPatterns(distribution, extensionStats);
+
+        // Generate actions
+        var actions = GenerateDistributionActions(workspacePath, distribution, extensionStats);
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "file_size_analysis",
+            query = new
+            {
+                workspace = Path.GetFileName(workspacePath),
+                mode = "distribution"
+            },
+            summary = new
+            {
+                totalFiles = totalFiles,
+                totalSize = totalSize,
+                totalSizeFormatted = FormatFileSize(totalSize),
+                averageSize = totalFiles > 0 ? totalSize / totalFiles : 0,
+                averageSizeFormatted = totalFiles > 0 ? FormatFileSize(totalSize / totalFiles) : "0 B",
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 50 ? "excellent" : "fast"
+            },
+            distribution = new
+            {
+                bySizeGroup = distribution
+                    .OrderBy(kvp => GetSizeGroupOrder(kvp.Key))
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new 
+                        { 
+                            count = kvp.Value.count,
+                            totalSize = FormatFileSize(kvp.Value.totalSize),
+                            percentage = $"{(kvp.Value.count * 100.0 / totalFiles):F1}%"
+                        }
+                    ),
+                byExtension = extensionStats
+                    .OrderByDescending(kvp => kvp.Value.totalSize)
+                    .Take(10)
+                    .ToDictionary(
+                        kvp => kvp.Key,
+                        kvp => new 
+                        { 
+                            count = kvp.Value.count,
+                            totalSize = FormatFileSize(kvp.Value.totalSize),
+                            avgSize = FormatFileSize(kvp.Value.totalSize / kvp.Value.count),
+                            percentage = $"{(kvp.Value.totalSize * 100.0 / totalSize):F1}%"
+                        }
+                    )
+            },
+            analysis = new
+            {
+                patterns = patterns.Take(4).ToList(),
+                insights = new
+                {
+                    spaceConsumers = extensionStats
+                        .OrderByDescending(kvp => kvp.Value.totalSize)
+                        .Take(3)
+                        .Select(kvp => $"{kvp.Key}: {FormatFileSize(kvp.Value.totalSize)} ({(kvp.Value.totalSize * 100.0 / totalSize):F1}%)")
+                        .ToList(),
+                    fileCountLeaders = extensionStats
+                        .OrderByDescending(kvp => kvp.Value.count)
+                        .Take(3)
+                        .Select(kvp => $"{kvp.Key}: {kvp.Value.count} files")
+                        .ToList()
+                }
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = "distribution",
+                truncated = false,
+                tokens = EstimateDistributionResponseTokens(distribution, extensionStats),
+                cached = GenerateCacheKey("dist")
+            }
+        };
+
+        return response;
+    }
+
+    private List<string> GenerateFileSizeInsights(
+        List<dynamic> results, 
+        string mode, 
+        long totalSize,
+        Dictionary<string, int> sizeGroups)
+    {
+        var insights = new List<string>();
+
+        if (results.Count == 0)
+        {
+            insights.Add($"No files found for {mode} analysis");
+            if (mode == "range")
+                insights.Add("Try adjusting the size range parameters");
+            return insights;
+        }
+
+        // Mode-specific insights
+        switch (mode.ToLower())
+        {
+            case "largest":
+                insights.Add($"Found {results.Count} largest files");
+                if (results.Any())
+                {
+                    var largest = results.First();
+                    insights.Add($"Largest file: {largest.filename} ({largest.sizeFormatted})");
+                    
+                    // Check for unusually large files
+                    if ((long)largest.size > 100 * 1024 * 1024) // 100MB
+                    {
+                        insights.Add("⚠️ Very large files detected - consider archiving or compression");
+                    }
+                }
+                break;
+                
+            case "smallest":
+                insights.Add($"Found {results.Count} smallest non-empty files");
+                var emptyCount = results.Count(r => (long)r.size == 0);
+                if (emptyCount > 0)
+                {
+                    insights.Add($"Note: {emptyCount} empty files excluded from results");
+                }
+                break;
+                
+            case "zero":
+                insights.Add($"Found {results.Count} empty files");
+                if (results.Count > 10)
+                {
+                    insights.Add("Many empty files detected - consider cleanup");
+                }
+                break;
+                
+            case "range":
+                insights.Add($"Found {results.Count} files in specified size range");
+                break;
+        }
+
+        // Size distribution insight
+        if (sizeGroups.Count > 0)
+        {
+            var dominantGroup = sizeGroups.OrderByDescending(kvp => kvp.Value).First();
+            insights.Add($"Most files are {dominantGroup.Key} ({dominantGroup.Value} files)");
+        }
+
+        // Total size insight
+        insights.Add($"Total size: {FormatFileSize(totalSize)}");
+
+        return insights;
+    }
+
+    private List<object> GenerateFileSizeActions(
+        string workspacePath,
+        string mode,
+        List<dynamic> results,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        var actions = new List<object>();
+
+        if (results.Any())
+        {
+            // View largest file action (if in largest mode)
+            if (mode == "largest" && results.Any())
+            {
+                var largest = results.First();
+                actions.Add(new
+                {
+                    id = "view_largest",
+                    cmd = new { file = largest.path },
+                    tokens = 1000,
+                    priority = "recommended"
+                });
+            }
+
+            // Analyze by extension if multiple types
+            if (extensionStats.Count > 1)
+            {
+                var topExt = extensionStats.OrderByDescending(kvp => kvp.Value.totalSize).First();
+                actions.Add(new
+                {
+                    id = "analyze_by_type",
+                    cmd = new
+                    {
+                        operation = "file_size_analysis",
+                        workspacePath = workspacePath,
+                        mode = mode,
+                        extensions = new[] { topExt.Key }
+                    },
+                    tokens = 500,
+                    priority = "available"
+                });
+            }
+
+            // Distribution analysis if not already in that mode
+            if (mode != "distribution")
+            {
+                actions.Add(new
+                {
+                    id = "view_distribution",
+                    cmd = new
+                    {
+                        operation = "file_size_analysis",
+                        workspacePath = workspacePath,
+                        mode = "distribution"
+                    },
+                    tokens = 800,
+                    priority = "recommended"
+                });
+            }
+
+            // Cleanup suggestion for zero-size files
+            if (mode == "zero" && results.Count > 0)
+            {
+                actions.Add(new
+                {
+                    id = "cleanup_empty",
+                    cmd = new
+                    {
+                        operation = "bash",
+                        command = "find . -type f -size 0 -print"
+                    },
+                    tokens = 200,
+                    priority = "available"
+                });
+            }
+        }
+
+        // Alternative modes
+        var alternativeModes = new[] { "largest", "smallest", "zero", "distribution" }
+            .Where(m => m != mode.ToLower())
+            .ToList();
+            
+        if (alternativeModes.Any())
+        {
+            actions.Add(new
+            {
+                id = $"try_{alternativeModes.First()}",
+                cmd = new
+                {
+                    operation = "file_size_analysis",
+                    workspacePath = workspacePath,
+                    mode = alternativeModes.First()
+                },
+                tokens = 600,
+                priority = "available"
+            });
+        }
+
+        return actions;
+    }
+
+    private List<string> AnalyzeFileSizePatterns(
+        List<dynamic> results,
+        Dictionary<string, int> sizeGroups)
+    {
+        var patterns = new List<string>();
+
+        if (results.Count == 0)
+        {
+            patterns.Add("No files to analyze");
+            return patterns;
+        }
+
+        // Size concentration patterns
+        if (sizeGroups.Count > 0)
+        {
+            var totalFiles = sizeGroups.Values.Sum();
+            var largeFiles = sizeGroups.Where(kvp => 
+                kvp.Key == "Large (1-10 MB)" || 
+                kvp.Key == "Very Large (10-100 MB)" || 
+                kvp.Key == "Huge (100MB+)").Sum(kvp => kvp.Value);
+                
+            if (largeFiles > totalFiles * 0.2)
+            {
+                patterns.Add($"High concentration of large files ({largeFiles} files)");
+            }
+            
+            var tinyFiles = sizeGroups.Where(kvp => kvp.Key == "Tiny (0-1 KB)").Sum(kvp => kvp.Value);
+            if (tinyFiles > totalFiles * 0.3)
+            {
+                patterns.Add($"Many tiny files detected ({tinyFiles} files)");
+            }
+        }
+
+        // Extension patterns
+        var extensionGroups = results.GroupBy(r => (string)r.extension).ToList();
+        if (extensionGroups.Count == 1)
+        {
+            patterns.Add($"All files are {extensionGroups.First().Key} files");
+        }
+        else if (extensionGroups.Count > 10)
+        {
+            patterns.Add("Highly diverse file types in results");
+        }
+
+        // Directory patterns
+        var directoryGroups = results
+            .GroupBy(r => Path.GetDirectoryName((string)r.relativePath))
+            .OrderByDescending(g => g.Count())
+            .ToList();
+            
+        if (directoryGroups.Any() && directoryGroups.First().Count() > results.Count * 0.5)
+        {
+            patterns.Add($"Files concentrated in {directoryGroups.First().Key}");
+        }
+
+        return patterns;
+    }
+
+    private List<string> GenerateDistributionInsights(
+        int totalFiles,
+        long totalSize,
+        Dictionary<string, (int count, long totalSize)> distribution,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        var insights = new List<string>();
+
+        insights.Add($"Analyzed {totalFiles} files totaling {FormatFileSize(totalSize)}");
+
+        // Size distribution insight
+        if (distribution.Any())
+        {
+            var largestGroup = distribution.OrderByDescending(kvp => kvp.Value.count).First();
+            insights.Add($"Most common size: {largestGroup.Key} ({largestGroup.Value.count} files)");
+        }
+
+        // Space consumption insight
+        if (extensionStats.Any())
+        {
+            var topConsumer = extensionStats.OrderByDescending(kvp => kvp.Value.totalSize).First();
+            var percentage = (topConsumer.Value.totalSize * 100.0 / totalSize);
+            insights.Add($"{topConsumer.Key} files consume {percentage:F1}% of total space");
+        }
+
+        // Average file size
+        if (totalFiles > 0)
+        {
+            var avgSize = totalSize / totalFiles;
+            insights.Add($"Average file size: {FormatFileSize(avgSize)}");
+        }
+
+        return insights;
+    }
+
+    private List<string> AnalyzeDistributionPatterns(
+        Dictionary<string, (int count, long totalSize)> distribution,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        var patterns = new List<string>();
+
+        // Size distribution patterns
+        var totalFiles = distribution.Sum(kvp => kvp.Value.count);
+        if (totalFiles > 0)
+        {
+            var smallFiles = distribution
+                .Where(kvp => kvp.Key == "Tiny (0-1 KB)" || kvp.Key == "Small (1-100 KB)")
+                .Sum(kvp => kvp.Value.count);
+                
+            if (smallFiles > totalFiles * 0.7)
+            {
+                patterns.Add("Repository dominated by small files");
+            }
+            
+            var largeFiles = distribution
+                .Where(kvp => kvp.Key.Contains("Large") || kvp.Key.Contains("Huge"))
+                .Sum(kvp => kvp.Value.count);
+                
+            if (largeFiles > 0)
+            {
+                var largeSize = distribution
+                    .Where(kvp => kvp.Key.Contains("Large") || kvp.Key.Contains("Huge"))
+                    .Sum(kvp => kvp.Value.totalSize);
+                var totalSize = distribution.Sum(kvp => kvp.Value.totalSize);
+                
+                if (largeSize > totalSize * 0.8)
+                {
+                    patterns.Add("Large files consume majority of disk space");
+                }
+            }
+        }
+
+        // Extension patterns
+        if (extensionStats.Count > 20)
+        {
+            patterns.Add("Highly diverse file types in repository");
+        }
+        else if (extensionStats.Count == 1)
+        {
+            patterns.Add($"Single file type repository: {extensionStats.First().Key}");
+        }
+
+        // Find binary vs text pattern
+        var binaryExtensions = new HashSet<string> { ".dll", ".exe", ".pdf", ".zip", ".jar", ".png", ".jpg", ".mp4" };
+        var binaryStats = extensionStats.Where(kvp => binaryExtensions.Contains(kvp.Key.ToLower())).ToList();
+        if (binaryStats.Any())
+        {
+            var binarySize = binaryStats.Sum(kvp => kvp.Value.totalSize);
+            var totalSize = extensionStats.Sum(kvp => kvp.Value.totalSize);
+            if (binarySize > totalSize * 0.5)
+            {
+                patterns.Add("Binary files dominate storage space");
+            }
+        }
+
+        return patterns;
+    }
+
+    private List<object> GenerateDistributionActions(
+        string workspacePath,
+        Dictionary<string, (int count, long totalSize)> distribution,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        var actions = new List<object>();
+
+        // Find large files
+        if (distribution.Any(kvp => kvp.Key.Contains("Large") || kvp.Key.Contains("Huge")))
+        {
+            actions.Add(new
+            {
+                id = "find_large_files",
+                cmd = new
+                {
+                    operation = "file_size_analysis",
+                    workspacePath = workspacePath,
+                    mode = "largest",
+                    maxResults = 20
+                },
+                tokens = 800,
+                priority = "recommended"
+            });
+        }
+
+        // Analyze specific extension if it's consuming significant space
+        var topConsumer = extensionStats.OrderByDescending(kvp => kvp.Value.totalSize).FirstOrDefault();
+        if (topConsumer.Value.totalSize > 0)
+        {
+            var totalSize = extensionStats.Sum(kvp => kvp.Value.totalSize);
+            if (topConsumer.Value.totalSize > totalSize * 0.3)
+            {
+                actions.Add(new
+                {
+                    id = "analyze_top_consumer",
+                    cmd = new
+                    {
+                        operation = "file_size_analysis",
+                        workspacePath = workspacePath,
+                        mode = "largest",
+                        extensions = new[] { topConsumer.Key }
+                    },
+                    tokens = 600,
+                    priority = "recommended"
+                });
+            }
+        }
+
+        // Check for empty files if many tiny files
+        if (distribution.ContainsKey("Tiny (0-1 KB)") && distribution["Tiny (0-1 KB)"].count > 50)
+        {
+            actions.Add(new
+            {
+                id = "find_empty_files",
+                cmd = new
+                {
+                    operation = "file_size_analysis",
+                    workspacePath = workspacePath,
+                    mode = "zero"
+                },
+                tokens = 400,
+                priority = "available"
+            });
+        }
+
+        // Disk usage command
+        actions.Add(new
+        {
+            id = "check_disk_usage",
+            cmd = new
+            {
+                operation = "bash",
+                command = "du -h --max-depth=2 . | sort -hr | head -20"
+            },
+            tokens = 300,
+            priority = "available"
+        });
+
+        return actions;
+    }
+
+    private int GetSizeGroupOrder(string sizeGroup)
+    {
+        return sizeGroup switch
+        {
+            "Tiny (0-1 KB)" => 1,
+            "Small (1-100 KB)" => 2,
+            "Medium (100KB-1MB)" => 3,
+            "Large (1-10 MB)" => 4,
+            "Very Large (10-100 MB)" => 5,
+            "Huge (100MB+)" => 6,
+            _ => 7
+        };
+    }
+
+    private string GetSizeGroup(long size)
+    {
+        return size switch
+        {
+            0 => "Empty",
+            < 1024 => "Tiny (0-1 KB)",
+            < 102400 => "Small (1-100 KB)",
+            < 1048576 => "Medium (100KB-1MB)",
+            < 10485760 => "Large (1-10 MB)",
+            < 104857600 => "Very Large (10-100 MB)",
+            _ => "Huge (100MB+)"
+        };
+    }
+
+    private int EstimateFileSizeAnalysisResponseTokens(List<dynamic> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 300;
+        
+        // Per result tokens
+        var perResultTokens = 35;
+        
+        // Additional for analysis
+        var analysisTokens = 200;
+        
+        return baseTokens + (results.Count * perResultTokens) + analysisTokens;
+    }
+
+    private int EstimateDistributionResponseTokens(
+        Dictionary<string, (int count, long totalSize)> distribution,
+        Dictionary<string, (int count, long totalSize)> extensionStats)
+    {
+        // Base tokens for structure
+        var baseTokens = 400;
+        
+        // Distribution data
+        var distributionTokens = distribution.Count * 30;
+        
+        // Extension stats
+        var extensionTokens = Math.Min(extensionStats.Count, 10) * 40;
+        
+        // Analysis and insights
+        var analysisTokens = 300;
+        
+        return baseTokens + distributionTokens + extensionTokens + analysisTokens;
+    }
+
+    #endregion
+
     #region Text Search Implementation
 
     private List<string> GenerateTextSearchInsights(

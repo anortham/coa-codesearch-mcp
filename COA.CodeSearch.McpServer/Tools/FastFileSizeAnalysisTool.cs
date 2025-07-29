@@ -1,3 +1,4 @@
+using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Lucene.Net.Index;
@@ -19,18 +20,21 @@ public class FastFileSizeAnalysisTool : ITool
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFieldSelectorService _fieldSelectorService;
     private readonly IErrorRecoveryService _errorRecoveryService;
+    private readonly AIResponseBuilderService _aiResponseBuilder;
     private const LuceneVersion Version = LuceneVersion.LUCENE_48;
 
     public FastFileSizeAnalysisTool(
         ILogger<FastFileSizeAnalysisTool> logger,
         ILuceneIndexService luceneIndexService,
         IFieldSelectorService fieldSelectorService,
-        IErrorRecoveryService errorRecoveryService)
+        IErrorRecoveryService errorRecoveryService,
+        AIResponseBuilderService aiResponseBuilder)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
+        _aiResponseBuilder = aiResponseBuilder;
     }
 
     public async Task<object> ExecuteAsync(
@@ -164,32 +168,16 @@ public class FastFileSizeAnalysisTool : ITool
             _logger.LogInformation("Found {Count} files in {Duration}ms - high performance analysis!", 
                 results.Count, searchDuration);
 
-            var response = new Dictionary<string, object>
-            {
-                ["success"] = true,
-                ["workspacePath"] = workspacePath,
-                ["mode"] = mode ?? "largest",
-                ["totalResults"] = results.Count,
-                ["searchDurationMs"] = searchDuration,
-                ["results"] = results,
-                ["performance"] = searchDuration < 10 ? "excellent" : "very fast"
-            };
-
-            if (includeAnalysis && results.Count > 0)
-            {
-                response["analysis"] = new
-                {
-                    totalSize = totalSize,
-                    totalSizeFormatted = FormatFileSize(totalSize),
-                    averageSize = totalSize / results.Count,
-                    averageSizeFormatted = FormatFileSize(totalSize / results.Count),
-                    sizeDistribution = sizeGroups.OrderByDescending(kvp => kvp.Value).ToList(),
-                    largestFile = results.FirstOrDefault(),
-                    smallestFile = results.LastOrDefault()
-                };
-            }
-
-            return response;
+            // Use AIResponseBuilderService for standard analysis
+            var responseMode = results.Count > 50 ? ResponseMode.Summary : ResponseMode.Full;
+            return _aiResponseBuilder.BuildFileSizeAnalysisResponse(
+                workspacePath,
+                mode ?? "largest",
+                results,
+                searchDuration,
+                totalSize,
+                sizeGroups,
+                responseMode);
         }
         catch (CircuitBreakerOpenException cbEx)
         {
@@ -256,46 +244,14 @@ public class FastFileSizeAnalysisTool : ITool
             extensionStats[extension] = (extCurrent.count + 1, extCurrent.totalSize + size);
         }
 
-        return new
-        {
-            success = true,
-            workspacePath = workspacePath,
-            mode = "distribution",
-            searchDurationMs = searchDuration,
-            performance = searchDuration < 50 ? "excellent" : "very fast",
-            summary = new
-            {
-                totalFiles = totalFiles,
-                totalSize = overallTotalSize,
-                totalSizeFormatted = FormatFileSize(overallTotalSize),
-                averageFileSize = totalFiles > 0 ? overallTotalSize / totalFiles : 0,
-                averageFileSizeFormatted = totalFiles > 0 ? FormatFileSize(overallTotalSize / totalFiles) : "0 B"
-            },
-            sizeDistribution = distribution
-                .Select(kvp => new
-                {
-                    sizeGroup = kvp.Key,
-                    fileCount = kvp.Value.count,
-                    totalSize = kvp.Value.totalSize,
-                    totalSizeFormatted = FormatFileSize(kvp.Value.totalSize),
-                    percentage = (kvp.Value.count * 100.0 / totalFiles).ToString("F1") + "%"
-                })
-                .OrderBy(x => GetSizeGroupOrder(x.sizeGroup))
-                .ToList(),
-            topExtensionsBySize = extensionStats
-                .OrderByDescending(kvp => kvp.Value.totalSize)
-                .Take(10)
-                .Select(kvp => new
-                {
-                    extension = kvp.Key,
-                    fileCount = kvp.Value.count,
-                    totalSize = kvp.Value.totalSize,
-                    totalSizeFormatted = FormatFileSize(kvp.Value.totalSize),
-                    averageSize = kvp.Value.totalSize / kvp.Value.count,
-                    averageSizeFormatted = FormatFileSize(kvp.Value.totalSize / kvp.Value.count)
-                })
-                .ToList()
-        };
+        // Use AIResponseBuilderService for distribution analysis
+        return _aiResponseBuilder.BuildFileSizeDistributionResponse(
+            workspacePath,
+            searchDuration,
+            totalFiles,
+            overallTotalSize,
+            distribution,
+            extensionStats);
     }
 
     private Query BuildRangeQuery(long? minSize, long? maxSize)
