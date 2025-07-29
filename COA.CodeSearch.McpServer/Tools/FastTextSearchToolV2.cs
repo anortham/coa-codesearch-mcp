@@ -431,6 +431,24 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         var includeResults = mode == ResponseMode.Full || results.Count <= maxInlineResults;
         var inlineResults = includeResults ? results : results.Take(maxInlineResults).ToList();
         
+        // Pre-estimate response size and apply hard safety limit
+        var preEstimatedTokens = EstimateResponseTokens(inlineResults) + 500; // Add overhead for metadata
+        var safetyLimitApplied = false;
+        if (preEstimatedTokens > 5000)
+        {
+            Logger.LogWarning("Pre-estimated response ({Tokens} tokens) exceeds safety threshold. Forcing minimal results.", preEstimatedTokens);
+            // Force minimal results to ensure we stay under limit
+            inlineResults = results.Take(3).ToList();
+            // Remove context from these results to save even more tokens
+            foreach (var result in inlineResults)
+            {
+                result.Context = null;
+            }
+            safetyLimitApplied = true;
+            // Add a warning to insights
+            insights.Insert(0, $"⚠️ Response size limit applied ({preEstimatedTokens} tokens). Showing 3 results without context.");
+        }
+        
         // Create response object with hybrid approach: include first page of results
         var response = new
         {
@@ -482,12 +500,15 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             actions = actions,
             meta = new
             {
-                mode = mode.ToString().ToLowerInvariant(),
+                mode = safetyLimitApplied ? "safety-limited" : mode.ToString().ToLowerInvariant(),
                 indexed = true,
-                tokens = EstimateResponseTokens(results),
-                cached = $"txt_{Guid.NewGuid().ToString("N")[..8]}"
+                tokens = EstimateResponseTokens(inlineResults),
+                cached = $"txt_{Guid.NewGuid().ToString("N")[..8]}",
+                safetyLimitApplied = safetyLimitApplied,
+                originalEstimatedTokens = safetyLimitApplied ? preEstimatedTokens : (int?)null
             }
         };
+
 
         // Store search results as a resource if provider is available
         if (_searchResultResourceProvider != null && results.Count > 0)
@@ -797,6 +818,7 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     {
         return EstimateResponseTokens(results) + 1000; // Add overhead for full structure
     }
+
 
     private Query BuildQueryWithCache(string queryText, string searchType, bool caseSensitive, string? filePattern, string[]? extensions, Analyzer analyzer)
     {
