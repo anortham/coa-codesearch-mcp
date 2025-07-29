@@ -61,6 +61,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<MemoryAnalyzer>();
         services.AddSingleton<MemoryFacetingService>();
         services.AddSingleton<IScoringService, ScoringService>();
+        services.AddSingleton<IMemoryEventPublisher, MemoryEventPublisher>();
         services.AddSingleton<FlexibleMemoryService>();
         services.AddSingleton<FlexibleMemoryTools>();
         services.AddSingleton<MemoryLinkingTools>();
@@ -341,6 +342,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<MemoryAnalyzer>();
         services.AddSingleton<MemoryFacetingService>();
         services.AddSingleton<IScoringService, ScoringService>();
+        services.AddSingleton<IMemoryEventPublisher, MemoryEventPublisher>();
         services.AddSingleton<FlexibleMemoryService>();
         
         return services.BuildServiceProvider();

@@ -110,7 +110,7 @@ public class UnifiedMemoryService
         // Strong indicators for SAVE intent
         if (ContainsAny(content, "remember", "store", "save", "create", "note", "record"))
         {
-            confidence += 0.4f;
+            confidence += 0.6f; // Increased from 0.4f to ensure SAVE intent is detected
         }
         if (ContainsAny(content, "technical debt", "architectural decision", "bug", "issue", "todo"))
         {
@@ -120,6 +120,12 @@ public class UnifiedMemoryService
         if (ContainsAny(content, "checklist", "task list", "plan", "items"))
         {
             return (MemoryIntent.Save, 0.9f); // High confidence for checklist creation
+        }
+        
+        // Return early for SAVE intent if confidence is sufficient
+        if (confidence >= 0.5f)
+        {
+            return (MemoryIntent.Save, Math.Min(confidence, 1.0f));
         }
 
         // Strong indicators for FIND intent
