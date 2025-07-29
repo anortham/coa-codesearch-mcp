@@ -55,8 +55,19 @@ public abstract class LuceneTestBase : IDisposable
         services.AddMemoryCache();
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
-        services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
         services.AddSingleton<AIResponseBuilderService>();
+        
+        // Add response builders
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.IResponseBuilderFactory, COA.CodeSearch.McpServer.Services.ResponseBuilders.ResponseBuilderFactory>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.TextSearchResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.FileSearchResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.MemorySearchResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.DirectorySearchResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.SimilarFilesResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.RecentFilesResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.FileSizeAnalysisResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.FileSizeDistributionResponseBuilder>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ResponseBuilders.BatchOperationsResponseBuilder>();
         
         // Add core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();

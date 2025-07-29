@@ -104,7 +104,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             var batchResult = new BatchOperationResult
             {
                 Operations = results.Select((r, i) => ConvertToBatchOperationEntry(r, i)).ToList(),
-                TotalExecutionTime = TimeSpan.FromMilliseconds(100 * operationCount) // Estimate
+                TotalExecutionTime = 100 * operationCount // Estimate in milliseconds
             };
 
             // Create request model for response builder
