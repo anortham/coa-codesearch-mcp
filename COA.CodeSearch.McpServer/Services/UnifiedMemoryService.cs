@@ -161,7 +161,8 @@ public class UnifiedMemoryService
         }
 
         // Strong indicators for MANAGE intent
-        if (ContainsAny(content, "update", "delete", "archive", "change", "modify", "remove"))
+        if (ContainsAny(content, "update", "delete", "archive", "change", "modify", "remove") ||
+            ContainsAny(content, "mark complete", "mark done", "check off", "complete item", "finish item"))
         {
             return (MemoryIntent.Manage, 0.8f);
         }
@@ -430,18 +431,202 @@ public class UnifiedMemoryService
     }
 
     /// <summary>
-    /// Handle MANAGE intent - update, delete, archive memories
+    /// Handle MANAGE intent - update, delete, archive memories and manage checklists
     /// </summary>
-    private Task<UnifiedMemoryResult> HandleManageAsync(
+    private async Task<UnifiedMemoryResult> HandleManageAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        var content = command.Content?.ToLowerInvariant() ?? "";
+        
+        // Check for checklist operations
+        if (ContainsAny(content, "checklist", "item", "task", "complete", "check", "mark"))
+        {
+            return await HandleChecklistManageAsync(command, cancellationToken);
+        }
+        
+        // Check for memory operations
+        if (ContainsAny(content, "memory", "update memory", "delete memory", "archive memory"))
+        {
+            return await HandleMemoryManageAsync(command, cancellationToken);
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "manage_ambiguous",
+            Message = "Unable to determine what to manage. Try: 'update checklist [name]' or 'mark checklist item complete'",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "manage_checklist",
+                    Description = "Manage checklist items",
+                    Command = "memory \"update checklist [checklist name] - mark item [item] complete\"",
+                    Priority = "medium"
+                },
+                new ActionSuggestion
+                {
+                    Id = "manage_memory",
+                    Description = "Update memory content",
+                    Command = "memory \"update memory [description] with [new information]\"",
+                    Priority = "medium"
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Handle checklist management operations
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleChecklistManageAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (_checklistTools == null)
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "checklist_unavailable",
+                Message = "Checklist tools are not available"
+            };
+        }
+
+        var content = command.Content?.ToLowerInvariant() ?? "";
+        
+        // Check for completion operations
+        if (ContainsAny(content, "complete", "mark complete", "check off", "done", "finished"))
+        {
+            return await HandleChecklistCompletionAsync(command, cancellationToken);
+        }
+        
+        // Check for adding items
+        if (ContainsAny(content, "add item", "add task", "new item", "add to checklist"))
+        {
+            return await HandleChecklistAddItemAsync(command, cancellationToken);
+        }
+        
+        // Check for updating items
+        if (ContainsAny(content, "update item", "change item", "modify item", "edit item"))
+        {
+            return await HandleChecklistUpdateItemAsync(command, cancellationToken);
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "checklist_operation_unclear",
+            Message = "Checklist operation not clear. Try: 'mark item complete in checklist [name]' or 'add item [description] to checklist [name]'",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "complete_item",
+                    Description = "Mark checklist item as complete",
+                    Command = "memory \"mark item [item description] complete in checklist [checklist name]\"",
+                    Priority = "high"
+                },
+                new ActionSuggestion
+                {
+                    Id = "add_item",
+                    Description = "Add item to checklist",
+                    Command = "memory \"add item [description] to checklist [checklist name]\"",
+                    Priority = "medium"
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Handle memory management operations
+    /// </summary>
+    private Task<UnifiedMemoryResult> HandleMemoryManageAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
-            Action = "manage_not_implemented",
-            Message = "Manage functionality not yet implemented"
+            Action = "memory_manage_not_implemented",
+            Message = "Memory management functionality not yet implemented. Use search and store commands instead."
         });
+    }
+
+    /// <summary>
+    /// Handle checklist item completion
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleChecklistCompletionAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        // This is a simplified implementation - in practice you'd want to parse the checklist name and item
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "checklist_completion_not_fully_implemented",
+            Message = "Checklist item completion requires specific checklist ID and item index. Use the individual checklist tools for now.",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "list_checklists",
+                    Description = "List available checklists",
+                    Command = "search_memories --types [\"Checklist\"]",
+                    Priority = "high"
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Handle adding items to checklist
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleChecklistAddItemAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "checklist_add_not_fully_implemented",
+            Message = "Adding checklist items requires specific checklist ID. Use the individual checklist tools for now.",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "list_checklists",
+                    Description = "List available checklists",
+                    Command = "search_memories --types [\"Checklist\"]", 
+                    Priority = "high"
+                }
+            }
+        };
+    }
+
+    /// <summary>
+    /// Handle updating checklist items
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleChecklistUpdateItemAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "checklist_update_not_fully_implemented",
+            Message = "Updating checklist items requires specific checklist ID and item index. Use the individual checklist tools for now.",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "list_checklists",
+                    Description = "List available checklists",
+                    Command = "search_memories --types [\"Checklist\"]",
+                    Priority = "high"
+                }
+            }
+        };
     }
 
     #region Helper Methods
