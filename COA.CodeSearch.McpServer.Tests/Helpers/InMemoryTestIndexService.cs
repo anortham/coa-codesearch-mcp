@@ -37,7 +37,9 @@ public class InMemoryTestIndexService : ILuceneIndexService
                 
                 if (Writer != null)
                 {
+                    // Force writer to commit and flush any pending changes
                     Writer.Commit();
+                    
                     Reader = DirectoryReader.Open(Directory);
                     Searcher = new IndexSearcher(Reader);
                 }

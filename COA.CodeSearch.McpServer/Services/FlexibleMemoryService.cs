@@ -1831,6 +1831,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 // Commit changes
                 indexWriter.Commit();
                 
+                // Also commit through the service to ensure test implementations refresh their searchers
+                await _indexService.CommitAsync(workspace);
+                
                 return true;
             }, context, ErrorSeverity.Recoverable);
         }
