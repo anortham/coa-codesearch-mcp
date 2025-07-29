@@ -200,14 +200,6 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IMemoryQualityValidator, MemoryQualityValidationService>();
         services.AddSingleton<MemoryQualityAssessmentTool>();
         
-        // Phase 3: Multi-level Caching Strategy
-        services.Configure<COA.CodeSearch.McpServer.Services.Caching.CacheOptions>(
-            context.Configuration.GetSection("Cache"));
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.Caching.IMultiLevelCache, 
-            COA.CodeSearch.McpServer.Services.Caching.MultiLevelCacheService>();
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.Caching.ICacheInvalidationService, 
-            COA.CodeSearch.McpServer.Services.Caching.CacheInvalidationService>();
-        services.AddSingleton<CacheManagementTool>();
         
         
         // Lucene lifecycle management

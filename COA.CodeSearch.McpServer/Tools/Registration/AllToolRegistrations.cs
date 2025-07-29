@@ -78,8 +78,6 @@ public static class AllToolRegistrations
         // Phase 3: Memory Quality Validation
         RegisterMemoryQualityAssessment(registry, serviceProvider.GetRequiredService<MemoryQualityAssessmentTool>());
         
-        // Phase 3: Multi-level Caching Strategy
-        RegisterCacheManagement(registry, serviceProvider.GetRequiredService<CacheManagementTool>());
         
         // AI Context loading
         RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
@@ -1644,48 +1642,5 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
         );
     }
 
-    private static void RegisterCacheManagement(ToolRegistry registry, CacheManagementTool tool)
-    {
-        registry.RegisterTool<CacheManagementParams>(
-            name: ToolNames.CacheManagement,
-            description: "Manage and monitor the multi-level cache system with statistics, clear, warm, and invalidate operations",
-            inputSchema: new
-            {
-                type = "object",
-                properties = new
-                {
-                    operation = new { 
-                        type = "string", 
-                        description = "Operation to perform: 'statistics', 'clear', 'warm', 'invalidate', 'health', 'config'",
-                        @enum = new[] { "statistics", "stats", "clear", "warm", "invalidate", "health", "config" },
-                        @default = "statistics"
-                    },
-                    keys = new { type = "string", description = "Cache keys to warm or invalidate (comma-separated)" },
-                    pattern = new { type = "string", description = "Pattern for pattern-based invalidation (supports wildcards)" },
-                    level = new { 
-                        type = "string", 
-                        description = "Cache level to operate on: 'L1', 'L2', or 'both'",
-                        @enum = new[] { "L1", "L2", "both" },
-                        @default = "both"
-                    },
-                    invalidationStrategy = new { 
-                        type = "string", 
-                        description = "Invalidation strategy: 'immediate', 'delayed', 'lazy'",
-                        @enum = new[] { "immediate", "delayed", "lazy" }
-                    },
-                    includeDetails = new { type = "boolean", description = "Include detailed breakdown in statistics", @default = true },
-                    force = new { type = "boolean", description = "Force operation even if it may impact performance", @default = false }
-                },
-                required = new[] { "operation" }
-            },
-            handler: async (parameters, ct) =>
-            {
-                if (parameters == null) throw new InvalidParametersException("Parameters are required");
-                
-                var result = await tool.ExecuteAsync(parameters);
-                return CreateSuccessResult(result);
-            }
-        );
-    }
 
 }
