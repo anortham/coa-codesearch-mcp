@@ -93,6 +93,7 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
         {
             query,
             searchType,
+            workspacePath,
             results,
             totalHits,
             hotspots,
