@@ -597,7 +597,7 @@ public class FileIndexingService
             new StringField("directoryName", directoryName, Field.Store.YES),
             
             // Indexed fields
-            new TextField("content", content, Field.Store.NO),
+            new TextField("content", content, Field.Store.YES), // Store content for MoreLikeThis
             new TextField("filename_text", fileName, Field.Store.NO),
             new TextField("directory_text", relativeDirectoryPath.Replace(Path.DirectorySeparatorChar, ' '), Field.Store.NO)
         };
