@@ -31,21 +31,42 @@ public class InMemoryTestIndexService : ILuceneIndexService
         {
             try
             {
-                Reader?.Dispose();
-                // IndexSearcher doesn't implement IDisposable in Lucene.NET
-                Searcher = null;
-                
                 if (Writer != null)
                 {
                     // Force writer to commit and flush any pending changes
                     Writer.Commit();
+                    Writer.Flush(true, true);
                     
+                    // Always dispose and recreate to ensure we see latest changes
+                    Searcher = null;
+                    Reader?.Dispose();
+                    
+                    // Create completely fresh reader from directory
                     Reader = DirectoryReader.Open(Directory);
                     Searcher = new IndexSearcher(Reader);
+                    
+                    // Debug logging for tests
+                    System.Diagnostics.Debug.WriteLine($"RefreshSearcher: Index now has {Reader.NumDocs} documents");
+                }
+                else if (Reader == null)
+                {
+                    // No writer but no reader either - try to open directory directly
+                    try
+                    {
+                        Reader = DirectoryReader.Open(Directory);
+                        Searcher = new IndexSearcher(Reader);
+                        System.Diagnostics.Debug.WriteLine($"RefreshSearcher (no writer): Index has {Reader.NumDocs} documents");
+                    }
+                    catch (IndexNotFoundException)
+                    {
+                        // Directory doesn't exist yet - this is normal for empty tests
+                        System.Diagnostics.Debug.WriteLine("RefreshSearcher: IndexNotFoundException - no index yet");
+                    }
                 }
             }
-            catch
+            catch (Exception ex)
             {
+                System.Diagnostics.Debug.WriteLine($"RefreshSearcher error: {ex.Message}");
                 // Ignore refresh errors in tests
             }
         }
@@ -89,7 +110,7 @@ public class InMemoryTestIndexService : ILuceneIndexService
         
         lock (index.Lock)
         {
-            // Refresh the searcher to see latest changes
+            // Always refresh the searcher to see latest changes - critical for tests
             index.RefreshSearcher();
             
             // If still no searcher (empty index), create one
