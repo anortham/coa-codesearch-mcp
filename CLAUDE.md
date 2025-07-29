@@ -72,16 +72,18 @@ mcp__codesearch__workflow_discovery --goal "search code"       # Learn tool depe
 
 ### Tool Categories
 
-| Purpose        | Text Search Tools                            | Memory Tools                              | Utility Tools                          |
-| -------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------- |
-| Find Files     | `text_search`, `file_search`                 | -                                         | -                                      |
-| Analyze Files  | `recent_files`, `file_size_analysis`        | -                                         | -                                      |
-| Discover Code  | `similar_files`, `directory_search`         | -                                         | -                                      |
-| Index & Search | `index_workspace`, `batch_operations`       | -                                         | -                                      |
-| Store Knowledge| -                                            | `store_memory`, `store_temporary_memory`  | -                                      |
-| Find Knowledge | -                                            | `search_memories`, `recall_context`      | `workflow_discovery` (NEW)             |
-| Explore Memory | -                                            | `memory_graph_navigator`, `memory_timeline` | -                                    |
-| Manage Data    | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
+| Purpose           | Text Search Tools                            | Memory Tools                              | Utility Tools                          |
+| ----------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------- |
+| Find Files        | `text_search`, `file_search`                 | -                                         | -                                      |
+| Analyze Files     | `recent_files`, `file_size_analysis`        | -                                         | -                                      |
+| Discover Code     | `similar_files`, `directory_search`         | -                                         | -                                      |
+| Index & Search    | `index_workspace`, `batch_operations`       | -                                         | -                                      |
+| Store Knowledge   | -                                            | `store_memory`, `store_temporary_memory`  | -                                      |
+| Find Knowledge    | -                                            | `search_memories`, `recall_context`      | `workflow_discovery` (NEW)             |
+| **🆕 Smart Search** | -                                            | `unified_memory`, `semantic_search`, `hybrid_search` | -                        |
+| **🆕 AI Intelligence** | -                                         | `memory_quality_assessment`, `load_context` | -                                 |
+| Explore Memory    | -                                            | `memory_graph_navigator`, `memory_timeline` | -                                    |
+| Manage Data       | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
 
 ### Memory System Essentials
 
@@ -97,6 +99,30 @@ mcp__codesearch__backup_memories    # Creates JSON backup
 mcp__codesearch__restore_memories   # Restores from JSON
 ```
 
+### 🆕 Phase 3: Advanced Memory Intelligence
+
+```bash
+# Natural language memory operations - use for intuitive commands
+mcp__codesearch__unified_memory --command "remember that UserService has performance issues"
+mcp__codesearch__unified_memory --command "find all technical debt related to authentication"
+mcp__codesearch__unified_memory --command "create checklist for database migration"
+
+# Semantic search - find by concepts and meaning
+mcp__codesearch__semantic_search --query "security vulnerabilities in user login systems"
+
+# Hybrid search - best of both text and semantic
+mcp__codesearch__hybrid_search --query "authentication patterns"
+
+# Memory quality assessment and improvement
+mcp__codesearch__memory_quality_assessment --memoryId "memory_123"
+
+# Auto-load relevant context for current work
+mcp__codesearch__load_context --workingDirectory "C:/YourProject/Services"
+
+# Advanced temporal scoring for recency-weighted results
+mcp__codesearch__search_memories --query "recent decisions" --boostRecent true
+```
+
 [Full memory system guide →](docs/MEMORY_SYSTEM.md)
 
 ## 🏗️ Project Overview
@@ -105,6 +131,7 @@ High-performance MCP server in .NET 9.0 providing text search and intelligent me
 
 - Lucene-powered millisecond text search
 - Intelligent memory system for architectural knowledge
+- **🆕 Phase 3 Complete**: Advanced Memory Intelligence with natural language commands, semantic search, and temporal scoring
 - File discovery and analysis tools
 - Project-wide content indexing
 - **NEW**: AI-optimized tool consistency with standardized parameters
