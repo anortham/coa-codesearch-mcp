@@ -21,6 +21,7 @@ public static class AllToolRegistrations
     {
         // Text search tools
         RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
+        RegisterFastTextSearchV3(registry, serviceProvider.GetRequiredService<FastTextSearchToolV3>()); // POC JsonNode version
         RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>());
         RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
         RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
@@ -267,6 +268,88 @@ Example: 50 results with context=3 ≈ 5,000 tokens",
         public string? GetQuery() => Query ?? SearchQuery;
     }
     
+    private static void RegisterFastTextSearchV3(ToolRegistry registry, FastTextSearchToolV3 tool)
+    {
+        registry.RegisterTool<FastTextSearchV3Params>(
+            name: "text_search_v3", // Different name for POC testing
+            description: @"POC: Text search using JsonNode for improved performance. 
+Same functionality as text_search but returns JsonNode instead of anonymous objects.
+Use this to test performance improvements from System.Text.Json migration.",
+            inputSchema: new
+            {
+                type = "object",
+                properties = new
+                {
+                    query = new { type = "string", description = "Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")" },
+                    workspacePath = new { type = "string", description = "Directory path to search in (e.g., C:\\MyProject)" },
+                    filePattern = new { 
+                        type = "string", 
+                        description = "Glob pattern to filter files"
+                    },
+                    extensions = new { type = "array", items = new { type = "string" }, description = "Limit to specific file types (e.g., ['.cs', '.js'])" },
+                    contextLines = new { type = "integer", description = "Lines of context before/after matches", @default = 0 },
+                    maxResults = new { type = "integer", description = "Maximum number of results", @default = 50 },
+                    caseSensitive = new { type = "boolean", description = "Case sensitive search", @default = false },
+                    searchType = new { 
+                        type = "string",
+                        @enum = new[] { "standard", "fuzzy", "wildcard", "phrase", "regex" },
+                        description = "Search algorithm",
+                        @default = "standard" 
+                    },
+                    responseMode = new { type = "string", description = "Response mode: 'summary' or 'full'", @default = "summary" }
+                },
+                required = new[] { "query", "workspacePath" }
+            },
+            handler: async (parameters, ct) =>
+            {
+                if (parameters == null) throw new InvalidParametersException("Parameters are required");
+                
+                if (string.IsNullOrWhiteSpace(parameters.Query))
+                {
+                    throw new InvalidParametersException("'query' parameter is required");
+                }
+                
+                var mode = ResponseMode.Summary;
+                if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+                {
+                    mode = parameters.ResponseMode.ToLowerInvariant() switch
+                    {
+                        "full" => ResponseMode.Full,
+                        "summary" => ResponseMode.Summary,
+                        _ => ResponseMode.Summary
+                    };
+                }
+                
+                var result = await tool.ExecuteAsync(
+                    parameters.Query,
+                    ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+                    parameters.FilePattern,
+                    parameters.Extensions,
+                    parameters.ContextLines,
+                    parameters.MaxResults ?? 50,
+                    parameters.CaseSensitive ?? false,
+                    parameters.SearchType ?? "standard",
+                    mode,
+                    null,
+                    ct);
+                    
+                return CreateSuccessResult(result);
+            }
+        );
+    }
+    
+    private class FastTextSearchV3Params
+    {
+        public string? Query { get; set; }
+        public string? WorkspacePath { get; set; }
+        public string? FilePattern { get; set; }
+        public string[]? Extensions { get; set; }
+        public int? ContextLines { get; set; }
+        public int? MaxResults { get; set; }
+        public bool? CaseSensitive { get; set; }
+        public string? SearchType { get; set; }
+        public string? ResponseMode { get; set; }
+    }
 
     private static void RegisterFastFileSearchV2(ToolRegistry registry, FastFileSearchToolV2 tool)
     {
