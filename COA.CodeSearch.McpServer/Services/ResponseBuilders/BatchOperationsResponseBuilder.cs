@@ -179,13 +179,14 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         }
 
         // Operation mix insight
-        if (data.operationTypes.Count == 1)
+        var operationTypes = (Dictionary<string, int>)data.operationTypes;
+        if (operationTypes.Count == 1)
         {
-            insights.Add($"All operations are {data.operationTypes.First().Key} searches");
+            var firstOperation = operationTypes.First();
+            insights.Add($"All operations are {firstOperation.Key} searches");
         }
         else
         {
-            var operationTypes = (Dictionary<string, int>)data.operationTypes;
             insights.Add($"Mixed batch: {string.Join(", ", operationTypes.Select(kv => $"{kv.Value} {kv.Key}"))}");
         }
 
