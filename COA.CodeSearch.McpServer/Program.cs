@@ -192,7 +192,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<IVectorIndex, InMemoryVectorIndex>();
         services.AddSingleton<SemanticMemoryIndex>();
         services.AddSingleton<HybridMemorySearch>();
-        services.AddSingleton<MemoryStorageOrchestrator>();
+        
+        // Event-driven semantic indexing (clean architecture)
+        services.AddSingleton<IMemoryEventPublisher, MemoryEventPublisher>();
+        services.AddHostedService<SemanticIndexingSubscriber>();
         
         // Phase 3: Memory Quality Validation
         services.AddSingleton<IQualityValidator, COA.CodeSearch.McpServer.Services.Quality.CompletenessValidator>();
