@@ -180,12 +180,37 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     private BatchOperationEntry ConvertToBatchOperationEntry(object result, int index)
     {
         dynamic d = result;
+        
+        // Handle both success and error cases
+        string? error = null;
+        object? resultData = null;
+        
+        try
+        {
+            // Try to get error property if it exists (for failed operations)
+            error = d.error?.ToString();
+        }
+        catch
+        {
+            // Property doesn't exist, which is fine for successful operations
+        }
+        
+        try
+        {
+            // Try to get result property if it exists (for successful operations)
+            resultData = d.result;
+        }
+        catch
+        {
+            // Property doesn't exist, which is fine for failed operations
+        }
+        
         return new BatchOperationEntry
         {
             OperationType = d.operation?.ToString() ?? "unknown",
             Success = d.success ?? false,
-            Result = d.result,
-            Error = d.error?.ToString(),
+            Result = resultData,
+            Error = error,
             Index = index
         };
     }
