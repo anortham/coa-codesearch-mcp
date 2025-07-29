@@ -33,6 +33,7 @@ public class FastTextSearchV2Test : LuceneTestBase
             ServiceProvider.GetRequiredService<IFieldSelectorService>(),
             ServiceProvider.GetRequiredService<IStreamingResultService>(),
             ServiceProvider.GetRequiredService<IErrorRecoveryService>(),
+            ServiceProvider.GetRequiredService<AIResponseBuilderService>(),
             null); // IContextAwarenessService is optional
             
         _indexTool = ServiceProvider.GetRequiredService<IndexWorkspaceTool>();
@@ -67,7 +68,7 @@ public class FastTextSearchV2Test : LuceneTestBase
             PropertyNamingPolicy = JsonNamingPolicy.CamelCase
         });
         
-        // Removed debug output for clean tests
+        // Debug output would go here if we had ITestOutputHelper
         
         // Parse to check structure
         var response = JsonDocument.Parse(json).RootElement;

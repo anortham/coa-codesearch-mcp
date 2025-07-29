@@ -55,6 +55,8 @@ public abstract class LuceneTestBase : IDisposable
         services.AddMemoryCache();
         services.AddSingleton<IDetailRequestCache, DetailRequestCache>();
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
+        services.AddSingleton<ITokenEstimationService, TokenEstimationService>();
+        services.AddSingleton<AIResponseBuilderService>();
         
         // Add core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();

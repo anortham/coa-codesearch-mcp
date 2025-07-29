@@ -129,6 +129,160 @@ public class AIResponseBuilderService
     }
 
     /// <summary>
+    /// Build AI-optimized response for text search results
+    /// </summary>
+    public object BuildTextSearchResponse(
+        string query,
+        string searchType,
+        string workspacePath,
+        List<TextSearchResult> results,
+        long totalHits,
+        string? filePattern,
+        string[]? extensions,
+        ResponseMode mode,
+        ProjectContext? projectContext,
+        long? alternateHits,
+        Dictionary<string, int>? alternateExtensions)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Group by extension
+        var byExtension = results
+            .GroupBy(r => r.Extension)
+            .ToDictionary(
+                g => g.Key,
+                g => new { count = g.Count(), files = g.Select(r => r.FileName).Distinct().Count() }
+            );
+
+        // Group by directory
+        var byDirectory = results
+            .GroupBy(r => Path.GetDirectoryName(r.RelativePath) ?? "root")
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Count()
+            );
+
+        // Find hotspot files
+        var hotspots = results
+            .GroupBy(r => r.RelativePath)
+            .OrderByDescending(g => g.Count())
+            .Take(5)
+            .Select(g => new TextSearchHotspot
+            { 
+                File = g.Key, 
+                Matches = g.Count(),
+                Lines = g.SelectMany(r => r.Context?.Where(c => c.IsMatch).Select(c => c.LineNumber) ?? Enumerable.Empty<int>()).Distinct().Count()
+            })
+            .ToList();
+
+        // Generate insights
+        var insights = GenerateTextSearchInsights(query, searchType, workspacePath, results, totalHits, filePattern, extensions, projectContext, alternateHits, alternateExtensions);
+
+        // Generate actions
+        var actions = GenerateTextSearchActions(query, searchType, results, totalHits, hotspots, 
+            byExtension.ToDictionary(kvp => kvp.Key, kvp => (object)kvp.Value), mode);
+
+        // Determine how many results to include inline based on token budget, mode, and context
+        var hasContext = results.Any(r => r.Context?.Any() == true);
+        var maxInlineResults = hasContext ? 5 : 10; // Fewer results when including context
+        var includeResults = mode == ResponseMode.Full || results.Count <= maxInlineResults;
+        var inlineResults = includeResults ? results : results.Take(maxInlineResults).ToList();
+        
+        // Pre-estimate response size and apply hard safety limit
+        var preEstimatedTokens = EstimateTextSearchResponseTokens(inlineResults) + 500; // Add overhead for metadata
+        var safetyLimitApplied = false;
+        if (preEstimatedTokens > 5000)
+        {
+            _logger.LogWarning("Pre-estimated response ({Tokens} tokens) exceeds safety threshold. Forcing minimal results.", preEstimatedTokens);
+            // Force minimal results to ensure we stay under limit
+            inlineResults = results.Take(3).ToList();
+            // Remove context from these results to save even more tokens
+            foreach (var result in inlineResults)
+            {
+                result.Context = null;
+            }
+            safetyLimitApplied = true;
+            // Add a warning to insights
+            insights.Insert(0, $"⚠️ Response size limit applied ({preEstimatedTokens} tokens). Showing 3 results without context.");
+        }
+        
+        // Store data in cache for detail requests if available
+        string? detailRequestToken = null;
+        if (mode == ResponseMode.Summary && _detailCache != null && results.Count > inlineResults.Count)
+        {
+            detailRequestToken = _detailCache.StoreDetailData(new { results, query, summary = new { totalHits }, distribution = new { byExtension, byDirectory }, hotspots });
+        }
+
+        // Create response object with hybrid approach
+        var response = new
+        {
+            success = true,
+            operation = "text_search",
+            query = new
+            {
+                text = query,
+                type = searchType,
+                filePattern = filePattern,
+                extensions = extensions,
+                workspace = workspacePath
+            },
+            summary = new
+            {
+                totalHits = totalHits,
+                returnedResults = results.Count,
+                filesMatched = results.Select(r => r.FilePath).Distinct().Count(),
+                truncated = totalHits > results.Count
+            },
+            results = inlineResults.Select(r => new
+            {
+                file = r.FileName,
+                path = r.RelativePath,
+                score = Math.Round(r.Score, 2),
+                context = r.Context?.Any() == true ? r.Context.Select(c => new
+                {
+                    line = c.LineNumber,
+                    content = c.Content,
+                    match = c.IsMatch
+                }).ToList() : null
+            }).ToList(),
+            resultsSummary = new
+            {
+                included = inlineResults.Count,
+                total = results.Count,
+                hasMore = results.Count > inlineResults.Count
+            },
+            distribution = new
+            {
+                byExtension = byExtension,
+                byDirectory = byDirectory
+            },
+            hotspots = hotspots.Select(h => new { file = h.File, matches = h.Matches, lines = h.Lines }).ToList(),
+            insights = insights,
+            actions = actions.Select(a => a is AIAction aiAction ? new
+            {
+                id = aiAction.Id,
+                cmd = aiAction.Command.Parameters,
+                tokens = aiAction.EstimatedTokens,
+                priority = aiAction.Priority.ToString().ToLowerInvariant()
+            } : a),
+            meta = new
+            {
+                mode = safetyLimitApplied ? "safety-limited" : mode.ToString().ToLowerInvariant(),
+                indexed = true,
+                tokens = EstimateTextSearchResponseTokens(inlineResults),
+                cached = $"txt_{Guid.NewGuid().ToString("N")[..8]}",
+                safetyLimitApplied = safetyLimitApplied,
+                originalEstimatedTokens = safetyLimitApplied ? preEstimatedTokens : (int?)null,
+                detailRequestToken = detailRequestToken
+            }
+        };
+
+        return response;
+    }
+
+    /// <summary>
     /// Build AI-optimized response for file search results
     /// </summary>
     public AIOptimizedResponse BuildFileSearchResponse(
@@ -778,6 +932,670 @@ public class AIResponseBuilderService
         return levels;
     }
 
+    /// <summary>
+    /// Build AI-optimized response for file search results
+    /// </summary>
+    public object BuildFileSearchResponse(
+        string query,
+        string? searchType,
+        string workspacePath,
+        List<FileSearchResult> results,
+        double searchDurationMs,
+        Dictionary<string, int> extensionCounts,
+        Dictionary<string, int> directoryCounts,
+        Dictionary<string, int> languageCounts,
+        ResponseMode mode)
+    {
+        var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
+
+        // Generate insights
+        var insights = GenerateFileSearchInsights(results, query, searchDurationMs);
+
+        // Find hotspots (directories with high concentration)
+        var hotspots = directoryCounts
+            .Where(kv => kv.Value >= 1)
+            .OrderByDescending(kv => kv.Value)
+            .Take(3)
+            .Select(kv => new { path = kv.Key, count = kv.Value })
+            .ToList();
+
+        // Generate actions
+        var actions = GenerateFileSearchActions(query, searchType, results, extensionCounts, directoryCounts);
+
+        // Prepare results based on mode
+        var resultsToInclude = mode == ResponseMode.Full 
+            ? results.Select(r => new
+            {
+                path = r.Path,
+                filename = Path.GetFileName(r.Path),
+                relativePath = GetRelativePath(r.Path, workspacePath),
+                extension = Path.GetExtension(r.Path),
+                score = Math.Round(r.Score, 3)
+            }).ToList<object>()
+            : results.Take(10).Select(r => new
+            {
+                file = Path.GetFileName(r.Path),
+                path = GetRelativePath(r.Path, workspacePath),
+                score = Math.Round(r.Score, 2)
+            }).ToList<object>();
+
+        // Create the response
+        var response = new
+        {
+            success = true,
+            operation = "file_search",
+            query = new
+            {
+                text = query,
+                type = searchType,
+                workspace = Path.GetFileName(workspacePath)
+            },
+            summary = new
+            {
+                totalFound = results.Count,
+                searchTime = $"{searchDurationMs:F1}ms",
+                performance = searchDurationMs < 10 ? "excellent" : searchDurationMs < 50 ? "fast" : "normal",
+                distribution = new
+                {
+                    byExtension = extensionCounts
+                        .OrderByDescending(kv => kv.Value)
+                        .Take(5)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value),
+                    byLanguage = languageCounts
+                        .OrderByDescending(kv => kv.Value)
+                        .Take(3)
+                        .ToDictionary(kv => kv.Key, kv => kv.Value)
+                }
+            },
+            analysis = new
+            {
+                patterns = AnalyzeFileSearchPatterns(results, extensionCounts, directoryCounts).Take(3).ToList(),
+                matchQuality = AnalyzeMatchQuality(query, results),
+                hotspots = new
+                {
+                    directories = hotspots
+                }
+            },
+            results = resultsToInclude,
+            resultsSummary = new
+            {
+                included = resultsToInclude.Count,
+                total = results.Count,
+                hasMore = results.Count > resultsToInclude.Count
+            },
+            insights = insights,
+            actions = actions,
+            meta = new
+            {
+                mode = mode.ToString().ToLowerInvariant(),
+                truncated = false,
+                tokens = EstimateFileSearchResponseTokens(results),
+                cached = GenerateCacheKey("filesearch")
+            }
+        };
+
+        return response;
+    }
+
+    private List<string> GenerateFileSearchInsights(List<FileSearchResult> results, string query, double searchDurationMs)
+    {
+        var insights = new List<string>();
+
+        // Basic result insight
+        if (results.Count == 0)
+        {
+            insights.Add($"No files matching '{query}'");
+            insights.Add("Try fuzzy or wildcard search for approximate matches");
+        }
+        else
+        {
+            insights.Add($"Found {results.Count} files in {searchDurationMs:F0}ms");
+        }
+
+        // Performance insight
+        if (searchDurationMs < 10)
+        {
+            insights.Add("⚡ Excellent search performance");
+        }
+
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            insights.Add($"Found {results.Count} files matching '{query}'");
+        }
+
+        return insights;
+    }
+
+    private List<object> GenerateFileSearchActions(
+        string query,
+        string? searchType,
+        List<FileSearchResult> results,
+        Dictionary<string, int> extensionCounts,
+        Dictionary<string, int> directoryCounts)
+    {
+        var actions = new List<object>();
+
+        // Open file action
+        if (results.Any())
+        {
+            var topResult = results.OrderByDescending(r => r.Score).First();
+            actions.Add(new
+            {
+                id = "open_file",
+                cmd = new { file = topResult.Path },
+                tokens = 100,
+                priority = "recommended"
+            });
+        }
+
+        // Search refinement actions
+        if (results.Count > 20)
+        {
+            // Filter by extension
+            var topExt = extensionCounts.OrderByDescending(kv => kv.Value).First();
+            actions.Add(new
+            {
+                id = "filter_by_type",
+                cmd = new { query = query, filter = $"*.{topExt.Key}" },
+                tokens = 500,
+                priority = "recommended"
+            });
+
+            // Search in specific directory
+            if (directoryCounts.Any(kv => kv.Value > 3))
+            {
+                var topDir = directoryCounts.OrderByDescending(kv => kv.Value).First();
+                actions.Add(new
+                {
+                    id = "search_in_directory",
+                    cmd = new { query = query, path = topDir.Key },
+                    tokens = 300,
+                    priority = "available"
+                });
+            }
+        }
+
+        // Alternative search suggestions
+        if (results.Count == 0)
+        {
+            actions.Add(new
+            {
+                id = "try_fuzzy_search",
+                cmd = new { query = $"{query}~", searchType = "fuzzy" },
+                tokens = 200,
+                priority = "recommended"
+            });
+
+            actions.Add(new
+            {
+                id = "try_wildcard_search",
+                cmd = new { query = $"*{query}*", searchType = "wildcard" },
+                tokens = 200,
+                priority = "recommended"
+            });
+        }
+
+        // Content search in found files
+        if (results.Count > 0 && results.Count < 20)
+        {
+            actions.Add(new
+            {
+                id = "search_in_files",
+                cmd = new
+                {
+                    operation = "text_search",
+                    files = results.Take(10).Select(r => r.Path).ToList()
+                },
+                tokens = 1500,
+                priority = "available"
+            });
+        }
+
+        // Ensure we always have at least one action
+        if (actions.Count == 0)
+        {
+            if (results.Count > 0)
+            {
+                actions.Add(new
+                {
+                    id = "explore_results",
+                    cmd = new { expand = "details" },
+                    tokens = 1000,
+                    priority = "available"
+                });
+            }
+            else
+            {
+                actions.Add(new
+                {
+                    id = "broaden_search",
+                    cmd = new { query = $"*{query}*", searchType = "wildcard" },
+                    tokens = 1500,
+                    priority = "recommended"
+                });
+            }
+        }
+
+        return actions;
+    }
+
+    private List<string> AnalyzeFileSearchPatterns(
+        List<FileSearchResult> results,
+        Dictionary<string, int> extensionCounts,
+        Dictionary<string, int> directoryCounts)
+    {
+        var patterns = new List<string>();
+
+        if (results.Count == 0)
+        {
+            patterns.Add("No matches found - check spelling or use fuzzy search");
+        }
+        else if (results.Count == 1)
+        {
+            patterns.Add("Single match - precise search result");
+        }
+        else if (results.Count >= 40)
+        {
+            patterns.Add("Many matches - consider refining search");
+        }
+
+        // Extension patterns
+        if (extensionCounts.Count == 1)
+        {
+            patterns.Add($"All results are {extensionCounts.First().Key} files");
+        }
+        else if (extensionCounts.Any(kv => kv.Value > results.Count * 0.7))
+        {
+            var dominant = extensionCounts.OrderByDescending(kv => kv.Value).First();
+            patterns.Add($"Predominantly {dominant.Key} files ({dominant.Value * 100 / results.Count}%)");
+        }
+
+        // Directory concentration
+        if (directoryCounts.Any(kv => kv.Value > results.Count * 0.5))
+        {
+            var concentrated = directoryCounts.OrderByDescending(kv => kv.Value).First();
+            patterns.Add($"Concentrated in {concentrated.Key} directory");
+        }
+
+        return patterns;
+    }
+
+    private object AnalyzeMatchQuality(string query, List<FileSearchResult> results)
+    {
+        var exactMatches = 0;
+        var partialMatches = 0;
+        var fuzzyMatches = 0;
+        var totalScore = 0f;
+
+        foreach (var result in results)
+        {
+            var filename = Path.GetFileName(result.Path).ToLower();
+            var queryLower = query.ToLower();
+
+            if (filename == queryLower)
+                exactMatches++;
+            else if (filename.Contains(queryLower))
+                partialMatches++;
+            else
+                fuzzyMatches++;
+
+            totalScore += (float)result.Score;
+        }
+
+        return new
+        {
+            exactMatches = exactMatches,
+            partialMatches = partialMatches,
+            fuzzyMatches = fuzzyMatches,
+            avgScore = results.Any() ? totalScore / results.Count : 0
+        };
+    }
+
+    private string GetRelativePath(string fullPath, string workspacePath)
+    {
+        if (fullPath.StartsWith(workspacePath, StringComparison.OrdinalIgnoreCase))
+        {
+            var relativePath = fullPath.Substring(workspacePath.Length).TrimStart(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return relativePath.Replace(Path.DirectorySeparatorChar, '/');
+        }
+        return fullPath;
+    }
+
+    private int EstimateFileSearchResponseTokens(List<FileSearchResult> results)
+    {
+        // Base tokens for structure
+        var baseTokens = 200;
+        
+        // Per result tokens
+        var perResultTokens = 30;
+        
+        // Additional for statistics
+        var statsTokens = 100;
+        
+        return baseTokens + (results.Count * perResultTokens) + statsTokens;
+    }
+
+    #endregion
+
+    #region Text Search Implementation
+
+    private List<string> GenerateTextSearchInsights(
+        string query,
+        string searchType,
+        string workspacePath,
+        List<TextSearchResult> results,
+        long totalHits,
+        string? filePattern,
+        string[]? extensions,
+        ProjectContext? projectContext,
+        long? alternateHits,
+        Dictionary<string, int>? alternateExtensions)
+    {
+        var insights = new List<string>();
+
+        // Basic result insights
+        if (totalHits == 0)
+        {
+            insights.Add($"No matches found for '{query}'");
+            
+            // Check if alternate search would find results
+            if (alternateHits > 0 && alternateExtensions != null)
+            {
+                var topExtensions = alternateExtensions
+                    .OrderByDescending(kvp => kvp.Value)
+                    .Take(5)
+                    .Select(kvp => $"{kvp.Key} ({kvp.Value})")
+                    .ToList();
+                    
+                insights.Add($"Found {alternateHits} matches in other file types: {string.Join(", ", topExtensions)}");
+                insights.Add($"💡 TIP: Remove filePattern/extensions to search ALL file types");
+                insights.Add($"🔍 Try: text_search --query \"{query}\" --workspacePath \"{workspacePath}\"");
+                
+                // Project-aware suggestions
+                if (projectContext?.Technologies?.Contains("blazor", StringComparer.OrdinalIgnoreCase) == true)
+                {
+                    if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
+                    {
+                        insights.Add("🎯 Blazor project detected - UI components are in .razor files!");
+                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .cs,.razor --workspacePath \"{workspacePath}\"");
+                    }
+                }
+                else if (projectContext?.Technologies?.Contains("aspnet", StringComparer.OrdinalIgnoreCase) == true)
+                {
+                    if (filePattern == "*.cs" || extensions?.Contains(".cs") == true)
+                    {
+                        insights.Add("🎯 ASP.NET project detected - views are in .cshtml files!");
+                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .cs,.cshtml --workspacePath \"{workspacePath}\"");
+                    }
+                }
+            }
+            else
+            {
+                // Original suggestions when no alternate results
+                if (searchType == "standard" && !query.Contains("*"))
+                {
+                    insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
+                }
+                if (extensions?.Length > 0)
+                {
+                    insights.Add($"Search limited to: {string.Join(", ", extensions)}");
+                }
+                if (!string.IsNullOrEmpty(filePattern))
+                {
+                    insights.Add($"Results filtered by pattern: {filePattern}");
+                }
+            }
+        }
+        else if (totalHits > results.Count)
+        {
+            insights.Add($"Showing {results.Count} of {totalHits} total matches");
+            if (totalHits > 100)
+            {
+                insights.Add("Consider refining search or using file patterns");
+            }
+        }
+
+        // File type insights
+        var extensionGroups = results.GroupBy(r => r.Extension).OrderByDescending(g => g.Count()).ToList();
+        if (extensionGroups.Count > 1)
+        {
+            var topTypes = string.Join(", ", extensionGroups.Take(3).Select(g => $"{g.Key} ({g.Count()})"));
+            insights.Add($"Most matches in: {topTypes}");
+        }
+
+        // Concentration insights
+        var filesWithMatches = results.Select(r => r.FilePath).Distinct().Count();
+        if (filesWithMatches > 0 && totalHits > filesWithMatches * 2)
+        {
+            var avgMatchesPerFile = totalHits / filesWithMatches;
+            insights.Add($"Average {avgMatchesPerFile:F1} matches per file - some files have high concentration");
+        }
+
+        // Search type insights
+        if (searchType == "fuzzy" && results.Any())
+        {
+            insights.Add("Fuzzy search found approximate matches");
+        }
+        else if (searchType == "phrase")
+        {
+            insights.Add("Exact phrase search - results contain the full phrase");
+        }
+
+        // Pattern insights
+        if (!string.IsNullOrEmpty(filePattern))
+        {
+            insights.Add($"Results filtered by pattern: {filePattern}");
+        }
+
+        // Ensure we always have at least one insight
+        if (insights.Count == 0)
+        {
+            if (totalHits > 0)
+            {
+                insights.Add($"Found {totalHits} matches for '{query}' in {filesWithMatches} files");
+                if (extensionGroups.Any())
+                {
+                    insights.Add($"Search matched files of type: {string.Join(", ", extensionGroups.Select(g => g.Key))}");
+                }
+            }
+            else
+            {
+                insights.Add($"No matches found for '{query}'");
+            }
+        }
+
+        return insights;
+    }
+
+    private List<object> GenerateTextSearchActions(
+        string query,
+        string searchType,
+        List<TextSearchResult> results,
+        long totalHits,
+        List<TextSearchHotspot> hotspots,
+        Dictionary<string, object> byExtension,
+        ResponseMode mode)
+    {
+        var actions = new List<object>();
+
+        // Refine search actions
+        if (totalHits > 100)
+        {
+            if (byExtension.Count > 1)
+            {
+                var topExt = byExtension.OrderByDescending(kvp => ((dynamic)kvp.Value).count).First();
+                actions.Add(new AIAction
+                {
+                    Id = "filter_by_type",
+                    Description = $"Filter results to {topExt.Key} files only",
+                    Command = new AIActionCommand
+                    {
+                        Tool = "mcp__codesearch__text_search",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            { "query", query },
+                            { "extensions", new[] { topExt.Key } }
+                        }
+                    },
+                    EstimatedTokens = Math.Min(2000, ((dynamic)topExt.Value).count * 50),
+                    Priority = ActionPriority.High,
+                    Context = ActionContext.ManyResults
+                });
+            }
+
+            actions.Add(new AIAction
+            {
+                Id = "narrow_search",
+                Description = "Narrow search with more specific terms",
+                Command = new AIActionCommand
+                {
+                    Tool = "mcp__codesearch__text_search",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "query", $"\"{query}\" AND specific_term" },
+                        { "searchType", "standard" }
+                    }
+                },
+                EstimatedTokens = 1500,
+                Priority = ActionPriority.Medium,
+                Context = ActionContext.ManyResults
+            });
+        }
+
+        // Context actions
+        if (hotspots.Any() && results.Any(r => r.Context == null))
+        {
+            actions.Add(new AIAction
+            {
+                Id = "add_context",
+                Description = "Show results with surrounding context",
+                Command = new AIActionCommand
+                {
+                    Tool = "mcp__codesearch__text_search",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "query", query },
+                        { "contextLines", 3 }
+                    }
+                },
+                EstimatedTokens = EstimateContextTokens(results.Take(20).ToList(), 3),
+                Priority = ActionPriority.High,
+                Context = ActionContext.Always
+            });
+        }
+
+        // Explore hotspots
+        if (hotspots.Any())
+        {
+            var topHotspot = hotspots.First();
+            actions.Add(new AIAction
+            {
+                Id = "explore_hotspot",
+                Description = $"Read {topHotspot.File} with {topHotspot.Matches} matches",
+                Command = new AIActionCommand
+                {
+                    Tool = "Read",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "file_path", topHotspot.File }
+                    }
+                },
+                EstimatedTokens = 1000,
+                Priority = ActionPriority.Medium,
+                Context = ActionContext.ManyResults
+            });
+        }
+
+        // Alternative search types
+        if (searchType == "standard" && !query.Contains("*"))
+        {
+            actions.Add(new AIAction
+            {
+                Id = "try_wildcard",
+                Description = "Try wildcard search for broader results",
+                Command = new AIActionCommand
+                {
+                    Tool = "mcp__codesearch__text_search",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "query", $"*{query}*" },
+                        { "searchType", "wildcard" }
+                    }
+                },
+                EstimatedTokens = 2000,
+                Priority = ActionPriority.Low,
+                Context = ActionContext.EmptyResults
+            });
+
+            actions.Add(new AIAction
+            {
+                Id = "try_fuzzy",
+                Description = "Try fuzzy search for approximate matches",
+                Command = new AIActionCommand
+                {
+                    Tool = "mcp__codesearch__text_search",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "query", query.TrimEnd('~') + "~" },
+                        { "searchType", "fuzzy" }
+                    }
+                },
+                EstimatedTokens = 2000,
+                Priority = ActionPriority.Low,
+                Context = ActionContext.EmptyResults
+            });
+        }
+
+        // Full details action
+        if (mode == ResponseMode.Summary && results.Count < 100)
+        {
+            actions.Add(new AIAction
+            {
+                Id = "full_details",
+                Description = "Get full details for all results",
+                Command = new AIActionCommand
+                {
+                    Tool = "mcp__codesearch__text_search",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        { "query", query },
+                        { "responseMode", "full" }
+                    }
+                },
+                EstimatedTokens = EstimateFullTextSearchResponseTokens(results),
+                Priority = ActionPriority.Low,
+                Context = ActionContext.Exploration
+            });
+        }
+
+        return actions.Cast<object>().ToList();
+    }
+
+    private int EstimateTextSearchResponseTokens(List<TextSearchResult> results)
+    {
+        // Estimate ~100 tokens per result without context, ~200 with context
+        var hasContext = results.Any(r => r.Context != null);
+        var tokensPerResult = hasContext ? 200 : 100;
+        return Math.Min(25000, results.Count * tokensPerResult);
+    }
+
+    private int EstimateContextTokens(List<TextSearchResult> results, int contextLines)
+    {
+        // Estimate tokens for adding context to results
+        var avgLinesPerResult = contextLines * 2 + 1; // Before + match + after
+        var avgCharsPerLine = 80;
+        var charsPerResult = avgLinesPerResult * avgCharsPerLine;
+        var tokensPerResult = charsPerResult / 4; // Rough char-to-token conversion
+        return results.Count * tokensPerResult;
+    }
+
+    private int EstimateFullTextSearchResponseTokens(List<TextSearchResult> results)
+    {
+        // Estimate for full response mode
+        return Math.Min(25000, results.Count * 250); // More tokens per result in full mode
+    }
+
     #endregion
 }
 
@@ -789,6 +1607,41 @@ public class FileSearchResult
     public string Path { get; set; } = string.Empty;
     public double Score { get; set; }
 }
+
+/// <summary>
+/// Text search result for response building
+/// </summary>
+public class TextSearchResult
+{
+    public string FilePath { get; set; } = string.Empty;
+    public string FileName { get; set; } = string.Empty;
+    public string RelativePath { get; set; } = string.Empty;
+    public string Extension { get; set; } = string.Empty;
+    public string Language { get; set; } = string.Empty;
+    public float Score { get; set; }
+    public List<TextSearchContextLine>? Context { get; set; }
+}
+
+/// <summary>
+/// Context line for text search results
+/// </summary>
+public class TextSearchContextLine
+{
+    public int LineNumber { get; set; }
+    public string Content { get; set; } = string.Empty;
+    public bool IsMatch { get; set; }
+}
+
+/// <summary>
+/// Hotspot info for text search results
+/// </summary>
+public class TextSearchHotspot
+{
+    public string File { get; set; } = string.Empty;
+    public int Matches { get; set; }
+    public int Lines { get; set; }
+}
+
 
 /// <summary>
 /// Token estimation service interface
