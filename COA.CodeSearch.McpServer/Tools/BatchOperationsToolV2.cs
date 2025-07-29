@@ -20,6 +20,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     public override ToolCategory Category => ToolCategory.Batch;
     private readonly IConfiguration _configuration;
     private readonly INotificationService? _notificationService;
+    private readonly AIResponseBuilderService _responseBuilder;
     
     // Available tools for batch operations
     private readonly FastTextSearchToolV2 _fastTextSearchToolV2;
@@ -37,6 +38,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         IOptions<ResponseLimitOptions> options,
         IDetailRequestCache detailCache,
         INotificationService? notificationService,
+        AIResponseBuilderService responseBuilder,
         FastTextSearchToolV2 fastTextSearchToolV2,
         FastFileSearchToolV2 fastFileSearchToolV2,
         FastRecentFilesTool fastRecentFilesTool,
@@ -47,6 +49,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
     {
         _configuration = configuration;
         _notificationService = notificationService;
+        _responseBuilder = responseBuilder;
         _fastTextSearchToolV2 = fastTextSearchToolV2;
         _fastFileSearchToolV2 = fastFileSearchToolV2;
         _fastRecentFilesTool = fastRecentFilesTool;
@@ -97,23 +100,26 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
             // Sort results back to original order and add to results list
             results.AddRange(operationResults.OrderBy(r => GetOperationIndex(r)));
 
-            // Create batch result
-            var batchResult = new
+            // Create batch result model
+            var batchResult = new BatchOperationResult
             {
-                success = true,
-                results = results,
-                summary = new
-                {
-                    total = operationCount,
-                    successful = results.Count(r => GetSuccess(r)),
-                    failed = results.Count(r => !GetSuccess(r))
-                }
+                Operations = results.Select((r, i) => ConvertToBatchOperationEntry(r, i)).ToList(),
+                TotalExecutionTime = TimeSpan.FromMilliseconds(100 * operationCount) // Estimate
             };
 
-            // Create AI-optimized response
-            var resultJson = JsonSerializer.Serialize(batchResult);
-            var resultDoc = JsonDocument.Parse(resultJson);
-            return CreateAiOptimizedResponse(operations, resultDoc.RootElement, mode);
+            // Create request model for response builder
+            var batchRequest = new BatchOperationRequest
+            {
+                Operations = operationArray.Select(op => new BatchOperationDefinition
+                {
+                    OperationType = op.GetProperty("operation").GetString() ?? op.GetProperty("type").GetString() ?? "unknown",
+                    Parameters = new Dictionary<string, object>()
+                }).ToList(),
+                DefaultWorkspacePath = workspacePath
+            };
+
+            // Use AIResponseBuilderService to build the response
+            return _responseBuilder.BuildBatchOperationsResponse(batchRequest, batchResult, mode);
         }
         catch (Exception ex)
         {
@@ -169,6 +175,19 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         var resultJson = JsonSerializer.Serialize(result);
         var doc = JsonDocument.Parse(resultJson);
         return doc.RootElement.TryGetProperty("index", out var index) ? index.GetInt32() : 0;
+    }
+
+    private BatchOperationEntry ConvertToBatchOperationEntry(object result, int index)
+    {
+        dynamic d = result;
+        return new BatchOperationEntry
+        {
+            OperationType = d.operation?.ToString() ?? "unknown",
+            Success = d.success ?? false,
+            Result = d.result,
+            Error = d.error?.ToString(),
+            Index = index
+        };
     }
 
     private async Task<object> ExecuteOperationWithIndexAsync(
