@@ -43,7 +43,7 @@ var host = Host.CreateDefaultBuilder(args)
         var logDirectory = pathResolution.GetLogsPath();
         
         configuration
-            .MinimumLevel.Debug()
+            .MinimumLevel.Information()
             .MinimumLevel.Override("Microsoft", LogEventLevel.Warning)
             .MinimumLevel.Override("System", LogEventLevel.Warning)
             .MinimumLevel.Override("COA.CodeSearch.McpServer.Services.FileIndexingService", LogEventLevel.Warning)
