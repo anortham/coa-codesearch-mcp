@@ -477,11 +477,12 @@ public class MemoryGraphNavigatorTool : ClaudeOptimizedToolBase
 
     private MemoryNode CreateMemoryNodeFromRelated(dynamic relatedMemory)
     {
+        // Using consistent extraction methods for safety
         return new MemoryNode
         {
-            Id = relatedMemory.Id?.ToString() ?? "",
-            Title = relatedMemory.Content?.ToString() ?? "Untitled",
-            Type = relatedMemory.Type?.ToString() ?? "Unknown",
+            Id = ExtractMemoryId(relatedMemory) ?? "",
+            Title = ExtractContent(relatedMemory) ?? "Untitled",
+            Type = ExtractType(relatedMemory) ?? "Unknown",
             Files = ExtractFiles(relatedMemory),
             CreatedAt = ExtractDate(relatedMemory, "Created") ?? DateTime.MinValue,
             IsOrphan = false
