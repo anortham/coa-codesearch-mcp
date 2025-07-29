@@ -35,9 +35,13 @@ public class SemanticMemoryIndex
         {
             // Create searchable content by combining relevant fields
             var searchableContent = CreateSearchableContent(memory);
+            _logger.LogInformation("Created searchable content for memory {Id}: {Content}", 
+                memory.Id, searchableContent.Substring(0, Math.Min(100, searchableContent.Length)));
             
             // Generate embedding
             var embedding = await _embeddingService.GetEmbeddingAsync(searchableContent);
+            _logger.LogInformation("Generated embedding for memory {Id} with {Dimensions} dimensions", 
+                memory.Id, embedding.Length);
             
             // Create metadata for filtering and context
             var metadata = new Dictionary<string, object>
@@ -66,7 +70,8 @@ public class SemanticMemoryIndex
             // Store in vector index
             await _vectorIndex.AddAsync(memory.Id, embedding, metadata);
             
-            _logger.LogDebug("Indexed memory {Id} for semantic search", memory.Id);
+            _logger.LogInformation("Successfully stored memory {Id} in vector index with metadata keys: {Keys}", 
+                memory.Id, string.Join(", ", metadata.Keys));
         }
         catch (Exception ex)
         {
@@ -92,6 +97,12 @@ public class SemanticMemoryIndex
 
             // Generate query embedding
             var queryEmbedding = await _embeddingService.GetEmbeddingAsync(query);
+            _logger.LogInformation("Generated query embedding for '{Query}' with {Dimensions} dimensions", 
+                query, queryEmbedding.Length);
+            
+            // Get current index stats
+            var stats = await _vectorIndex.GetStatsAsync();
+            _logger.LogInformation("Vector index contains {Count} vectors", stats.TotalVectors);
             
             // Search for similar vectors
             var vectorMatches = await _vectorIndex.SearchAsync(
@@ -99,6 +110,9 @@ public class SemanticMemoryIndex
                 limit,
                 filter,
                 threshold);
+            
+            _logger.LogInformation("Vector search returned {Count} matches for query '{Query}'", 
+                vectorMatches.Count, query);
 
             // Convert to semantic search results
             var results = vectorMatches.Select(match => new SemanticSearchResult

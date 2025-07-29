@@ -131,9 +131,31 @@ public class FastSimilarFilesTool : ITool
                 FieldNames = new[] { "content" } // Search in content field
             };
 
-            // Create the query
+            // Get the content of the source document
+            var sourceContent = sourceDoc.Get("content");
+            if (string.IsNullOrEmpty(sourceContent))
+            {
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Source document has no content field",
+                    null);
+            }
+
+            // Create the query using StringReader approach (more reliable than docId approach)
             var startTime = DateTime.UtcNow;
-            var query = mlt.Like(sourceDocId);
+            Query query;
+            using (var reader = new StringReader(sourceContent))
+            {
+                query = mlt.Like(reader, "content");
+            }
+
+            if (query == null)
+            {
+                return UnifiedToolResponse<object>.CreateError(
+                    ErrorCodes.VALIDATION_ERROR,
+                    "Could not generate similarity query - document may not have enough distinctive terms",
+                    null);
+            }
             
             // Add exclusions if needed
             if (excludeExtensions?.Length > 0 || true) // Always exclude the source file
