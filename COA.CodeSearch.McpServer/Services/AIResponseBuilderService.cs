@@ -375,7 +375,8 @@ public class AIResponseBuilderService
             Parameters = op.Parameters
         }).ToList();
 
-        var results = result.Operations?.Select(op => op.Result ?? new object()).ToList() ?? new List<object>();
+        // Pass the full operation entries as results to preserve operation type
+        var results = result.Operations?.Cast<object>().ToList() ?? new List<object>();
         
         var operationTimings = new Dictionary<string, double>();
         if (result.Operations != null)

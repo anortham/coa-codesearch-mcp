@@ -125,22 +125,44 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                 totalTime = $"{totalDurationMs:F1}ms",
                 avgTimePerOperation = $"{totalDurationMs / operations.Count:F1}ms"
             },
-            results = displayResults.Select((r, i) => 
+            results = displayResults.Select<object, object>((r, i) => 
             {
-                // Extract the actual result data from each operation result
-                var opIndex = i < operations.Count ? i : operations.Count - 1;
-                var operation = operations[opIndex];
-                var matchCount = ExtractMatchCount(r, operation);
-                
-                return new
+                // Handle BatchOperationEntry objects
+                if (r is BatchOperationEntry entry)
                 {
-                    index = i,
-                    operation = operation.Operation,
-                    query = operation.Parameters.ContainsKey("query") ? operation.Parameters["query"] : null,
-                    matches = matchCount,
-                    summary = GetOperationSummary(operation),
-                    result = r // Include the actual operation result
-                };
+                    var opIndex = entry.Index < operations.Count ? entry.Index : operations.Count - 1;
+                    var operation = operations[opIndex];
+                    var matchCount = entry.Result != null ? ExtractMatchCount(entry.Result, operation) : 0;
+                    
+                    return new
+                    {
+                        index = entry.Index,
+                        operation = entry.OperationType ?? operation.Operation,
+                        query = operation.Parameters.ContainsKey("query") ? operation.Parameters["query"] : null,
+                        matches = matchCount,
+                        summary = GetOperationSummary(operation),
+                        success = entry.Success,
+                        error = entry.Error,
+                        result = entry.Result // Include the actual operation result
+                    };
+                }
+                else
+                {
+                    // Fallback for raw results
+                    var opIndex = i < operations.Count ? i : operations.Count - 1;
+                    var operation = operations[opIndex];
+                    var matchCount = ExtractMatchCount(r, operation);
+                    
+                    return (object)new
+                    {
+                        index = i,
+                        operation = operation.Operation,
+                        query = operation.Parameters.ContainsKey("query") ? operation.Parameters["query"] : null,
+                        matches = matchCount,
+                        summary = GetOperationSummary(operation),
+                        result = r
+                    };
+                }
             }).ToList(),
             resultsSummary = new
             {
@@ -347,10 +369,21 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         for (int i = 0; i < results.Count; i++)
         {
             var result = results[i];
-            var operation = operations[i];
+            
+            // Determine the actual operation index
+            int opIndex = i;
+            object actualResult = result;
+            
+            if (result is BatchOperationEntry entry)
+            {
+                opIndex = entry.Index < operations.Count ? entry.Index : operations.Count - 1;
+                actualResult = entry.Result ?? result;
+            }
+            
+            var operation = operations[opIndex];
             
             // Extract match count based on operation type
-            var matchCount = ExtractMatchCount(result, operation);
+            var matchCount = ExtractMatchCount(actualResult, operation);
             totalMatches += matchCount;
             
             if (matchCount > 10)
@@ -359,7 +392,7 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             }
 
             // Track file occurrences
-            var files = ExtractFiles(result, operation);
+            var files = ExtractFiles(actualResult, operation);
             foreach (var file in files)
             {
                 fileOccurrences[file] = fileOccurrences.GetValueOrDefault(file, 0) + 1;
@@ -417,13 +450,25 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
 
     private int ExtractMatchCount(object result, BatchOperationSpec operation)
     {
+        // Handle BatchOperationEntry
+        if (result is BatchOperationEntry entry)
+        {
+            return entry.Result != null ? ExtractMatchCount(entry.Result, operation) : 0;
+        }
+        
         // Try to extract count from different result structures
         if (result is JsonElement json)
         {
-            if (json.TryGetProperty("summary", out var summary) && 
-                summary.TryGetProperty("totalFound", out var totalFound))
+            if (json.TryGetProperty("summary", out var summary))
             {
-                return totalFound.GetInt32();
+                if (summary.TryGetProperty("totalHits", out var totalHits))
+                {
+                    return totalHits.GetInt32();
+                }
+                else if (summary.TryGetProperty("totalFound", out var totalFound))
+                {
+                    return totalFound.GetInt32();
+                }
             }
             else if (json.TryGetProperty("results", out var results) && 
                      results.ValueKind == JsonValueKind.Array)
@@ -433,7 +478,29 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         }
         
         // Try reflection for dynamic objects
-        var totalFoundProp = result.GetType().GetProperty("TotalFound");
+        var resultType = result.GetType();
+        
+        // Check for summary.totalHits pattern
+        var summaryProp = resultType.GetProperty("summary");
+        if (summaryProp != null)
+        {
+            var summaryValue = summaryProp.GetValue(result);
+            if (summaryValue != null)
+            {
+                var summaryType = summaryValue.GetType();
+                var totalHitsProp = summaryType.GetProperty("totalHits");
+                if (totalHitsProp != null)
+                {
+                    var totalHitsValue = totalHitsProp.GetValue(summaryValue);
+                    if (totalHitsValue != null)
+                    {
+                        return Convert.ToInt32(totalHitsValue);
+                    }
+                }
+            }
+        }
+        
+        var totalFoundProp = resultType.GetProperty("TotalFound");
         if (totalFoundProp != null)
         {
             return Convert.ToInt32(totalFoundProp.GetValue(result));
@@ -445,6 +512,12 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
     private List<string> ExtractFiles(object result, BatchOperationSpec operation)
     {
         var files = new List<string>();
+        
+        // Handle BatchOperationEntry
+        if (result is BatchOperationEntry entry)
+        {
+            return entry.Result != null ? ExtractFiles(entry.Result, operation) : files;
+        }
         
         // Try to extract files from different result structures
         if (result is JsonElement json)
@@ -480,7 +553,13 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
     private string CalculateEffectiveness(dynamic resultAnalysis)
     {
         if (resultAnalysis.totalMatches == 0) return "no_results";
-        if (resultAnalysis.highMatchOperations > resultAnalysis.operations * 0.5) return "highly_effective";
+        
+        // Calculate total operations from the high match operations and average
+        var totalOperations = resultAnalysis.avgMatchesPerOperation > 0 
+            ? resultAnalysis.totalMatches / resultAnalysis.avgMatchesPerOperation 
+            : 1;
+            
+        if (resultAnalysis.highMatchOperations > totalOperations * 0.5) return "highly_effective";
         if (resultAnalysis.avgMatchesPerOperation > 5) return "effective";
         return "limited_results";
     }
