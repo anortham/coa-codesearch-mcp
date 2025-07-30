@@ -114,47 +114,13 @@ public class UnifiedMemoryService
     private (MemoryIntent Intent, float Confidence) DetectIntent(UnifiedMemoryCommand command)
     {
         var content = command.Content?.ToLowerInvariant() ?? "";
-        var confidence = 0.0f;
-
-        // Strong indicators for SAVE intent
-        if (ContainsAny(content, "remember", "store", "save", "create", "note", "record"))
-        {
-            confidence += 0.6f; // Increased from 0.4f to ensure SAVE intent is detected
-        }
-        if (ContainsAny(content, "technical debt", "architectural decision", "bug", "issue", "todo"))
-        {
-            confidence += 0.3f;
-            return (MemoryIntent.Save, Math.Min(confidence, 1.0f));
-        }
-        if (ContainsAny(content, "checklist", "task list", "plan", "items"))
-        {
-            return (MemoryIntent.Save, 0.9f); // High confidence for checklist creation
-        }
         
-        // Return early for SAVE intent if confidence is sufficient
-        if (confidence >= 0.5f)
-        {
-            return (MemoryIntent.Save, Math.Min(confidence, 1.0f));
-        }
-
-        // Strong indicators for FIND intent
-        if (ContainsAny(content, "find", "search", "look for", "get", "show", "list"))
-        {
-            confidence += 0.4f;
-        }
-        if (ContainsAny(content, "where", "what", "how many", "which"))
-        {
-            confidence += 0.3f;
-        }
-        if (confidence >= 0.5f)
-        {
-            return (MemoryIntent.Find, Math.Min(confidence, 1.0f));
-        }
-
-        // Strong indicators for CONNECT intent
+        // Check for CONNECT intent first - these are very specific keywords
         if (ContainsAny(content, "connect", "link", "relate", "associate", "tie"))
         {
-            return (MemoryIntent.Connect, 0.8f);
+            // Additional confidence if it mentions "to" or "with" (common in connect commands)
+            var confidence = ContainsAny(content, " to ", " with ", " and ") ? 0.9f : 0.8f;
+            return (MemoryIntent.Connect, confidence);
         }
 
         // Strong indicators for EXPLORE intent
@@ -175,6 +141,33 @@ public class UnifiedMemoryService
             ContainsAny(content, "backup", "restore", "export", "import"))
         {
             return (MemoryIntent.Manage, 0.8f);
+        }
+
+        // Strong indicators for FIND intent
+        if (ContainsAny(content, "find", "search", "look for", "get", "show", "list") ||
+            ContainsAny(content, "where", "what", "how many", "which"))
+        {
+            return (MemoryIntent.Find, 0.8f);
+        }
+
+        // Strong indicators for SAVE intent
+        var saveConfidence = 0.0f;
+        if (ContainsAny(content, "remember", "store", "save", "create", "note", "record"))
+        {
+            saveConfidence += 0.6f;
+        }
+        if (ContainsAny(content, "technical debt", "architectural decision", "bug", "issue", "todo"))
+        {
+            saveConfidence += 0.3f;
+        }
+        if (ContainsAny(content, "checklist", "task list", "plan", "items"))
+        {
+            return (MemoryIntent.Save, 0.9f); // High confidence for checklist creation
+        }
+        
+        if (saveConfidence >= 0.5f)
+        {
+            return (MemoryIntent.Save, Math.Min(saveConfidence, 1.0f));
         }
 
         // Default to FIND if no clear intent detected
