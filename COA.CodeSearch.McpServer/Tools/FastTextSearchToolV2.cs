@@ -1259,17 +1259,35 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             parser.AllowLeadingWildcard = true;
             
             Query luceneQuery;
-            if (searchType == "fuzzy" && !query.Contains("~"))
+            try
             {
-                luceneQuery = parser.Parse(query + "~");
+                if (searchType == "fuzzy" && !query.Contains("~"))
+                {
+                    luceneQuery = parser.Parse(EscapeQueryText(query) + "~");
+                }
+                else if (searchType == "phrase")
+                {
+                    luceneQuery = parser.Parse($"\"{EscapeQueryText(query)}\"");
+                }
+                else
+                {
+                    luceneQuery = parser.Parse(EscapeQueryText(query));
+                }
             }
-            else if (searchType == "phrase")
+            catch (ParseException ex)
             {
-                luceneQuery = parser.Parse($"\"{query}\"");
-            }
-            else
-            {
-                luceneQuery = parser.Parse(query);
+                Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
+                // If the query contains square brackets, use wildcard approach
+                if (query.Contains('[') || query.Contains(']'))
+                {
+                    var wildcardQuery = query.Replace("[", "\\[").Replace("]", "\\]");
+                    luceneQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
+                }
+                else
+                {
+                    // Fall back to term query
+                    luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
+                }
             }
             
             // Search without restrictions
