@@ -105,36 +105,42 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             });
         }
 
+        // Build unified response format matching other tools
         return new
         {
             success = true,
             operation = "batch_operations",
+            query = new
+            {
+                operationCount = operations.Count,
+                operationTypes = operationTypes,
+                workspace = operations.FirstOrDefault()?.Parameters.ContainsKey("workspacePath") == true 
+                    ? operations.First().Parameters["workspacePath"] : "multiple"
+            },
             summary = new
             {
                 totalOperations = operations.Count,
                 completedOperations = results.Count,
+                totalMatches = resultAnalysis.totalMatches,
                 totalTime = $"{totalDurationMs:F1}ms",
-                avgTimePerOperation = $"{totalDurationMs / operations.Count:F1}ms",
-                operationTypes = operationTypes
+                avgTimePerOperation = $"{totalDurationMs / operations.Count:F1}ms"
             },
-            performance = new
+            results = displayResults.Select((r, i) => 
             {
-                parallel = operations.Count > 1,
-                speedup = operations.Count > 1 ? $"{CalculateSpeedup(totalDurationMs, operationTimings):F1}x" : "N/A",
-                slowestOperations = slowestOperations
-            },
-            analysis = new
-            {
-                patterns = insights.Take(3).ToList(),
-                summary = resultAnalysis,
-                effectiveness = CalculateEffectiveness(resultAnalysis)
-            },
-            operations = operationSummaries,
-            results = displayResults.Select((r, i) => (object)new
-            {
-                index = i,
-                operation = operations[i].Operation,
-                resultSummary = GetResultSummary(r, operations[i])
+                // Extract the actual result data from each operation result
+                var opIndex = i < operations.Count ? i : operations.Count - 1;
+                var operation = operations[opIndex];
+                var matchCount = ExtractMatchCount(r, operation);
+                
+                return new
+                {
+                    index = i,
+                    operation = operation.Operation,
+                    query = operation.Parameters.ContainsKey("query") ? operation.Parameters["query"] : null,
+                    matches = matchCount,
+                    summary = GetOperationSummary(operation),
+                    result = r // Include the actual operation result
+                };
             }).ToList(),
             resultsSummary = new
             {
@@ -142,14 +148,17 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
+            distribution = new
+            {
+                byOperation = operationTypes,
+                commonFiles = resultAnalysis.commonFiles
+            },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? (object)new
+            actions = actions.Select(a => a is AIAction aiAction ? new
             {
                 id = aiAction.Id,
-                description = aiAction.Description,
-                command = aiAction.Command.Tool,
-                parameters = aiAction.Command.Parameters,
-                estimatedTokens = aiAction.EstimatedTokens,
+                cmd = aiAction.Command.Parameters,
+                tokens = aiAction.EstimatedTokens,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
             } : a),
             meta = new
@@ -157,9 +166,22 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
                 tokens = EstimateResponseTokens(displayResults),
-                format = "ai-optimized",
-                detailRequestToken = detailRequestToken
-            }
+                detailRequestToken = detailRequestToken,
+                // Include batch-specific metadata
+                performance = new
+                {
+                    parallel = operations.Count > 1,
+                    speedup = operations.Count > 1 ? $"{CalculateSpeedup(totalDurationMs, operationTimings):F1}x" : "N/A",
+                    slowestOperations = slowestOperations
+                },
+                analysis = new
+                {
+                    effectiveness = CalculateEffectiveness(resultAnalysis),
+                    highMatchOperations = resultAnalysis.highMatchOperations,
+                    avgMatchesPerOperation = resultAnalysis.avgMatchesPerOperation
+                }
+            },
+            resourceUri = $"codesearch-batch://batch_{Guid.NewGuid().ToString("N")[..8]}_{DateTimeOffset.UtcNow.ToUnixTimeSeconds()}"
         };
     }
 
@@ -234,14 +256,12 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             actions.Add(new AIAction
             {
                 Id = "analyze_common_file",
-                Description = $"Analyze frequently matched file",
                 Command = new AICommand
                 {
-                    Tool = "file_analysis",
+                    Tool = "Read",
                     Parameters = new Dictionary<string, object>
                     {
-                        ["file"] = topFile.file,
-                        ["matchCount"] = topFile.count
+                        ["file_path"] = topFile.file
                     }
                 },
                 EstimatedTokens = 1000,
@@ -255,7 +275,6 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             actions.Add(new AIAction
             {
                 Id = "broaden_search",
-                Description = "Try broader search parameters",
                 Command = new AICommand
                 {
                     Tool = "batch_operations",
@@ -281,7 +300,6 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             actions.Add(new AIAction
             {
                 Id = "view_full_results",
-                Description = "View complete results",
                 Command = new AICommand
                 {
                     Tool = "batch_operations",
@@ -304,7 +322,6 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             actions.Add(new AIAction
             {
                 Id = "focus_operation_type",
-                Description = $"Run only {topType.Key} operations",
                 Command = new AICommand
                 {
                     Tool = "batch_operations",

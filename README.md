@@ -65,7 +65,7 @@ Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platfor
 - `similar_files` - Find files with similar content using MLT algorithm
 - `file_size_analysis` - Analyze file sizes and distributions
 
-### Essential Memory System (6 Core Tools)
+### Essential Memory System (10 Tools)
 - `recall_context` - Load relevant context from previous sessions (**use at session start!**)
 - `store_memory` - Store any type of memory with custom fields
 - `search_memories` - Search stored memories with intelligent query expansion
