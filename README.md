@@ -226,67 +226,98 @@ search_assistant --goal "Understand authentication implementation" \
   --workspacePath "C:/YourProject"
 ```
 
-## 🚀 AI Agent Optimizations
+## 🤖 AI Agent Optimizations
 
-This MCP server is specifically optimized for AI agent workflows with **60-85% token reduction**:
+This MCP server is specifically designed for optimal AI agent experience with comprehensive UX improvements:
 
-### 🎯 Token Optimization Features
-- **⚡ Confidence-Based Result Limiting**: Dynamic result counts based on search quality
-  - High confidence (score > 0.8): Show 2-3 results 
-  - Medium confidence (score > 0.5): Show 3-5 results
-  - Low confidence: Show 5-8 results with refinement suggestions
-- **🔗 Resource URI System**: Two-tier access pattern
-  - Minimal initial response with essential results
-  - Full results accessible via `resourceUri` when needed
-- **📊 Standardized Response Structure**: Consistent `resultsSummary` across all tools
-  - `included`: Number of results in response
-  - `total`: Total results available  
-  - `hasMore`: Whether more results exist
-- **🗂️ Field Minimization**: Essential data only (path + score vs 6+ fields)
-
-### 🧠 Intelligence Features  
-- **Progressive Disclosure**: Automatic token-aware response summarization
-- **Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
-- **Workflow Discovery**: Proactive tool guidance and dependency mapping
-- **Parameter Standardization**: Consistent `query` parameter across search tools
-
-### Example Optimized Response
-
+### 🎯 Unified Response Format
+All tools now follow a consistent response structure for predictable AI parsing:
 ```json
-// Example response showing token optimizations
 {
   "success": true,
   "operation": "text_search",
-  "query": {
-    "text": "authentication",
-    "type": "standard",
-    "workspace": "MyProject"
-  },
-  "results": [
-    // Only 3 results (confidence-limited from 15 total)
-    {
-      "file": "AuthService.cs",
-      "path": "src/services/AuthService.cs", 
-      "score": 0.89
-      // Minimal fields - no redundant filename, relativePath, etc.
-    }
-  ],
-  "resultsSummary": {
-    "included": 3,      // What's shown (confidence-limited)  
-    "total": 15,        // What's available
-    "hasMore": true     // More available via resourceUri
-  },
-  "meta": {  
-    "searchTime": "4ms",
-    "resourceUri": "codesearch-search://search_abc123"  // Full results
+  "query": { /* standardized query info */ },
+  "summary": { /* high-level insights */ },
+  "results": [ /* actual results */ ],
+  "resultsSummary": { "included": 3, "total": 15, "hasMore": true },
+  "insights": ["Key findings"],
+  "actions": [{ "cmd": "next steps", "description": "what it does" }],
+  "meta": { /* metadata including mode, tokens, performance */ },
+  "resourceUri": "codesearch://..."
+}
+```
+
+### 📊 Parameter Standardization
+- **All search tools** now use `query` as the primary parameter
+- **Backward compatible** with legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`)
+- **Consistent interface** across `text_search`, `file_search`, `directory_search`
+
+### 🧠 Token Optimization (60-85% reduction)
+- **Automatic Mode Switching**: Switches to summary at 5,000 tokens
+- **Progressive Disclosure**: Smart summaries with drill-down capabilities
+- **Confidence-Based Limiting**: 2-3 results for high-confidence matches
+- **Detail Request Tokens**: Get full results when needed without re-searching
+
+### 🔄 Enhanced Workflow Discovery
+```bash
+# Discover tool chains and dependencies
+workflow_discovery --goal "search code"
+workflow_discovery --toolName "text_search"
+```
+- **Dynamic Context-Aware Workflows**: Adapts to your specific goals
+- **Tool Chain Mapping**: Understand prerequisites and sequences
+- **Specialized Workflows**: Auth, performance, bug hunting patterns
+
+### 🚨 Actionable Error Handling
+Instead of generic errors, get specific recovery guidance:
+```json
+{
+  "error": "INDEX_NOT_FOUND",
+  "message": "No search index found",
+  "recovery": {
+    "steps": ["1. Run: index_workspace --workspacePath 'C:/YourProject'"],
+    "suggestedActions": [{ "cmd": "index_workspace", "description": "Create index" }]
   }
 }
 ```
 
-**Token Comparison:**
-- **Before**: ~4,500 tokens (15 results × 300 tokens each)
-- **After**: ~900 tokens (3 results × 50 tokens each) 
-- **Savings**: 80% reduction for high-confidence searches
+### 📚 Comprehensive Documentation
+See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for:
+- Complete unified response format specification
+- Token optimization strategies
+- Progressive disclosure patterns
+- Tool description best practices
+- Implementation guidelines
+
+### Example: Unified Response with Progressive Disclosure
+```json
+{
+  "success": true,
+  "operation": "batch_operations",
+  "summary": {
+    "totalMatches": 150,
+    "operations": { "text_search": 2, "file_search": 1 },
+    "hotspots": ["AuthService.cs (25 matches)", "UserController.cs (18 matches)"]
+  },
+  "results": [
+    // Limited results in summary mode
+  ],
+  "insights": [
+    "Authentication logic concentrated in 3 files",
+    "TODO comments cluster in test files"
+  ],
+  "actions": [
+    { "cmd": "text_search --query 'TODO' --filePattern '*Test.cs'", "description": "Focus on test TODOs" }
+  ],
+  "meta": {
+    "mode": "summary",
+    "autoModeSwitch": true,
+    "tokens": 4500,
+    "detailRequestToken": "cache_abc123",
+    "performance": { "totalTime": "125ms" }
+  }
+}
+```
 
 ## 🤖 Claude Code Usage Best Practices
 
