@@ -185,9 +185,10 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder
             {
                 insights.Add($"All directories at same depth level");
             }
-            else
+            else if (data.depthStats.Count > 0)
             {
-                var maxDepth = data.depthStats.Keys.Max();
+                var depthStatsDict = (Dictionary<int, int>)data.depthStats;
+                var maxDepth = depthStatsDict.Keys.Max();
                 insights.Add($"Directory tree spans {maxDepth + 1} levels");
             }
             
