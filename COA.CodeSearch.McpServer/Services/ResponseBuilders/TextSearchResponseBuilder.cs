@@ -223,6 +223,19 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
                 insights.Add($"🔍 Try: text_search --query \"{data.query}\" --workspacePath \"{data.workspacePath}\"");
             }
             
+            // Show filePattern hints if using problematic patterns
+            if (!string.IsNullOrEmpty(data.filePattern))
+            {
+                insights.Add($"Results filtered by pattern: {data.filePattern}");
+                
+                // Add specific hint for problematic glob patterns
+                if (data.filePattern.StartsWith("**/"))
+                {
+                    insights.Add($"💡 TIP: Pattern '**/' may not work as expected. Try simpler pattern '*.{data.filePattern.Substring(3)}'");
+                    insights.Add($"🔍 Try: text_search --query \"{data.query}\" --extensions .{data.filePattern.Substring(3).TrimStart('*', '.')}");
+                }
+            }
+            
             // Add search type specific tips
             switch (data.searchType)
             {

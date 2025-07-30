@@ -705,6 +705,22 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         {
             insights.Add($"No matches found for '{query}'");
             
+            // Always show basic search suggestions first
+            if (searchType == "standard" && !query.Contains("*"))
+            {
+                insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
+            }
+            
+            if (extensions?.Length > 0)
+            {
+                insights.Add($"Search limited to: {string.Join(", ", extensions)}");
+            }
+            
+            if (!string.IsNullOrEmpty(filePattern))
+            {
+                insights.Add($"Results filtered by pattern: {filePattern}");
+            }
+            
             // Check if alternate search would find results
             if (alternateHits > 0 && alternateExtensions != null)
             {
@@ -733,29 +749,6 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                     {
                         insights.Add("🎯 ASP.NET project detected - views are in .cshtml files!");
                         insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .cs,.cshtml --workspacePath \"{workspacePath}\"");
-                    }
-                }
-            }
-            else
-            {
-                // Original suggestions when no alternate results
-                if (searchType == "standard" && !query.Contains("*"))
-                {
-                    insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
-                }
-                if (extensions?.Length > 0)
-                {
-                    insights.Add($"Search limited to: {string.Join(", ", extensions)}");
-                }
-                if (!string.IsNullOrEmpty(filePattern))
-                {
-                    insights.Add($"Results filtered by pattern: {filePattern}");
-                    
-                    // Add specific hint for problematic glob patterns
-                    if (filePattern.StartsWith("**/"))
-                    {
-                        insights.Add($"💡 TIP: Try simpler pattern '*.{filePattern.Substring(3)}' or use extensions parameter instead");
-                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .{filePattern.Substring(3).TrimStart('*', '.')} --workspacePath \"{workspacePath}\"");
                     }
                 }
             }
@@ -799,12 +792,6 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         if (!string.IsNullOrEmpty(filePattern))
         {
             insights.Add($"Results filtered by pattern: {filePattern}");
-            
-            // Add specific hint for problematic glob patterns
-            if (filePattern.StartsWith("**/") && totalHits == 0)
-            {
-                insights.Add($"💡 TIP: Pattern '**/' may not work as expected. Try '*.{filePattern.Substring(3)}' instead");
-            }
         }
 
         // Ensure we always have at least one insight
