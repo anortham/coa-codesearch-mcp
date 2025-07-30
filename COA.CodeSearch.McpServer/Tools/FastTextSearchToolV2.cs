@@ -750,6 +750,13 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 if (!string.IsNullOrEmpty(filePattern))
                 {
                     insights.Add($"Results filtered by pattern: {filePattern}");
+                    
+                    // Add specific hint for problematic glob patterns
+                    if (filePattern.StartsWith("**/"))
+                    {
+                        insights.Add($"💡 TIP: Try simpler pattern '*.{filePattern.Substring(3)}' or use extensions parameter instead");
+                        insights.Add($"🔍 Try: text_search --query \"{query}\" --extensions .{filePattern.Substring(3).TrimStart('*', '.')} --workspacePath \"{workspacePath}\"");
+                    }
                 }
             }
         }
@@ -792,6 +799,12 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         if (!string.IsNullOrEmpty(filePattern))
         {
             insights.Add($"Results filtered by pattern: {filePattern}");
+            
+            // Add specific hint for problematic glob patterns
+            if (filePattern.StartsWith("**/") && totalHits == 0)
+            {
+                insights.Add($"💡 TIP: Pattern '**/' may not work as expected. Try '*.{filePattern.Substring(3)}' instead");
+            }
         }
 
         // Ensure we always have at least one insight
