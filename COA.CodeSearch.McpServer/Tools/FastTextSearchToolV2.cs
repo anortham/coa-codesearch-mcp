@@ -34,6 +34,11 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IContextAwarenessService? _contextAwarenessService;
     private readonly IQueryCacheService _queryCacheService;
     private readonly IFieldSelectorService _fieldSelectorService;
+    
+    // Lucene special characters that need escaping (excluding [ and ] which cause issues)
+    private static readonly char[] LuceneSpecialChars = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '~', '*', '?', ':', '\\', '/', '<', '>' };
+    private static readonly char[] LuceneSpecialCharsExceptWildcard = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '~', ':', '\\', '/', '<', '>' };
+    private static readonly char[] LuceneSpecialCharsExceptFuzzy = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '*', '?', ':', '\\', '/', '<', '>' };
     private readonly IStreamingResultService _streamingResultService;
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
@@ -1011,9 +1016,29 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 }
                 catch (ParseException ex)
                 {
-                    Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}", queryText);
-                    // Last resort: treat as a simple term query
-                    contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
+                    Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}, trying alternative approach", queryText);
+                    
+                    // If the query contains square brackets, try a different approach
+                    if (queryText.Contains('[') || queryText.Contains(']'))
+                    {
+                        // For queries with square brackets, use a phrase query or wildcard query
+                        try
+                        {
+                            // Try as a phrase query first
+                            contentQuery = standardParser.Parse($"\"{queryText}\"");
+                        }
+                        catch
+                        {
+                            // If phrase query fails, create a wildcard query with the literal text
+                            var wildcardQuery = queryText.Replace("[", "\\[").Replace("]", "\\]");
+                            contentQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
+                        }
+                    }
+                    else
+                    {
+                        // For other cases, treat as a simple term query
+                        contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
+                    }
                 }
                 break;
         }
@@ -1141,10 +1166,10 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private static string EscapeQueryText(string query)
     {
         // Lucene special characters that need escaping
-        var specialChars = new[] { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', '*', '?', ':', '\\', '/', '<', '>' };
-        
+        // Note: We're excluding [ and ] as they cause issues even when escaped
+        // They are handled separately in the BuildQuery method
         var escapedQuery = query;
-        foreach (var c in specialChars)
+        foreach (var c in LuceneSpecialChars)
         {
             escapedQuery = escapedQuery.Replace(c.ToString(), "\\" + c);
         }
@@ -1155,10 +1180,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private static string EscapeQueryTextForWildcard(string query)
     {
         // For wildcard queries, escape all special chars EXCEPT * and ?
-        var specialChars = new[] { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', ':', '\\', '/', '<', '>' };
-        
         var escapedQuery = query;
-        foreach (var c in specialChars)
+        foreach (var c in LuceneSpecialCharsExceptWildcard)
         {
             escapedQuery = escapedQuery.Replace(c.ToString(), "\\" + c);
         }
@@ -1169,10 +1192,8 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private static string EscapeQueryTextForFuzzy(string query)
     {
         // For fuzzy queries, escape all special chars EXCEPT ~
-        var specialChars = new[] { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '*', '?', ':', '\\', '/', '<', '>' };
-        
         var escapedQuery = query;
-        foreach (var c in specialChars)
+        foreach (var c in LuceneSpecialCharsExceptFuzzy)
         {
             escapedQuery = escapedQuery.Replace(c.ToString(), "\\" + c);
         }

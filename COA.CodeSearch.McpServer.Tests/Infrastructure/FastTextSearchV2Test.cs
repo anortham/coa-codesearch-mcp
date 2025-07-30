@@ -249,4 +249,106 @@ public class FastTextSearchV2Test : LuceneTestBase
         // First insight should mention no matches found
         insights[0].GetString().Should().Contain("No matches found");
     }
+
+    [Fact]
+    public async Task Should_Handle_Square_Bracket_Queries()
+    {
+        // Arrange - index the workspace first
+        await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
+        
+        // Act - search for [Fact] attribute (common in test files)
+        var result = await _tool.ExecuteAsync(
+            query: "[Fact]",
+            workspacePath: _testWorkspacePath,
+            filePattern: null,
+            extensions: null,
+            contextLines: 2,
+            maxResults: 10);
+        
+        // Assert - should not throw and should return results
+        result.Should().NotBeNull();
+        
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        // Check that the query was handled successfully
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        
+        // The query should be preserved as-is
+        var query = response.GetProperty("query");
+        query.GetProperty("text").GetString().Should().Be("[Fact]");
+        
+        // Check that we got a valid response (may or may not have results depending on indexed content)
+        var summary = response.GetProperty("summary");
+        summary.Should().NotBeNull();
+        summary.GetProperty("totalHits").Should().NotBeNull();
+        summary.GetProperty("returnedResults").Should().NotBeNull();
+    }
+
+    [Fact]
+    public async Task Should_Handle_Theory_Attribute_Query()
+    {
+        // Arrange - index the workspace first
+        await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
+        
+        // Act - search for [Theory] attribute
+        var result = await _tool.ExecuteAsync(
+            query: "[Theory]",
+            workspacePath: _testWorkspacePath,
+            filePattern: null,
+            extensions: null,
+            contextLines: 0,
+            maxResults: 10);
+        
+        // Assert - should not throw
+        result.Should().NotBeNull();
+        
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        // Check successful handling
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("query").GetProperty("text").GetString().Should().Be("[Theory]");
+    }
+
+    [Fact]
+    public async Task Should_Handle_Complex_Square_Bracket_Query()
+    {
+        // Arrange - index the workspace first
+        await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
+        
+        // Act - search for more complex pattern with square brackets
+        var result = await _tool.ExecuteAsync(
+            query: "[Fact] test",
+            workspacePath: _testWorkspacePath,
+            filePattern: null,
+            extensions: null,
+            contextLines: 0,
+            maxResults: 10);
+        
+        // Assert - should not throw
+        result.Should().NotBeNull();
+        
+        var json = JsonSerializer.Serialize(result, new JsonSerializerOptions 
+        { 
+            WriteIndented = true,
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        });
+        
+        var response = JsonDocument.Parse(json).RootElement;
+        
+        // Check successful handling
+        response.GetProperty("success").GetBoolean().Should().BeTrue();
+        response.GetProperty("query").GetProperty("text").GetString().Should().Be("[Fact] test");
+    }
 }

@@ -19,8 +19,8 @@ public class EscapeQueryTextTests
         // Test cases
         var testCases = new[]
         {
-            ("[HttpGet]", "\\[HttpGet\\]"),
-            ("[HttpGet", "\\[HttpGet"),
+            ("[HttpGet]", "[HttpGet]"), // Square brackets are no longer escaped
+            ("[HttpGet", "[HttpGet"),
             ("api/ser-forms/offboarding/approve", "api\\/ser\\-forms\\/offboarding\\/approve"),
             ("GetNetPromoterScores()", "GetNetPromoterScores\\(\\)"),
             ("Task<IEnumerable<string>>", "Task\\<IEnumerable\\<string\\>\\>"),
@@ -36,9 +36,7 @@ public class EscapeQueryTextTests
             var result = escapeMethod.Invoke(null, new object[] { input })?.ToString();
             Assert.NotNull(result);
             
-            // Check that all special characters are escaped
-            if (input.Contains('[')) Assert.Contains("\\[", result);
-            if (input.Contains(']')) Assert.Contains("\\]", result);
+            // Check that all special characters are escaped (except square brackets)
             if (input.Contains('(')) Assert.Contains("\\(", result);
             if (input.Contains(')')) Assert.Contains("\\)", result);
             if (input.Contains('<')) Assert.Contains("\\<", result);
@@ -50,7 +48,17 @@ public class EscapeQueryTextTests
             if (input.Contains('&')) Assert.Contains("\\&", result);
             if (input.Contains('\\')) Assert.Contains("\\\\", result);
             
-            // @ should not be escaped
+            // Square brackets and @ should not be escaped
+            if (input.Contains('['))
+            {
+                Assert.Contains("[", result);
+                Assert.DoesNotContain("\\[", result);
+            }
+            if (input.Contains(']'))
+            {
+                Assert.Contains("]", result);
+                Assert.DoesNotContain("\\]", result);
+            }
             if (input.Contains('@'))
             {
                 Assert.Contains("@", result);
