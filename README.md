@@ -343,14 +343,23 @@ For optimal Claude Code experience across ALL your projects, add these patterns 
 
 ### Efficient Search Patterns
 1. **Index first**: `mcp__codesearch__index_workspace` (required once per session)
-2. **Search content**: `text_search --query "pattern" --contextLines 3`
-3. **Explore results**: Use hotspots and insights from summary mode
-4. **Drill down**: Use provided actions or `responseMode: "full"` only when needed
+2. **Discover workflows**: `workflow_discovery --goal "your task"` (learn tool chains)
+3. **Search content**: `text_search --query "pattern" --contextLines 3` (standardized parameter)
+4. **Explore results**: Use hotspots and insights from summary mode
+5. **Drill down**: Use provided actions or `responseMode: "full"` only when needed
 
 ### Memory System Workflow  
 1. **Start sessions**: `recall_context --query "what I'm working on"`
-2. **Store findings**: `store_memory --type "TechnicalDebt" --content "..."`  
-3. **Find related**: `search_memories --query "authentication"`
+2. **Natural language**: `unified_memory --command "remember that UserService needs refactoring"`
+3. **Store findings**: `store_memory --type "TechnicalDebt" --content "..."`  
+4. **Find related**: `search_memories --query "authentication"`
+5. **Semantic search**: `semantic_search --query "performance issues in login"`
+
+### AI-Optimized Features
+- **Unified responses**: All tools follow consistent format for easy parsing
+- **Progressive disclosure**: Automatic summary mode at 5000 tokens
+- **Actionable errors**: Get specific recovery steps, not generic messages
+- **Parameter standardization**: Use `query` for all search tools
 ```
 
 Copy this guidance to your global configuration for consistent tool usage across all projects.
