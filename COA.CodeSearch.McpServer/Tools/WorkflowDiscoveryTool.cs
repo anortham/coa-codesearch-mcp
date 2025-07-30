@@ -77,13 +77,42 @@ public class WorkflowDiscoveryTool : ITool
     private List<WorkflowInfo> GetWorkflowsForGoal(string goal)
     {
         var allWorkflows = GetAllWorkflows();
-        var lowerGoal = goal.ToLowerInvariant();
+        var dynamicWorkflows = GetDynamicWorkflowsForGoal(goal);
+        var combinedWorkflows = new List<WorkflowInfo>();
         
-        return allWorkflows.Where(w => 
-            w.Description.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase) ||
-            w.UseCases.Any(uc => uc.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase)) ||
-            w.Name.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase)
-        ).ToList();
+        // Add dynamic workflows first (higher priority)
+        combinedWorkflows.AddRange(dynamicWorkflows);
+        
+        // Then add matching predefined workflows
+        var lowerGoal = goal.ToLowerInvariant();
+        var keywords = ExtractKeywords(lowerGoal);
+        
+        var matchingWorkflows = allWorkflows.Where(w => 
+        {
+            // Direct match in description, name, or use cases
+            if (w.Description.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase) ||
+                w.UseCases.Any(uc => uc.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase)) ||
+                w.Name.Contains(lowerGoal, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+            
+            // Keyword matching for better flexibility
+            return keywords.Any(keyword => 
+                w.Description.Contains(keyword, StringComparison.OrdinalIgnoreCase) ||
+                w.UseCases.Any(uc => uc.Contains(keyword, StringComparison.OrdinalIgnoreCase)) ||
+                w.Name.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        });
+        
+        combinedWorkflows.AddRange(matchingWorkflows);
+        
+        // If no matches found, suggest a general search workflow
+        if (!combinedWorkflows.Any())
+        {
+            combinedWorkflows.Add(CreateGeneralSearchWorkflow(goal));
+        }
+        
+        return combinedWorkflows.Distinct().ToList();
     }
     
     private List<WorkflowInfo> GetAllWorkflows()
@@ -272,6 +301,232 @@ public class WorkflowDiscoveryTool : ITool
                 }
             }
         };
+    }
+    
+    private List<string> ExtractKeywords(string goal)
+    {
+        // Extract meaningful keywords from the goal
+        var stopWords = new HashSet<string> { "find", "search", "for", "the", "a", "an", "to", "in", "of", "and", "or", "how", "where", "what", "when", "why", "all", "any" };
+        var words = goal.Split(' ', StringSplitOptions.RemoveEmptyEntries)
+            .Where(w => !stopWords.Contains(w.ToLowerInvariant()) && w.Length > 2)
+            .ToList();
+        
+        return words;
+    }
+    
+    private List<WorkflowInfo> GetDynamicWorkflowsForGoal(string goal)
+    {
+        var workflows = new List<WorkflowInfo>();
+        var lowerGoal = goal.ToLowerInvariant();
+        
+        // Authentication/security related goals
+        if (ContainsAny(lowerGoal, "auth", "login", "security", "password", "token", "oauth", "jwt"))
+        {
+            workflows.Add(new WorkflowInfo
+            {
+                Name = "Authentication Code Discovery",
+                Description = "Find and analyze authentication-related code",
+                Category = "Security",
+                Steps = new List<WorkflowStep>
+                {
+                    new WorkflowStep
+                    {
+                        Tool = "index_workspace",
+                        Required = true,
+                        Description = "Index the codebase",
+                        EstimatedTime = "10-60 seconds"
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "batch_operations",
+                        Required = true,
+                        Description = "Search for authentication patterns",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["operations"] = new[]
+                            {
+                                new { operation = "text_search", query = "authenticate OR auth OR login", searchType = "standard" },
+                                new { operation = "text_search", query = "password OR token OR jwt", searchType = "standard" },
+                                new { operation = "file_search", query = "*auth*", searchType = "wildcard" },
+                                new { operation = "file_search", query = "*login*", searchType = "wildcard" }
+                            }
+                        }
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "pattern_detector",
+                        Required = false,
+                        Description = "Analyze for security patterns",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["patternTypes"] = new[] { "security" }
+                        }
+                    }
+                },
+                UseCases = new List<string>
+                {
+                    "Security audit",
+                    "Understanding authentication flow",
+                    "Finding login implementations",
+                    "Reviewing security patterns"
+                }
+            });
+        }
+        
+        // Performance related goals
+        if (ContainsAny(lowerGoal, "performance", "slow", "optimize", "bottleneck", "speed"))
+        {
+            workflows.Add(new WorkflowInfo
+            {
+                Name = "Performance Analysis Workflow",
+                Description = "Identify performance issues and optimization opportunities",
+                Category = "Analysis",
+                Steps = new List<WorkflowStep>
+                {
+                    new WorkflowStep
+                    {
+                        Tool = "index_workspace",
+                        Required = true,
+                        Description = "Index the codebase"
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "pattern_detector",
+                        Required = true,
+                        Description = "Detect performance anti-patterns",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["patternTypes"] = new[] { "performance" }
+                        }
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "text_search",
+                        Required = false,
+                        Description = "Search for performance-related code",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["query"] = "async OR await OR Task OR parallel OR cache"
+                        }
+                    }
+                },
+                UseCases = new List<string>
+                {
+                    "Performance optimization",
+                    "Finding bottlenecks",
+                    "Identifying slow code",
+                    "Async pattern analysis"
+                }
+            });
+        }
+        
+        // Bug/error related goals
+        if (ContainsAny(lowerGoal, "bug", "error", "exception", "fix", "issue", "problem"))
+        {
+            workflows.Add(new WorkflowInfo
+            {
+                Name = "Bug Investigation Workflow",
+                Description = "Find and analyze potential bugs and error handling",
+                Category = "Debugging",
+                Steps = new List<WorkflowStep>
+                {
+                    new WorkflowStep
+                    {
+                        Tool = "index_workspace",
+                        Required = true,
+                        Description = "Index the codebase"
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "batch_operations",
+                        Required = true,
+                        Description = "Search for error patterns",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["operations"] = new[]
+                            {
+                                new { operation = "text_search", query = "TODO OR FIXME OR HACK OR BUG", searchType = "standard" },
+                                new { operation = "text_search", query = "catch OR throw OR exception", searchType = "standard" },
+                                new { operation = "text_search", query = "error OR fail", searchType = "standard" }
+                            }
+                        }
+                    },
+                    new WorkflowStep
+                    {
+                        Tool = "recent_files",
+                        Required = false,
+                        Description = "Check recently modified files",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["timeFrame"] = "7d"
+                        }
+                    }
+                },
+                UseCases = new List<string>
+                {
+                    "Bug hunting",
+                    "Error analysis",
+                    "Finding TODOs and FIXMEs",
+                    "Exception handling review"
+                }
+            });
+        }
+        
+        return workflows;
+    }
+    
+    private WorkflowInfo CreateGeneralSearchWorkflow(string goal)
+    {
+        return new WorkflowInfo
+        {
+            Name = $"Custom Search: {goal}",
+            Description = $"General workflow for finding information about: {goal}",
+            Category = "Search",
+            Steps = new List<WorkflowStep>
+            {
+                new WorkflowStep
+                {
+                    Tool = "index_workspace",
+                    Required = true,
+                    Description = "Ensure workspace is indexed",
+                    EstimatedTime = "10-60 seconds"
+                },
+                new WorkflowStep
+                {
+                    Tool = "search_assistant",
+                    Required = true,
+                    Description = $"AI-guided search for: {goal}",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        ["goal"] = goal,
+                        ["workspacePath"] = "{workspace_path}"
+                    }
+                },
+                new WorkflowStep
+                {
+                    Tool = "store_memory",
+                    Required = false,
+                    Description = "Store important findings",
+                    Parameters = new Dictionary<string, object>
+                    {
+                        ["memoryType"] = "ProjectInsight",
+                        ["content"] = "{findings}"
+                    }
+                }
+            },
+            UseCases = new List<string>
+            {
+                "Custom searches",
+                "Exploratory analysis",
+                "Understanding unfamiliar codebases",
+                "Finding specific patterns"
+            }
+        };
+    }
+    
+    private bool ContainsAny(string text, params string[] keywords)
+    {
+        return keywords.Any(keyword => text.Contains(keyword, StringComparison.OrdinalIgnoreCase));
     }
 }
 
