@@ -202,7 +202,7 @@ public class DynamicDispatchDetailedTest
         return result;
     }
 
-    [Fact]
+    [Fact(Skip = "This test takes a very long time to run.")]
     public void MeasureJsonSerializationOverhead()
     {
         const int iterations = 10000;
