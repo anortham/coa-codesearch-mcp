@@ -135,6 +135,7 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
                     
                     return new BatchOperationDefinition
                     {
+                        Operation = opType,
                         OperationType = opType,
                         Parameters = parameters
                     };
