@@ -198,15 +198,15 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             insights.Add($"Total size of modified files: {FormatFileSize(data.totalSize)}");
             
             // Extension patterns
-            if (data.extensionCounts.Count == 1)
+            var extensionCountsDict = (Dictionary<string, int>)data.extensionCounts;
+            if (extensionCountsDict.Count == 1)
             {
-                var ext = data.extensionCounts.First();
+                var ext = extensionCountsDict.First();
                 insights.Add($"All modifications are {ext.Key} files");
             }
-            else if (data.extensionCounts.Count > 1)
+            else if (extensionCountsDict.Count > 1)
             {
-                var extensionCounts = (Dictionary<string, int>)data.extensionCounts;
-                var topExt = extensionCounts.OrderByDescending(kv => kv.Value).First();
+                var topExt = extensionCountsDict.OrderByDescending(kv => kv.Value).First();
                 insights.Add($"Most modified: {topExt.Key} files ({topExt.Value} files)");
             }
             
