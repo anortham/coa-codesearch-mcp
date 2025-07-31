@@ -1011,14 +1011,19 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 if (HasProblematicPattern(queryText))
                 {
                     Logger.LogDebug("Query '{Query}' contains problematic patterns, using phrase query approach", queryText);
-                    // Use phrase query for problematic patterns as it handles them better
-                    var phraseQuery = new PhraseQuery();
-                    var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    foreach (var term in terms)
+                    // Use the query parser with phrase syntax for problematic patterns
+                    var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                    standardParser.DefaultOperator = Operator.AND;
+                    try
                     {
-                        phraseQuery.Add(new Term("content", term.ToLowerInvariant()));
+                        // Wrap in quotes to make it a phrase query
+                        contentQuery = standardParser.Parse($"\"{queryText}\"");
                     }
-                    contentQuery = phraseQuery;
+                    catch
+                    {
+                        // If even phrase parsing fails, fall back to term query
+                        contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
+                    }
                 }
                 else
                 {
@@ -1294,14 +1299,16 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             if (HasProblematicPattern(query) && searchType != "fuzzy" && searchType != "phrase")
             {
                 Logger.LogDebug("Alternate search query '{Query}' contains problematic patterns, using phrase query", query);
-                // Use phrase query for problematic patterns
-                var phraseQuery = new PhraseQuery();
-                var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var term in terms)
+                // Use the query parser with phrase syntax for problematic patterns
+                try
                 {
-                    phraseQuery.Add(new Term("content", term.ToLowerInvariant()));
+                    luceneQuery = parser.Parse($"\"{query}\"");
                 }
-                luceneQuery = phraseQuery;
+                catch
+                {
+                    // Fall back to term query if phrase parsing fails
+                    luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
+                }
             }
             else
             {
