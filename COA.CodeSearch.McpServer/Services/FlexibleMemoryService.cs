@@ -890,44 +890,33 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     {
         try
         {
-            // For precise search (no query expansion), use phrase queries or exact term matching
+            // For precise search (no query expansion), use standard analyzer but no synonyms
             if (!enableQueryExpansion)
             {
                 _logger.LogInformation("Building precise query without synonym expansion for: {Query}", queryText);
                 
-                // Build a boolean query that searches for the exact terms
-                var booleanQuery = new BooleanQuery();
-                
-                // Split the query into terms
-                var terms = queryText.ToLower().Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
-                
-                if (terms.Length == 1)
-                {
-                    // Single term - use exact term query on raw field
-                    var term = terms[0];
-                    
-                    // Search in raw fields for exact matching (no analyzer)
-                    booleanQuery.Add(new TermQuery(new Term("content.raw", queryText)), Occur.SHOULD);
-                    booleanQuery.Add(new TermQuery(new Term("type", term)), Occur.SHOULD);
-                    
-                    _logger.LogInformation("Created exact term query for: {Term}", term);
-                }
-                else
-                {
-                    // Multiple terms - search for exact phrase in raw field
-                    // Use the original query text for exact matching
-                    booleanQuery.Add(new TermQuery(new Term("content.raw", queryText)), Occur.SHOULD);
-                    
-                    // Also try searching in type field for single words
-                    foreach (var term in terms)
+                // Use MultiFieldQueryParser with StandardAnalyzer (no synonyms)
+                // This allows normal tokenization and searching but without synonym expansion
+                var preciseAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+                var preciseParser = new MultiFieldQueryParser(
+                    LuceneVersion.LUCENE_48,
+                    new[] { "content", "type", "file", "_all" },
+                    preciseAnalyzer,
+                    new Dictionary<string, float>
                     {
-                        booleanQuery.Add(new TermQuery(new Term("type", term)), Occur.SHOULD);
-                    }
-                    
-                    _logger.LogInformation("Created precise query for: {Query}", queryText);
-                }
+                        { "content", 2.0f },
+                        { "type", 1.5f },
+                        { "file", 1.0f },
+                        { "_all", 0.5f }
+                    });
                 
-                return booleanQuery;
+                preciseParser.DefaultOperator = QueryParserBase.AND_OPERATOR;
+                preciseParser.AllowLeadingWildcard = true;
+                
+                var preciseQuery = preciseParser.Parse(queryText);
+                _logger.LogInformation("Created precise query without synonyms for: {Query}", queryText);
+                
+                return preciseQuery;
             }
             
             // For fuzzy search (with query expansion), use the normal analyzer

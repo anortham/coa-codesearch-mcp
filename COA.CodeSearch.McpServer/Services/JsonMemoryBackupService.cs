@@ -216,6 +216,8 @@ public class JsonMemoryBackupService : IDisposable
             if (types != null && types.Length > 0)
             {
                 memoriesToRestore = memoriesToRestore.Where(m => types.Contains(m.Type)).ToList();
+                _logger.LogInformation("Filtered to {Count} memories by types: {Types}", 
+                    memoriesToRestore.Count, string.Join(", ", types));
             }
             else
             {
@@ -227,8 +229,14 @@ public class JsonMemoryBackupService : IDisposable
                     memoriesToRestore = memoriesToRestore.Where(m => 
                         GetWorkspaceForType(m.Type) != localWorkspace
                     ).ToList();
+                    _logger.LogInformation("Filtered to {Count} project memories (excluding local)", 
+                        memoriesToRestore.Count);
                 }
-                // If includeLocal is true, restore everything
+                else
+                {
+                    _logger.LogInformation("Restoring all {Count} memories (including local)", 
+                        memoriesToRestore.Count);
+                }
             }
             
             // Group by workspace and create snapshots for rollback
