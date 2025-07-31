@@ -511,6 +511,13 @@ public class UnifiedMemoryService
                 };
             }
 
+            // Strip common prefixes like "memory" from the source and target
+            source = Regex.Replace(source, @"^memory\s+", "", RegexOptions.IgnoreCase).Trim();
+            target = Regex.Replace(target, @"^memory\s+", "", RegexOptions.IgnoreCase).Trim();
+            
+            // Also strip any trailing "as [relationship]" from target
+            target = Regex.Replace(target, @"\s+as\s+.+$", "", RegexOptions.IgnoreCase).Trim();
+
             // First, try to find memories by the descriptions
             if (_memoryTools == null)
             {
@@ -522,10 +529,39 @@ public class UnifiedMemoryService
                 };
             }
 
-            var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, null, null, null, null, true, 1);
-            var targetMemories = await _memoryTools.SearchMemoriesAsync(target, null, null, null, null, true, 1);
+            // Check if source/target are GUIDs (memory IDs)
+            var guidPattern = @"^[a-f0-9]{8}(-[a-f0-9]{4}){3}-[a-f0-9]{12}$";
+            var isSourceGuid = Regex.IsMatch(source, guidPattern, RegexOptions.IgnoreCase);
+            var isTargetGuid = Regex.IsMatch(target, guidPattern, RegexOptions.IgnoreCase);
+            
+            FlexibleMemoryEntry? sourceMemory = null;
+            FlexibleMemoryEntry? targetMemory = null;
+            
+            // Get source memory by ID or search
+            if (isSourceGuid)
+            {
+                var sourceResult = await _memoryTools.GetMemoryByIdAsync(source);
+                sourceMemory = sourceResult?.Success == true ? sourceResult.Memory : null;
+            }
+            else
+            {
+                var sourceMemories = await _memoryTools.SearchMemoriesAsync(source, null, null, null, null, true, 1);
+                sourceMemory = sourceMemories?.Memories?.FirstOrDefault();
+            }
+            
+            // Get target memory by ID or search
+            if (isTargetGuid)
+            {
+                var targetResult = await _memoryTools.GetMemoryByIdAsync(target);
+                targetMemory = targetResult?.Success == true ? targetResult.Memory : null;
+            }
+            else
+            {
+                var targetMemories = await _memoryTools.SearchMemoriesAsync(target, null, null, null, null, true, 1);
+                targetMemory = targetMemories?.Memories?.FirstOrDefault();
+            }
 
-            if (sourceMemories?.Memories == null || !sourceMemories.Memories.Any())
+            if (sourceMemory == null)
             {
                 return new UnifiedMemoryResult
                 {
@@ -535,7 +571,7 @@ public class UnifiedMemoryService
                 };
             }
 
-            if (targetMemories?.Memories == null || !targetMemories.Memories.Any())
+            if (targetMemory == null)
             {
                 return new UnifiedMemoryResult
                 {
@@ -544,9 +580,6 @@ public class UnifiedMemoryService
                     Message = $"Could not find memory matching: '{target}'"
                 };
             }
-
-            var sourceMemory = sourceMemories.Memories.First();
-            var targetMemory = targetMemories.Memories.First();
 
             // Determine relationship type from content
             var relationshipType = "relatedTo"; // default
