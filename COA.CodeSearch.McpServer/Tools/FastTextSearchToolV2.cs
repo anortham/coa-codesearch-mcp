@@ -1007,39 +1007,29 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 break;
             
             default: // standard
-                var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                standardParser.DefaultOperator = Operator.AND;
-                var escapedQuery = EscapeQueryText(queryText);
-                try
+                // Check for problematic patterns upfront
+                if (HasProblematicPattern(queryText))
                 {
-                    contentQuery = standardParser.Parse(escapedQuery);
+                    Logger.LogDebug("Query '{Query}' contains problematic patterns, using wildcard approach", queryText);
+                    var wildcardQuery = queryText
+                        .Replace("[", "\\[").Replace("]", "\\]")
+                        .Replace("{", "\\{").Replace("}", "\\}");
+                    contentQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
                 }
-                catch (ParseException ex)
+                else
                 {
-                    Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}, trying alternative approach", queryText);
-                    
-                    // If the query contains square brackets or unmatched braces, try a different approach
-                    if (queryText.Contains('[') || queryText.Contains(']') || 
-                        HasUnmatchedBraces(queryText))
+                    var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                    standardParser.DefaultOperator = Operator.AND;
+                    var escapedQuery = EscapeQueryText(queryText);
+                    try
                     {
-                        // For queries with special brackets/braces, use a phrase query or wildcard query
-                        try
-                        {
-                            // Try as a phrase query first
-                            contentQuery = standardParser.Parse($"\"{queryText}\"");
-                        }
-                        catch
-                        {
-                            // If phrase query fails, create a wildcard query with the literal text
-                            var wildcardQuery = queryText
-                                .Replace("[", "\\[").Replace("]", "\\]")
-                                .Replace("{", "\\{").Replace("}", "\\}");
-                            contentQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
-                        }
+                        contentQuery = standardParser.Parse(escapedQuery);
                     }
-                    else
+                    catch (ParseException ex)
                     {
-                        // For other cases, treat as a simple term query
+                        Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}, trying alternative approach", queryText);
+                        
+                        // Fall back to simple term query for unexpected parse errors
                         contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
                     }
                 }
@@ -1212,6 +1202,31 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return openBraces != closeBraces;
     }
 
+    private static bool HasProblematicPattern(string query)
+    {
+        // Check for patterns that cause Lucene parse errors
+        if (string.IsNullOrWhiteSpace(query))
+            return false;
+
+        // Unmatched braces
+        if (HasUnmatchedBraces(query))
+            return true;
+
+        // Square brackets (often problematic)
+        if (query.Contains('[') || query.Contains(']'))
+            return true;
+
+        // Escaped braces that still cause issues
+        var trimmed = query.Trim();
+        if (trimmed.EndsWith('{') || trimmed.StartsWith('}') || 
+            trimmed == "{" || trimmed == "}" || trimmed == "{ }")
+            return true;
+
+        // Other known problematic patterns can be added here
+        
+        return false;
+    }
+
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
@@ -1270,34 +1285,36 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             parser.AllowLeadingWildcard = true;
             
             Query luceneQuery;
-            try
+            
+            // Check for problematic patterns first
+            if (HasProblematicPattern(query) && searchType != "fuzzy" && searchType != "phrase")
             {
-                if (searchType == "fuzzy" && !query.Contains("~"))
-                {
-                    luceneQuery = parser.Parse(EscapeQueryText(query) + "~");
-                }
-                else if (searchType == "phrase")
-                {
-                    luceneQuery = parser.Parse($"\"{EscapeQueryText(query)}\"");
-                }
-                else
-                {
-                    luceneQuery = parser.Parse(EscapeQueryText(query));
-                }
+                Logger.LogDebug("Alternate search query '{Query}' contains problematic patterns, using wildcard", query);
+                var wildcardQuery = query
+                    .Replace("[", "\\[").Replace("]", "\\]")
+                    .Replace("{", "\\{").Replace("}", "\\}");
+                luceneQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
             }
-            catch (ParseException ex)
+            else
             {
-                Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
-                // If the query contains square brackets or unmatched braces, use wildcard approach
-                if (query.Contains('[') || query.Contains(']') || HasUnmatchedBraces(query))
+                try
                 {
-                    var wildcardQuery = query
-                        .Replace("[", "\\[").Replace("]", "\\]")
-                        .Replace("{", "\\{").Replace("}", "\\}");
-                    luceneQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
+                    if (searchType == "fuzzy" && !query.Contains("~"))
+                    {
+                        luceneQuery = parser.Parse(EscapeQueryText(query) + "~");
+                    }
+                    else if (searchType == "phrase")
+                    {
+                        luceneQuery = parser.Parse($"\"{EscapeQueryText(query)}\"");
+                    }
+                    else
+                    {
+                        luceneQuery = parser.Parse(EscapeQueryText(query));
+                    }
                 }
-                else
+                catch (ParseException ex)
                 {
+                    Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
                     // Fall back to term query
                     luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
                 }
