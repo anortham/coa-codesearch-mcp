@@ -185,11 +185,11 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             insights.Add($"Found {results.Count} files modified in the last {data.timeFrame}");
             
             // Activity level insight
-            if (data.timeBuckets.lastHour > 0)
+            if (data.timeBuckets != null && data.timeBuckets.lastHour > 0)
             {
                 insights.Add($"🔥 Active development: {data.timeBuckets.lastHour} files modified in the last hour");
             }
-            else if (data.timeBuckets.last24Hours > 10)
+            else if (data.timeBuckets != null && data.timeBuckets.last24Hours > 10)
             {
                 insights.Add($"High activity: {data.timeBuckets.last24Hours} files changed today");
             }
@@ -198,20 +198,23 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             insights.Add($"Total size of modified files: {FormatFileSize(data.totalSize)}");
             
             // Extension patterns
-            var extensionCountsDict = (Dictionary<string, int>)data.extensionCounts;
-            if (extensionCountsDict.Count == 1)
+            if (data.extensionCounts != null)
             {
-                var ext = extensionCountsDict.First();
-                insights.Add($"All modifications are {ext.Key} files");
-            }
-            else if (extensionCountsDict.Count > 1)
-            {
-                var topExt = extensionCountsDict.OrderByDescending(kv => kv.Value).First();
-                insights.Add($"Most modified: {topExt.Key} files ({topExt.Value} files)");
+                var extensionCountsDict = (Dictionary<string, int>)data.extensionCounts;
+                if (extensionCountsDict.Count == 1)
+                {
+                    var ext = extensionCountsDict.First();
+                    insights.Add($"All modifications are {ext.Key} files");
+                }
+                else if (extensionCountsDict.Count > 1)
+                {
+                    var topExt = extensionCountsDict.OrderByDescending(kv => kv.Value).First();
+                    insights.Add($"Most modified: {topExt.Key} files ({topExt.Value} files)");
+                }
             }
             
             // Directory concentration
-            if (data.directoryGroups.Count > 0)
+            if (data.directoryGroups != null && data.directoryGroups.Count > 0)
             {
                 var topDir = data.directoryGroups[0];
                 if (topDir.fileCount > results.Count * 0.5)
@@ -221,12 +224,12 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             }
             
             // Modification patterns
-            if (data.modificationPatterns.burstActivity)
+            if (data.modificationPatterns != null && data.modificationPatterns.burstActivity)
             {
                 insights.Add("Burst activity detected - multiple files modified together");
             }
             
-            if (data.modificationPatterns.workingHours)
+            if (data.modificationPatterns != null && data.modificationPatterns.workingHours)
             {
                 insights.Add($"Most modifications during {data.modificationPatterns.peakHour}:00 hours");
             }
@@ -282,7 +285,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             }
             
             // Analyze hot directory
-            if (data.directoryGroups.Count > 0 && data.directoryGroups[0].fileCount > 5)
+            if (data.directoryGroups != null && data.directoryGroups.Count > 0 && data.directoryGroups[0].fileCount > 5)
             {
                 var hotDir = data.directoryGroups[0];
                 actions.Add(new AIAction
@@ -324,7 +327,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             }
             
             // Store insight about activity
-            if (data.modificationPatterns.burstActivity && results.Count > 10)
+            if (data.modificationPatterns != null && data.modificationPatterns.burstActivity && results.Count > 10)
             {
                 actions.Add(new AIAction
                 {
