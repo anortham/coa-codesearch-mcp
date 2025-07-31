@@ -1,6 +1,7 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
+using Lucene.Net.Store;
 using Microsoft.Extensions.Logging;
 using System.Security;
 using System.Text.Json;
@@ -53,7 +54,7 @@ public class JsonMemoryBackupService : IDisposable
             throw new SecurityException($"Backup directory path '{normalizedBackupPath}' is outside the allowed base path '{normalizedBasePath}'");
         }
         
-        Directory.CreateDirectory(_backupDirectory);
+        System.IO.Directory.CreateDirectory(_backupDirectory);
     }
     
     /// <summary>
@@ -73,7 +74,7 @@ public class JsonMemoryBackupService : IDisposable
             var tempBackupPath = backupPath + ".tmp";
             
             // Default types if not specified
-            types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "TechnicalDebt" };
             
             if (includeLocal)
             {
@@ -163,7 +164,7 @@ public class JsonMemoryBackupService : IDisposable
             // If no file specified, use the most recent backup
             if (string.IsNullOrEmpty(backupFile))
             {
-                var files = Directory.GetFiles(_backupDirectory, "memories_*.json")
+                var files = System.IO.Directory.GetFiles(_backupDirectory, "memories_*.json")
                     .OrderByDescending(f => f)
                     .ToArray();
                     
@@ -200,7 +201,7 @@ public class JsonMemoryBackupService : IDisposable
             _logger.LogInformation("Restoring from backup with {Count} memories", backup.Memories.Count);
             
             // Default types if not specified
-            types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight" };
+            types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "TechnicalDebt" };
             
             if (includeLocal)
             {
@@ -282,7 +283,7 @@ public class JsonMemoryBackupService : IDisposable
     /// </summary>
     public Task<List<BackupFileInfo>> ListBackupsAsync()
     {
-        var files = Directory.GetFiles(_backupDirectory, "memories_*.json")
+        var files = System.IO.Directory.GetFiles(_backupDirectory, "memories_*.json")
             .Select(f => new FileInfo(f))
             .OrderByDescending(f => f.Name)
             .Select(f => new BackupFileInfo
@@ -307,6 +308,23 @@ public class JsonMemoryBackupService : IDisposable
         
         try
         {
+            // Check if index exists before trying to read from it
+            var indexPath = workspace;
+            if (System.IO.Directory.Exists(indexPath))
+            {
+                using var directory = FSDirectory.Open(indexPath);
+                if (!DirectoryReader.IndexExists(directory))
+                {
+                    _logger.LogDebug("Index does not exist at {Workspace} for type {Type}, skipping", workspace, type);
+                    return memories;
+                }
+            }
+            else
+            {
+                _logger.LogDebug("Index directory does not exist at {Workspace} for type {Type}, skipping", workspace, type);
+                return memories;
+            }
+            
             var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
             var query = new TermQuery(new Term("type", type));
             var collector = TopScoreDocCollector.Create(10000, true);
@@ -320,6 +338,9 @@ public class JsonMemoryBackupService : IDisposable
                 var memory = DocumentToMemory(doc);
                 memories.Add(memory);
             }
+            
+            _logger.LogDebug("Successfully collected {Count} memories of type {Type} from {Workspace}", 
+                memories.Count, type, workspace);
         }
         catch (Exception ex)
         {
@@ -377,6 +398,8 @@ public class JsonMemoryBackupService : IDisposable
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        // Add raw field for precise searching (not analyzed)
+        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
         doc.Add(new StringField("created", memory.Created.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("modified", memory.Modified.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
@@ -433,7 +456,8 @@ public class JsonMemoryBackupService : IDisposable
         var isProjectType = type is "ArchitecturalDecision" 
                                  or "CodePattern" 
                                  or "SecurityRule" 
-                                 or "ProjectInsight";
+                                 or "ProjectInsight"
+                                 or "TechnicalDebt";
         
         return isProjectType
             ? _pathResolutionService.GetProjectMemoryPath()
@@ -693,6 +717,8 @@ internal class WorkspaceSnapshotTracker
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        // Add raw field for precise searching (not analyzed)
+        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
         doc.Add(new StringField("created", memory.Created.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("modified", memory.Modified.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));

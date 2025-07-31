@@ -397,6 +397,9 @@ public class UnifiedMemoryService
             else if (_memoryTools != null)
             {
                 // Default to regular text search
+                // Use enableQueryExpansion: false for Precise mode, true for regular Text mode
+                var enableExpansion = searchMode != SearchMode.Precise;
+                
                 var memoryResult = await _memoryTools.SearchMemoriesAsync(
                     command.Content, // query
                     null, // types
@@ -407,7 +410,8 @@ public class UnifiedMemoryService
                     20, // maxResults
                     false, // includeArchived
                     true, // boostRecent
-                    true // boostFrequent
+                    true, // boostFrequent
+                    enableExpansion // enableQueryExpansion
                 );
                 results.AddRange(memoryResult.Memories);
             }
@@ -420,17 +424,28 @@ public class UnifiedMemoryService
                 // This would require additional implementation
             }
 
+            // Build helpful message and hints based on search mode
+            var searchModeHint = searchMode switch
+            {
+                SearchMode.Precise => "Using precise search (no synonyms). Add 'about' or 'similar' for fuzzy search.",
+                SearchMode.Semantic => "Using semantic search (concepts). Add 'exact' or 'precise' for literal matches.",
+                SearchMode.Hybrid => "Using hybrid search. Add 'exact' for precise matches or 'similar' for concepts.",
+                _ => "Add 'exact' for precise matches, 'similar' for concepts."
+            };
+
             return new UnifiedMemoryResult
             {
                 Success = true,
                 Action = "found",
                 Memories = results,
                 Highlights = highlights,
-                Message = $"Found {results.Count} memories using {searchMode} search",
+                Message = $"Found {results.Count} memories using {searchMode} search. {searchModeHint}",
                 Metadata = new Dictionary<string, object>
                 {
                     ["searchMode"] = searchMode.ToString(),
-                    ["resultCount"] = results.Count
+                    ["resultCount"] = results.Count,
+                    ["searchHint"] = searchModeHint,
+                    ["synonymExpansion"] = searchMode == SearchMode.Text  // Regular text search uses synonyms
                 },
                 NextSteps = GenerateFindNextSteps(results, command)
             };
@@ -1576,6 +1591,10 @@ public class UnifiedMemoryService
     /// </summary>
     private SearchMode DetermineSearchMode(string content)
     {
+        // Use precise search when user wants exact matches (no synonym expansion)
+        if (ContainsAny(content, "exact", "precise", "specific", "literally", "exactly"))
+            return SearchMode.Precise;
+            
         // Use semantic search for conceptual/meaning-based queries
         if (ContainsAny(content, "concept", "meaning", "similar", "like", "related to", "about"))
             return SearchMode.Semantic;
@@ -1626,6 +1645,7 @@ public class UnifiedMemoryService
     private enum SearchMode
     {
         Text,
+        Precise,  // Text search without synonym expansion
         Semantic,
         Hybrid
     }

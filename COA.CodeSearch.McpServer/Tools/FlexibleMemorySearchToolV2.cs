@@ -55,6 +55,8 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         bool includeArchived = false,
         bool boostRecent = false,
         bool boostFrequent = false,
+        // Query expansion parameter
+        bool enableQueryExpansion = true,
         // Context awareness feature
         bool enableContextAwareness = true,
         string? currentFile = null,
@@ -92,6 +94,7 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
                 IncludeArchived = includeArchived,
                 BoostRecent = boostRecent,
                 BoostFrequent = boostFrequent,
+                EnableQueryExpansion = enableQueryExpansion,
                 EnableHighlighting = enableHighlighting,
                 MaxFragments = maxFragments,
                 FragmentSize = fragmentSize

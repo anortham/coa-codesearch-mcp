@@ -1752,6 +1752,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     parameters?.IncludeArchived ?? false,
                     parameters?.BoostRecent ?? false,
                     parameters?.BoostFrequent ?? false,
+                    parameters?.EnableQueryExpansion ?? true, // Query expansion parameter
                     parameters?.EnableContextAwareness ?? true,
                     parameters?.CurrentFile,
                     parameters?.RecentFiles,

@@ -181,7 +181,8 @@ public class FlexibleMemoryTools : ITool
         int maxResults = 50,
         bool includeArchived = false,
         bool boostRecent = false,
-        bool boostFrequent = false)
+        bool boostFrequent = false,
+        bool? enableQueryExpansion = null)
     {
         try
         {
@@ -195,7 +196,8 @@ public class FlexibleMemoryTools : ITool
                 MaxResults = maxResults,
                 IncludeArchived = includeArchived,
                 BoostRecent = boostRecent,
-                BoostFrequent = boostFrequent
+                BoostFrequent = boostFrequent,
+                EnableQueryExpansion = enableQueryExpansion
             };
             
             if (!string.IsNullOrEmpty(dateRange))
