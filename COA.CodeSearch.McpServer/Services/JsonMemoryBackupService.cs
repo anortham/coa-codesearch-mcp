@@ -83,13 +83,22 @@ public class JsonMemoryBackupService : IDisposable
             
             var allMemories = new List<MemoryBackupItem>();
             
-            // Collect memories from each workspace
+            // Collect memories from workspaces based on what types were requested
+            var workspacesToBackup = new HashSet<string>();
+            
+            // Determine which workspaces to backup based on types
             foreach (var type in types)
             {
                 var workspace = GetWorkspaceForType(type);
-                var memories = await CollectMemoriesAsync(workspace, type, cancellationToken);
+                workspacesToBackup.Add(workspace);
+            }
+            
+            // Collect ALL memories from each workspace (no type filtering)
+            foreach (var workspace in workspacesToBackup)
+            {
+                var memories = await CollectMemoriesAsync(workspace, cancellationToken);
                 allMemories.AddRange(memories);
-                _logger.LogInformation("Collected {Count} memories of type {Type}", memories.Count, type);
+                _logger.LogInformation("Collected {Count} memories from workspace {Workspace}", memories.Count, workspace);
             }
             
             // Write to temporary file first (atomic transaction)
@@ -301,7 +310,6 @@ public class JsonMemoryBackupService : IDisposable
     
     private async Task<List<MemoryBackupItem>> CollectMemoriesAsync(
         string workspace, 
-        string type,
         CancellationToken cancellationToken)
     {
         var memories = new List<MemoryBackupItem>();
@@ -315,18 +323,18 @@ public class JsonMemoryBackupService : IDisposable
                 using var directory = FSDirectory.Open(indexPath);
                 if (!DirectoryReader.IndexExists(directory))
                 {
-                    _logger.LogDebug("Index does not exist at {Workspace} for type {Type}, skipping", workspace, type);
+                    _logger.LogDebug("Index does not exist at {Workspace}, skipping", workspace);
                     return memories;
                 }
             }
             else
             {
-                _logger.LogDebug("Index directory does not exist at {Workspace} for type {Type}, skipping", workspace, type);
+                _logger.LogDebug("Index directory does not exist at {Workspace}, skipping", workspace);
                 return memories;
             }
             
             var searcher = await _luceneService.GetIndexSearcherAsync(workspace, cancellationToken);
-            var query = new TermQuery(new Term("type", type));
+            var query = new MatchAllDocsQuery(); // Get ALL memories, not filtered by type
             var collector = TopScoreDocCollector.Create(10000, true);
             searcher.Search(query, collector);
             
@@ -339,13 +347,13 @@ public class JsonMemoryBackupService : IDisposable
                 memories.Add(memory);
             }
             
-            _logger.LogDebug("Successfully collected {Count} memories of type {Type} from {Workspace}", 
-                memories.Count, type, workspace);
+            _logger.LogDebug("Successfully collected {Count} memories from {Workspace}", 
+                memories.Count, workspace);
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Failed to collect memories of type {Type} from {Workspace}", 
-                type, workspace);
+            _logger.LogWarning(ex, "Failed to collect memories from {Workspace}", 
+                workspace);
         }
         
         return memories;
