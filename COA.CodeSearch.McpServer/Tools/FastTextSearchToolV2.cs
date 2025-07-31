@@ -1010,11 +1010,15 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 // Check for problematic patterns upfront
                 if (HasProblematicPattern(queryText))
                 {
-                    Logger.LogDebug("Query '{Query}' contains problematic patterns, using wildcard approach", queryText);
-                    var wildcardQuery = queryText
-                        .Replace("[", "\\[").Replace("]", "\\]")
-                        .Replace("{", "\\{").Replace("}", "\\}");
-                    contentQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
+                    Logger.LogDebug("Query '{Query}' contains problematic patterns, using phrase query approach", queryText);
+                    // Use phrase query for problematic patterns as it handles them better
+                    var phraseQuery = new PhraseQuery();
+                    var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var term in terms)
+                    {
+                        phraseQuery.Add(new Term("content", term.ToLowerInvariant()));
+                    }
+                    contentQuery = phraseQuery;
                 }
                 else
                 {
@@ -1289,11 +1293,15 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             // Check for problematic patterns first
             if (HasProblematicPattern(query) && searchType != "fuzzy" && searchType != "phrase")
             {
-                Logger.LogDebug("Alternate search query '{Query}' contains problematic patterns, using wildcard", query);
-                var wildcardQuery = query
-                    .Replace("[", "\\[").Replace("]", "\\]")
-                    .Replace("{", "\\{").Replace("}", "\\}");
-                luceneQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
+                Logger.LogDebug("Alternate search query '{Query}' contains problematic patterns, using phrase query", query);
+                // Use phrase query for problematic patterns
+                var phraseQuery = new PhraseQuery();
+                var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var term in terms)
+                {
+                    phraseQuery.Add(new Term("content", term.ToLowerInvariant()));
+                }
+                luceneQuery = phraseQuery;
             }
             else
             {
