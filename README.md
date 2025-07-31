@@ -127,6 +127,13 @@ Add `.codesearch/` to `.gitignore`, except `backups/*.json` for team sharing.
 ## 🚀 Common Workflows
 
 ### First Time Setup
+
+**What you say to Claude:**
+- "Index this project for searching"
+- "What was I working on last time?"
+- "Show me how to get started with code search"
+
+**Tools Claude will use:**
 ```bash
 # Index your workspace
 index_workspace --workspacePath "C:/YourProject"
@@ -139,6 +146,17 @@ workflow_discovery --goal "getting started"
 ```
 
 ### Daily Usage
+
+**What you say to Claude:**
+- "Search for authentication code"
+- "Find files named AuthService"
+- "Show me all the Services directories"
+- "Find files similar to AuthService.cs"
+- "What files changed in the last 24 hours?"
+- "Find all error handling patterns in the code"
+- "How do I search code effectively?"
+
+**Tools Claude will use:**
 ```bash
 # Search for code patterns (NEW: standardized 'query' parameter)
 text_search --query "authentication" --workspacePath "C:/YourProject"
@@ -164,6 +182,15 @@ workflow_discovery --toolName "text_search"
 ```
 
 ### Memory System
+
+**What you say to Claude:**
+- "Remember that we decided to use JWT for authentication"
+- "Make a note that UserService needs refactoring - high priority"
+- "What decisions did we make about authentication?"
+- "Show me how authentication patterns are connected"
+- "Backup our project memories"
+
+**Tools Claude will use:**
 ```bash
 # Store architectural decision
 store_memory --type "ArchitecturalDecision" \
@@ -186,6 +213,18 @@ backup_memories  # Creates JSON in .codesearch/backups/
 ```
 
 ### 🆕 Phase 3: Advanced Memory Intelligence
+
+**What you say to Claude:**
+- "Remember that UserService has performance issues"
+- "Find all technical debt related to authentication"
+- "Create a checklist for the database migration project"
+- "Find any security vulnerabilities in our login system"
+- "Search for authentication patterns using both text and concepts"
+- "Check the quality of memory 123"
+- "Load context for the Services directory"
+- "Show me recent architecture decisions"
+
+**Tools Claude will use:**
 ```bash
 # Natural language memory operations
 unified_memory --command "remember that UserService has performance issues"
@@ -209,6 +248,13 @@ search_memories --query "architecture decisions" --boostRecent true
 ```
 
 ### Advanced Workflows
+
+**What you say to Claude:**
+- "Analyze this project for security and performance issues"
+- "Find all TODOs, C# files, and what changed in the last week"
+- "Help me understand how authentication is implemented"
+
+**Tools Claude will use:**
 ```bash
 # Pattern analysis with severity levels
 pattern_detector --workspacePath "C:/YourProject" \
