@@ -209,18 +209,27 @@ public class JsonMemoryBackupService : IDisposable
             
             _logger.LogInformation("Restoring from backup with {Count} memories", backup.Memories.Count);
             
-            // Default types if not specified
-            types ??= new[] { "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight", "TechnicalDebt" };
+            // Determine which memories to restore based on workspace
+            var memoriesToRestore = backup.Memories.ToList();
             
-            if (includeLocal)
+            // If types are specified, filter by them
+            if (types != null && types.Length > 0)
             {
-                types = types.Concat(new[] { "WorkSession", "LocalInsight" }).ToArray();
+                memoriesToRestore = memoriesToRestore.Where(m => types.Contains(m.Type)).ToList();
             }
-            
-            // Filter memories by type
-            var memoriesToRestore = backup.Memories
-                .Where(m => types.Contains(m.Type))
-                .ToList();
+            else
+            {
+                // No types specified - restore based on includeLocal flag
+                if (!includeLocal)
+                {
+                    // Exclude local types by checking workspace
+                    var localWorkspace = _pathResolutionService.GetLocalMemoryPath();
+                    memoriesToRestore = memoriesToRestore.Where(m => 
+                        GetWorkspaceForType(m.Type) != localWorkspace
+                    ).ToList();
+                }
+                // If includeLocal is true, restore everything
+            }
             
             // Group by workspace and create snapshots for rollback
             var groupedMemories = memoriesToRestore.GroupBy(m => GetWorkspaceForType(m.Type));
@@ -460,16 +469,16 @@ public class JsonMemoryBackupService : IDisposable
     
     private string GetWorkspaceForType(string type)
     {
-        // Project-level types (shared with team)
-        var isProjectType = type is "ArchitecturalDecision" 
-                                 or "CodePattern" 
-                                 or "SecurityRule" 
-                                 or "ProjectInsight"
-                                 or "TechnicalDebt";
+        // Local-only types (developer-specific, not shared)
+        var isLocalType = type is "WorkSession" 
+                               or "LocalInsight"
+                               or "SearchContext"
+                               or "WorkingMemory";
         
-        return isProjectType
-            ? _pathResolutionService.GetProjectMemoryPath()
-            : _pathResolutionService.GetLocalMemoryPath();
+        // Everything else goes to project memory (shared with team)
+        return isLocalType
+            ? _pathResolutionService.GetLocalMemoryPath()
+            : _pathResolutionService.GetProjectMemoryPath();
     }
     
     private int GetMemoryCount(string filePath)
