@@ -28,7 +28,9 @@ public class EscapeQueryTextTests
             ("value != null", "value \\!\\= null"),
             ("if (x > 0 && y < 10)", "if \\(x \\> 0 \\&\\& y \\< 10\\)"),
             ("normal text", "normal text"),
-            ("path\\to\\file", "path\\\\to\\\\file")
+            ("path\\to\\file", "path\\\\to\\\\file"),
+            ("new {", "new \\{"),  // Test curly brace escaping
+            ("return new { success = true }", "return new \\{ success \\= true \\}")  // Full anonymous type
         };
         
         foreach (var (input, expected) in testCases)
@@ -47,6 +49,10 @@ public class EscapeQueryTextTests
             if (input.Contains('-')) Assert.Contains("\\-", result);
             if (input.Contains('&')) Assert.Contains("\\&", result);
             if (input.Contains('\\')) Assert.Contains("\\\\", result);
+            
+            // Curly braces should be escaped
+            if (input.Contains('{')) Assert.Contains("\\{", result);
+            if (input.Contains('}')) Assert.Contains("\\}", result);
             
             // Square brackets and @ should not be escaped
             if (input.Contains('['))

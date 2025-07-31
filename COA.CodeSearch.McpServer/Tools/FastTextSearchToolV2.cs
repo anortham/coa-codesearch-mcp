@@ -1018,10 +1018,11 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                 {
                     Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}, trying alternative approach", queryText);
                     
-                    // If the query contains square brackets, try a different approach
-                    if (queryText.Contains('[') || queryText.Contains(']'))
+                    // If the query contains square brackets or unmatched braces, try a different approach
+                    if (queryText.Contains('[') || queryText.Contains(']') || 
+                        HasUnmatchedBraces(queryText))
                     {
-                        // For queries with square brackets, use a phrase query or wildcard query
+                        // For queries with special brackets/braces, use a phrase query or wildcard query
                         try
                         {
                             // Try as a phrase query first
@@ -1030,7 +1031,9 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
                         catch
                         {
                             // If phrase query fails, create a wildcard query with the literal text
-                            var wildcardQuery = queryText.Replace("[", "\\[").Replace("]", "\\]");
+                            var wildcardQuery = queryText
+                                .Replace("[", "\\[").Replace("]", "\\]")
+                                .Replace("{", "\\{").Replace("}", "\\}");
                             contentQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
                         }
                     }
@@ -1201,6 +1204,14 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         return escapedQuery;
     }
 
+    private static bool HasUnmatchedBraces(string query)
+    {
+        // Check if query has unmatched curly braces that would cause parse errors
+        var openBraces = query.Count(c => c == '{');
+        var closeBraces = query.Count(c => c == '}');
+        return openBraces != closeBraces;
+    }
+
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
     {
@@ -1277,10 +1288,12 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
             catch (ParseException ex)
             {
                 Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
-                // If the query contains square brackets, use wildcard approach
-                if (query.Contains('[') || query.Contains(']'))
+                // If the query contains square brackets or unmatched braces, use wildcard approach
+                if (query.Contains('[') || query.Contains(']') || HasUnmatchedBraces(query))
                 {
-                    var wildcardQuery = query.Replace("[", "\\[").Replace("]", "\\]");
+                    var wildcardQuery = query
+                        .Replace("[", "\\[").Replace("]", "\\]")
+                        .Replace("{", "\\{").Replace("}", "\\}");
                     luceneQuery = new WildcardQuery(new Term("content", $"*{wildcardQuery}*"));
                 }
                 else
