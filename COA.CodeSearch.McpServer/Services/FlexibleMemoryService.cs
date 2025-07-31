@@ -452,6 +452,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Content: Keep stored for display, searchable via _all field
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        // Add raw field for precise searching (not analyzed)
+        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
         
         // Date fields with custom field type for proper numeric range query support
         var dateFieldType = new FieldType 
@@ -542,6 +544,8 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Content: Keep stored for display, searchable via _all field
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
+        // Add raw field for precise searching (not analyzed)
+        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
         
         // Date fields with custom field type for proper numeric range query support
         var dateFieldType = new FieldType 
@@ -676,6 +680,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     {
         var parts = new List<string>
         {
+            memory.Id, // Include ID in searchable content
             memory.Content,
             memory.Type,
             string.Join(" ", memory.FilesInvolved)
@@ -881,18 +886,59 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     /// Build text query using MultiFieldQueryParser with field boosting
     /// Enhanced version that maintains compatibility while adding improvements
     /// </summary>
-    private async Task<Query> BuildTextQueryAsync(string queryText)
+    private async Task<Query> BuildTextQueryAsync(string queryText, bool enableQueryExpansion = true)
     {
         try
         {
-            // Get the same analyzer used for indexing from LuceneIndexService
+            // For precise search (no query expansion), use phrase queries or exact term matching
+            if (!enableQueryExpansion)
+            {
+                _logger.LogInformation("Building precise query without synonym expansion for: {Query}", queryText);
+                
+                // Build a boolean query that searches for the exact terms
+                var booleanQuery = new BooleanQuery();
+                
+                // Split the query into terms
+                var terms = queryText.ToLower().Split(new[] { ' ', '\t', '\n', '\r' }, StringSplitOptions.RemoveEmptyEntries);
+                
+                if (terms.Length == 1)
+                {
+                    // Single term - use exact term query on raw field
+                    var term = terms[0];
+                    
+                    // Search in raw fields for exact matching (no analyzer)
+                    booleanQuery.Add(new TermQuery(new Term("content.raw", queryText)), Occur.SHOULD);
+                    booleanQuery.Add(new TermQuery(new Term("type", term)), Occur.SHOULD);
+                    
+                    _logger.LogInformation("Created exact term query for: {Term}", term);
+                }
+                else
+                {
+                    // Multiple terms - search for exact phrase in raw field
+                    // Use the original query text for exact matching
+                    booleanQuery.Add(new TermQuery(new Term("content.raw", queryText)), Occur.SHOULD);
+                    
+                    // Also try searching in type field for single words
+                    foreach (var term in terms)
+                    {
+                        booleanQuery.Add(new TermQuery(new Term("type", term)), Occur.SHOULD);
+                    }
+                    
+                    _logger.LogInformation("Created precise query for: {Query}", queryText);
+                }
+                
+                return booleanQuery;
+            }
+            
+            // For fuzzy search (with query expansion), use the normal analyzer
             var analyzer = await _indexService.GetAnalyzerAsync(_projectMemoryWorkspace);
             
             // First try the enhanced MultiFieldQueryParser approach
             var enhancedQuery = await TryBuildMultiFieldQueryAsync(queryText, analyzer);
             if (enhancedQuery != null)
             {
-                _logger.LogInformation("MultiFieldQueryParser: '{Query}' -> '{ParsedQuery}'", queryText, enhancedQuery.ToString());
+                _logger.LogInformation("MultiFieldQueryParser: '{Query}' -> '{ParsedQuery}' (expansion: {Expansion})", 
+                    queryText, enhancedQuery.ToString(), enableQueryExpansion);
                 return enhancedQuery;
             }
             
@@ -953,7 +999,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         // Main search query
         if (!string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
         {
-            var textQuery = await BuildTextQueryAsync(request.Query);
+            var textQuery = await BuildTextQueryAsync(request.Query, request.EnableQueryExpansion ?? true);
             booleanQuery.Add(textQuery, Occur.MUST);
         }
         
