@@ -23,7 +23,7 @@ public static class AllToolRegistrations
         // RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>()); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
+        // RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>());
         RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>());
         // RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>()); // COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
