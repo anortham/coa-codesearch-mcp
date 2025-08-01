@@ -26,7 +26,7 @@ public static class AllToolRegistrations
         // RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>()); // COMMENTED OUT - Migrated to attribute-based registration
-        // RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>()); // COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Claude Memory System tools - only essential tools that don't have flexible equivalents
         var memoryTools = serviceProvider.GetRequiredService<ClaudeMemoryTools>();
@@ -39,17 +39,17 @@ public static class AllToolRegistrations
         // Batch operations (for multi-search efficiency)
         // RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         
-        // Logging control tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
-        // RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
+        // Logging control tool
+        // RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
-        // Version information tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
-        // RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
+        // Version information tool
+        // RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
-        // Index health check tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION  
-        // RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
+        // Index health check tool
+        // RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
-        // System health check tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
-        // RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
+        // System health check tool
+        // RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // AI-optimized search tools
         // RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>()); // COMMENTED OUT - Migrated to attribute-based registration
@@ -59,14 +59,14 @@ public static class AllToolRegistrations
         // Tool usage analytics
         // RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
-        // Workflow discovery - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
-        // RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
+        // Workflow discovery
+        // RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Phase 3: Advanced tools now handled by RegisterEssentialMemoryTools
         
         
-        // AI Context loading - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
-        // RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
+        // AI Context loading
+        // RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>()); // COMMENTED OUT - Migrated to attribute-based registration
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
