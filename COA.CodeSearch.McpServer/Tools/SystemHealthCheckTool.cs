@@ -1,6 +1,8 @@
 using COA.CodeSearch.Contracts;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Attributes;
+using COA.CodeSearch.McpServer.Constants;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Diagnostics;
@@ -11,7 +13,8 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Comprehensive system health check tool covering all major services and components
 /// </summary>
-public class SystemHealthCheckTool
+[McpServerToolType]
+public class SystemHealthCheckTool : ITool
 {
     private readonly ILogger<SystemHealthCheckTool> _logger;
     private readonly IndexHealthCheckTool _indexHealthCheck;
@@ -19,6 +22,10 @@ public class SystemHealthCheckTool
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IIndexingMetricsService _metricsService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
+
+    public string ToolName => ToolNames.SystemHealthCheck;
+    public string Description => "Perform comprehensive system health check covering all major services and components";
+    public ToolCategory Category => ToolCategory.Infrastructure;
 
     public SystemHealthCheckTool(
         ILogger<SystemHealthCheckTool> logger,
@@ -34,6 +41,22 @@ public class SystemHealthCheckTool
         _circuitBreakerService = circuitBreakerService;
         _metricsService = metricsService;
         _memoryLimits = memoryLimits.Value;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "system_health_check")]
+    [Description("Perform comprehensive system health check covering all major services and components. Includes memory pressure, index health, circuit breakers, system metrics, and configuration validation with overall assessment and recommendations.")]
+    public async Task<object> ExecuteAsync(SystemHealthCheckParams parameters)
+    {
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters?.IncludeIndexHealth ?? true,
+            parameters?.IncludeMemoryPressure ?? true,
+            parameters?.IncludeSystemMetrics ?? true,
+            parameters?.IncludeConfiguration ?? false,
+            CancellationToken.None);
     }
 
     /// <summary>
@@ -400,4 +423,22 @@ public class SystemHealthCheckTool
 
         return (assessment, recommendations, warnings, errors);
     }
+}
+
+/// <summary>
+/// Parameters for the SystemHealthCheckTool
+/// </summary>
+public class SystemHealthCheckParams
+{
+    [Description("Include index health status in the response")]
+    public bool? IncludeIndexHealth { get; set; } = true;
+    
+    [Description("Include memory pressure monitoring data")]
+    public bool? IncludeMemoryPressure { get; set; } = true;
+    
+    [Description("Include system performance metrics")]
+    public bool? IncludeSystemMetrics { get; set; } = true;
+    
+    [Description("Include configuration status and validation")]
+    public bool? IncludeConfiguration { get; set; } = false;
 }
