@@ -270,15 +270,24 @@ public void RecentFilesQuery_SerializesCorrectly()
    - [x] BatchOperationsResponseBuilder.cs (17 anonymous types) ✅ COMPLETED: All anonymous types replaced with concrete types
    - [x] AIResponseBuilderService.cs (0 anonymous types) ✅ COMPLETED: Verified zero anonymous types (service delegates to ResponseBuilders)
 
-3. **Week 2: Tool Response Types**
-   - [ ] FastFileSearchToolV2.cs (error response types)
-   - [ ] FastDirectorySearchTool.cs (response types)
-   - [ ] UnifiedMemoryService.cs (result types)
+3. **Phase 1.5: Error Response Standardization** (NEW - Quick Wins)
+   - [ ] Create standard ErrorResponse type
+   - [ ] SystemHealthCheckTool.cs (4 error returns)
+   - [ ] ErrorRecoveryService.cs (1 error return)
+   - [ ] ClaudeMemoryTools.cs (1 error return)
+   - [ ] FastFileSearchToolV2.cs (1 error return)
+   - [ ] UnifiedMemoryService.cs (1 error return)
+   - [ ] Other tools with error returns
 
-4. **Week 2: Service Types**
-   - [ ] ErrorRecoveryService.cs (RecoveryInfo already typed)
+4. **Week 2: Tool Response Types**
+   - [ ] FastDirectorySearchTool.cs (dynamic usage conversion)
+   - [ ] Remaining tool anonymous types
+   - [ ] Service response types
+
+5. **Week 2: Service Types**
    - [ ] TypeDiscoveryResourceProvider.cs (resource types)
    - [ ] Memory-related response types
+   - [ ] Other service types
 
 ### Why This Order?
 
@@ -683,6 +692,87 @@ Implement project-level service architecture enabling multiple agents to safely 
 
 The ResponseBuilder layer is now fully type-safe and ready for enterprise-scale development!
 
+## Phase 1.5: Error Response Standardization (NEW)
+
+### Objective
+
+Standardize error responses across all tools and services by replacing anonymous error objects with a consistent ErrorResponse type.
+
+### Current State
+
+After Phase 1 completion, 94 anonymous types remain outside the ResponseBuilder layer:
+- **Error handling returns**: ~8-10 simple error response objects
+- **Tool responses**: Various tools still using anonymous types
+- **Service responses**: ErrorRecoveryService and UnifiedMemoryService with anonymous returns
+- **Dynamic usage**: 32 instances of dynamic usage remain, primarily in FastDirectorySearchTool
+
+### Scope
+
+#### 1.5.1 Standard Error Response Type
+
+Create a unified error response contract:
+```csharp
+public class ErrorResponse
+{
+    public string error { get; set; }        // Error message
+    public string details { get; set; }      // Additional details (e.g., exception message)
+    public string code { get; set; }         // Optional error code
+    public string suggestion { get; set; }   // Optional recovery suggestion
+}
+```
+
+#### 1.5.2 Files to Update
+
+**Priority 1: Error Returns (Quick Wins)**
+- [ ] SystemHealthCheckTool.cs - 4 error returns: `{ error = "...", details = ex.Message }`
+- [ ] ErrorRecoveryService.cs - 1 anonymous error return
+- [ ] ClaudeMemoryTools.cs - 1 anonymous error return
+- [ ] FastFileSearchToolV2.cs - 1 anonymous error return
+- [ ] UnifiedMemoryService.cs - 1 anonymous error return
+- [ ] IndexHealthCheckTool.cs - Error returns
+- [ ] StreamingTextSearchTool.cs - Error returns
+- [ ] MemoryLinkingTools.cs - Error returns
+
+**Priority 2: Dynamic Usage**
+- [ ] FastDirectorySearchTool.cs - Convert dynamic usage to concrete types
+- [ ] BaseResponseBuilder.cs - Review and eliminate remaining dynamic usage
+- [ ] DynamicHelper.cs - Evaluate if still needed after conversions
+
+**Priority 3: Other Anonymous Types**
+- [ ] Review remaining anonymous types in tools
+- [ ] Standardize response patterns across all tools
+
+### Implementation Strategy
+
+1. **Create ErrorResponse type** in COA.CodeSearch.Contracts
+2. **Replace one error return at a time**:
+   ```csharp
+   // BEFORE
+   return new { error = "Failed to retrieve index health", details = ex.Message };
+   
+   // AFTER
+   return new ErrorResponse 
+   { 
+       error = "Failed to retrieve index health", 
+       details = ex.Message 
+   };
+   ```
+3. **Test each replacement** to ensure JSON compatibility
+4. **Commit incrementally** as with Phase 1
+
+### Success Metrics
+
+- Eliminate ~10 anonymous error returns
+- Standardize error handling across all tools
+- Reduce anonymous type count by ~10-15%
+- Maintain 100% backward compatibility
+
+### Estimated Timeline
+
+- 1-2 days for error response standardization
+- 1 day for FastDirectorySearchTool dynamic conversion
+- 1 day for testing and validation
+
 ### Phase 2 Complete When:
 
 - [ ] HTTP transport fully functional
@@ -705,7 +795,7 @@ The ResponseBuilder layer is now fully type-safe and ready for enterprise-scale 
 
 ---
 
-_Document Version: 2.0_  
+_Document Version: 2.1_  
 _Last Updated: July 31, 2025_  
-_Status: Phase 1 Detailed Implementation Plan Ready_  
-_Key Changes: Added detailed implementation steps, anti-patterns from failed attempt, concrete examples, and strict workflow to prevent property renaming chaos_
+_Status: Phase 1 Complete ✅ | Phase 1.5 Planned_  
+_Key Changes: Phase 1 successfully completed with 61 anonymous types replaced. Added Phase 1.5 for error response standardization based on post-Phase 1 analysis revealing 94 remaining anonymous types outside ResponseBuilder layer._
