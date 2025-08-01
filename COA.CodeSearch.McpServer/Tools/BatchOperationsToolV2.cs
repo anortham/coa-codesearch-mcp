@@ -71,6 +71,25 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         if (parameters == null) throw new InvalidParametersException("Parameters are required");
         
         var operations = parameters.Operations;
+        
+        // Handle case where operations comes as a JSON string that needs parsing
+        if (operations.ValueKind == JsonValueKind.String)
+        {
+            var jsonString = operations.GetString();
+            if (string.IsNullOrWhiteSpace(jsonString))
+                throw new InvalidParametersException("operations are required and cannot be empty");
+            
+            try
+            {
+                using var doc = JsonDocument.Parse(jsonString);
+                operations = doc.RootElement.Clone();
+            }
+            catch (JsonException ex)
+            {
+                throw new InvalidParametersException($"Invalid JSON in operations parameter: {ex.Message}");
+            }
+        }
+        
         if (operations.ValueKind == JsonValueKind.Undefined || 
             (operations.ValueKind == JsonValueKind.Array && operations.GetArrayLength() == 0))
             throw new InvalidParametersException("operations are required and cannot be empty");
