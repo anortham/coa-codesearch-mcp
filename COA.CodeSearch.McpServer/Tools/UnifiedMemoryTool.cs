@@ -1,8 +1,10 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +14,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Unified memory tool that provides natural language interface to all memory operations
 /// Replaces the need for multiple memory tools with intelligent intent detection
 /// </summary>
+[McpServerToolType]
 public class UnifiedMemoryTool : ClaudeOptimizedToolBase
 {
     private readonly UnifiedMemoryService _unifiedMemoryService;
@@ -45,6 +48,71 @@ public class UnifiedMemoryTool : ClaudeOptimizedToolBase
             UnifiedMemoryToolResult result => result.MemoryCount > 0 ? result.MemoryCount : (result.Memory != null ? 1 : 0),
             _ => 0
         };
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "unified_memory")]
+    [Description(@"Unified memory interface that uses natural language to perform memory operations.
+Replaces the need for multiple memory tools with intelligent intent detection.
+Automatically routes commands to appropriate tools based on detected intent.
+
+Supported intents:
+- SAVE: Store memories, create checklists (""remember that UserService has performance issues"")
+- FIND: Search memories, files, content (""find all authentication bugs"")  
+- CONNECT: Link related memories (""connect auth bug to security audit"")
+- EXPLORE: Navigate relationships (""explore authentication system connections"")
+- SUGGEST: Get recommendations (""suggest improvements for authentication"")
+- MANAGE: Update/delete memories (""update technical debt status to resolved"")
+
+Examples:
+- ""remember that database query in UserService.GetActiveUsers() takes 5 seconds""
+- ""find all technical debt related to authentication system""
+- ""create checklist for database migration project""
+- ""explore relationships around user management architecture""
+- ""suggest next steps for performance optimization""
+
+Use cases: Natural language memory operations, AI agent workflows, context-aware suggestions.
+AI-optimized: Provides intent detection, action suggestions, and usage guidance.")]
+    public async Task<object> ExecuteAsync(UnifiedMemoryInputParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        // Convert string intent to MemoryIntent enum
+        MemoryIntent? intent = null;
+        if (!string.IsNullOrEmpty(parameters.Intent) && parameters.Intent != "auto")
+        {
+            intent = parameters.Intent.ToLowerInvariant() switch
+            {
+                "save" => MemoryIntent.Save,
+                "find" => MemoryIntent.Find,
+                "connect" => MemoryIntent.Connect,
+                "explore" => MemoryIntent.Explore,
+                "suggest" => MemoryIntent.Suggest,
+                "manage" => MemoryIntent.Manage,
+                _ => null
+            };
+        }
+
+        var toolParams = new UnifiedMemoryParams
+        {
+            Command = ValidateRequired(parameters.Command, "command"),
+            Intent = intent,
+            WorkingDirectory = parameters.WorkingDirectory,
+            SessionId = parameters.SessionId,
+            RelatedFiles = parameters.RelatedFiles?.ToList() ?? new List<string>(),
+            CurrentFocus = parameters.CurrentFocus
+        };
+
+        return await ExecuteAsync(toolParams, CancellationToken.None);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
 
     /// <summary>
