@@ -21,6 +21,10 @@ public class FileWatcherService : BackgroundService
     private readonly int _batchSize;
     private readonly bool _enabled;
     private readonly ConcurrentBag<IFileChangeSubscriber> _subscribers = new();
+    
+    // Track recent deletes to detect atomic writes across batches
+    private readonly ConcurrentDictionary<string, DateTime> _recentDeletes = new();
+    private readonly TimeSpan _atomicWriteWindow = TimeSpan.FromSeconds(2); // Window to detect atomic writes
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
@@ -209,6 +213,13 @@ public class FileWatcherService : BackgroundService
             // Process deletes first (they're quick and don't require file access)
             foreach (var delete in deletes)
             {
+                // Double-check if this delete is still valid (not part of a pending atomic write)
+                if (_recentDeletes.ContainsKey(delete.FilePath))
+                {
+                    _logger.LogDebug("Skipping delete for {FilePath} - might be part of an atomic write", delete.FilePath);
+                    continue;
+                }
+                
                 try
                 {
                     await _fileIndexingService.DeleteFileAsync(workspacePath, delete.FilePath, cancellationToken);
@@ -347,6 +358,17 @@ public class FileWatcherService : BackgroundService
             return;
         }
 
+        // Check if this file was recently deleted (potential atomic write)
+        if (_recentDeletes.TryGetValue(e.FullPath, out var deleteTime))
+        {
+            var timeSinceDelete = DateTime.UtcNow - deleteTime;
+            if (timeSinceDelete <= _atomicWriteWindow)
+            {
+                _logger.LogInformation("Detected atomic write pattern for {FilePath} - converting to modification", e.FullPath);
+                _recentDeletes.TryRemove(e.FullPath, out _); // Remove from recent deletes
+            }
+        }
+
         _logger.LogInformation("File changed detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
         
         var added = _changeQueue.TryAdd(new FileChangeEvent
@@ -366,6 +388,29 @@ public class FileWatcherService : BackgroundService
     {
         if (ShouldIgnoreFile(e.FullPath))
             return;
+
+        // Check if this file was recently deleted (atomic write pattern)
+        if (_recentDeletes.TryRemove(e.FullPath, out var deleteTime))
+        {
+            var timeSinceDelete = DateTime.UtcNow - deleteTime;
+            if (timeSinceDelete <= _atomicWriteWindow)
+            {
+                _logger.LogInformation("Detected atomic write (delete+create) for {FilePath} - converting to modification", e.FullPath);
+                
+                var modAdded = _changeQueue.TryAdd(new FileChangeEvent
+                {
+                    WorkspacePath = workspacePath,
+                    FilePath = e.FullPath,
+                    ChangeType = FileChangeType.Modified  // Convert to modification
+                });
+                
+                if (!modAdded)
+                {
+                    _logger.LogWarning("Failed to add atomic write modification event to queue for: {FilePath}", e.FullPath);
+                }
+                return;
+            }
+        }
 
         _logger.LogInformation("File created detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
         
@@ -387,8 +432,16 @@ public class FileWatcherService : BackgroundService
         if (ShouldIgnoreFile(e.FullPath))
             return;
 
-        _logger.LogInformation("File deleted detected: {FilePath} in workspace {WorkspacePath}", e.FullPath, workspacePath);
+        // Track this delete for potential atomic write detection
+        _recentDeletes[e.FullPath] = DateTime.UtcNow;
         
+        // Clean up old entries periodically (older than the atomic write window)
+        CleanupOldDeletes();
+
+        _logger.LogInformation("File deleted detected: {FilePath} in workspace {WorkspacePath} - tracking for potential atomic write", e.FullPath, workspacePath);
+        
+        // Don't immediately process deletes - wait to see if it's part of an atomic write
+        // We'll still add it to the queue, but the batch processor will check recent creates
         var added = _changeQueue.TryAdd(new FileChangeEvent
         {
             WorkspacePath = workspacePath,
@@ -429,6 +482,29 @@ public class FileWatcherService : BackgroundService
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
         _logger.LogError(e.GetException(), "FileSystemWatcher error");
+    }
+
+    private void CleanupOldDeletes()
+    {
+        // Only cleanup every 100th call to avoid performance impact
+        if (Random.Shared.Next(100) != 0)
+            return;
+            
+        var cutoffTime = DateTime.UtcNow - _atomicWriteWindow;
+        var keysToRemove = _recentDeletes
+            .Where(kvp => kvp.Value < cutoffTime)
+            .Select(kvp => kvp.Key)
+            .ToList();
+            
+        foreach (var key in keysToRemove)
+        {
+            _recentDeletes.TryRemove(key, out _);
+        }
+        
+        if (keysToRemove.Count > 0)
+        {
+            _logger.LogDebug("Cleaned up {Count} old delete entries from atomic write tracking", keysToRemove.Count);
+        }
     }
 
     private bool ShouldIgnoreFile(string filePath)
