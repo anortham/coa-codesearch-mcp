@@ -238,15 +238,27 @@ public class FileWatcherService : BackgroundService
                         continue;
                     }
                     
-                    // Quiet period passed - this is a real delete
+                    // Quiet period passed - but double-check if file still exists
+                    if (File.Exists(delete.FilePath))
+                    {
+                        _logger.LogWarning("File still exists after delete event: {FilePath} - treating as modification", delete.FilePath);
+                        _pendingDeletes.TryRemove(delete.FilePath, out _);
+                        
+                        // Convert to update event
+                        await _fileIndexingService.ReindexFileAsync(workspacePath, delete.FilePath, cancellationToken);
+                        _logger.LogInformation("Reindexed file that still exists: {FilePath}", delete.FilePath);
+                        continue;
+                    }
+                    
+                    // File really doesn't exist - proceed with delete
                     _pendingDeletes.TryRemove(delete.FilePath, out _);
                 }
                 
                 try
                 {
                     await _fileIndexingService.DeleteFileAsync(workspacePath, delete.FilePath, cancellationToken);
-                    _logger.LogInformation("Deleted from index: {FilePath} (after {Period:F1}s quiet period)", 
-                        delete.FilePath, _deleteQuietPeriod.TotalSeconds);
+                    _logger.LogInformation("Deleted from index: {FilePath} (verified file doesn't exist)", 
+                        delete.FilePath);
                     
                     // Notify subscribers
                     await NotifySubscribersAsync(delete, cancellationToken);
