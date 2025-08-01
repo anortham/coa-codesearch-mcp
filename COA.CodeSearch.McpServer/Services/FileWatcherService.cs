@@ -22,9 +22,9 @@ public class FileWatcherService : BackgroundService
     private readonly bool _enabled;
     private readonly ConcurrentBag<IFileChangeSubscriber> _subscribers = new();
     
-    // Track recent deletes to detect atomic writes across batches
-    private readonly ConcurrentDictionary<string, DateTime> _recentDeletes = new();
-    private readonly TimeSpan _atomicWriteWindow = TimeSpan.FromMilliseconds(500); // Shorter window for faster updates
+    // Track pending deletes - files scheduled for deletion after a quiet period
+    private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
+    private readonly TimeSpan _deleteQuietPeriod = TimeSpan.FromSeconds(3); // Wait 3 seconds of no activity before deleting
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
@@ -210,33 +210,43 @@ public class FileWatcherService : BackgroundService
             var deletes = coalescedEvents.Where(c => c.ChangeType == FileChangeType.Deleted).ToList();
             var updates = coalescedEvents.Where(c => c.ChangeType != FileChangeType.Deleted).ToList();
             
-            // Process deletes with atomic write checking
+            // Process deletes only after quiet period
             foreach (var delete in deletes)
             {
-                // Check if this delete is still within the atomic write window
-                if (_recentDeletes.TryGetValue(delete.FilePath, out var deleteTime))
+                // Check if this delete is pending
+                if (_pendingDeletes.TryGetValue(delete.FilePath, out var pendingDelete))
                 {
-                    var timeSinceDelete = DateTime.UtcNow - deleteTime;
-                    if (timeSinceDelete < _atomicWriteWindow)
+                    // Skip if cancelled (file was recreated/modified)
+                    if (pendingDelete.Cancelled)
                     {
-                        _logger.LogDebug("Deferring delete for {FilePath} - within atomic write window ({Time:F1}s)", 
-                            delete.FilePath, timeSinceDelete.TotalSeconds);
+                        _logger.LogDebug("Skipping cancelled delete for {FilePath}", delete.FilePath);
+                        _pendingDeletes.TryRemove(delete.FilePath, out _);
+                        continue;
+                    }
+                    
+                    var now = DateTime.UtcNow;
+                    var timeSinceLastActivity = now - pendingDelete.LastActivityTime;
+                    
+                    // Check if quiet period has passed
+                    if (timeSinceLastActivity < _deleteQuietPeriod)
+                    {
+                        _logger.LogDebug("Deferring delete for {FilePath} - still within quiet period ({Time:F1}s remaining)", 
+                            delete.FilePath, (_deleteQuietPeriod - timeSinceLastActivity).TotalSeconds);
                         
-                        // Re-add to queue to process later (preserving original timestamp)
+                        // Re-add to queue to check again later
                         _changeQueue.TryAdd(delete);
                         continue;
                     }
-                    else
-                    {
-                        // Time window expired, this is a real delete
-                        _recentDeletes.TryRemove(delete.FilePath, out _);
-                    }
+                    
+                    // Quiet period passed - this is a real delete
+                    _pendingDeletes.TryRemove(delete.FilePath, out _);
                 }
                 
                 try
                 {
                     await _fileIndexingService.DeleteFileAsync(workspacePath, delete.FilePath, cancellationToken);
-                    _logger.LogInformation("Deleted from index: {FilePath}", delete.FilePath);
+                    _logger.LogInformation("Deleted from index: {FilePath} (after {Period:F1}s quiet period)", 
+                        delete.FilePath, _deleteQuietPeriod.TotalSeconds);
                     
                     // Notify subscribers
                     await NotifySubscribersAsync(delete, cancellationToken);
@@ -371,14 +381,16 @@ public class FileWatcherService : BackgroundService
             return;
         }
 
-        // Check if this file was recently deleted (potential atomic write)
-        if (_recentDeletes.TryGetValue(e.FullPath, out var deleteTime))
+        var now = DateTime.UtcNow;
+        
+        // Cancel any pending delete for this file
+        if (_pendingDeletes.TryGetValue(e.FullPath, out var pendingDelete))
         {
-            var timeSinceDelete = DateTime.UtcNow - deleteTime;
-            if (timeSinceDelete <= _atomicWriteWindow)
+            if (!pendingDelete.Cancelled)
             {
-                _logger.LogInformation("Detected atomic write pattern for {FilePath} - converting to modification", e.FullPath);
-                _recentDeletes.TryRemove(e.FullPath, out _); // Remove from recent deletes
+                pendingDelete.Cancelled = true;
+                pendingDelete.LastActivityTime = now;
+                _logger.LogDebug("Cancelled pending delete for {FilePath} due to file change", e.FullPath);
             }
         }
 
@@ -389,7 +401,7 @@ public class FileWatcherService : BackgroundService
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Modified,
-            Timestamp = DateTime.UtcNow
+            Timestamp = now
         });
         
         if (!added)
@@ -403,13 +415,18 @@ public class FileWatcherService : BackgroundService
         if (ShouldIgnoreFile(e.FullPath))
             return;
 
-        // Check if this file was recently deleted (atomic write pattern)
-        if (_recentDeletes.TryRemove(e.FullPath, out var deleteTime))
+        var now = DateTime.UtcNow;
+        
+        // Check if this file has a pending delete (atomic write pattern)
+        if (_pendingDeletes.TryGetValue(e.FullPath, out var pendingDelete))
         {
-            var timeSinceDelete = DateTime.UtcNow - deleteTime;
-            if (timeSinceDelete <= _atomicWriteWindow)
+            if (!pendingDelete.Cancelled)
             {
-                _logger.LogInformation("✓ Detected atomic write (delete+create) for {FilePath} within {Time:F1}s - converting to modification", 
+                var timeSinceDelete = now - pendingDelete.DeleteDetectedTime;
+                pendingDelete.Cancelled = true;
+                pendingDelete.LastActivityTime = now;
+                
+                _logger.LogInformation("✓ Detected atomic write (delete+create) for {FilePath} after {Time:F1}s - converting to modification", 
                     e.FullPath, timeSinceDelete.TotalSeconds);
                 
                 var modAdded = _changeQueue.TryAdd(new FileChangeEvent
@@ -417,7 +434,7 @@ public class FileWatcherService : BackgroundService
                     WorkspacePath = workspacePath,
                     FilePath = e.FullPath,
                     ChangeType = FileChangeType.Modified,  // Convert to modification
-                    Timestamp = DateTime.UtcNow
+                    Timestamp = now
                 });
                 
                 if (!modAdded)
@@ -435,7 +452,7 @@ public class FileWatcherService : BackgroundService
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Created,
-            Timestamp = DateTime.UtcNow
+            Timestamp = now
         });
         
         if (!added)
@@ -449,23 +466,29 @@ public class FileWatcherService : BackgroundService
         if (ShouldIgnoreFile(e.FullPath))
             return;
 
-        // Track this delete for potential atomic write detection
-        _recentDeletes[e.FullPath] = DateTime.UtcNow;
+        // Add to pending deletes - will only be processed after quiet period
+        var now = DateTime.UtcNow;
+        _pendingDeletes[e.FullPath] = new PendingDelete
+        {
+            FilePath = e.FullPath,
+            DeleteDetectedTime = now,
+            LastActivityTime = now,
+            Cancelled = false
+        };
         
-        // Clean up old entries periodically (older than the atomic write window)
-        CleanupOldDeletes();
+        // Clean up old entries periodically
+        CleanupOldPendingDeletes();
 
-        _logger.LogInformation("File deleted detected: {FilePath} - tracking for {Window:F1}s to detect atomic write", 
-            e.FullPath, _atomicWriteWindow.TotalSeconds);
+        _logger.LogInformation("File deleted detected: {FilePath} - deferring for {Period:F1}s quiet period", 
+            e.FullPath, _deleteQuietPeriod.TotalSeconds);
         
-        // Don't immediately process deletes - wait to see if it's part of an atomic write
-        // We'll still add it to the queue, but the batch processor will check recent creates
+        // Add delete event to queue - batch processor will check if it should be processed
         var added = _changeQueue.TryAdd(new FileChangeEvent
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
             ChangeType = FileChangeType.Deleted,
-            Timestamp = DateTime.UtcNow
+            Timestamp = now
         });
         
         if (!added)
@@ -505,26 +528,26 @@ public class FileWatcherService : BackgroundService
         _logger.LogError(e.GetException(), "FileSystemWatcher error");
     }
 
-    private void CleanupOldDeletes()
+    private void CleanupOldPendingDeletes()
     {
         // Only cleanup every 100th call to avoid performance impact
         if (Random.Shared.Next(100) != 0)
             return;
             
-        var cutoffTime = DateTime.UtcNow - _atomicWriteWindow;
-        var keysToRemove = _recentDeletes
-            .Where(kvp => kvp.Value < cutoffTime)
+        var cutoffTime = DateTime.UtcNow - TimeSpan.FromMinutes(5); // Clean up entries older than 5 minutes
+        var keysToRemove = _pendingDeletes
+            .Where(kvp => kvp.Value.LastActivityTime < cutoffTime || kvp.Value.Cancelled)
             .Select(kvp => kvp.Key)
             .ToList();
             
         foreach (var key in keysToRemove)
         {
-            _recentDeletes.TryRemove(key, out _);
+            _pendingDeletes.TryRemove(key, out _);
         }
         
         if (keysToRemove.Count > 0)
         {
-            _logger.LogDebug("Cleaned up {Count} old delete entries from atomic write tracking", keysToRemove.Count);
+            _logger.LogDebug("Cleaned up {Count} old pending delete entries", keysToRemove.Count);
         }
     }
 
@@ -664,6 +687,14 @@ public class FileWatcherService : BackgroundService
         Created,
         Modified,
         Deleted
+    }
+    
+    private class PendingDelete
+    {
+        public string FilePath { get; set; } = "";
+        public DateTime DeleteDetectedTime { get; set; }
+        public DateTime LastActivityTime { get; set; }
+        public bool Cancelled { get; set; }
     }
 }
 
