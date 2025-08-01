@@ -254,31 +254,37 @@ public class UnifiedMemoryInputParams
     /// <summary>
     /// The natural language command
     /// </summary>
+    [Description("The natural language command to execute")]
     public string Command { get; set; } = string.Empty;
 
     /// <summary>
     /// Optional: Force a specific intent instead of auto-detection (string from enum)
     /// </summary>
+    [Description("Optional: Force a specific intent instead of auto-detection")]
     public string? Intent { get; set; }
 
     /// <summary>
     /// Optional: Working directory for file operations
     /// </summary>
+    [Description("Optional: Working directory for file operations")]
     public string? WorkingDirectory { get; set; }
 
     /// <summary>
     /// Optional: Session ID for tracking
     /// </summary>
+    [Description("Optional: Session ID for tracking")]
     public string? SessionId { get; set; }
 
     /// <summary>
     /// Optional: Files currently being worked on
     /// </summary>
+    [Description("Optional: Files currently being worked on")]
     public string[]? RelatedFiles { get; set; }
 
     /// <summary>
     /// Optional: Current focus or task description
     /// </summary>
+    [Description("Optional: Current focus or task description")]
     public string? CurrentFocus { get; set; }
 }
 
