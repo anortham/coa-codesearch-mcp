@@ -42,8 +42,8 @@ public static class AllToolRegistrations
         // Logging control tool
         RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
         
-        // Version information tool
-        RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
+        // Version information tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
         
         // Index health check tool
         RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
