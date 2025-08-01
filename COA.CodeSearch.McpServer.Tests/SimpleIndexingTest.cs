@@ -26,8 +26,7 @@ public class SimpleIndexingTest
         // Create a simple test setup
         var loggerFactory = LoggerFactory.Create(builder => 
         {
-            builder.AddConsole();
-            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.SetMinimumLevel(LogLevel.Warning);
         });
         
         // Create test directory
