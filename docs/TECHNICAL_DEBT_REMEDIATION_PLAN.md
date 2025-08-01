@@ -544,23 +544,26 @@ The migration to the official SDK does NOT require rewriting your 45+ tools. The
 Since we've already implemented the attribute system, migrate all tools before SDK integration:
 
 1. **Migrate Simple Tools First** (No parameters)
-   - [ ] GetVersionTool ✅ (already done)
+   - [x] GetVersionTool ✅ (already done and tested)
    - [ ] Other parameterless tools
    
-2. **Migrate Tools with Parameters**
-   - [ ] Create parameter classes matching existing schemas
-   - [ ] Add attributes to tool classes and methods
-   - [ ] Keep existing ExecuteAsync methods unchanged
+2. **Per-Tool Migration Process** (TEST IMMEDIATELY)
+   - [ ] Add attributes to tool class and ExecuteAsync method
+   - [ ] Create parameter class if needed (matching existing schema)
+   - [ ] **Comment out manual registration in AllToolRegistrations.cs**
+   - [ ] Build and test the tool immediately
+   - [ ] Verify JSON output unchanged
+   - [ ] Commit the migration for that tool
    
-3. **Test Each Migration**
-   - [ ] Verify tool appears in tools/list
-   - [ ] Test with same parameters
-   - [ ] Confirm JSON output unchanged
-
-4. **Remove Manual Registration**
-   - [ ] Once all tools migrated, remove AllToolRegistrations.cs
-   - [ ] Clean up manual registration code
-   - [ ] Rely entirely on attribute discovery
+3. **Migration Order**
+   - [ ] Simple tools without parameters first
+   - [ ] Tools with simple parameters next
+   - [ ] Complex tools with nested parameters last
+   
+4. **Final Cleanup** (After all tools migrated)
+   - [ ] Remove AllToolRegistrations.cs entirely
+   - [ ] Remove manual registration methods
+   - [ ] Update Program.cs to only use attribute discovery
 
 #### 2.1 Initial Setup & Analysis
 

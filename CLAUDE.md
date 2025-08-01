@@ -28,7 +28,7 @@
 ```
 
 - **MCP Tools (`mcp__codesearch__*`)**: Execute on INSTALLED server, not your edits
-- **Testing Changes**: Must build → user reinstalls → new Claude session  
+- **Testing Changes**: Must build → user reinstalls → new Claude session
 - **Example**: Editing `JsonMemoryBackupService.cs` won't affect `backup_memories` until restart
 - **⚠️ REMINDER**: If you edit tool code, IMMEDIATELY tell user to restart before testing
 
@@ -47,7 +47,7 @@
 ### 6. **Commit Changes**
 
 - **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
-- **NEVER** check in broken builds or failing tests
+- **NEVER** check in broken builds or failing tests! BUILD -> TEST -> COMMIT IN THAT ORDER
 
 ## 📋 Quick Reference
 
@@ -72,18 +72,18 @@ mcp__codesearch__workflow_discovery --goal "search code"       # Learn tool depe
 
 ### Tool Categories
 
-| Purpose           | Text Search Tools                            | Memory Tools                              | Utility Tools                          |
-| ----------------- | -------------------------------------------- | ----------------------------------------- | -------------------------------------- |
-| Find Files        | `text_search`, `file_search`                 | -                                         | -                                      |
-| Analyze Files     | `recent_files`, `file_size_analysis`        | -                                         | -                                      |
-| Discover Code     | `similar_files`, `directory_search`         | -                                         | -                                      |
-| Index & Search    | `index_workspace`, `batch_operations`       | -                                         | -                                      |
-| Store Knowledge   | -                                            | `store_memory`                            | -                                      |
-| Find Knowledge    | -                                            | `search_memories`, `recall_context`      | `workflow_discovery`                   |
-| **Smart Search**  | -                                            | `unified_memory`, `semantic_search`, `hybrid_search` | -                        |
-| **AI Intelligence** | -                                         | `memory_quality_assessment`, `load_context` | -                                 |
-| Explore Memory    | -                                            | `memory_graph_navigator`                  | -                                    |
-| Manage Data       | -                                            | `backup_memories`, `restore_memories`    | `index_health_check`, `log_diagnostics`|
+| Purpose             | Text Search Tools                     | Memory Tools                                         | Utility Tools                           |
+| ------------------- | ------------------------------------- | ---------------------------------------------------- | --------------------------------------- |
+| Find Files          | `text_search`, `file_search`          | -                                                    | -                                       |
+| Analyze Files       | `recent_files`, `file_size_analysis`  | -                                                    | -                                       |
+| Discover Code       | `similar_files`, `directory_search`   | -                                                    | -                                       |
+| Index & Search      | `index_workspace`, `batch_operations` | -                                                    | -                                       |
+| Store Knowledge     | -                                     | `store_memory`                                       | -                                       |
+| Find Knowledge      | -                                     | `search_memories`, `recall_context`                  | `workflow_discovery`                    |
+| **Smart Search**    | -                                     | `unified_memory`, `semantic_search`, `hybrid_search` | -                                       |
+| **AI Intelligence** | -                                     | `memory_quality_assessment`, `load_context`          | -                                       |
+| Explore Memory      | -                                     | `memory_graph_navigator`                             | -                                       |
+| Manage Data         | -                                     | `backup_memories`, `restore_memories`                | `index_health_check`, `log_diagnostics` |
 
 ### Memory System Essentials
 
@@ -143,21 +143,25 @@ High-performance MCP server in .NET 9.0 providing text search and intelligent me
 This project implements comprehensive AI agent experience optimizations:
 
 ### Parameter Standardization
+
 - **All search tools** now use `query` as the primary parameter
 - **Backward compatible** with legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`)
 - **Consistent interface** across `text_search`, `file_search`, `directory_search`
 
 ### Response Format Consistency
+
 - **Unified envelope** with `format` field indicating response type
 - **Mixed format support** for both structured data and markdown display
 - **Predictable parsing** for AI agents
 
 ### Workflow Discovery
+
 - **New tool**: `workflow_discovery` provides proactive guidance
 - **Tool chains**: Understand prerequisites and dependencies
 - **Use case mapping**: Find the right tools for your goals
 
 ### Enhanced Error States
+
 - **Actionable guidance** instead of generic error messages
 - **Suggested next steps** when tools encounter empty states
 - **Recovery workflows** with specific commands to try
@@ -204,14 +208,14 @@ private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
 
 ### Key Services
 
-| Service                     | Purpose                                   |
-| --------------------------- | ----------------------------------------- |
-| `LuceneIndexService`        | Fast text indexing and search             |
-| `FlexibleMemoryService`     | Memory storage with custom fields         |
-| `JsonMemoryBackupService`   | JSON-based memory backup/restore          |
-| `PathResolutionService`     | Path computation and resolution service    |
-| `FileIndexingService`       | File content extraction and indexing      |
-| `QueryCacheService`         | Query result caching for performance      |
+| Service                   | Purpose                                 |
+| ------------------------- | --------------------------------------- |
+| `LuceneIndexService`      | Fast text indexing and search           |
+| `FlexibleMemoryService`   | Memory storage with custom fields       |
+| `JsonMemoryBackupService` | JSON-based memory backup/restore        |
+| `PathResolutionService`   | Path computation and resolution service |
+| `FileIndexingService`     | File content extraction and indexing    |
+| `QueryCacheService`       | Query result caching for performance    |
 
 ### Progressive Disclosure (V2 Tools)
 
