@@ -1,8 +1,10 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -13,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// AI-optimized tool that orchestrates multi-step search operations while maintaining context.
 /// Designed to help AI agents perform complex discovery tasks efficiently.
 /// </summary>
+[McpServerToolType]
 public class SearchAssistantTool : ClaudeOptimizedToolBase
 {
     public override string ToolName => ToolNames.SearchAssistant;
@@ -40,6 +43,54 @@ public class SearchAssistantTool : ClaudeOptimizedToolBase
         _textSearchTool = textSearchTool;
         _fileSearchTool = fileSearchTool;
         _errorRecoveryService = errorRecoveryService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "search_assistant")]
+    [Description(@"Orchestrates multi-step search operations while maintaining context.
+Analyzes search goals, creates search strategies, executes multiple search operations, discovers patterns and insights, finds related content, and provides actionable next steps.
+Returns: Structured findings with strategy, insights, and resource URI for continued exploration.
+Use cases: Complex code discovery, pattern analysis, architecture understanding, debugging workflows.
+AI-optimized: Provides guided search assistance with context preservation.")]
+    public async Task<object> ExecuteAsync(SearchAssistantParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+        if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+        {
+            mode = parameters.ResponseMode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+
+        var constraints = parameters.Constraints != null ? new SearchConstraints
+        {
+            FileTypes = parameters.Constraints.FileTypes?.ToList(),
+            ExcludePaths = parameters.Constraints.ExcludePaths?.ToList(),
+            MaxResults = parameters.Constraints.MaxResults
+        } : null;
+        
+        return await ExecuteAsync(
+            ValidateRequired(parameters.Goal, "goal"),
+            ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+            constraints,
+            parameters.PreviousContext,
+            mode,
+            null,
+            CancellationToken.None);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
 
     public async Task<object> ExecuteAsync(
@@ -496,4 +547,40 @@ internal class SearchExecutionResult
 {
     public List<object> Results { get; set; } = new();
     public List<string> ExecutedSteps { get; set; } = new();
+}
+
+/// <summary>
+/// Parameters for SearchAssistant tool
+/// </summary>
+public class SearchAssistantParams
+{
+    [Description("The goal or objective of the search operation (e.g., 'Find all error handling patterns', 'Locate authentication code', 'Understand data flow')")]
+    public string? Goal { get; set; }
+    
+    [Description("Directory path to search in (e.g., C:\\MyProject). Use the project root directory.")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description("Optional constraints to limit search scope")]
+    public SearchConstraintsParams? Constraints { get; set; }
+    
+    [Description("Resource URI from a previous search to build upon (enables context preservation)")]
+    public string? PreviousContext { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.")]
+    public string? ResponseMode { get; set; }
+}
+
+/// <summary>
+/// Search constraints parameters
+/// </summary>
+public class SearchConstraintsParams
+{
+    [Description("File types to include (e.g., ['cs', 'ts', 'js'])")]
+    public string[]? FileTypes { get; set; }
+    
+    [Description("Paths to exclude from search")]
+    public string[]? ExcludePaths { get; set; }
+    
+    [Description("Maximum number of results per operation")]
+    public int? MaxResults { get; set; }
 }
