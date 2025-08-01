@@ -221,9 +221,9 @@ stages:
               packagesToPack: "COA.Mcp.Protocol/COA.Mcp.Protocol.csproj"
               configuration: $(buildConfiguration)
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
-              nobuild: true
+              nobuild: false
               versioningScheme: "off"
-              arguments: "$(versionArguments)"
+              arguments: "$(versionArguments) --no-restore"
 
           - task: DotNetCoreCLI@2
             displayName: "Pack COA.CodeSearch.McpServer"
@@ -232,9 +232,9 @@ stages:
               packagesToPack: "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj"
               configuration: $(buildConfiguration)
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
-              nobuild: true
+              nobuild: false
               versioningScheme: "off"
-              arguments: "$(versionArguments)"
+              arguments: "$(versionArguments) --no-restore"
 
           - powershell: |
               Write-Host "Generated NuGet packages:"
