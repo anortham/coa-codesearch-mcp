@@ -1643,7 +1643,7 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
 
         // Register the 6 essential tools only
         // RegisterUnifiedMemory(registry, unifiedMemoryTool); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterSearchMemoriesV2(registry, memorySearchV2);
+        // RegisterSearchMemoriesV2(registry, memorySearchV2); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterStoreMemoryOnly(registry, memoryTools);
         RegisterSemanticSearch(registry, semanticSearchTool);
         RegisterHybridSearch(registry, hybridSearchTool);

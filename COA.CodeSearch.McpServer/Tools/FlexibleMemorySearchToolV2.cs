@@ -1,9 +1,11 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// AI-optimized version of memory search with structured response format
 /// </summary>
+[McpServerToolType]
 public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
 {
     public override string ToolName => "flexible_memory_search_v2";
@@ -42,6 +45,51 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         _contextAwareness = contextAwareness;
         _responseBuilder = responseBuilder;
         _memoryLinking = memoryLinking;
+    }
+
+    [McpServerTool(Name = "search_memories")]
+    [Description(@"Searches stored memories with intelligent query expansion.
+Returns: Matching memories with scores, metadata, and relationships.
+Prerequisites: None - searches existing memory database.
+Error handling: Returns empty results if no matches found.
+Use cases: Finding past decisions, reviewing technical debt, discovering patterns.
+Features: Query expansion, context awareness, faceted filtering, smart ranking.")]
+    public async Task<object> ExecuteAsync(FlexibleMemorySearchV2Params parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var mode = ResponseMode.Summary;
+        if (!string.IsNullOrWhiteSpace(parameters.Mode))
+        {
+            mode = parameters.Mode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+        
+        return await ExecuteAsync(
+            parameters.Query,
+            parameters.Types,
+            parameters.DateRange,
+            parameters.Facets,
+            parameters.OrderBy,
+            parameters.OrderDescending ?? true,
+            parameters.MaxResults ?? 50,
+            parameters.IncludeArchived ?? false,
+            parameters.BoostRecent ?? false,
+            parameters.BoostFrequent ?? false,
+            parameters.EnableQueryExpansion ?? true,
+            parameters.EnableContextAwareness ?? true,
+            parameters.CurrentFile,
+            parameters.RecentFiles,
+            mode,
+            false, // enableHighlighting - not exposed in params
+            3, // maxFragments - not exposed in params
+            100, // fragmentSize - not exposed in params
+            null,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -432,5 +480,55 @@ public class FlexibleMemorySearchToolV2 : ClaudeOptimizedToolBase
         public string FinalQuery { get; set; } = string.Empty;
         public string[] ContextKeywords { get; set; } = Array.Empty<string>();
     }
+}
 
+/// <summary>
+/// Parameters for FlexibleMemorySearchToolV2
+/// </summary>
+public class FlexibleMemorySearchV2Params
+{
+    [Description("Search query (* for all)")]
+    public string? Query { get; set; }
+    
+    [Description("Filter by memory types")]
+    public string[]? Types { get; set; }
+    
+    [Description("Relative time: 'last-week', 'last-month', 'last-7-days'")]
+    public string? DateRange { get; set; }
+    
+    [Description("Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})")]
+    public Dictionary<string, string>? Facets { get; set; }
+    
+    [Description("Sort field: 'created', 'modified', 'type', 'score', or custom field")]
+    public string? OrderBy { get; set; }
+    
+    [Description("Sort order (default: true)")]
+    public bool? OrderDescending { get; set; }
+    
+    [Description("Maximum results (default: 50)")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include archived memories (default: false)")]
+    public bool? IncludeArchived { get; set; }
+    
+    [Description("Boost recently created memories")]
+    public bool? BoostRecent { get; set; }
+    
+    [Description("Boost frequently accessed memories")]
+    public bool? BoostFrequent { get; set; }
+    
+    [Description("Enable automatic query expansion with synonyms and related terms")]
+    public bool? EnableQueryExpansion { get; set; }
+    
+    [Description("Enable context-aware memory boosting based on current work")]
+    public bool? EnableContextAwareness { get; set; }
+    
+    [Description("Path to current file being worked on (for context awareness)")]
+    public string? CurrentFile { get; set; }
+    
+    [Description("Recently accessed files (for context awareness)")]
+    public string[]? RecentFiles { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'")]
+    public string? Mode { get; set; }
 }
