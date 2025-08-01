@@ -25,7 +25,7 @@ public static class AllToolRegistrations
         // RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>()); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>());
+        // RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterIndexWorkspace(registry, serviceProvider.GetRequiredService<IndexWorkspaceTool>()); // COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         
         // Claude Memory System tools - only essential tools that don't have flexible equivalents
@@ -37,7 +37,7 @@ public static class AllToolRegistrations
         RegisterEssentialMemoryTools(registry, serviceProvider);
         
         // Batch operations (for multi-search efficiency)
-        RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>());
+        // RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Logging control tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         // RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
