@@ -241,8 +241,8 @@ public void RecentFilesQuery_SerializesCorrectly()
 
 1. **Week 1: Core ResponseBuilders** (Most Used)
    - [x] RecentFilesResponseBuilder.cs (10 anonymous types) ✅ COMPLETED: All anonymous types replaced with concrete types
-   - [ ] DirectorySearchResponseBuilder.cs (4 anonymous types)
-   - [ ] SimilarFilesResponseBuilder.cs (3 anonymous types)
+   - [x] DirectorySearchResponseBuilder.cs (9 anonymous types) ✅ COMPLETED: All anonymous types replaced with concrete types
+   - [x] SimilarFilesResponseBuilder.cs (10 anonymous types) ✅ COMPLETED: All anonymous types replaced with concrete types
    - [ ] FileSizeAnalysisResponseBuilder.cs (4 anonymous types)
 
 2. **Week 1: Batch Operations** (Complex)
@@ -638,8 +638,8 @@ Implement project-level service architecture enabling multiple agents to safely 
 
 ### Phase 1 Complete When:
 
-- [ ] All dynamic types replaced with concrete types (**IN PROGRESS**: RecentFilesResponseBuilder.cs completed with 10/10 anonymous types replaced)
-- [x] Zero runtime type errors in 1000+ test runs (✅ All 331 tests pass, 5 skipped as expected)
+- [ ] All dynamic types replaced with concrete types (**IN PROGRESS**: 3 of 6 major ResponseBuilder files completed - 29 anonymous types replaced with concrete types)
+- [x] Zero runtime type errors in 1000+ test runs (✅ All 351 tests pass, 5 skipped as expected)
 - [x] Performance benchmarks show no regression (✅ Build time and test execution maintained)
 
 ### Phase 2 Complete When:
