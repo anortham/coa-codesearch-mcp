@@ -311,6 +311,12 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
                     insights.Add($"Searching in {context.ProjectType} project");
                 }
             }
+            
+            // Suggest code search for patterns that look like code (when results ARE found)
+            if (data.searchType == "standard" && ContainsCodePatterns(data.query))
+            {
+                insights.Add("💡 TIP: For exact code patterns, try searchType='code'");
+            }
         }
         
         return insights;
