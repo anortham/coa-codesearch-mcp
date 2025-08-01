@@ -1645,7 +1645,7 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
         // RegisterUnifiedMemory(registry, unifiedMemoryTool); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterSearchMemoriesV2(registry, memorySearchV2); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterStoreMemoryOnly(registry, memoryTools); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterSemanticSearch(registry, semanticSearchTool);
+        // RegisterSemanticSearch(registry, semanticSearchTool); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterHybridSearch(registry, hybridSearchTool);
         RegisterMemoryQualityAssessment(registry, qualityAssessmentTool);
     }
