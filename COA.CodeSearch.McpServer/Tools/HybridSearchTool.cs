@@ -1,4 +1,6 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -6,6 +8,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for hybrid search that combines Lucene text search with semantic search
 /// </summary>
+[McpServerToolType]
 public class HybridSearchTool
 {
     private readonly HybridMemorySearch _hybridSearch;
@@ -19,6 +22,8 @@ public class HybridSearchTool
         _logger = logger;
     }
 
+    [McpServerTool(Name = "hybrid_search")]
+    [Description("Perform hybrid search combining Lucene text search with semantic search for comprehensive results. Merges exact keyword matches with conceptual understanding. Best for thorough exploration when you need both precision and recall.")]
     public async Task<object> ExecuteAsync(HybridSearchParams parameters)
     {
         try
@@ -218,45 +223,54 @@ public class HybridSearchParams
     /// <summary>
     /// Search query
     /// </summary>
+    [Description("Search query for both text and semantic search")]
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
     /// Maximum number of results to return
     /// </summary>
+    [Description("Maximum number of results to return")]
     public int MaxResults { get; set; } = 20;
 
     /// <summary>
     /// Weight for Lucene search results (0.0 to 1.0)
     /// </summary>
+    [Description("Weight for text search results (0.0 to 1.0)")]
     public float LuceneWeight { get; set; } = 0.6f;
 
     /// <summary>
     /// Weight for semantic search results (0.0 to 1.0)
     /// </summary>
+    [Description("Weight for semantic search results (0.0 to 1.0)")]
     public float SemanticWeight { get; set; } = 0.4f;
 
     /// <summary>
     /// Strategy for merging results
     /// </summary>
+    [Description("Strategy for merging results: Linear, Reciprocal, Multiplicative")]
     public MergeStrategy MergeStrategy { get; set; } = MergeStrategy.Linear;
 
     /// <summary>
     /// Minimum similarity threshold for semantic results
     /// </summary>
+    [Description("Minimum similarity threshold for semantic results")]
     public float SemanticThreshold { get; set; } = 0.2f;
 
     /// <summary>
     /// Boost factor when result found by both methods
     /// </summary>
+    [Description("Boost factor when result found by both methods")]
     public float BothFoundBoost { get; set; } = 1.2f;
 
     /// <summary>
     /// Filters for Lucene search
     /// </summary>
+    [Description("Filters for Lucene search (faceted search)")]
     public Dictionary<string, string>? LuceneFilters { get; set; }
 
     /// <summary>
     /// Filters for semantic search
     /// </summary>
+    [Description("Filters for semantic search")]
     public Dictionary<string, object>? SemanticFilters { get; set; }
 }
