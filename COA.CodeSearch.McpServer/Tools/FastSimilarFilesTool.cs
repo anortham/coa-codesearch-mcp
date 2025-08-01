@@ -1,6 +1,8 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Analysis;
 using Lucene.Net.Index;
 using Lucene.Net.Queries.Mlt;
@@ -14,6 +16,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// High-performance tool to find files with similar content using Lucene's "More Like This" feature
 /// </summary>
+[McpServerToolType]
 public class FastSimilarFilesTool : ITool
 {
     public string ToolName => "fast_similar_files";
@@ -38,6 +41,46 @@ public class FastSimilarFilesTool : ITool
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
         _aiResponseBuilder = aiResponseBuilder;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "similar_files")]
+    [Description(@"Finds files with similar content using 'More Like This' algorithm.
+Returns: File paths with similarity scores and matching terms.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding duplicate code, discovering related implementations, identifying patterns.
+Not for: Exact text matches (use text_search), file name searches (use file_search).")]
+    public async Task<object> ExecuteAsync(FastSimilarFilesParams parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate required parameters
+        if (string.IsNullOrWhiteSpace(parameters.SourcePath))
+        {
+            throw new InvalidParametersException("sourcePath parameter is required");
+        }
+        
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters.SourcePath,
+            parameters.WorkspacePath,
+            parameters.MaxResults ?? 10,
+            parameters.MinTermFreq ?? 2,
+            parameters.MinDocFreq ?? 2,
+            parameters.MinWordLength ?? 4,
+            parameters.MaxWordLength ?? 30,
+            parameters.ExcludeExtensions,
+            parameters.IncludeScore ?? true,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -273,4 +316,37 @@ public class FastSimilarFilesTool : ITool
         // This would require accessing the internal IndexReader which isn't exposed in our setup
         return new List<string> { "content", "analysis", "unavailable" };
     }
+}
+
+/// <summary>
+/// Parameters for FastSimilarFilesTool
+/// </summary>
+public class FastSimilarFilesParams
+{
+    [Description("Path to the source file to find similar files for")]
+    public string? SourcePath { get; set; }
+    
+    [Description("Path to solution, project, or directory to search")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description("Maximum similar files to return")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Min times a term must appear in source")]
+    public int? MinTermFreq { get; set; }
+    
+    [Description("Min docs a term must appear in")]
+    public int? MinDocFreq { get; set; }
+    
+    [Description("Minimum word length to consider")]
+    public int? MinWordLength { get; set; }
+    
+    [Description("Maximum word length to consider")]
+    public int? MaxWordLength { get; set; }
+    
+    [Description("File extensions to exclude")]
+    public string[]? ExcludeExtensions { get; set; }
+    
+    [Description("Include similarity scores")]
+    public bool? IncludeScore { get; set; }
 }
