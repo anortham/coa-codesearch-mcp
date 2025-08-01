@@ -1063,6 +1063,35 @@ Not for: File name searches (use file_search), directory searches (use directory
                 }
                 break;
             
+            case "code":
+                // Special handling for code patterns - normalize quotes and use phrase query
+                // This helps find patterns like [McpServerTool(Name = "roslyn_")] in C# code
+                var codeQuery = queryText;
+                
+                // Normalize quotes for C# code - if query has unescaped quotes, escape them
+                // This handles the common case where source files have escaped quotes
+                if (queryText.Contains('"') && !queryText.Contains("\\\""))
+                {
+                    codeQuery = queryText.Replace("\"", "\\\"");
+                    Logger.LogDebug("Code search: normalized quotes in query from '{Original}' to '{Normalized}'", queryText, codeQuery);
+                }
+                
+                try
+                {
+                    // Use phrase query to preserve exact sequence
+                    var codeParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                    codeParser.DefaultOperator = Operator.AND;
+                    contentQuery = codeParser.Parse($"\"{EscapeQueryText(codeQuery)}\"");
+                    Logger.LogDebug("Code search: using phrase query for '{Query}'", codeQuery);
+                }
+                catch (ParseException ex)
+                {
+                    Logger.LogWarning(ex, "Failed to parse code query as phrase: {Query}, trying term query", codeQuery);
+                    // Fall back to term query for exact matching
+                    contentQuery = new TermQuery(new Term("content", codeQuery.ToLowerInvariant()));
+                }
+                break;
+            
             default: // standard
                 // Check for problematic patterns upfront
                 if (HasProblematicPattern(queryText))
@@ -1478,7 +1507,8 @@ Example: 50 results with context=3 ≈ 5,000 tokens")]
 - fuzzy: Approximate match allowing typos (append ~ to terms)  
 - wildcard: Pattern matching with * and ?
 - phrase: Exact phrase in quotes
-- regex: Full regex support with capturing groups")]
+- regex: Full regex support with capturing groups
+- code: Code-aware search that handles escaped quotes and preserves exact patterns")]
     public string? SearchType { get; set; }
     
     [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.")]
