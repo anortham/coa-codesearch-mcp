@@ -1,8 +1,10 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -13,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// AI-optimized tool that analyzes codebase for patterns and anti-patterns.
 /// Designed to help AI agents identify architectural patterns, code smells, and improvement opportunities.
 /// </summary>
+[McpServerToolType]
 public class PatternDetectorTool : ClaudeOptimizedToolBase
 {
     public override string ToolName => "pattern_detector";
@@ -43,6 +46,50 @@ public class PatternDetectorTool : ClaudeOptimizedToolBase
         _fileSearchTool = fileSearchTool;
         _fileSizeAnalysisTool = fileSizeAnalysisTool;
         _errorRecoveryService = errorRecoveryService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "pattern_detector")]
+    [Description(@"Analyzes files by size with distribution insights.
+Detects architectural patterns, security vulnerabilities, performance issues, and testing patterns.
+Returns: Detailed analysis of patterns and anti-patterns with severity levels and remediation guidance.
+Use cases: Code quality assessment, security audits, architecture reviews, technical debt identification.
+AI-optimized: Provides actionable insights with confidence scores and prioritized recommendations.")]
+    public async Task<object> ExecuteAsync(PatternDetectorParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var mode = ResponseMode.Summary;
+        if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+        {
+            mode = parameters.ResponseMode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+
+        var patternTypes = parameters.PatternTypes?.Select(pt => Enum.Parse<PatternType>(pt, true)).ToArray() ?? new PatternType[0];
+        var depth = Enum.TryParse<PatternDepth>(parameters.Depth, true, out var parsedDepth) ? parsedDepth : PatternDepth.Shallow;
+        
+        return await ExecuteAsync(
+            ValidateRequired(parameters.WorkspacePath, "workspacePath"),
+            patternTypes,
+            depth,
+            parameters.CreateMemories ?? false,
+            mode,
+            null,
+            CancellationToken.None);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
 
     public async Task<object> ExecuteAsync(
@@ -665,4 +712,25 @@ internal class PatternDetectionBatch
 {
     public List<DetectedPattern> Patterns { get; set; } = new();
     public List<DetectedAntiPattern> AntiPatterns { get; set; } = new();
+}
+
+/// <summary>
+/// Parameters for PatternDetector tool
+/// </summary>
+public class PatternDetectorParams
+{
+    [Description("Directory path to analyze (e.g., C:\\MyProject). Use the project root directory.")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description("Types of patterns to detect (e.g., ['architecture', 'security'])")]
+    public string[]? PatternTypes { get; set; }
+    
+    [Description("Analysis depth: 'shallow' for quick scan, 'deep' for comprehensive analysis")]
+    public string? Depth { get; set; }
+    
+    [Description("Automatically create memories for significant findings")]
+    public bool? CreateMemories { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large results.")]
+    public string? ResponseMode { get; set; }
 }
