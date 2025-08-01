@@ -375,7 +375,7 @@ public class UnifiedMemoryService
                     LuceneWeight = 0.6f,
                     SemanticWeight = 0.4f,
                     SemanticThreshold = 0.2f,
-                    MergeStrategy = MergeStrategy.Linear,
+                    MergeStrategy = "Linear",
                     BothFoundBoost = 1.2f
                 });
                 
