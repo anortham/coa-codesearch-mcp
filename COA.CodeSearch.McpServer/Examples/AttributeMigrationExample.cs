@@ -150,4 +150,48 @@ namespace COA.CodeSearch.McpServer.Examples
     {
         public InvalidParametersException(string message) : base(message) { }
     }
+
+    /// <summary>
+    /// STEP-BY-STEP MIGRATION PROCESS FOR EACH TOOL
+    /// </summary>
+    /// 1. ADD ATTRIBUTES to the tool class and method:
+    ///    - Add [McpServerToolType] to the class
+    ///    - Add [McpServerTool(Name = "exact_tool_name")] to ExecuteAsync
+    ///    - Add [Description("...")] with the EXACT description from AllToolRegistrations
+    ///
+    /// 2. CREATE PARAMETER CLASS (if tool has parameters):
+    ///    - Create a class with properties matching the inputSchema from registration
+    ///    - Add [Description("...")] to each property using the schema descriptions
+    ///    - Create new ExecuteAsync overload that takes the parameter class
+    ///    - Have it call the existing ExecuteAsync with individual parameters
+    ///
+    /// 3. COMMENT OUT MANUAL REGISTRATION in AllToolRegistrations.cs:
+    ///    Find the line like:
+    ///    RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
+    ///    Comment it out:
+    ///    // RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
+    ///
+    /// 4. BUILD THE PROJECT:
+    ///    dotnet build -c Debug
+    ///
+    /// 5. TEST THE TOOL immediately:
+    ///    - For simple tools: mcp__codesearch__get_version
+    ///    - For tools with params: mcp__codesearch__text_search --query "test" --workspacePath "C:\project"
+    ///    - Verify the tool executes successfully
+    ///    - Check JSON output matches exactly what it was before
+    ///
+    /// 6. VERIFY no breaking changes:
+    ///    - Tool should work exactly as before
+    ///    - All parameters should be recognized
+    ///    - Output format should be identical
+    ///
+    /// 7. COMMIT the migration for this specific tool:
+    ///    git add -A
+    ///    git commit -m "feat: Migrate [ToolName] to attribute-based registration"
+    ///
+    /// IMPORTANT NOTES:
+    /// - By commenting out the manual registration, we force the tool to use attributes
+    /// - This allows immediate testing without waiting to migrate all tools
+    /// - If the tool doesn't work, you can uncomment the registration to rollback
+    /// - Always preserve the EXACT tool name and description for compatibility
 }
