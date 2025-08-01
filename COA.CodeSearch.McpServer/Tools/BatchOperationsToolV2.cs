@@ -1,9 +1,11 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
@@ -13,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// AI-optimized batch operations for text search and file analysis tools
 /// </summary>
+[McpServerToolType]
 public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
 {
     public override string ToolName => "batch_operations_v2";
@@ -56,6 +59,28 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         _fastFileSizeAnalysisTool = fastFileSizeAnalysisTool;
         _fastSimilarFilesTool = fastSimilarFilesTool;
         _fastDirectorySearchTool = fastDirectorySearchTool;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "batch_operations")]
+    [Description("Execute multiple code analysis operations in parallel for comprehensive insights. Combines results across different analysis types, identifies patterns, and suggests next steps. Faster than running operations sequentially. Supported: text_search, file_search, recent_files, similar_files, directory_search.")]
+    public async Task<object> ExecuteAsync(BatchOperationsV2Params parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var operations = parameters.Operations;
+        if (operations.ValueKind == JsonValueKind.Undefined || 
+            (operations.ValueKind == JsonValueKind.Array && operations.GetArrayLength() == 0))
+            throw new InvalidParametersException("operations are required and cannot be empty");
+        
+        return await ExecuteAsync(
+            operations,
+            parameters.WorkspacePath,
+            Enum.TryParse<ResponseMode>(parameters.Mode, true, out var mode) ? mode : ResponseMode.Summary,
+            parameters.DetailRequest,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -910,4 +935,28 @@ public class BatchOperationsToolV2 : ClaudeOptimizedToolBase
         public List<string> Patterns { get; set; } = new();
         public List<string> Correlations { get; set; } = new();
     }
+}
+
+/// <summary>
+/// Parameters for BatchOperationsV2 tool
+/// </summary>
+public class BatchOperationsV2Params
+{
+    [Description("Array of operations to execute. Format: [{\"operation\": \"text_search\", \"query\": \"TODO\"}, {\"operation\": \"file_search\", \"query\": \"*.cs\"}]. Each operation must have 'operation' field plus operation-specific parameters.")]
+    public JsonElement Operations { get; set; }
+    
+    [Description("Default workspace path for operations")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'")]
+    public string? Mode { get; set; } = "summary";
+    
+    [Description(@"Request more details from a previous summary response.
+Example: After getting a summary with 150 results, use the provided 
+detailRequestToken to get full results.
+
+Usage:
+1. First call returns summary with metadata.detailRequestToken
+2. Second call with detailRequest gets additional data")]
+    public DetailRequest? DetailRequest { get; set; }
 }
