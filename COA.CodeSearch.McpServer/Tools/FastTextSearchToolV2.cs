@@ -1067,19 +1067,25 @@ Not for: File name searches (use file_search), directory searches (use directory
                 // Use the exact field for code patterns - no tokenization, preserves exact text
                 // This helps find patterns like [McpServerTool(Name = "roslyn_")] in C# code
                 var codeQuery = queryText;
+                string fieldName;
                 
-                // Handle case sensitivity
+                // Choose field based on case sensitivity
                 if (!caseSensitive)
                 {
                     codeQuery = codeQuery.ToLowerInvariant();
+                    fieldName = "contentExactLower";
+                }
+                else
+                {
+                    fieldName = "contentExact";
                 }
                 
                 // For substring matching on a non-tokenized field, we need to use WildcardQuery
                 // Wrap the query with wildcards to find it anywhere in the content
                 var wildcardPattern = $"*{EscapeWildcardChars(codeQuery)}*";
-                contentQuery = new WildcardQuery(new Term("contentExact", wildcardPattern));
-                Logger.LogDebug("Code search: using wildcard match on contentExact field for '{Query}' (pattern: {Pattern}, case sensitive: {CaseSensitive})", 
-                    queryText, wildcardPattern, caseSensitive);
+                contentQuery = new WildcardQuery(new Term(fieldName, wildcardPattern));
+                Logger.LogDebug("Code search: using wildcard match on {Field} field for '{Query}' (pattern: {Pattern}, case sensitive: {CaseSensitive})", 
+                    fieldName, queryText, wildcardPattern, caseSensitive);
                 break;
             
             default: // standard
