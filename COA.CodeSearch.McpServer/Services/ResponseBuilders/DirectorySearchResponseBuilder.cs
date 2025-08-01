@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts.Responses.DirectorySearch;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -52,7 +53,7 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder
             .Where(r => r.FileCount > 0)
             .OrderByDescending(r => r.FileCount)
             .Take(5)
-            .Select(r => new
+            .Select(r => new DirectoryFileItem
             {
                 path = r.RelativePath,
                 fileCount = r.FileCount
@@ -85,34 +86,34 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder
         var resultLimit = mode == ResponseMode.Summary ? 30 : 100;
         var displayResults = results.Take(resultLimit).ToList();
 
-        return new
+        return new DirectorySearchResponse
         {
             success = true,
             operation = "directory_search",
-            query = new
+            query = new DirectorySearchQuery
             {
                 text = query,
                 type = searchType,
                 workspace = Path.GetFileName(workspacePath)
             },
-            summary = new
+            summary = new DirectorySearchSummary
             {
                 totalFound = results.Count,
                 searchTime = $"{searchDurationMs:F1}ms",
                 performance = GetPerformanceRating(searchDurationMs),
                 avgDepth = results.Any() ? results.Average(r => r.RelativePath.Count(c => c == Path.DirectorySeparatorChar)) : 0
             },
-            analysis = new
+            analysis = new DirectorySearchAnalysis
             {
                 patterns = insights.Take(3).ToList(),
                 depthDistribution = depthStats,
-                hotspots = new
+                hotspots = new DirectorySearchHotspots
                 {
                     byParent = parentGroups,
                     byFileCount = directoriesWithFiles
                 }
             },
-            results = displayResults.Select(r => new
+            results = displayResults.Select(r => new DirectorySearchResultItem
             {
                 name = r.DirectoryName,
                 path = r.RelativePath,
@@ -120,22 +121,22 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder
                 depth = r.RelativePath.Count(c => c == Path.DirectorySeparatorChar),
                 score = Math.Round(r.Score, 2)
             }).ToList(),
-            resultsSummary = new
+            resultsSummary = new DirectorySearchResultsSummary
             {
                 included = displayResults.Count,
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? new
+            actions = actions.Select(a => a is AIAction aiAction ? new DirectorySearchAction
             {
                 id = aiAction.Id,
                 description = aiAction.Description,
                 command = aiAction.Command.Tool,
                 parameters = aiAction.Command.Parameters,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
-            } : a),
-            meta = new
+            } : a).ToList(),
+            meta = new DirectorySearchMeta
             {
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
