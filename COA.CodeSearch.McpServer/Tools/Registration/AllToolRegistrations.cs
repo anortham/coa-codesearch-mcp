@@ -52,7 +52,7 @@ public static class AllToolRegistrations
         // RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
         
         // AI-optimized search tools
-        RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>());
+        // RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterPatternDetector(registry, serviceProvider.GetRequiredService<PatternDetectorTool>());
         RegisterMemoryGraphNavigator(registry, serviceProvider.GetRequiredService<MemoryGraphNavigatorTool>());
         
