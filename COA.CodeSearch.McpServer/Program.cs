@@ -4,7 +4,6 @@ using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.ResponseBuilders;
 using COA.CodeSearch.McpServer.Tools;
-using COA.CodeSearch.McpServer.Tools.Registration;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -317,9 +316,8 @@ using (var scope = host.Services.CreateScope())
     // Register tools after configuration validation passes
     var toolRegistry = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
     logger.LogInformation("Registering tools after successful configuration validation...");
-    AllToolRegistrations.RegisterAll(toolRegistry, scope.ServiceProvider);
     
-    // Also register tools using attribute-based discovery (for gradual migration)
+    // Register tools using attribute-based discovery
     var attributeDiscovery = scope.ServiceProvider.GetRequiredService<AttributeBasedToolDiscovery>();
     logger.LogInformation("Discovering attribute-based tools...");
     attributeDiscovery.DiscoverAndRegisterTools(toolRegistry);
