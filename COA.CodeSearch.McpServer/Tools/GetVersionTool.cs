@@ -1,6 +1,7 @@
 using System.Reflection;
 using Microsoft.Extensions.Logging;
 using System.Linq;
+using COA.CodeSearch.McpServer.Attributes;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -8,6 +9,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool to get the version and build information of the running MCP server.
 /// This helps Claude understand which version is actually running vs what's being edited.
 /// </summary>
+[McpServerToolType]
 public class GetVersionTool : ITool
 {
     public string ToolName => "get_version";
@@ -22,6 +24,8 @@ public class GetVersionTool : ITool
         _logger = logger;
     }
     
+    [McpServerTool(Name = "get_version")]
+    [Description("Get the version and build information of the running MCP server. Shows version number, build date, runtime info, and helps identify if running code matches edited code.")]
     public Task<object> ExecuteAsync()
     {
         try

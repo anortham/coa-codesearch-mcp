@@ -19,6 +19,14 @@ public class ToolRegistry
     }
 
     /// <summary>
+    /// Check if a tool is already registered
+    /// </summary>
+    public bool IsToolRegistered(string name)
+    {
+        return _tools.ContainsKey(name);
+    }
+
+    /// <summary>
     /// Register a new tool
     /// </summary>
     public void RegisterTool(string name, string description, object inputSchema, Func<JsonElement?, CancellationToken, Task<CallToolResult>> handler)
