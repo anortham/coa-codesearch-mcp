@@ -598,6 +598,7 @@ public class FileIndexingService
             
             // Indexed fields
             new TextField("content", content, Field.Store.YES), // Store content for MoreLikeThis
+            new StringField("contentExact", content, Field.Store.NO), // For exact code pattern matching - preserves case, no tokenization
             new TextField("filename_text", fileName, Field.Store.NO),
             new TextField("directory_text", relativeDirectoryPath.Replace(Path.DirectorySeparatorChar, ' '), Field.Store.NO)
         };
