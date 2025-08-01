@@ -24,7 +24,7 @@ public class FileWatcherService : BackgroundService
     
     // Track recent deletes to detect atomic writes across batches
     private readonly ConcurrentDictionary<string, DateTime> _recentDeletes = new();
-    private readonly TimeSpan _atomicWriteWindow = TimeSpan.FromSeconds(2); // Window to detect atomic writes
+    private readonly TimeSpan _atomicWriteWindow = TimeSpan.FromMilliseconds(500); // Shorter window for faster updates
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
@@ -210,14 +210,27 @@ public class FileWatcherService : BackgroundService
             var deletes = coalescedEvents.Where(c => c.ChangeType == FileChangeType.Deleted).ToList();
             var updates = coalescedEvents.Where(c => c.ChangeType != FileChangeType.Deleted).ToList();
             
-            // Process deletes first (they're quick and don't require file access)
+            // Process deletes with atomic write checking
             foreach (var delete in deletes)
             {
-                // Double-check if this delete is still valid (not part of a pending atomic write)
-                if (_recentDeletes.ContainsKey(delete.FilePath))
+                // Check if this delete is still within the atomic write window
+                if (_recentDeletes.TryGetValue(delete.FilePath, out var deleteTime))
                 {
-                    _logger.LogDebug("Skipping delete for {FilePath} - might be part of an atomic write", delete.FilePath);
-                    continue;
+                    var timeSinceDelete = DateTime.UtcNow - deleteTime;
+                    if (timeSinceDelete < _atomicWriteWindow)
+                    {
+                        _logger.LogDebug("Deferring delete for {FilePath} - within atomic write window ({Time:F1}s)", 
+                            delete.FilePath, timeSinceDelete.TotalSeconds);
+                        
+                        // Re-add to queue to process later (preserving original timestamp)
+                        _changeQueue.TryAdd(delete);
+                        continue;
+                    }
+                    else
+                    {
+                        // Time window expired, this is a real delete
+                        _recentDeletes.TryRemove(delete.FilePath, out _);
+                    }
                 }
                 
                 try
@@ -375,7 +388,8 @@ public class FileWatcherService : BackgroundService
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
-            ChangeType = FileChangeType.Modified
+            ChangeType = FileChangeType.Modified,
+            Timestamp = DateTime.UtcNow
         });
         
         if (!added)
@@ -395,13 +409,15 @@ public class FileWatcherService : BackgroundService
             var timeSinceDelete = DateTime.UtcNow - deleteTime;
             if (timeSinceDelete <= _atomicWriteWindow)
             {
-                _logger.LogInformation("Detected atomic write (delete+create) for {FilePath} - converting to modification", e.FullPath);
+                _logger.LogInformation("✓ Detected atomic write (delete+create) for {FilePath} within {Time:F1}s - converting to modification", 
+                    e.FullPath, timeSinceDelete.TotalSeconds);
                 
                 var modAdded = _changeQueue.TryAdd(new FileChangeEvent
                 {
                     WorkspacePath = workspacePath,
                     FilePath = e.FullPath,
-                    ChangeType = FileChangeType.Modified  // Convert to modification
+                    ChangeType = FileChangeType.Modified,  // Convert to modification
+                    Timestamp = DateTime.UtcNow
                 });
                 
                 if (!modAdded)
@@ -418,7 +434,8 @@ public class FileWatcherService : BackgroundService
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
-            ChangeType = FileChangeType.Created
+            ChangeType = FileChangeType.Created,
+            Timestamp = DateTime.UtcNow
         });
         
         if (!added)
@@ -438,7 +455,8 @@ public class FileWatcherService : BackgroundService
         // Clean up old entries periodically (older than the atomic write window)
         CleanupOldDeletes();
 
-        _logger.LogInformation("File deleted detected: {FilePath} in workspace {WorkspacePath} - tracking for potential atomic write", e.FullPath, workspacePath);
+        _logger.LogInformation("File deleted detected: {FilePath} - tracking for {Window:F1}s to detect atomic write", 
+            e.FullPath, _atomicWriteWindow.TotalSeconds);
         
         // Don't immediately process deletes - wait to see if it's part of an atomic write
         // We'll still add it to the queue, but the batch processor will check recent creates
@@ -446,7 +464,8 @@ public class FileWatcherService : BackgroundService
         {
             WorkspacePath = workspacePath,
             FilePath = e.FullPath,
-            ChangeType = FileChangeType.Deleted
+            ChangeType = FileChangeType.Deleted,
+            Timestamp = DateTime.UtcNow
         });
         
         if (!added)
@@ -464,7 +483,8 @@ public class FileWatcherService : BackgroundService
             {
                 WorkspacePath = workspacePath,
                 FilePath = e.OldFullPath,
-                ChangeType = FileChangeType.Deleted
+                ChangeType = FileChangeType.Deleted,
+                Timestamp = DateTime.UtcNow
             });
         }
 
@@ -474,7 +494,8 @@ public class FileWatcherService : BackgroundService
             {
                 WorkspacePath = workspacePath,
                 FilePath = e.FullPath,
-                ChangeType = FileChangeType.Created
+                ChangeType = FileChangeType.Created,
+                Timestamp = DateTime.UtcNow
             });
         }
     }
@@ -635,6 +656,7 @@ public class FileWatcherService : BackgroundService
         public string WorkspacePath { get; set; } = "";
         public string FilePath { get; set; } = "";
         public FileChangeType ChangeType { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
     }
 
     private enum FileChangeType
