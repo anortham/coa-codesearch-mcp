@@ -30,8 +30,8 @@ public static class AllToolRegistrations
         
         // Claude Memory System tools - only essential tools that don't have flexible equivalents
         var memoryTools = serviceProvider.GetRequiredService<ClaudeMemoryTools>();
-        RegisterRecallContext(registry, memoryTools);
-        RegisterBackupRestore(registry, memoryTools);
+        // RegisterRecallContext(registry, memoryTools); // COMMENTED OUT - Migrated to attribute-based registration
+        // RegisterBackupRestore(registry, memoryTools); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Essential Memory Tools (only 6 tools exposed as per design)
         RegisterEssentialMemoryTools(registry, serviceProvider);
