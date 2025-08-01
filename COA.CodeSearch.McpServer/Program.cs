@@ -107,6 +107,7 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ConfigurationValidationService>();
         services.AddSingleton<ToolRegistry>();
         services.AddSingleton<ToolUsageAnalyticsService>();
+        services.AddSingleton<AttributeBasedToolDiscovery>();
         
         // Resource services for MCP Resources capability
         services.AddSingleton<IResourceRegistry, ResourceRegistry>();
@@ -317,6 +318,12 @@ using (var scope = host.Services.CreateScope())
     var toolRegistry = scope.ServiceProvider.GetRequiredService<ToolRegistry>();
     logger.LogInformation("Registering tools after successful configuration validation...");
     AllToolRegistrations.RegisterAll(toolRegistry, scope.ServiceProvider);
+    
+    // Also register tools using attribute-based discovery (for gradual migration)
+    var attributeDiscovery = scope.ServiceProvider.GetRequiredService<AttributeBasedToolDiscovery>();
+    logger.LogInformation("Discovering attribute-based tools...");
+    attributeDiscovery.DiscoverAndRegisterTools(toolRegistry);
+    
     logger.LogInformation("Tool registration complete");
     
     // Register resource providers for MCP Resources capability
