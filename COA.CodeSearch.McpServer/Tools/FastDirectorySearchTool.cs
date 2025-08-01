@@ -1,7 +1,9 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
@@ -14,6 +16,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// High-performance directory search using Lucene index - find folders by name with fuzzy matching
 /// </summary>
+[McpServerToolType]
 public class FastDirectorySearchTool : ITool
 {
     public string ToolName => "fast_directory_search";
@@ -47,6 +50,45 @@ public class FastDirectorySearchTool : ITool
         _scoringService = scoringService;
         _searchResultResourceProvider = searchResultResourceProvider;
         _resultConfidenceService = resultConfidenceService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "directory_search")]
+    [Description(@"Searches for directories/folders with fuzzy matching support.
+Returns: Directory paths with file counts and structure information.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Exploring project structure, finding namespaces, locating module folders.
+Not for: File searches (use file_search), text content searches (use text_search).")]
+    public async Task<object> ExecuteAsync(FastDirectorySearchParams parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate that at least one query parameter is provided
+        var query = parameters.GetQuery();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            throw new InvalidParametersException("Either 'query' or 'directoryQuery' parameter is required");
+        }
+        
+        // Validate required workspace path
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            query,
+            parameters.WorkspacePath,
+            parameters.SearchType ?? "standard",
+            parameters.MaxResults ?? 30,
+            parameters.IncludeFileCount ?? true,
+            parameters.GroupByDirectory ?? true,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -427,4 +469,41 @@ public class FastDirectorySearchTool : ITool
         public HashSet<string> Extensions { get; set; } = new();
         public float Score { get; set; }
     }
+}
+
+/// <summary>
+/// Parameters for FastDirectorySearchTool
+/// </summary>
+public class FastDirectorySearchParams
+{
+    [Description("Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)")]
+    public string? Query { get; set; }
+    
+    [Description("[DEPRECATED] Use 'query' instead. Directory name to search for - examples: 'Services' (contains), 'Servces~' (fuzzy match), 'User*' (wildcard), 'src/*/models' (pattern)")]
+    public string? DirectoryQuery { get; set; }
+    
+    [Description("Path to solution, project, or directory to search")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description(@"Search algorithm for directory names:
+- standard: Contains match (Service matches Services/)
+- fuzzy: Typo-tolerant (Servces~ finds Services/)
+- wildcard: Pattern matching (User* finds UserService/)
+- exact: Exact directory name match
+- regex: Regular expressions (^src/.*/models$)")]
+    public string? SearchType { get; set; }
+    
+    [Description("Maximum results to return")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include file count per directory")]
+    public bool? IncludeFileCount { get; set; }
+    
+    [Description("Group results by unique directories")]
+    public bool? GroupByDirectory { get; set; }
+    
+    /// <summary>
+    /// Helper method to get the query from either Query or DirectoryQuery (backward compatibility)
+    /// </summary>
+    public string? GetQuery() => Query ?? DirectoryQuery;
 }
