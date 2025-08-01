@@ -521,6 +521,9 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
 
 ### Migration Plan
 
+**IMPORTANT: Tool Logic Remains Unchanged!**
+The migration to the official SDK does NOT require rewriting your 45+ tools. The tools themselves (TextSearchTool, FileSearchTool, etc.) and their ExecuteAsync methods remain exactly the same. Only the registration mechanism and protocol layer change.
+
 #### 2.1 Initial Setup & Analysis
 
 **Week 3, Day 1-2: Setup and Exploration**
@@ -570,10 +573,12 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
    public class McpServer : IMcpServer
    ```
 
-3. **Update Tool Registration**
-   - [ ] Convert `ToolRegistrationHelper` to use SDK registration
-   - [ ] Update all tool handlers to SDK signature
-   - [ ] Maintain backward compatibility for tool parameters
+3. **Update Tool Registration** (Minor Changes Only)
+   - [ ] Update `AllToolRegistrations.cs` to use SDK's registration method
+   - [ ] Change `registry.RegisterTool<T>` to SDK equivalent (similar API)
+   - [ ] Tool handlers remain the same - just wrap with SDK signature
+   - [ ] All tool ExecuteAsync methods stay unchanged
+   - [ ] Parameter classes and result types remain the same
 
 4. **Test STDIO Mode**
    - [ ] Verify all tools work with SDK types
@@ -661,6 +666,28 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
    - [ ] Release notes
    - [ ] Breaking changes documentation
 
+### What Does NOT Change
+
+To be absolutely clear, the following remain **completely unchanged**:
+
+1. **All Tool Classes** - TextSearchTool.cs, FileSearchTool.cs, etc.
+2. **All ExecuteAsync Methods** - Your core business logic
+3. **All Parameter Classes** - TextSearchParams, FileSearchParams, etc.
+4. **All Result Types** - Your response structures
+5. **All Services** - LuceneIndexService, FlexibleMemoryService, etc.
+6. **All Business Logic** - Search algorithms, memory operations, etc.
+
+### What DOES Change
+
+Only the protocol plumbing changes:
+
+1. **McpServer.cs** - Replace custom STDIO handling with SDK
+2. **Registration Calls** - Update to SDK's registration API (very similar)
+3. **Imports** - Change `using COA.Mcp.Protocol` to SDK namespace
+4. **Transport** - Get HTTP support from SDK instead of building it
+
+Think of it like replacing the engine in a car - the interior, controls, and passenger experience remain identical.
+
 ### Implementation Strategy
 
 #### Incremental Migration Steps
@@ -699,12 +726,13 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
 
 ### Success Metrics
 
-- ✅ All 45+ tools migrated to SDK types
+- ✅ All 45+ tools working with SDK (registration updated, logic unchanged)
 - ✅ STDIO mode maintains 100% compatibility
 - ✅ HTTP mode supports 10+ concurrent clients
 - ✅ Zero breaking changes for existing users
 - ✅ Performance within 5% of current
-- ✅ Reduced codebase by ~2000 lines
+- ✅ Reduced codebase by ~2000 lines (removing COA.Mcp.Protocol)
+- ✅ Tool business logic 100% preserved
 
 ### Deliverables
 
