@@ -1,6 +1,8 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Util;
@@ -11,6 +13,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// High-performance tool to find recently modified files using Lucene's indexed lastModified field
 /// </summary>
+[McpServerToolType]
 public class FastRecentFilesTool : ITool
 {
     public string ToolName => "fast_recent_files";
@@ -35,6 +38,38 @@ public class FastRecentFilesTool : ITool
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
         _aiResponseBuilder = aiResponseBuilder;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "recent_files")]
+    [Description(@"Finds files modified within specified time periods.
+Returns: File paths sorted by modification time with size information.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Resuming work after breaks, reviewing recent changes, tracking daily progress.
+Not for: Content searches (use text_search), finding specific files (use file_search).")]
+    public async Task<object> ExecuteAsync(FastRecentFilesParams parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate required workspace path
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters.WorkspacePath,
+            parameters.TimeFrame ?? "24h",
+            parameters.FilePattern,
+            parameters.Extensions,
+            parameters.MaxResults ?? 50,
+            parameters.IncludeSize ?? true,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -260,4 +295,30 @@ public class FastRecentFilesTool : ITool
         
         return $"{len:0.##} {sizes[order]}";
     }
+}
+
+/// <summary>
+/// Parameters for FastRecentFilesTool
+/// </summary>
+public class FastRecentFilesParams
+{
+    [Description("Path to solution, project, or directory to search")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description(@"Time period for recent changes.
+Format: number + unit (m=minutes, h=hours, d=days, w=weeks)
+Examples: '30m' = 30 minutes, '24h' = 24 hours, '7d' = 7 days, '4w' = 4 weeks")]
+    public string? TimeFrame { get; set; }
+    
+    [Description("Optional: Filter by file pattern (e.g., '*.cs', 'src/**/*.ts')")]
+    public string? FilePattern { get; set; }
+    
+    [Description("Optional: Filter by file extensions")]
+    public string[]? Extensions { get; set; }
+    
+    [Description("Maximum results to return")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include file size information")]
+    public bool? IncludeSize { get; set; }
 }
