@@ -215,7 +215,18 @@ stages:
               summaryFileLocation: '$(Agent.TempDirectory)\**\coverage.cobertura.xml'
 
           - task: DotNetCoreCLI@2
-            displayName: "Pack dotnet tool"
+            displayName: "Pack COA.Mcp.Protocol"
+            inputs:
+              command: "pack"
+              packagesToPack: "COA.Mcp.Protocol/COA.Mcp.Protocol.csproj"
+              configuration: $(buildConfiguration)
+              packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
+              nobuild: true
+              versioningScheme: "off"
+              arguments: "$(versionArguments)"
+
+          - task: DotNetCoreCLI@2
+            displayName: "Pack COA.CodeSearch.McpServer"
             inputs:
               command: "pack"
               packagesToPack: "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj"
