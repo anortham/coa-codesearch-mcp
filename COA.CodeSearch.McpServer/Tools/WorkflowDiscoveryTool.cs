@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Attributes;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -7,6 +8,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Provides workflow discovery information for AI agents to understand tool dependencies
 /// </summary>
+[McpServerToolType]
 public class WorkflowDiscoveryTool : ITool
 {
     private readonly ILogger<WorkflowDiscoveryTool> _logger;
@@ -18,6 +20,17 @@ public class WorkflowDiscoveryTool : ITool
     public WorkflowDiscoveryTool(ILogger<WorkflowDiscoveryTool> logger)
     {
         _logger = logger;
+    }
+    
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "workflow_discovery")]
+    [Description("Discover workflow dependencies and suggested tool chains. Provides AI agents with proactive understanding of tool prerequisites and common workflows. Returns: Workflow information with dependencies, steps, and use cases. Use cases: Understanding tool dependencies, discovering workflow patterns, getting guidance on tool chains.")]
+    public async Task<object> ExecuteAsync(WorkflowDiscoveryParams parameters)
+    {
+        // Call the existing implementation
+        return await GetWorkflowsAsync(parameters?.ToolName, parameters?.Goal);
     }
     
     /// <summary>
@@ -562,4 +575,16 @@ public class WorkflowStep
     public string Description { get; set; } = "";
     public string? EstimatedTime { get; set; }
     public Dictionary<string, object> Parameters { get; set; } = new();
+}
+
+/// <summary>
+/// Parameters for the WorkflowDiscoveryTool
+/// </summary>
+public class WorkflowDiscoveryParams
+{
+    [Description("Get workflow information for a specific tool (optional)")]
+    public string? ToolName { get; set; }
+    
+    [Description("Get workflows for a specific goal like 'search code' or 'analyze patterns' (optional)")]
+    public string? Goal { get; set; }
 }
