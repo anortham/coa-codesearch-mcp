@@ -1,9 +1,11 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
@@ -23,6 +25,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// AI-optimized version of FastTextSearchTool with structured response format
 /// Updated for memory lifecycle testing - improved error handling
 /// </summary>
+[McpServerToolType]
 public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
 {
     public override string ToolName => ToolNames.TextSearch;
@@ -82,6 +85,60 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         // DEBUG: Log if scoring service was injected
         logger.LogInformation("FastTextSearchToolV2 initialized with ScoringService: {ScoringServiceStatus}", 
             scoringService != null ? "INJECTED" : "NULL");
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "text_search")]
+    [Description(@"Searches file contents for text patterns (literals, wildcards, regex).
+Returns: File paths with line numbers and optional context.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding code patterns, error messages, TODOs, configuration values.
+Not for: File name searches (use file_search), directory searches (use directory_search).")]
+    public async Task<object> ExecuteAsync(FastTextSearchV2Params parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate that at least one query parameter is provided
+        var query = parameters.GetQuery();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            throw new InvalidParametersException("Either 'query' or 'searchQuery' parameter is required");
+        }
+        
+        // Validate required workspace path
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+        if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+        {
+            mode = parameters.ResponseMode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            query,
+            parameters.WorkspacePath,
+            parameters.FilePattern,
+            parameters.Extensions,
+            parameters.ContextLines,
+            parameters.MaxResults ?? 50,
+            parameters.CaseSensitive ?? false,
+            parameters.SearchType ?? "standard",
+            mode,
+            null, // detailRequest - not supported in attribute-based version
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -1377,4 +1434,58 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
         
         return null;
     }
+}
+
+/// <summary>
+/// Parameters for FastTextSearchToolV2
+/// </summary>
+public class FastTextSearchV2Params
+{
+    [Description("Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")")]
+    public string? Query { get; set; }
+    
+    [Description("[DEPRECATED] Use 'query' instead. Text to search for - supports wildcards (*), fuzzy (~), and phrases (\"exact match\")")]
+    public string? SearchQuery { get; set; }
+    
+    [Description("Directory path to search in (e.g., C:\\MyProject). Always use the project root directory. To search in specific folders, use the filePattern parameter instead of passing subdirectories.")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description(@"Glob pattern to filter files. 
+Syntax:
+- '*.cs' = all C# files
+- 'src/**/*.js' = all JS files under src/
+- '*Test.cs' = files ending with Test.cs
+- '!*.min.js' = exclude minified JS files
+Uses minimatch patterns: * (any chars), ** (any dirs), ? (single char), [abc] (char set)")]
+    public string? FilePattern { get; set; }
+    
+    [Description("Optional: Limit to specific file types (e.g., ['.cs', '.js', '.json'])")]
+    public string[]? Extensions { get; set; }
+    
+    [Description(@"Lines of context before/after matches. 
+Token impact: ~100 tokens per result with context=3.
+Example: 50 results with context=3 ≈ 5,000 tokens")]
+    public int? ContextLines { get; set; }
+    
+    [Description("Maximum number of results")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Case sensitive search")]
+    public bool? CaseSensitive { get; set; }
+    
+    [Description(@"Search algorithm:
+- standard: Exact substring match (case-insensitive by default)
+- fuzzy: Approximate match allowing typos (append ~ to terms)  
+- wildcard: Pattern matching with * and ?
+- phrase: Exact phrase in quotes
+- regex: Full regex support with capturing groups")]
+    public string? SearchType { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.")]
+    public string? ResponseMode { get; set; }
+    
+    /// <summary>
+    /// Helper method to get the query from either Query or SearchQuery (backward compatibility)
+    /// </summary>
+    public string? GetQuery() => Query ?? SearchQuery;
 }
