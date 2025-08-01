@@ -97,27 +97,30 @@ public class AIContextService
                 return memories;
             }
             
-            // Find memories related to files in directory (limit for performance)
+            // Get files in directory (limit for performance)
             var files = Directory.GetFiles(directory, "*.*", SearchOption.AllDirectories)
                 .Where(f => !f.Contains("\\.codesearch\\") && !f.Contains("\\node_modules\\"))
                 .Take(50)
+                .ToHashSet(); // Use HashSet for faster lookups
+            
+            // Search ALL memories ONCE instead of per-file
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = "*",
+                MaxResults = 200 // Get more results to find file matches
+            };
+            
+            var result = await _memoryService.SearchMemoriesAsync(searchRequest);
+            
+            // Filter memories that reference any of our directory files
+            var fileMemories = result.Memories
+                .Where(m => m.FilesInvolved?.Any(f => files.Contains(f)) == true)
                 .ToList();
             
-            foreach (var file in files)
-            {
-                var searchRequest = new FlexibleMemorySearchRequest
-                {
-                    Query = "*",
-                    MaxResults = 10
-                };
-                
-                var result = await _memoryService.SearchMemoriesAsync(searchRequest);
-                var fileMemories = result.Memories.Where(m => m.FilesInvolved?.Contains(file) == true).ToList();
-                memories.AddRange(fileMemories);
-            }
+            memories.AddRange(fileMemories);
             
-            _logger.LogDebug("Found {Count} directory memories for {FileCount} files", 
-                memories.Count, files.Count);
+            _logger.LogDebug("Found {Count} directory memories for {FileCount} files (1 search instead of {FileCount})", 
+                memories.Count, files.Count, files.Count);
         }
         catch (Exception ex)
         {
