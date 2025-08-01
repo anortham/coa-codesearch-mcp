@@ -1,6 +1,8 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Util;
@@ -11,6 +13,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// High-performance file size analysis using Lucene's indexed size field - find large files, analyze distributions, etc.
 /// </summary>
+[McpServerToolType]
 public class FastFileSizeAnalysisTool : ITool
 {
     public string ToolName => "fast_file_size_analysis";
@@ -35,6 +38,40 @@ public class FastFileSizeAnalysisTool : ITool
         _fieldSelectorService = fieldSelectorService;
         _errorRecoveryService = errorRecoveryService;
         _aiResponseBuilder = aiResponseBuilder;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "file_size_analysis")]
+    [Description(@"Analyzes files by size with distribution insights.
+Returns: File paths with sizes, grouped by analysis mode.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Finding large files, identifying empty files, understanding codebase distribution.
+Not for: Content analysis (use text_search), recent changes (use recent_files).")]
+    public async Task<object> ExecuteAsync(FastFileSizeAnalysisParams parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate required workspace path
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters.WorkspacePath,
+            parameters.Mode ?? "largest",
+            parameters.MinSize,
+            parameters.MaxSize,
+            parameters.FilePattern,
+            parameters.Extensions,
+            parameters.MaxResults ?? 50,
+            parameters.IncludeAnalysis ?? true,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -323,4 +360,39 @@ public class FastFileSizeAnalysisTool : ITool
         
         return $"{len:0.##} {sizes[order]}";
     }
+}
+
+/// <summary>
+/// Parameters for FastFileSizeAnalysisTool
+/// </summary>
+public class FastFileSizeAnalysisParams
+{
+    [Description("Path to solution, project, or directory to analyze")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description(@"Analysis mode:
+- largest: Find biggest files (default)
+- smallest: Find smallest non-empty files
+- range: Files within size bounds (requires minSize/maxSize)
+- zero: Find empty files
+- distribution: Size distribution statistics")]
+    public string? Mode { get; set; }
+    
+    [Description("Minimum file size in bytes (for 'range' mode)")]
+    public long? MinSize { get; set; }
+    
+    [Description("Maximum file size in bytes (for 'range' mode)")]
+    public long? MaxSize { get; set; }
+    
+    [Description("Optional: Filter by file pattern")]
+    public string? FilePattern { get; set; }
+    
+    [Description("Optional: Filter by extensions")]
+    public string[]? Extensions { get; set; }
+    
+    [Description("Maximum results")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include size distribution analysis")]
+    public bool? IncludeAnalysis { get; set; }
 }
