@@ -57,7 +57,7 @@ public static class AllToolRegistrations
         // RegisterMemoryGraphNavigator(registry, serviceProvider.GetRequiredService<MemoryGraphNavigatorTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Tool usage analytics
-        RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>());
+        // RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Workflow discovery - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         // RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());

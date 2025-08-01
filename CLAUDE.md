@@ -172,17 +172,39 @@ See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for complete analysis.
 
 ### Adding a New Tool
 
-1. **Create tool class** in `Tools/` folder:
+1. **Create tool class** in `Tools/` folder with attributes:
 
 ```csharp
+[McpServerToolType]
 public class MyTool
 {
     private readonly ILogger<MyTool> _logger;
 
+    [McpServerTool(Name = "my_tool")]
+    [Description("Detailed description of what the tool does")]
+    public async Task<object> ExecuteAsync(MyToolParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        // Validate required parameters
+        var param1 = ValidateRequired(parameters.Param1, "param1");
+        
+        // Call existing implementation
+        return await ExecuteAsync(param1);
+    }
+
+    // Original implementation method
     public async Task<MyResult> ExecuteAsync(string param1)
     {
         // Implementation
     }
+}
+
+// Parameter class with Description attributes
+public class MyToolParams
+{
+    [Description("Description of parameter 1")]
+    public string? Param1 { get; set; }
 }
 ```
 
@@ -192,19 +214,7 @@ public class MyTool
 services.AddSingleton<MyTool>();
 ```
 
-3. **Add registration** in `AllToolRegistrations.cs`:
-
-```csharp
-private static void RegisterMyTool(ToolRegistry registry, MyTool tool)
-{
-    registry.RegisterTool<MyToolParams>(
-        name: "my_tool",
-        description: "What it does",
-        inputSchema: new { /* schema */ },
-        handler: async (p, ct) => await tool.ExecuteAsync(p.Param1)
-    );
-}
-```
+3. **No manual registration needed** - The attribute-based registration system automatically discovers and registers tools marked with `[McpServerToolType]`.
 
 ### Key Services
 
