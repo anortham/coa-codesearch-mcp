@@ -22,7 +22,7 @@ public static class AllToolRegistrations
         // Text search tools
         // RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
+        // RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
         RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>());
         RegisterFastDirectorySearch(registry, serviceProvider.GetRequiredService<FastDirectorySearchTool>());
