@@ -31,12 +31,17 @@ public class HybridSearchTool
             _logger.LogInformation("Executing hybrid search for query: {Query} with strategy: {Strategy}", 
                 parameters.Query, parameters.MergeStrategy);
 
+            // Parse merge strategy from string
+            var mergeStrategy = Enum.TryParse<MergeStrategy>(parameters.MergeStrategy, true, out var strategy)
+                ? strategy
+                : MergeStrategy.Linear;
+
             var options = new HybridSearchOptions
             {
                 MaxResults = parameters.MaxResults,
                 LuceneWeight = parameters.LuceneWeight,
                 SemanticWeight = parameters.SemanticWeight,
-                MergeStrategy = parameters.MergeStrategy,
+                MergeStrategy = mergeStrategy,
                 SemanticThreshold = parameters.SemanticThreshold,
                 BothFoundBoost = parameters.BothFoundBoost,
                 LuceneFilters = parameters.LuceneFilters,
@@ -176,15 +181,15 @@ public class HybridSearchTool
         }
 
         // Strategy insights
-        switch (parameters.MergeStrategy)
+        switch (parameters.MergeStrategy.ToLowerInvariant())
         {
-            case MergeStrategy.Linear:
+            case "linear":
                 insights.Add($"📊 Linear merge used (Lucene: {parameters.LuceneWeight:P0}, Semantic: {parameters.SemanticWeight:P0})");
                 break;
-            case MergeStrategy.Reciprocal:
+            case "reciprocal":
                 insights.Add("🔄 Reciprocal Rank Fusion used - ranks matter more than scores");
                 break;
-            case MergeStrategy.Multiplicative:
+            case "multiplicative":
                 insights.Add("✖️ Multiplicative merge - amplifies high-confidence matches");
                 break;
         }
@@ -248,7 +253,7 @@ public class HybridSearchParams
     /// Strategy for merging results
     /// </summary>
     [Description("Strategy for merging results: Linear, Reciprocal, Multiplicative")]
-    public MergeStrategy MergeStrategy { get; set; } = MergeStrategy.Linear;
+    public string MergeStrategy { get; set; } = "Linear";
 
     /// <summary>
     /// Minimum similarity threshold for semantic results
