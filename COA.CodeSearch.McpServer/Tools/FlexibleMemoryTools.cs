@@ -1,4 +1,5 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Protocol;
@@ -9,6 +10,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tools for the flexible memory system
 /// </summary>
+[McpServerToolType]
 public class FlexibleMemoryTools : ITool
 {
     public string ToolName => "flexible_memory";
@@ -26,6 +28,33 @@ public class FlexibleMemoryTools : ITool
         _logger = logger;
         _memoryService = memoryService;
         _pathResolution = pathResolution;
+    }
+    
+    [McpServerTool(Name = "store_memory")]
+    [Description(@"Stores knowledge permanently in searchable memory system.
+Returns: Created memory with ID and metadata.
+Prerequisites: None - memory system is always available.
+Error handling: Returns VALIDATION_ERROR if memoryType is invalid or content is empty.
+Use cases: Architectural decisions, technical debt, code patterns, project insights.
+Not for: Temporary notes (use store_temporary_memory), file storage (use Write tool).")]
+    public async Task<StoreMemoryResult> StoreMemoryAsync(StoreMemoryParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        return await StoreMemoryAsync(
+            ValidateRequired(parameters.MemoryType, "memoryType"),
+            ValidateRequired(parameters.Content, "content"),
+            parameters.IsShared ?? true,
+            parameters.SessionId,
+            parameters.Files,
+            parameters.Fields);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
     
     /// <summary>
@@ -1426,4 +1455,28 @@ public class FileMemoriesResult
     public Dictionary<string, List<FlexibleMemoryEntry>> MemoriesByType { get; set; } = new();
     public List<FlexibleMemoryEntry> Memories { get; set; } = new();
     public string Message { get; set; } = "";
+}
+
+/// <summary>
+/// Parameters for StoreMemory tool
+/// </summary>
+public class StoreMemoryParams
+{
+    [Description("Memory type (TechnicalDebt, Question, ArchitecturalDecision, CodePattern, etc.)")]
+    public string? MemoryType { get; set; }
+    
+    [Description("Main content of the memory")]
+    public string? Content { get; set; }
+    
+    [Description("Whether to share with team (default: true)")]
+    public bool? IsShared { get; set; }
+    
+    [Description("Optional session ID")]
+    public string? SessionId { get; set; }
+    
+    [Description("Related files")]
+    public string[]? Files { get; set; }
+    
+    [Description("Custom fields as JSON object (importance, urgency, category, etc.)")]
+    public Dictionary<string, JsonElement>? Fields { get; set; }
 }
