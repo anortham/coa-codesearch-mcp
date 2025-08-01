@@ -1,8 +1,9 @@
 using COA.CodeSearch.Contracts;
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
-using System.ComponentModel;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -51,6 +52,7 @@ public class MemoryQualityAssessmentParams
 /// <summary>
 /// Tool for assessing and improving memory quality
 /// </summary>
+[McpServerToolType]
 public class MemoryQualityAssessmentTool
 {
     public string Name => "memory_quality_assessment";
@@ -71,6 +73,8 @@ public class MemoryQualityAssessmentTool
         _memoryService = memoryService;
     }
 
+    [McpServerTool(Name = "memory_quality_assessment")]
+    [Description("Assess and improve the quality of stored memories with detailed scoring and suggestions. Evaluates completeness, relevance, consistency, and provides actionable improvement recommendations.")]
     public async Task<object> ExecuteAsync(MemoryQualityAssessmentParams parameters)
     {
         try
