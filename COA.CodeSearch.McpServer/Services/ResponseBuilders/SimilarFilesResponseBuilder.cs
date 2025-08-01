@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts.Responses.SimilarFiles;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -37,7 +38,7 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
         var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
 
         // Group by similarity ranges
-        var similarityRanges = new
+        var similarityRanges = new SimilarityRanges
         {
             veryHigh = results.Count(r => r.Score >= 0.8),
             high = results.Count(r => r.Score >= 0.6 && r.Score < 0.8),
@@ -55,7 +56,7 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
             .GroupBy(r => Path.GetDirectoryName(r.RelativePath) ?? "root")
             .OrderByDescending(g => g.Count())
             .Take(3)
-            .Select(g => new
+            .Select(g => new DirectoryPattern
             {
                 directory = g.Key,
                 count = g.Count(),
@@ -89,32 +90,32 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
         var resultLimit = mode == ResponseMode.Summary ? 10 : 50;
         var displayResults = results.Take(resultLimit).ToList();
 
-        return new
+        return new SimilarFilesResponse
         {
             success = true,
             operation = "similar_files",
-            source = new
+            source = new SimilarFilesSource
             {
                 file = Path.GetFileName(sourceFilePath),
                 path = sourceFilePath,
                 size = sourceFileInfo.Length,
                 sizeFormatted = FormatFileSize(sourceFileInfo.Length)
             },
-            summary = new
+            summary = new SimilarFilesSummary
             {
                 totalFound = results.Count,
                 searchTime = $"{searchDurationMs:F1}ms",
                 avgSimilarity = results.Any() ? results.Average(r => r.Score) : 0.0,
                 similarityDistribution = similarityRanges
             },
-            analysis = new
+            analysis = new SimilarFilesAnalysis
             {
                 patterns = insights.Take(3).ToList(),
                 topTerms = topTerms?.Take(10).ToList() ?? new List<string>(),
                 directoryPatterns = directoryPatterns,
                 extensionDistribution = extensionGroups
             },
-            results = displayResults.Select(r => new
+            results = displayResults.Select(r => new SimilarFilesResultItem
             {
                 file = r.FileName,
                 path = r.RelativePath,
@@ -124,14 +125,14 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
                 sizeFormatted = FormatFileSize(r.FileSize),
                 matchingTerms = r.MatchingTerms
             }).ToList(),
-            resultsSummary = new
+            resultsSummary = new SimilarFilesResultsSummary
             {
                 included = displayResults.Count,
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? new
+            actions = actions.Select(a => a is AIAction aiAction ? new SimilarFilesAction
             {
                 id = aiAction.Id,
                 description = aiAction.Description,
@@ -139,8 +140,8 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder
                 parameters = aiAction.Command.Parameters,
                 estimatedTokens = aiAction.EstimatedTokens,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
-            } : a),
-            meta = new
+            } : a).ToList(),
+            meta = new SimilarFilesMeta
             {
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
