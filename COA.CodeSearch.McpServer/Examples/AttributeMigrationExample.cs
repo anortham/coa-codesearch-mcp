@@ -1,4 +1,7 @@
 using COA.CodeSearch.McpServer.Attributes;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Tools;
+using System;
 using System.Threading.Tasks;
 
 namespace COA.CodeSearch.McpServer.Examples
