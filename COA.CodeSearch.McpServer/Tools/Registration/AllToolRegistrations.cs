@@ -48,8 +48,8 @@ public static class AllToolRegistrations
         // Index health check tool
         RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
         
-        // System health check tool
-        RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
+        // System health check tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
         
         // AI-optimized search tools
         RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>());
