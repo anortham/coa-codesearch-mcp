@@ -1,8 +1,10 @@
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Attributes;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
+[McpServerToolType]
 public class IndexWorkspaceTool : ITool
 {
     public string ToolName => "index_workspace";
@@ -29,6 +31,20 @@ public class IndexWorkspaceTool : ITool
         _pathResolutionService = pathResolutionService;
         _fileWatcherService = fileWatcherService;
         _notificationService = notificationService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "index_workspace")]
+    [Description("Creates search index for a workspace directory. Returns: Index statistics including file count, size, and build time. Prerequisites: None - this is the first step for all search operations. Error handling: Returns DIRECTORY_NOT_FOUND if path doesn't exist. Use cases: Initial workspace setup, re-indexing after major changes. Important: One-time operation per workspace - subsequent searches use the index.")]
+    public async Task<object> ExecuteAsync(IndexWorkspaceParams parameters)
+    {
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters.WorkspacePath ?? throw new ArgumentException("WorkspacePath is required"),
+            parameters.ForceRebuild ?? false,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -577,4 +593,16 @@ public class IndexWorkspaceTool : ITool
         public DateTime CreatedAt { get; set; }
         public DateTime LastAccessed { get; set; }
     }
+}
+
+/// <summary>
+/// Parameters for the IndexWorkspaceTool
+/// </summary>
+public class IndexWorkspaceParams
+{
+    [Description("Directory path to index (e.g., C:\\MyProject or C:\\source\\MyRepo). Must be a directory, not a file path.")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description("Force rebuild even if index exists (default: false)")]
+    public bool? ForceRebuild { get; set; } = false;
 }
