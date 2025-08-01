@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts.Responses.FileSizeAnalysis;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -40,7 +41,7 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
             .GroupBy(r => r.Extension)
             .ToDictionary(
                 g => g.Key,
-                g => new { count = g.Count(), totalSize = g.Sum(r => r.FileSize) }
+                g => new ExtensionGroupValue { count = g.Count(), totalSize = g.Sum(r => r.FileSize) }
             );
 
         // Group by directory
@@ -48,7 +49,7 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
             .GroupBy(r => Path.GetDirectoryName(r.RelativePath) ?? "root")
             .OrderByDescending(g => g.Sum(r => r.FileSize))
             .Take(5)
-            .Select(g => new
+            .Select(g => new FileSizeDirectoryGroup
             {
                 directory = g.Key,
                 fileCount = g.Count(),
@@ -88,16 +89,16 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
         var resultLimit = responseMode == ResponseMode.Summary ? 50 : 200;
         var displayResults = results.Take(resultLimit).ToList();
 
-        return new
+        return new FileSizeAnalysisResponse
         {
             success = true,
             operation = "file_size_analysis",
-            query = new
+            query = new FileSizeQuery
             {
                 mode = mode,
                 workspace = Path.GetFileName(workspacePath)
             },
-            summary = new
+            summary = new FileSizeSummary
             {
                 totalFiles = results.Count,
                 searchTime = $"{searchDurationMs:F1}ms",
@@ -106,14 +107,14 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                 avgSize = FormatFileSize((long)statistics.AverageSize),
                 medianSize = FormatFileSize((long)statistics.MedianSize)
             },
-            statistics = new
+            statistics = new FileSizeStatisticsInfo
             {
                 min = FormatFileSize(statistics.MinSize),
                 max = FormatFileSize(statistics.MaxSize),
                 mean = FormatFileSize((long)statistics.AverageSize),
                 median = FormatFileSize((long)statistics.MedianSize),
                 stdDev = FormatFileSize((long)statistics.StandardDeviation),
-                distribution = new
+                distribution = new SizeDistribution
                 {
                     tiny = statistics.SizeDistribution.GetValueOrDefault("tiny", 0),
                     small = statistics.SizeDistribution.GetValueOrDefault("small", 0),
@@ -122,13 +123,13 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                     huge = statistics.SizeDistribution.GetValueOrDefault("huge", 0)
                 }
             },
-            analysis = new
+            analysis = new FileSizeAnalysis
             {
                 patterns = insights.Take(3).ToList(),
-                outliers = outliers,
-                hotspots = new
+                outliers = outliers.Cast<object>().ToList(),
+                hotspots = new FileSizeHotspots
                 {
-                    byDirectory = directoryGroups.Select(d => new
+                    byDirectory = directoryGroups.Select(d => new HotspotDirectory
                     {
                         path = d.directory,
                         files = d.fileCount,
@@ -138,7 +139,7 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                     byExtension = extensionGroups
                         .OrderByDescending(kv => kv.Value.totalSize)
                         .Take(5)
-                        .Select(kv => new
+                        .Select(kv => new HotspotExtension
                         {
                             extension = kv.Key,
                             count = kv.Value.count,
@@ -147,7 +148,7 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                         .ToList()
                 }
             },
-            results = displayResults.Select(r => new
+            results = displayResults.Select(r => new FileSizeResultItem
             {
                 file = r.FileName,
                 path = r.RelativePath,
@@ -156,14 +157,14 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                 extension = r.Extension,
                 percentOfTotal = Math.Round((double)r.FileSize / statistics.TotalSize * 100, 2)
             }).ToList(),
-            resultsSummary = new
+            resultsSummary = new FileSizeResultsSummary
             {
                 included = displayResults.Count,
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? (object)new
+            actions = actions.Select(a => a is AIAction aiAction ? (object)new FileSizeAction
             {
                 id = aiAction.Id,
                 description = aiAction.Description,
@@ -171,8 +172,8 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
                 parameters = aiAction.Command.Parameters,
                 estimatedTokens = aiAction.EstimatedTokens,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
-            } : a),
-            meta = new
+            } : a).ToList(),
+            meta = new FileSizeMeta
             {
                 mode = responseMode.ToString().ToLowerInvariant(),
                 analysisMode = mode,
@@ -420,12 +421,12 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
         return actions;
     }
 
-    private List<dynamic> FindSizeOutliers(List<FileSizeResult> results, FileSizeStatistics statistics)
+    private List<SizeOutlier> FindSizeOutliers(List<FileSizeResult> results, FileSizeStatistics statistics)
     {
         if (!results.Any() || statistics.StandardDeviation == 0)
-            return new List<dynamic>();
+            return new List<SizeOutlier>();
 
-        var outliers = new List<dynamic>();
+        var outliers = new List<SizeOutlier>();
         var mean = statistics.AverageSize;
         var stdDev = statistics.StandardDeviation;
 
@@ -434,7 +435,7 @@ public class FileSizeAnalysisResponseBuilder : BaseResponseBuilder
             var zScore = Math.Abs((result.FileSize - mean) / stdDev);
             if (zScore > 3) // More than 3 standard deviations
             {
-                outliers.Add((object)new
+                outliers.Add(new SizeOutlier
                 {
                     file = result.FileName,
                     path = result.RelativePath,
