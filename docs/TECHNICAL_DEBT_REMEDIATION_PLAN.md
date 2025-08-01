@@ -489,11 +489,24 @@ public void RecentFilesResponse_MaintainsJsonCompatibility()
 }
 ```
 
-## Phase 2: Migrate to Official MCP C# SDK (Weeks 3-4) - REVISED
+## Phase 2: Migrate to Official MCP C# SDK (Weeks 3-4) - REVISED WITH ATTRIBUTE PREPARATION
 
 ### Objective
 
 Replace custom `COA.Mcp.Protocol` implementation with the official Model Context Protocol C# SDK, which provides built-in HTTP transport and industry-standard protocol implementation.
+
+### ✅ NEW: Phase 2.0 - Attribute-Based Registration Preparation (COMPLETED)
+
+We've successfully implemented a custom attribute system that exactly mirrors the official SDK's naming:
+- ✅ Created `McpServerToolType` and `McpServerTool` attributes matching SDK names
+- ✅ Built `AttributeBasedToolDiscovery` service for scanning and registering tools
+- ✅ Updated `GetVersionTool` as proof of concept
+- ✅ System supports both manual and attribute-based registration simultaneously
+
+This preparation step significantly reduces Phase 2 risk by allowing us to:
+1. Migrate tools to attributes gradually while keeping current system
+2. Test attribute-based discovery with our existing protocol
+3. Make the final SDK switch a simple namespace change
 
 ### Background
 
@@ -519,10 +532,35 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
 - **ASP.NET Core Package**: https://www.nuget.org/packages/ModelContextProtocol.AspNetCore
 - **Main Package**: https://www.nuget.org/packages/ModelContextProtocol
 
-### Migration Plan
+### Migration Plan - UPDATED WITH ATTRIBUTE PREPARATION
 
 **IMPORTANT: Tool Logic Remains Unchanged!**
 The migration to the official SDK does NOT require rewriting your 45+ tools. The tools themselves (TextSearchTool, FileSearchTool, etc.) and their ExecuteAsync methods remain exactly the same. Only the registration mechanism and protocol layer change.
+
+#### 2.0 Tool Attribute Migration (NEW FIRST STEP)
+
+**Week 2.5: Migrate All Tools to Attributes**
+
+Since we've already implemented the attribute system, migrate all tools before SDK integration:
+
+1. **Migrate Simple Tools First** (No parameters)
+   - [ ] GetVersionTool ✅ (already done)
+   - [ ] Other parameterless tools
+   
+2. **Migrate Tools with Parameters**
+   - [ ] Create parameter classes matching existing schemas
+   - [ ] Add attributes to tool classes and methods
+   - [ ] Keep existing ExecuteAsync methods unchanged
+   
+3. **Test Each Migration**
+   - [ ] Verify tool appears in tools/list
+   - [ ] Test with same parameters
+   - [ ] Confirm JSON output unchanged
+
+4. **Remove Manual Registration**
+   - [ ] Once all tools migrated, remove AllToolRegistrations.cs
+   - [ ] Clean up manual registration code
+   - [ ] Rely entirely on attribute discovery
 
 #### 2.1 Initial Setup & Analysis
 
@@ -573,10 +611,10 @@ The migration to the official SDK does NOT require rewriting your 45+ tools. The
    public class McpServer : IMcpServer
    ```
 
-3. **Update Tool Registration** (Minor Changes Only)
-   - [ ] Update `AllToolRegistrations.cs` to use SDK's registration method
-   - [ ] Change `registry.RegisterTool<T>` to SDK equivalent (similar API)
-   - [ ] Tool handlers remain the same - just wrap with SDK signature
+3. **Update Tool Registration** (SIMPLIFIED - Attributes Already Done!)
+   - [ ] ~~Update `AllToolRegistrations.cs`~~ Already removed after attribute migration
+   - [ ] Change namespace from `COA.CodeSearch.McpServer.Attributes` to `ModelContextProtocol`
+   - [ ] Update `AttributeBasedToolDiscovery` to use SDK's discovery (or remove if SDK handles it)
    - [ ] All tool ExecuteAsync methods stay unchanged
    - [ ] Parameter classes and result types remain the same
 
