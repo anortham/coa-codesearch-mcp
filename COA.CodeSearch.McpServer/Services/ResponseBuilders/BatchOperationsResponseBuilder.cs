@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts.Responses.BatchOperations;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
@@ -46,7 +47,7 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         var slowestOperations = operationTimings
             .OrderByDescending(kv => kv.Value)
             .Take(3)
-            .Select(kv => new
+            .Select(kv => new BatchSlowestOperation
             {
                 operation = kv.Key,
                 duration = $"{kv.Value:F1}ms"
@@ -77,9 +78,9 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         }, tokenBudget);
 
         // Build operation summaries
-        var operationSummaries = operations.Select((op, index) => new
+        var operationSummaries = operations.Select((op, index) => new BatchOperationSummary
         {
-            index,
+            index = index,
             operation = op.Operation,
             parameters = GetOperationSummary(op),
             success = index < results.Count,
@@ -96,28 +97,28 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         string? detailRequestToken = null;
         if (mode == ResponseMode.Summary && _detailCache != null && results.Count > displayResults.Count)
         {
-            detailRequestToken = _detailCache.StoreDetailData(new 
+            detailRequestToken = _detailCache.StoreDetailData(new BatchDetailData
             { 
-                operations, 
-                results, 
-                operationSummaries,
-                resultAnalysis 
+                operations = operations.Cast<object>().ToList(), 
+                results = results, 
+                operationSummaries = operationSummaries.Cast<object>().ToList(),
+                resultAnalysis = resultAnalysis 
             });
         }
 
         // Build unified response format matching other tools
-        return new
+        return new BatchOperationsResponse
         {
             success = true,
             operation = "batch_operations",
-            query = new
+            query = new BatchQuery
             {
                 operationCount = operations.Count,
                 operationTypes = operationTypes,
                 workspace = operations.FirstOrDefault()?.Parameters.ContainsKey("workspacePath") == true 
-                    ? operations.First().Parameters["workspacePath"] : "multiple"
+                    ? operations.First().Parameters["workspacePath"].ToString() ?? "multiple" : "multiple"
             },
-            summary = new
+            summary = new BatchSummary
             {
                 totalOperations = operations.Count,
                 completedOperations = results.Count,
@@ -134,7 +135,7 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                     var operation = operations[opIndex];
                     var matchCount = entry.Result != null ? ExtractMatchCount(entry.Result, operation) : 0;
                     
-                    return new
+                    return new BatchResultEntry
                     {
                         index = entry.Index,
                         operation = entry.OperationType ?? operation.Operation,
@@ -153,7 +154,7 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                     var operation = operations[opIndex];
                     var matchCount = ExtractMatchCount(r, operation);
                     
-                    return (object)new
+                    return (object)new BatchFallbackResult
                     {
                         index = i,
                         operation = operation.Operation,
@@ -164,39 +165,39 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
                     };
                 }
             }).ToList(),
-            resultsSummary = new
+            resultsSummary = new BatchResultsSummary
             {
                 included = displayResults.Count,
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
-            distribution = new
+            distribution = new BatchDistribution
             {
                 byOperation = operationTypes,
                 commonFiles = resultAnalysis.commonFiles
             },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? new
+            actions = actions.Select(a => a is AIAction aiAction ? (object)new BatchAction
             {
                 id = aiAction.Id,
                 cmd = aiAction.Command.Parameters,
                 tokens = aiAction.EstimatedTokens,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
-            } : a),
-            meta = new
+            } : a).ToList(),
+            meta = new BatchMeta
             {
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
                 tokens = EstimateResponseTokens(displayResults),
                 detailRequestToken = detailRequestToken,
                 // Include batch-specific metadata
-                performance = new
+                performance = new BatchPerformance
                 {
                     parallel = operations.Count > 1,
                     speedup = operations.Count > 1 ? $"{CalculateSpeedup(totalDurationMs, operationTimings):F1}x" : "N/A",
                     slowestOperations = slowestOperations
                 },
-                analysis = new
+                analysis = new BatchAnalysis
                 {
                     effectiveness = CalculateEffectiveness(resultAnalysis),
                     highMatchOperations = resultAnalysis.highMatchOperations,
@@ -403,15 +404,15 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
             .Where(kv => kv.Value > 1)
             .OrderByDescending(kv => kv.Value)
             .Take(5)
-            .Select(kv => new { file = kv.Key, count = kv.Value })
+            .Select(kv => new BatchCommonFile { file = kv.Key, count = kv.Value })
             .ToList();
 
-        return new
+        return new BatchResultAnalysis
         {
-            totalMatches,
-            highMatchOperations,
+            totalMatches = totalMatches,
+            highMatchOperations = highMatchOperations,
             avgMatchesPerOperation = results.Count > 0 ? totalMatches / results.Count : 0,
-            commonFiles
+            commonFiles = commonFiles
         };
     }
 
@@ -435,12 +436,12 @@ public class BatchOperationsResponseBuilder : BaseResponseBuilder
         return summary;
     }
 
-    private dynamic GetResultSummary(object result, BatchOperationSpec operation)
+    private BatchGetResultSummary GetResultSummary(object result, BatchOperationSpec operation)
     {
         var matchCount = ExtractMatchCount(result, operation);
         var resultType = result.GetType().GetProperty("operation")?.GetValue(result)?.ToString() ?? operation.Operation;
         
-        return new
+        return new BatchGetResultSummary
         {
             type = resultType,
             matches = matchCount,
