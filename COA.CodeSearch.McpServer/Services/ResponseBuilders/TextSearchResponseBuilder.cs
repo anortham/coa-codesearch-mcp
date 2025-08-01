@@ -241,12 +241,20 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
             {
                 case "standard":
                     insights.Add("Try wildcard search with '*' or fuzzy search with '~'");
+                    // Suggest code search for patterns that look like code
+                    if (ContainsCodePatterns(data.query))
+                    {
+                        insights.Add("💡 TIP: For exact code patterns, try searchType='code'");
+                    }
                     break;
                 case "fuzzy":
                     insights.Add("Try broader fuzzy search or wildcard patterns");
                     break;
                 case "regex":
                     insights.Add("Check regex syntax or try simpler patterns");
+                    break;
+                case "code":
+                    insights.Add("Code search preserves exact patterns without tokenization");
                     break;
             }
         }
@@ -348,6 +356,27 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
                 EstimatedTokens = 2000,
                 Priority = Priority.Low
             });
+            
+            // Add code search suggestion if query looks like code
+            if (data.searchType == "standard" && ContainsCodePatterns(data.query))
+            {
+                actions.Add(new AIAction
+                {
+                    Id = "try_code",
+                    Description = "Try exact code search",
+                    Command = new AICommand
+                    {
+                        Tool = "text_search",
+                        Parameters = new Dictionary<string, object>
+                        {
+                            ["query"] = data.query,
+                            ["searchType"] = "code"
+                        }
+                    },
+                    EstimatedTokens = 1500,
+                    Priority = Priority.Medium
+                });
+            }
         }
         else
         {
@@ -437,5 +466,49 @@ public class TextSearchResponseBuilder : BaseResponseBuilder
         var analysisTokens = 200;
         
         return baseTokens + (results.Count * perResultTokens) + analysisTokens;
+    }
+    
+    private bool ContainsCodePatterns(string query)
+    {
+        // Check for common code patterns that would benefit from exact matching
+        var codePatterns = new[]
+        {
+            "=>",          // Lambda expressions
+            "->",          // Pointer dereference
+            "::",          // Scope resolution
+            "[]",          // Array brackets
+            "()",          // Function calls
+            "{}",          // Braces
+            "<>",          // Generic types
+            "==",          // Equality
+            "!=",          // Inequality
+            "&&",          // Logical AND
+            "||",          // Logical OR
+            "++",          // Increment
+            "--",          // Decrement
+            "/*",          // Comment start
+            "//",          // Line comment
+            "${",          // String interpolation
+            "@\"",         // Verbatim string
+            "=\"",         // Attribute assignment
+            "[Attribute",  // Attributes
+            ".(",          // Method chaining
+            ")]",          // Attribute closing
+            "Name =",      // Named parameters
+            "public ",     // Access modifiers
+            "private ",
+            "protected ",
+            "class ",
+            "interface ",
+            "namespace ",
+            "using ",
+            "import ",
+            "function ",
+            "const ",
+            "let ",
+            "var "
+        };
+        
+        return codePatterns.Any(pattern => query.Contains(pattern));
     }
 }
