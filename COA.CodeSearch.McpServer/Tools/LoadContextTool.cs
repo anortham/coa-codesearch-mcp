@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Attributes;
 using Microsoft.Extensions.Caching.Memory;
 using Microsoft.Extensions.Logging;
 
@@ -8,6 +9,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool to load AI working context with relevant memories for the current work environment
 /// </summary>
+[McpServerToolType]
 public class LoadContextTool : ITool
 {
     public string ToolName => "load_context";
@@ -26,6 +28,21 @@ public class LoadContextTool : ITool
         _logger = logger;
         _contextService = contextService;
         _cache = cache;
+    }
+    
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "load_context")]
+    [Description("Load AI working context with relevant memories for directory or session. Automatically loads and ranks memories by relevance for the current working environment. Returns: Organized memories (primary/secondary/available), insights, and suggested actions. Use cases: Starting work sessions, resuming projects, getting contextual memory overview.")]
+    public async Task<object> ExecuteAsync(LoadContextParams parameters)
+    {
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters?.WorkingDirectory,
+            parameters?.SessionId,
+            parameters?.RefreshCache ?? false,
+            CancellationToken.None);
     }
     
     public async Task<object> ExecuteAsync(
@@ -249,4 +266,19 @@ public class LoadContextTool : ITool
         
         return actions.ToArray();
     }
+}
+
+/// <summary>
+/// Parameters for the LoadContextTool
+/// </summary>
+public class LoadContextParams
+{
+    [Description("Directory to load context for (defaults to current directory)")]
+    public string? WorkingDirectory { get; set; }
+    
+    [Description("Session ID to load session-specific memories (optional)")]
+    public string? SessionId { get; set; }
+    
+    [Description("Force refresh cached context (default: false)")]
+    public bool? RefreshCache { get; set; } = false;
 }

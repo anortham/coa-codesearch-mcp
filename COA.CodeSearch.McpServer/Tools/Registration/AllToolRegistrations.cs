@@ -65,8 +65,8 @@ public static class AllToolRegistrations
         // Phase 3: Advanced tools now handled by RegisterEssentialMemoryTools
         
         
-        // AI Context loading
-        RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
+        // AI Context loading - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterLoadContext(registry, serviceProvider.GetRequiredService<LoadContextTool>());
     }
 
     private static void RegisterBatchOperationsV2(ToolRegistry registry, BatchOperationsToolV2 tool)
