@@ -1,8 +1,10 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 
@@ -12,6 +14,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool for accessing and managing tool usage analytics.
 /// Provides insights into tool usage patterns, performance metrics, and workflow optimization.
 /// </summary>
+[McpServerToolType]
 public class ToolUsageAnalyticsTool : ClaudeOptimizedToolBase
 {
     public override string ToolName => "tool_usage_analytics";
@@ -33,6 +36,52 @@ public class ToolUsageAnalyticsTool : ClaudeOptimizedToolBase
     {
         _analyticsService = analyticsService;
         _errorRecoveryService = errorRecoveryService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "tool_usage_analytics")]
+    [Description(@"View tool usage analytics, performance metrics, and workflow patterns.
+Provides insights into tool effectiveness, usage patterns, error analysis, and optimization recommendations.
+Returns: Analytics data including usage statistics, performance metrics, and actionable insights.
+Use cases: Understanding tool performance, optimizing workflows, identifying issues, tracking usage patterns.
+AI-optimized: Provides intelligent recommendations and workflow optimization suggestions.")]
+    public async Task<object> ExecuteAsync(ToolUsageAnalyticsParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var mode = ResponseMode.Summary;
+        if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+        {
+            mode = parameters.ResponseMode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+
+        var action = AnalyticsAction.Summary;
+        if (!string.IsNullOrWhiteSpace(parameters.Action))
+        {
+            action = parameters.Action.ToLowerInvariant() switch
+            {
+                "summary" => AnalyticsAction.Summary,
+                "detailed" => AnalyticsAction.Detailed,
+                "tool_specific" => AnalyticsAction.ToolSpecific,
+                "export" => AnalyticsAction.Export,
+                "reset" => AnalyticsAction.Reset,
+                _ => AnalyticsAction.Summary
+            };
+        }
+        
+        return await ExecuteAsync(
+            action,
+            parameters.ToolName,
+            mode,
+            null,
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -329,4 +378,24 @@ public class ToolSpecificAnalytics
     public string ToolName { get; set; } = string.Empty;
     public ToolUsageStats Stats { get; set; } = new();
     public List<string> Recommendations { get; set; } = new();
+}
+
+/// <summary>
+/// Parameters for ToolUsageAnalytics tool
+/// </summary>
+public class ToolUsageAnalyticsParams
+{
+    [Description(@"Analytics action to perform:
+- summary: High-level analytics overview
+- detailed: Complete analytics data with all metrics
+- tool_specific: Analytics for a specific tool (requires toolName)
+- export: Export all analytics data as JSON
+- reset: Clear all analytics data")]
+    public string? Action { get; set; }
+    
+    [Description("Name of specific tool to analyze (required for tool_specific action)")]
+    public string? ToolName { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'")]
+    public string? ResponseMode { get; set; }
 }
