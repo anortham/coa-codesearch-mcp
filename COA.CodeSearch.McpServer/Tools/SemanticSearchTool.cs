@@ -1,5 +1,7 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Models;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -7,6 +9,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// MCP tool for semantic search that finds conceptually similar memories
 /// </summary>
+[McpServerToolType]
 public class SemanticSearchTool
 {
     private readonly SemanticMemoryIndex _semanticIndex;
@@ -23,6 +26,8 @@ public class SemanticSearchTool
         _logger = logger;
     }
 
+    [McpServerTool(Name = "semantic_search")]
+    [Description("Perform semantic search to find conceptually similar memories using embeddings. Finds memories based on concepts and meaning, not just exact keyword matches. Ideal for discovering related architectural decisions, similar problems, or concept-based exploration.")]
     public async Task<object> ExecuteAsync(SemanticSearchParams parameters)
     {
         try
@@ -218,30 +223,36 @@ public class SemanticSearchParams
     /// <summary>
     /// Search query (concepts, not just keywords)
     /// </summary>
+    [Description("Search query (concepts, not just keywords). Examples: 'authentication issues', 'performance problems', 'database design patterns'")]
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
     /// Maximum number of results to return
     /// </summary>
+    [Description("Maximum number of results to return")]
     public int MaxResults { get; set; } = 20;
 
     /// <summary>
     /// Minimum similarity threshold (0.0 to 1.0)
     /// </summary>
+    [Description("Minimum similarity threshold (0.0 to 1.0). Lower values find more results.")]
     public float Threshold { get; set; } = 0.2f;
 
     /// <summary>
     /// Filter by memory type
     /// </summary>
+    [Description("Filter by memory type (TechnicalDebt, ArchitecturalDecision, etc.)")]
     public string? MemoryType { get; set; }
 
     /// <summary>
     /// Filter by shared status
     /// </summary>
+    [Description("Filter by shared status")]
     public bool? IsShared { get; set; }
 
     /// <summary>
     /// Custom field filters
     /// </summary>
+    [Description("Custom field filters as key-value pairs")]
     public Dictionary<string, object>? CustomFilters { get; set; }
 }
