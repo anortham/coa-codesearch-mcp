@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Microsoft.Extensions.Logging;
@@ -88,7 +89,11 @@ public class MemoryQualityAssessmentTool
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during memory quality assessment");
-            return new { error = "Quality assessment failed", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Quality assessment failed", 
+                details = ex.Message 
+            };
         }
     }
 
@@ -98,7 +103,10 @@ public class MemoryQualityAssessmentTool
     {
         if (string.IsNullOrEmpty(parameters.MemoryId))
         {
-            return new { error = "MemoryId is required for single memory assessment" };
+            return new ErrorResponse 
+            { 
+                error = "MemoryId is required for single memory assessment" 
+            };
         }
 
         var searchResult = await _memoryService.SearchMemoriesAsync(new FlexibleMemorySearchRequest
@@ -110,7 +118,10 @@ public class MemoryQualityAssessmentTool
         var memory = searchResult.Memories.FirstOrDefault();
         if (memory == null)
         {
-            return new { error = $"Memory with ID '{parameters.MemoryId}' not found" };
+            return new ErrorResponse 
+            { 
+                error = $"Memory with ID '{parameters.MemoryId}' not found" 
+            };
         }
 
         var qualityScore = await _qualityValidator.ValidateQualityAsync(memory, options);
@@ -156,7 +167,10 @@ public class MemoryQualityAssessmentTool
     {
         if (parameters.MemoryIds == null || !parameters.MemoryIds.Any())
         {
-            return new { error = "MemoryIds list is required for batch assessment" };
+            return new ErrorResponse 
+            { 
+                error = "MemoryIds list is required for batch assessment" 
+            };
         }
 
         var memories = new List<FlexibleMemoryEntry>();
@@ -178,7 +192,10 @@ public class MemoryQualityAssessmentTool
 
         if (!memories.Any())
         {
-            return new { error = "No memories found for the provided IDs" };
+            return new ErrorResponse 
+            { 
+                error = "No memories found for the provided IDs" 
+            };
         }
 
         var qualityScores = await _qualityValidator.ValidateQualityBatchAsync(memories, options);
@@ -221,7 +238,10 @@ public class MemoryQualityAssessmentTool
         
         if (!searchResult.Memories.Any())
         {
-            return new { error = "No memories found for bulk assessment" };
+            return new ErrorResponse 
+            { 
+                error = "No memories found for bulk assessment" 
+            };
         }
 
         var qualityScores = await _qualityValidator.ValidateQualityBatchAsync(searchResult.Memories, options);

@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts;
 using COA.CodeSearch.McpServer.Services;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
@@ -119,7 +120,11 @@ public class IndexHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get metrics for health check");
-            return new { error = "Failed to retrieve metrics", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve metrics", 
+                details = ex.Message 
+            };
         }
     }
 
@@ -157,7 +162,11 @@ public class IndexHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get circuit breaker status for health check");
-            return new { error = "Failed to retrieve circuit breaker status", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve circuit breaker status", 
+                details = ex.Message 
+            };
         }
     }
 

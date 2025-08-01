@@ -1,3 +1,4 @@
+using COA.CodeSearch.Contracts;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using Microsoft.Extensions.Logging;
@@ -171,7 +172,11 @@ public class SystemHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get memory pressure status");
-            return new { error = "Failed to retrieve memory pressure status", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve memory pressure status", 
+                details = ex.Message 
+            };
         }
     }
 
@@ -190,7 +195,11 @@ public class SystemHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get index health status");
-            return new { error = "Failed to retrieve index health", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve index health", 
+                details = ex.Message 
+            };
         }
     }
 
@@ -220,7 +229,11 @@ public class SystemHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get circuit breaker summary");
-            return new { error = "Failed to retrieve circuit breaker status", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve circuit breaker status", 
+                details = ex.Message 
+            };
         }
     }
 
@@ -256,7 +269,11 @@ public class SystemHealthCheckTool
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to get system metrics");
-            return new { error = "Failed to retrieve system metrics", details = ex.Message };
+            return new ErrorResponse 
+            { 
+                error = "Failed to retrieve system metrics", 
+                details = ex.Message 
+            };
         }
     }
 
