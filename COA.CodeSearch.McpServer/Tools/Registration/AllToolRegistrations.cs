@@ -1642,7 +1642,7 @@ AI-optimized: Provides intent detection, action suggestions, and usage guidance.
         var qualityAssessmentTool = serviceProvider.GetRequiredService<MemoryQualityAssessmentTool>();
 
         // Register the 6 essential tools only
-        RegisterUnifiedMemory(registry, unifiedMemoryTool);
+        // RegisterUnifiedMemory(registry, unifiedMemoryTool); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterSearchMemoriesV2(registry, memorySearchV2);
         RegisterStoreMemoryOnly(registry, memoryTools);
         RegisterSemanticSearch(registry, semanticSearchTool);
