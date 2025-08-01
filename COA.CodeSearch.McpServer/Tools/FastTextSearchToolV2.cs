@@ -1064,32 +1064,22 @@ Not for: File name searches (use file_search), directory searches (use directory
                 break;
             
             case "code":
-                // Special handling for code patterns - normalize quotes and use phrase query
+                // Use the exact field for code patterns - no tokenization, preserves exact text
                 // This helps find patterns like [McpServerTool(Name = "roslyn_")] in C# code
                 var codeQuery = queryText;
                 
-                // Normalize quotes for C# code - if query has unescaped quotes, escape them
-                // This handles the common case where source files have escaped quotes
-                if (queryText.Contains('"') && !queryText.Contains("\\\""))
+                // Handle case sensitivity
+                if (!caseSensitive)
                 {
-                    codeQuery = queryText.Replace("\"", "\\\"");
-                    Logger.LogDebug("Code search: normalized quotes in query from '{Original}' to '{Normalized}'", queryText, codeQuery);
+                    codeQuery = codeQuery.ToLowerInvariant();
                 }
                 
-                try
-                {
-                    // Use phrase query to preserve exact sequence
-                    var codeParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                    codeParser.DefaultOperator = Operator.AND;
-                    contentQuery = codeParser.Parse($"\"{EscapeQueryText(codeQuery)}\"");
-                    Logger.LogDebug("Code search: using phrase query for '{Query}'", codeQuery);
-                }
-                catch (ParseException ex)
-                {
-                    Logger.LogWarning(ex, "Failed to parse code query as phrase: {Query}, trying term query", codeQuery);
-                    // Fall back to term query for exact matching
-                    contentQuery = new TermQuery(new Term("content", codeQuery.ToLowerInvariant()));
-                }
+                // For substring matching on a non-tokenized field, we need to use WildcardQuery
+                // Wrap the query with wildcards to find it anywhere in the content
+                var wildcardPattern = $"*{EscapeWildcardChars(codeQuery)}*";
+                contentQuery = new WildcardQuery(new Term("contentExact", wildcardPattern));
+                Logger.LogDebug("Code search: using wildcard match on contentExact field for '{Query}' (pattern: {Pattern}, case sensitive: {CaseSensitive})", 
+                    queryText, wildcardPattern, caseSensitive);
                 break;
             
             default: // standard
@@ -1275,6 +1265,12 @@ Not for: File name searches (use file_search), directory searches (use directory
         }
         
         return escapedQuery;
+    }
+
+    private static string EscapeWildcardChars(string query)
+    {
+        // For code search, escape * and ? to treat them as literals
+        return query.Replace("*", "\\*").Replace("?", "\\?");
     }
 
     private static string EscapeQueryTextForFuzzy(string query)
