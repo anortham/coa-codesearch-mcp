@@ -45,8 +45,8 @@ public static class AllToolRegistrations
         // Version information tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         // RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
         
-        // Index health check tool
-        RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
+        // Index health check tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION  
+        // RegisterIndexHealthCheck(registry, serviceProvider.GetRequiredService<IndexHealthCheckTool>());
         
         // System health check tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         // RegisterSystemHealthCheck(registry, serviceProvider.GetRequiredService<SystemHealthCheckTool>());
