@@ -54,7 +54,7 @@ public static class AllToolRegistrations
         // AI-optimized search tools
         // RegisterSearchAssistant(registry, serviceProvider.GetRequiredService<SearchAssistantTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         // RegisterPatternDetector(registry, serviceProvider.GetRequiredService<PatternDetectorTool>()); // COMMENTED OUT - Migrated to attribute-based registration
-        RegisterMemoryGraphNavigator(registry, serviceProvider.GetRequiredService<MemoryGraphNavigatorTool>());
+        // RegisterMemoryGraphNavigator(registry, serviceProvider.GetRequiredService<MemoryGraphNavigatorTool>()); // COMMENTED OUT - Migrated to attribute-based registration
         
         // Tool usage analytics
         RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>());

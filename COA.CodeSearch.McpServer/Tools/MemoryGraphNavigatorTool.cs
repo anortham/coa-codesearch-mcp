@@ -1,8 +1,10 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Text.Json;
@@ -13,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// AI-optimized tool that explores memory relationships with visual understanding.
 /// Designed to help AI agents understand the connections and dependencies between memories.
 /// </summary>
+[McpServerToolType]
 public class MemoryGraphNavigatorTool : ClaudeOptimizedToolBase
 {
     public override string ToolName => "memory_graph_navigator";
@@ -40,6 +43,47 @@ public class MemoryGraphNavigatorTool : ClaudeOptimizedToolBase
         _linkingTools = linkingTools;
         _memoryService = memoryService;
         _errorRecoveryService = errorRecoveryService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "memory_graph_navigator")]
+    [Description(@"Explores memory relationships and dependencies with graph visualization.
+Maps connections between memories to understand knowledge structure and dependencies.
+Returns: Interactive graph showing memory nodes, relationships, clusters, and insights.
+Use cases: Understanding project knowledge structure, finding related memories, identifying knowledge gaps.
+AI-optimized: Provides relationship strength, clusters themes, and suggests exploration paths.")]
+    public async Task<object> ExecuteAsync(MemoryGraphNavigatorParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        var mode = ResponseMode.Summary;  // Default to summary for AI optimization
+        if (!string.IsNullOrWhiteSpace(parameters.ResponseMode))
+        {
+            mode = parameters.ResponseMode.ToLowerInvariant() switch
+            {
+                "full" => ResponseMode.Full,
+                "summary" => ResponseMode.Summary,
+                _ => ResponseMode.Summary
+            };
+        }
+        
+        return await ExecuteAsync(
+            ValidateRequired(parameters.StartPoint, "startPoint"),
+            parameters.Depth ?? 2,
+            parameters.FilterTypes,
+            parameters.IncludeOrphans ?? false,
+            mode,
+            null,
+            CancellationToken.None);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
 
     public async Task<object> ExecuteAsync(
@@ -670,4 +714,25 @@ public class MemoryCluster
     public string Theme { get; set; } = string.Empty;
     public List<string> MemberIds { get; set; } = new();
     public string ClusterType { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Parameters for MemoryGraphNavigator tool
+/// </summary>
+public class MemoryGraphNavigatorParams
+{
+    [Description("Memory ID or search query to start graph exploration from (e.g., memory ID or 'authentication patterns')")]
+    public string? StartPoint { get; set; }
+    
+    [Description("Maximum depth of relationship traversal (1-5)")]
+    public int? Depth { get; set; }
+    
+    [Description("Filter by specific memory types (e.g., ['TechnicalDebt', 'ArchitecturalDecision'])")]
+    public string[]? FilterTypes { get; set; }
+    
+    [Description("Include memories with no relationships in the graph")]
+    public bool? IncludeOrphans { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary for large graphs.")]
+    public string? ResponseMode { get; set; }
 }
