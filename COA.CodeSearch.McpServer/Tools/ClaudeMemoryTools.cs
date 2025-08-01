@@ -1,5 +1,7 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -8,6 +10,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Essential MCP tools for Claude's persistent memory system
 /// Only includes tools that don't have flexible memory equivalents
 /// </summary>
+[McpServerToolType]
 public class ClaudeMemoryTools : ITool
 {
     public string ToolName => "claude_memory";
@@ -22,6 +25,34 @@ public class ClaudeMemoryTools : ITool
         _logger = logger;
         _memoryService = memoryService;
         _backupService = backupService;
+    }
+
+    [McpServerTool(Name = "recall_context")]
+    [Description("Load relevant project knowledge from previous sessions including architectural decisions, code patterns, and insights. Searches stored memories based on your current work context. Recommended at session start to restore context from past work.")]
+    public async Task<object> RecallContext(RecallContextParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        MemoryScope? scopeFilter = null;
+        if (!string.IsNullOrEmpty(parameters.ScopeFilter))
+        {
+            if (System.Enum.TryParse<MemoryScope>(parameters.ScopeFilter, out var scope))
+            {
+                scopeFilter = scope;
+            }
+        }
+        
+        return await RecallContext(
+            ValidateRequired(parameters.Query, "query"),
+            scopeFilter,
+            parameters.MaxResults ?? 10);
+    }
+    
+    private static string ValidateRequired(string? value, string paramName)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            throw new InvalidParametersException($"{paramName} is required");
+        return value;
     }
 
     public async Task<object> RecallContext(
@@ -97,6 +128,15 @@ public class ClaudeMemoryTools : ITool
         }
     }
     
+    [McpServerTool(Name = "backup_memories")]
+    [Description("Export memories to JSON file for version control and team sharing. Creates timestamped, human-readable backups. Use cases: commit to git for team collaboration, backup before major changes, transfer knowledge to new machines. By default backs up only project memories (ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight). Use includeLocal=true to include personal memories.")]
+    public async Task<object> BackupMemories(BackupMemoriesParams parameters)
+    {
+        return await BackupMemories(
+            parameters?.Scopes,
+            parameters?.IncludeLocal ?? false);
+    }
+    
     public async Task<object> BackupMemories(
         string[]? scopes = null,
         bool includeLocal = false)  // Changed default to false - only backup project memories
@@ -146,6 +186,15 @@ public class ClaudeMemoryTools : ITool
                 message = $"❌ Backup failed: {ex.Message}"
             };
         }
+    }
+    
+    [McpServerTool(Name = "restore_memories")]
+    [Description("Restore memories from JSON backup file. Automatically finds most recent backup if no file specified. Useful when setting up on a new machine or after losing the Lucene index. By default restores only project-level memories.")]
+    public async Task<object> RestoreMemories(RestoreMemoriesParams parameters)
+    {
+        return await RestoreMemories(
+            parameters?.Scopes,
+            parameters?.IncludeLocal ?? false);
     }
     
     public async Task<object> RestoreMemories(
@@ -258,4 +307,43 @@ public static class ClaudeMemoryServiceExtensions
             .Take(20)
             .ToArray();
     }
+}
+
+/// <summary>
+/// Parameters for RecallContext
+/// </summary>
+public class RecallContextParams
+{
+    [Description("What you're currently working on or want to learn about")]
+    public string? Query { get; set; }
+    
+    [Description("Filter by type: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight, WorkSession, LocalInsight")]
+    public string? ScopeFilter { get; set; }
+    
+    [Description("Maximum number of results to return (default: 10)")]
+    public int? MaxResults { get; set; }
+}
+
+/// <summary>
+/// Parameters for BackupMemories
+/// </summary>
+public class BackupMemoriesParams
+{
+    [Description("Memory types to backup. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight")]
+    public string[]? Scopes { get; set; }
+    
+    [Description("Include local developer memories (WorkSession, LocalInsight). Default: false")]
+    public bool? IncludeLocal { get; set; }
+}
+
+/// <summary>
+/// Parameters for RestoreMemories
+/// </summary>
+public class RestoreMemoriesParams
+{
+    [Description("Memory types to restore. Defaults to project memories: ArchitecturalDecision, CodePattern, SecurityRule, ProjectInsight")]
+    public string[]? Scopes { get; set; }
+    
+    [Description("Include local developer memories (WorkSession, LocalInsight). Default: false")]
+    public bool? IncludeLocal { get; set; }
 }
