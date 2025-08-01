@@ -221,7 +221,7 @@ stages:
               packagesToPack: "COA.Mcp.Protocol/COA.Mcp.Protocol.csproj"
               configuration: $(buildConfiguration)
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
-              nobuild: false
+              nobuild: true
               versioningScheme: "off"
               arguments: "$(versionArguments) --no-restore"
 
@@ -232,7 +232,7 @@ stages:
               packagesToPack: "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj"
               configuration: $(buildConfiguration)
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
-              nobuild: false
+              nobuild: true
               versioningScheme: "off"
               arguments: "$(versionArguments) --no-restore"
 

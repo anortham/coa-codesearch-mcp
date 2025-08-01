@@ -23,7 +23,7 @@ public class LuceneIndexingUnitTests : IDisposable
     public LuceneIndexingUnitTests(ITestOutputHelper output)
     {
         _output = output;
-        _loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
+        _loggerFactory = LoggerFactory.Create(builder => builder.SetMinimumLevel(LogLevel.Warning));
         
         // Create a temporary test directory with test files
         _testDirectory = Path.Combine(Path.GetTempPath(), $"lucene_test_{Guid.NewGuid()}");
