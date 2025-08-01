@@ -489,35 +489,45 @@ public void RecentFilesResponse_MaintainsJsonCompatibility()
 }
 ```
 
-## Phase 2: Migrate to Official MCP C# SDK (Weeks 3-4) - REVISED WITH ATTRIBUTE PREPARATION
+## Phase 2: Migrate to Official MCP C# SDK - UPDATED FOR REALITY (August 2025)
 
 ### Objective
 
 Replace custom `COA.Mcp.Protocol` implementation with the official Model Context Protocol C# SDK, which provides built-in HTTP transport and industry-standard protocol implementation.
 
-### ✅ NEW: Phase 2.0 - Attribute-Based Registration Preparation (COMPLETED)
+**CRITICAL UPDATE**: The SDK is in preview (v0.3.0-preview.3) with potential breaking changes. Migration should be carefully planned and tested.
 
-We've successfully implemented a custom attribute system that exactly mirrors the official SDK's naming:
+### ✅ Phase 2.0 - Attribute-Based Registration Migration (COMPLETED - August 1, 2025)
+
+We've successfully migrated ALL tools to attribute-based registration:
 - ✅ Created `McpServerToolType` and `McpServerTool` attributes matching SDK names
 - ✅ Built `AttributeBasedToolDiscovery` service for scanning and registering tools
-- ✅ Updated `GetVersionTool` as proof of concept
-- ✅ System supports both manual and attribute-based registration simultaneously
+- ✅ Migrated all 27 tools to use attribute-based registration
+- ✅ Removed `AllToolRegistrations.cs` entirely - no more manual registration!
+- ✅ Fixed BatchOperationsToolV2 JSON deserialization issue
 
-This preparation step significantly reduces Phase 2 risk by allowing us to:
-1. Migrate tools to attributes gradually while keeping current system
-2. Test attribute-based discovery with our existing protocol
-3. Make the final SDK switch a simple namespace change
+**Achievement Summary:**
+- 🎯 **27/27 tools migrated** to attribute-based registration
+- 🧪 **All tools tested** and working correctly
+- ✅ **Zero breaking changes** - all JSON output maintains compatibility
+- 🏆 **Technical debt eliminated** - removed 1,776 lines of manual registration code
+
+This completed migration significantly reduces Phase 2 risk by:
+1. All tools now use attributes matching the official SDK pattern
+2. The final SDK switch will be a simple namespace change
+3. No more manual registration complexity to maintain
 
 ### Background
 
-The official MCP C# SDK (released by Anthropic) provides everything Phase 2 originally planned to build:
+The official MCP C# SDK (developed in collaboration between Anthropic and Microsoft) provides everything Phase 2 originally planned to build:
 - ✅ STDIO transport (already implemented)
 - ✅ HTTP transport via AspNetCore package
 - ✅ Standard protocol implementation
 - ✅ Multi-client support
 - ✅ Active maintenance and updates
+- ⚠️ Currently in preview status (breaking changes possible)
 
-This eliminates the need to build custom HTTP transport and provides a direct path to Phase 3 multi-agent architecture.
+This eliminates the need to build custom HTTP transport and provides a direct path to Phase 3 multi-agent architecture. The SDK supports the 2025-06-18 protocol specification with enhanced security and structured tool output.
 
 ### Official Resources
 
@@ -527,47 +537,40 @@ This eliminates the need to build custom HTTP transport and provides a direct pa
 - **C# SDK Repository**: https://github.com/modelcontextprotocol/csharp-sdk
 - **SDK Documentation**: https://modelcontextprotocol.io/docs/tools/sdks/csharp
 
-#### NuGet Packages
-- **Core Package**: https://www.nuget.org/packages/ModelContextProtocol (v0.6.0+)
+#### NuGet Packages (Current Status: Preview)
+- **Main Package**: https://www.nuget.org/packages/ModelContextProtocol (v0.3.0-preview.3)
 - **ASP.NET Core Package**: https://www.nuget.org/packages/ModelContextProtocol.AspNetCore
-- **Main Package**: https://www.nuget.org/packages/ModelContextProtocol
+- **Core Package**: https://www.nuget.org/packages/ModelContextProtocol.Core (minimal dependencies)
 
 ### Migration Plan - UPDATED WITH ATTRIBUTE PREPARATION
 
 **IMPORTANT: Tool Logic Remains Unchanged!**
 The migration to the official SDK does NOT require rewriting your 45+ tools. The tools themselves (TextSearchTool, FileSearchTool, etc.) and their ExecuteAsync methods remain exactly the same. Only the registration mechanism and protocol layer change.
 
-#### 2.0 Tool Attribute Migration (NEW FIRST STEP)
+#### 2.0 Tool Attribute Migration ✅ COMPLETED
 
-**Week 2.5: Migrate All Tools to Attributes**
+**All 27 tools have been successfully migrated to attribute-based registration!**
 
-Since we've already implemented the attribute system, migrate all tools before SDK integration:
+**Completed Migration Summary:**
+1. ✅ **Simple Tools** - GetVersionTool, SetLoggingTool, etc.
+2. ✅ **Search Tools** - FastTextSearchToolV2, FastFileSearchToolV2, etc.
+3. ✅ **Memory Tools** - FlexibleMemoryTools, ClaudeMemoryTools, UnifiedMemoryTool, etc.
+4. ✅ **Complex Tools** - BatchOperationsToolV2, SearchAssistantTool, PatternDetectorTool, etc.
+5. ✅ **Final Cleanup**:
+   - ✅ Removed AllToolRegistrations.cs (1,776 lines eliminated!)
+   - ✅ Updated Program.cs to only use AttributeBasedToolDiscovery
+   - ✅ Fixed BatchOperationsToolV2 JSON deserialization issue
 
-1. **Migrate Simple Tools First** (No parameters)
-   - [x] GetVersionTool ✅ (already done and tested)
-   - [ ] Other parameterless tools
-   
-2. **Per-Tool Migration Process** (TEST IMMEDIATELY)
-   - [ ] Add attributes to tool class and ExecuteAsync method
-   - [ ] Create parameter class if needed (matching existing schema)
-   - [ ] **Comment out manual registration in AllToolRegistrations.cs**
-   - [ ] Build and test the tool immediately
-   - [ ] Verify JSON output unchanged
-   - [ ] Commit the migration for that tool
-   
-3. **Migration Order**
-   - [ ] Simple tools without parameters first
-   - [ ] Tools with simple parameters next
-   - [ ] Complex tools with nested parameters last
-   
-4. **Final Cleanup** (After all tools migrated)
-   - [ ] Remove AllToolRegistrations.cs entirely
-   - [ ] Remove manual registration methods
-   - [ ] Update Program.cs to only use attribute discovery
+#### 2.1 Initial Setup & Analysis - RISK ASSESSMENT ADDED
 
-#### 2.1 Initial Setup & Analysis
+**Phase Duration: 3-5 days (expanded for preview SDK evaluation)**
 
-**Week 3, Day 1-2: Setup and Exploration**
+**Risk Assessment (NEW):**
+- 🔴 **High Risk**: SDK is in preview, breaking changes expected
+- 🟡 **Medium Risk**: Our attribute system may not align with SDK's
+- 🟢 **Low Risk**: Tool logic remains unchanged
+
+**Setup and Exploration**
 
 1. **Create Migration Branch**
    ```bash
@@ -577,15 +580,25 @@ Since we've already implemented the attribute system, migrate all tools before S
 2. **Install Official SDK Packages**
    ```xml
    <!-- In COA.CodeSearch.McpServer.csproj -->
-   <PackageReference Include="ModelContextProtocol" Version="0.6.0" />
-   <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.6.0" />
+   <PackageReference Include="ModelContextProtocol" Version="0.3.0-preview.3" />
+   <!-- Only if HTTP support needed: -->
+   <PackageReference Include="ModelContextProtocol.AspNetCore" Version="0.3.0-preview.3" />
    ```
+   
+   **IMPORTANT SDK CONSIDERATIONS:**
+   - SDK is currently in preview with potential breaking changes
+   - Version 0.3.0-preview.3 as of August 2025
+   - Microsoft collaboration ensures long-term support
+   - Built on lessons from mcpdotnet project
 
 3. **Analyze Current Implementation**
    - [ ] Document all COA.Mcp.Protocol types currently used
    - [ ] Map custom types to SDK equivalents
    - [ ] Identify any custom protocol extensions
    - [ ] List all tools and their parameter/result types
+   - [ ] **NEW**: Review SDK source code for attribute compatibility
+   - [ ] **NEW**: Test SDK with a simple proof-of-concept tool
+   - [ ] **NEW**: Evaluate SDK's DI integration with our services
 
 4. **Create Type Mapping Document**
    ```
@@ -596,9 +609,16 @@ Since we've already implemented the attribute system, migrate all tools before S
    - etc.
    ```
 
-#### 2.2 Core Migration
+#### 2.2 Core Migration - PHASED APPROACH
 
-**Week 3, Day 3-4: Replace Protocol Types**
+**Phase Duration: 5-7 days (expanded for careful migration)**
+
+**Migration Approach (REVISED):**
+Instead of full replacement, use a phased approach:
+1. Run SDK alongside custom protocol
+2. Migrate one tool as proof-of-concept
+3. Gradually migrate remaining tools
+4. Remove custom protocol only after full validation
 
 1. **Update Service Interfaces**
    - [ ] Replace `COA.Mcp.Protocol` using statements
@@ -615,20 +635,34 @@ Since we've already implemented the attribute system, migrate all tools before S
    ```
 
 3. **Update Tool Registration** (SIMPLIFIED - Attributes Already Done!)
-   - [ ] ~~Update `AllToolRegistrations.cs`~~ Already removed after attribute migration
-   - [ ] Change namespace from `COA.CodeSearch.McpServer.Attributes` to `ModelContextProtocol`
-   - [ ] Update `AttributeBasedToolDiscovery` to use SDK's discovery (or remove if SDK handles it)
+   - [ ] Evaluate SDK's tool registration mechanism vs our attributes
+   - [ ] Our current attributes: `[McpServerToolType]` and `[McpServerTool]`
+   - [ ] SDK likely uses different attribute names/namespace
+   - [ ] May need adapter layer between our attributes and SDK's
+   - [ ] All 27 tools already have attributes - minimal changes needed
    - [ ] All tool ExecuteAsync methods stay unchanged
    - [ ] Parameter classes and result types remain the same
+   
+   **Migration Strategy Options:**
+   a) Direct replacement: Change our attributes to SDK's (requires updating all 27 tools)
+   b) Adapter pattern: Keep our attributes, translate to SDK's at runtime
+   c) Dual support: Support both during transition period
 
 4. **Test STDIO Mode**
    - [ ] Verify all tools work with SDK types
    - [ ] Ensure JSON compatibility maintained
    - [ ] Run full test suite
 
-#### 2.3 Add HTTP Transport
+#### 2.3 Add HTTP Transport - OPTIONAL ENHANCEMENT
 
-**Week 3, Day 5 - Week 4, Day 1: HTTP Implementation**
+**Phase Duration: 3-5 days (if prioritized)**
+
+**Decision Point**: HTTP transport may be deferred if:
+- STDIO mode meets all current needs
+- Preview SDK has HTTP stability concerns
+- Phase 3 multi-agent can work with STDIO
+
+**HTTP Implementation (if pursued):**
 
 1. **Create HTTP Host Project** (Optional)
    ```bash
@@ -661,9 +695,15 @@ Since we've already implemented the attribute system, migrate all tools before S
    }
    ```
 
-#### 2.4 Testing & Validation
+#### 2.4 Testing & Validation - EXPANDED SCOPE
 
-**Week 4, Day 2-3: Comprehensive Testing**
+**Phase Duration: 5-7 days (critical for preview SDK)**
+
+**Additional Testing Requirements:**
+- [ ] SDK stability testing (memory leaks, crashes)
+- [ ] Backward compatibility with existing clients
+- [ ] Preview SDK upgrade path testing
+- [ ] Fallback mechanism if SDK fails
 
 1. **Protocol Compatibility Tests**
    - [ ] STDIO mode works with Claude Code
@@ -687,9 +727,15 @@ Since we've already implemented the attribute system, migrate all tools before S
    - [ ] Update README with new setup
    - [ ] Create troubleshooting guide
 
-#### 2.5 Cleanup & Documentation
+#### 2.5 Cleanup & Documentation - INCLUDE ROLLBACK PLAN
 
-**Week 4, Day 4-5: Finalization**
+**Phase Duration: 3-5 days**
+
+**Rollback Strategy (NEW):**
+- [ ] Maintain custom protocol in separate branch
+- [ ] Document SDK version dependencies
+- [ ] Create quick rollback procedure
+- [ ] Keep both implementations until SDK reaches 1.0
 
 1. **Remove Old Code**
    - [ ] Delete COA.Mcp.Protocol project
@@ -811,6 +857,55 @@ Think of it like replacing the engine in a car - the interior, controls, and pas
 3. **Dependency**: Relying on external package
 
 **Conclusion**: Benefits significantly outweigh risks. Official SDK provides immediate HTTP support and positions project for long-term success.
+
+### Phase 2 Reality Check and Recommendations (August 2025)
+
+**Current SDK Status**:
+- Version: 0.3.0-preview.3 (not 0.6.0 as originally planned)
+- Status: Preview with breaking changes expected
+- Collaboration: Microsoft + Anthropic ensures quality
+- Timeline: Unknown when v1.0 will be released
+
+**Revised Timeline Estimate**:
+- Original: 2 weeks (Phase 2 only)
+- Realistic: 3-4 weeks minimum
+- Conservative: 5-6 weeks with full validation
+
+**Key Recommendations**:
+
+1. **Proof of Concept First** (1 week)
+   - Create small test project with SDK
+   - Migrate just ONE tool (e.g., GetVersionTool)
+   - Validate attribute compatibility
+   - Test STDIO mode thoroughly
+
+2. **Attribute Alignment Investigation** (3 days)
+   - Our attributes: `[McpServerToolType]`, `[McpServerTool]`
+   - SDK attributes: Unknown (need investigation)
+   - May need adapter pattern or wrapper
+
+3. **Phased Migration Approach**
+   - Keep custom protocol operational
+   - Run both in parallel initially
+   - Migrate tools in batches of 5
+   - Full validation after each batch
+
+4. **Risk Mitigation**
+   - Maintain rollback capability
+   - Document all SDK quirks/issues
+   - Create compatibility test suite
+   - Monitor SDK GitHub for updates
+
+5. **Decision Points**
+   - After POC: Continue or wait for SDK maturity?
+   - After 50% migration: Full speed or reassess?
+   - HTTP support: Now or defer to Phase 3?
+
+**Alternative Approach**: 
+If SDK proves too unstable, consider:
+- Keeping custom protocol for STDIO
+- Building minimal HTTP wrapper ourselves
+- Waiting for SDK v1.0 while proceeding with Phase 3-5
 
 ## Phase 3: Multi-Agent Architecture (Weeks 5-6)
 
@@ -1072,7 +1167,13 @@ public class ErrorResponse
 
 ---
 
-_Document Version: 3.0_  
+_Document Version: 3.2_  
 _Last Updated: August 1, 2025_  
-_Status: Phase 1 Complete ✅ | Phase 1.5 Complete ✅ | Phase 2 REVISED - Official SDK Migration_  
-_Key Changes: Major revision - Phase 2 now focuses on migrating to official Model Context Protocol C# SDK instead of building custom HTTP transport. This provides HTTP support immediately and accelerates Phase 3 multi-agent architecture. Added comprehensive migration plan with links to official resources._
+_Status: Phase 1 Complete ✅ | Phase 1.5 Complete ✅ | Phase 2.0 Complete ✅ | Phase 2.1 Ready to Start - Official SDK Migration_  
+_Key Changes: 
+- Phase 2.0 COMPLETE - All 27 tools migrated to attribute-based registration
+- Removed AllToolRegistrations.cs entirely (1,776 lines of technical debt eliminated!)
+- Fixed BatchOperationsToolV2 JSON deserialization issue
+- Updated Phase 2.1-2.5 to reflect SDK preview status (v0.3.0-preview.3)
+- Added risk assessment and revised timeline for SDK migration
+- Ready for Phase 2.1 - Official SDK integration with careful evaluation needed_
