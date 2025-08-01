@@ -1,9 +1,11 @@
+using COA.CodeSearch.McpServer.Attributes;
 using COA.CodeSearch.McpServer.Configuration;
 using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
 using COA.CodeSearch.McpServer.Services;
+using COA.Mcp.Protocol;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
@@ -18,6 +20,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// AI-optimized version of FastFileSearchTool with structured response format
 /// </summary>
+[McpServerToolType]
 public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
 {
     public override string ToolName => "fast_file_search_v2";
@@ -57,6 +60,52 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         _searchResultResourceProvider = searchResultResourceProvider;
         _scoringService = scoringService;
         _resultConfidenceService = resultConfidenceService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "file_search")]
+    [Description(@"Finds files by name patterns with fuzzy matching support.
+Returns: File paths sorted by relevance score.
+Prerequisites: Call index_workspace first for the target directory.
+Error handling: Returns INDEX_NOT_FOUND error with recovery steps if not indexed.
+Use cases: Locating specific files, finding files with typos, discovering file patterns.
+Not for: Text content searches (use text_search), directory searches (use directory_search).")]
+    public async Task<object> ExecuteAsync(FastFileSearchV2Params parameters)
+    {
+        if (parameters == null) 
+            throw new InvalidParametersException("Parameters are required");
+        
+        // Validate that at least one query parameter is provided
+        var query = parameters.GetQuery();
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            throw new InvalidParametersException("Either 'query' or 'nameQuery' parameter is required");
+        }
+        
+        // Validate required workspace path
+        if (string.IsNullOrWhiteSpace(parameters.WorkspacePath))
+        {
+            throw new InvalidParametersException("workspacePath parameter is required");
+        }
+        
+        var mode = parameters.ResponseMode?.ToLowerInvariant() switch
+        {
+            "full" => ResponseMode.Full,
+            _ => ResponseMode.Summary
+        };
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            query,
+            parameters.WorkspacePath,
+            parameters.SearchType ?? "standard",
+            parameters.MaxResults ?? 50,
+            parameters.IncludeDirectories ?? false,
+            mode,
+            null, // detailRequest - not supported in attribute-based version
+            CancellationToken.None);
     }
 
     public async Task<object> ExecuteAsync(
@@ -411,4 +460,45 @@ public class FastFileSearchToolV2 : ClaudeOptimizedToolBase
         public float Score { get; set; }
         public string Language { get; set; } = "";
     }
+}
+
+/// <summary>
+/// Parameters for FastFileSearchToolV2
+/// </summary>
+public class FastFileSearchV2Params
+{
+    [Description("File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '.*Test.*.cs' (regex)")]
+    public string? Query { get; set; }
+    
+    [Description("[DEPRECATED] Use 'query' instead. File name to search for - examples: 'UserService' (contains), 'UserSrvc~' (fuzzy), 'User*.cs' (wildcard), '.*Test.*.cs' (regex)")]
+    public string? NameQuery { get; set; }
+    
+    [Description("Path to solution, project, or directory to search")]
+    public string? WorkspacePath { get; set; }
+    
+    [Description(@"Search algorithm for file names:
+- standard: Contains match (UserService matches UserService.cs)
+- fuzzy: Typo-tolerant (UserSrvc~ finds UserService.cs)
+- wildcard: Pattern matching (User*.cs finds UserService.cs)
+- exact: Exact filename match
+- regex: Regular expressions on relative paths - examples:
+  * '.*Test.*\.cs' - files with 'Test' in name
+  * '.*Service\.cs' - files ending with 'Service.cs'
+  * 'Tests\\.*' - files in Tests folders
+  * '.*\\Services\\.*' - files in Services folders")]
+    public string? SearchType { get; set; }
+    
+    [Description("Maximum results to return")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include directory names in search")]
+    public bool? IncludeDirectories { get; set; }
+    
+    [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.")]
+    public string? ResponseMode { get; set; }
+    
+    /// <summary>
+    /// Helper method to get the query from either Query or NameQuery (backward compatibility)
+    /// </summary>
+    public string? GetQuery() => Query ?? NameQuery;
 }

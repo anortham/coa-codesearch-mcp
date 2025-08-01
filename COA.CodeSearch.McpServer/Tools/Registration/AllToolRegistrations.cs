@@ -20,8 +20,8 @@ public static class AllToolRegistrations
     public static void RegisterAll(ToolRegistry registry, IServiceProvider serviceProvider)
     {
         // Text search tools
-        RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>());
-        RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>());
+        // RegisterFastTextSearchV2(registry, serviceProvider.GetRequiredService<FastTextSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
+        // RegisterFastFileSearchV2(registry, serviceProvider.GetRequiredService<FastFileSearchToolV2>()); // COMMENTED OUT - Migrated to attribute-based registration
         RegisterFastRecentFiles(registry, serviceProvider.GetRequiredService<FastRecentFilesTool>());
         RegisterFastFileSizeAnalysis(registry, serviceProvider.GetRequiredService<FastFileSizeAnalysisTool>());
         RegisterFastSimilarFiles(registry, serviceProvider.GetRequiredService<FastSimilarFilesTool>());
