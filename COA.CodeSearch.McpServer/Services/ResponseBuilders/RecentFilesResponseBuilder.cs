@@ -1,6 +1,7 @@
 using COA.CodeSearch.McpServer.Infrastructure;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.Contracts.Responses.RecentFiles;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -39,7 +40,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
 
         // Group by time buckets
         var now = DateTime.UtcNow;
-        var timeBuckets = new
+        var timeBuckets = new TimeBuckets
         {
             lastHour = results.Count(r => r.LastModified > now.AddHours(-1)),
             last24Hours = results.Count(r => r.LastModified > now.AddDays(-1)),
@@ -52,7 +53,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
             .GroupBy(r => Path.GetDirectoryName(r.RelativePath) ?? "root")
             .OrderByDescending(g => g.Count())
             .Take(5)
-            .Select(g => new
+            .Select(g => new DirectoryGroup
             {
                 directory = g.Key,
                 fileCount = g.Count(),
@@ -94,35 +95,35 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
         var resultLimit = mode == ResponseMode.Summary ? 50 : 200;
         var displayResults = results.Take(resultLimit).ToList();
 
-        return new
+        return new RecentFilesResponse
         {
             success = true,
             operation = "recent_files",
-            query = new
+            query = new RecentFilesQuery
             {
                 timeFrame = timeFrame,
                 cutoff = cutoffTime.ToString("yyyy-MM-dd HH:mm:ss"),
                 workspace = Path.GetFileName(workspacePath)
             },
-            summary = new
+            summary = new RecentFilesSummary
             {
                 totalFound = results.Count,
                 searchTime = $"{searchDurationMs:F1}ms",
                 totalSize = totalSize,
                 totalSizeFormatted = FormatFileSize(totalSize),
                 avgFileSize = results.Any() ? FormatFileSize((long)(totalSize / results.Count)) : "0 B",
-                distribution = new
+                distribution = new RecentFilesDistribution
                 {
                     byTime = timeBuckets,
                     byExtension = extensionCounts
                 }
             },
-            analysis = new
+            analysis = new RecentFilesAnalysis
             {
                 patterns = insights.Take(3).ToList(),
-                hotspots = new
+                hotspots = new RecentFilesHotspots
                 {
-                    directories = directoryGroups.Select(d => (object)new
+                    directories = directoryGroups.Select(d => new HotspotDirectory
                     {
                         path = d.directory,
                         files = d.fileCount,
@@ -132,7 +133,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
                 },
                 activityPattern = modificationPatterns
             },
-            results = displayResults.Select(r => new
+            results = displayResults.Select(r => new RecentFileResultItem
             {
                 file = r.FileName,
                 path = r.RelativePath,
@@ -142,14 +143,14 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
                 sizeFormatted = FormatFileSize(r.FileSize),
                 extension = r.Extension
             }).ToList(),
-            resultsSummary = new
+            resultsSummary = new ResultsSummary
             {
                 included = displayResults.Count,
                 total = results.Count,
                 hasMore = results.Count > displayResults.Count
             },
             insights = insights,
-            actions = actions.Select(a => a is AIAction aiAction ? (object)new
+            actions = actions.Select(a => a is AIAction aiAction ? (object)new ActionResult
             {
                 id = aiAction.Id,
                 description = aiAction.Description,
@@ -157,8 +158,8 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
                 parameters = aiAction.Command.Parameters,
                 estimatedTokens = aiAction.EstimatedTokens,
                 priority = aiAction.Priority.ToString().ToLowerInvariant()
-            } : a),
-            meta = new
+            } : a).ToList(),
+            meta = new ResponseMeta
             {
                 mode = mode.ToString().ToLowerInvariant(),
                 truncated = results.Count > displayResults.Count,
@@ -372,11 +373,11 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
         return actions;
     }
 
-    private dynamic AnalyzeModificationPatterns(List<RecentFileResult> results)
+    private ModificationPatterns AnalyzeModificationPatterns(List<RecentFileResult> results)
     {
         if (!results.Any())
         {
-            return new { burstActivity = false, workingHours = false, peakHour = 0 };
+            return new ModificationPatterns { burstActivity = false, workingHours = false, peakHour = 0 };
         }
 
         // Check for burst activity (multiple files modified within short time)
@@ -402,11 +403,11 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder
         var peakHour = hourGroups.Any() ? hourGroups.First().Key : 0;
         var workingHours = hourGroups.Any() && hourGroups.First().Count() > results.Count * 0.3;
 
-        return new
+        return new ModificationPatterns
         {
-            burstActivity,
-            workingHours,
-            peakHour
+            burstActivity = burstActivity,
+            workingHours = workingHours,
+            peakHour = peakHour
         };
     }
 

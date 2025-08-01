@@ -109,6 +109,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\COA.Mcp.Protocol\COA.Mcp.Protocol.csproj" />
+    <ProjectReference Include="..\COA.CodeSearch.Contracts\COA.CodeSearch.Contracts.csproj" />
   </ItemGroup>
 
 </Project>
