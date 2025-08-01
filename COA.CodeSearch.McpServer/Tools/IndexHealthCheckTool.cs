@@ -1,5 +1,8 @@
 using COA.CodeSearch.Contracts;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Attributes;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Constants;
 using Microsoft.Extensions.Logging;
 using System.Text.Json;
 
@@ -8,12 +11,17 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for checking the health of Lucene indexes and providing detailed metrics
 /// </summary>
-public class IndexHealthCheckTool
+[McpServerToolType]
+public class IndexHealthCheckTool : ITool
 {
     private readonly ILogger<IndexHealthCheckTool> _logger;
     private readonly LuceneIndexService _luceneIndexService;
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
+
+    public string ToolName => ToolNames.IndexHealthCheck;
+    public string Description => "Perform comprehensive health check of Lucene indexes with detailed metrics, circuit breaker status, and recommendations";
+    public ToolCategory Category => ToolCategory.Infrastructure;
 
     public IndexHealthCheckTool(
         ILogger<IndexHealthCheckTool> logger,
@@ -25,6 +33,21 @@ public class IndexHealthCheckTool
         _luceneIndexService = luceneIndexService;
         _metricsService = metricsService;
         _circuitBreakerService = circuitBreakerService;
+    }
+
+    /// <summary>
+    /// Attribute-based ExecuteAsync method for MCP registration
+    /// </summary>
+    [McpServerTool(Name = "index_health_check")]
+    [Description("Perform comprehensive health check of Lucene indexes with detailed metrics, circuit breaker status, and recommendations. Returns status, diagnostics, performance metrics, and actionable recommendations.")]
+    public async Task<object> ExecuteAsync(IndexHealthCheckParams parameters)
+    {
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters?.IncludeMetrics ?? true,
+            parameters?.IncludeCircuitBreakerStatus ?? true,
+            parameters?.IncludeAutoRepair ?? false,
+            CancellationToken.None);
     }
 
     /// <summary>
@@ -291,4 +314,19 @@ public class IndexHealthCheckTool
             _ => "Unknown"
         };
     }
+}
+
+/// <summary>
+/// Parameters for the IndexHealthCheckTool
+/// </summary>
+public class IndexHealthCheckParams
+{
+    [Description("Include performance metrics in the response")]
+    public bool? IncludeMetrics { get; set; } = true;
+    
+    [Description("Include circuit breaker status for all operations")]
+    public bool? IncludeCircuitBreakerStatus { get; set; } = true;
+    
+    [Description("Automatically attempt to repair corrupted indexes when detected")]
+    public bool? IncludeAutoRepair { get; set; } = false;
 }
