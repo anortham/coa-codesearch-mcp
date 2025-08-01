@@ -39,8 +39,8 @@ public static class AllToolRegistrations
         // Batch operations (for multi-search efficiency)
         RegisterBatchOperationsV2(registry, serviceProvider.GetRequiredService<BatchOperationsToolV2>());
         
-        // Logging control tool
-        RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
+        // Logging control tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterSetLogging(registry, serviceProvider.GetRequiredService<SetLoggingTool>());
         
         // Version information tool - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
         // RegisterGetVersion(registry, serviceProvider.GetRequiredService<GetVersionTool>());
@@ -59,8 +59,8 @@ public static class AllToolRegistrations
         // Tool usage analytics
         RegisterToolUsageAnalytics(registry, serviceProvider.GetRequiredService<ToolUsageAnalyticsTool>());
         
-        // Workflow discovery
-        RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
+        // Workflow discovery - COMMENTED OUT TO TEST ATTRIBUTE REGISTRATION
+        // RegisterWorkflowDiscovery(registry, serviceProvider.GetRequiredService<WorkflowDiscoveryTool>());
         
         // Phase 3: Advanced tools now handled by RegisterEssentialMemoryTools
         

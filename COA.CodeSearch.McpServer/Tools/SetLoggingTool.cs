@@ -1,11 +1,13 @@
 using Microsoft.Extensions.Logging;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Attributes;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// MCP tool for viewing and managing log files
 /// </summary>
+[McpServerToolType]
 public class SetLoggingTool : ITool
 {
     public string ToolName => "log_diagnostics";
@@ -23,7 +25,27 @@ public class SetLoggingTool : ITool
     }
 
     /// <summary>
-    /// Control file logging settings
+    /// Control file logging settings - new parameter-based overload for attribute registration
+    /// </summary>
+    [McpServerTool(Name = "log_diagnostics")]
+    [Description("View and manage log files. Logs are written to .codesearch/logs directory. Actions: status, list, cleanup")]
+    public async Task<object> ExecuteAsync(SetLoggingParams parameters)
+    {
+        if (parameters?.Action == null)
+        {
+            throw new ArgumentNullException(nameof(parameters), "Action parameter is required");
+        }
+        
+        // Call the existing implementation
+        return await ExecuteAsync(
+            parameters.Action,
+            null, // level parameter removed - configuration-driven now
+            parameters.Cleanup,
+            CancellationToken.None);
+    }
+    
+    /// <summary>
+    /// Control file logging settings - existing implementation
     /// </summary>
     public async Task<object> ExecuteAsync(
         string action,
@@ -197,4 +219,16 @@ public class SetLoggingTool : ITool
         }
         return $"{len:0.##} {sizes[order]}";
     }
+}
+
+/// <summary>
+/// Parameters for the SetLoggingTool
+/// </summary>
+public class SetLoggingParams
+{
+    [Description("Action to perform: 'status', 'list', 'cleanup'")]
+    public string? Action { get; set; }
+    
+    [Description("For 'cleanup' action: set to true to confirm deletion of old log files")]
+    public bool? Cleanup { get; set; }
 }
