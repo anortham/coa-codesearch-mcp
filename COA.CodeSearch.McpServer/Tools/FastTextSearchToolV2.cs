@@ -1064,28 +1064,24 @@ Not for: File name searches (use file_search), directory searches (use directory
                 break;
             
             case "code":
-                // Use the exact field for code patterns - no tokenization, preserves exact text
+                // Use phrase query for exact code patterns - preserves exact sequence of tokens
                 // This helps find patterns like [McpServerTool(Name = "roslyn_")] in C# code
-                var codeQuery = queryText;
-                string fieldName;
+                var codeParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                codeParser.DefaultOperator = Operator.AND;
                 
-                // Choose field based on case sensitivity
-                if (!caseSensitive)
+                try
                 {
-                    codeQuery = codeQuery.ToLowerInvariant();
-                    fieldName = "contentExactLower";
+                    // Use phrase query to preserve exact token sequence
+                    // This will match the exact sequence of tokens after analysis
+                    contentQuery = codeParser.Parse($"\"{EscapeQueryText(queryText)}\"");
+                    Logger.LogDebug("Code search: using phrase query for '{Query}' (case sensitive: {CaseSensitive})", 
+                        queryText, caseSensitive);
                 }
-                else
+                catch (ParseException ex)
                 {
-                    fieldName = "contentExact";
+                    Logger.LogWarning(ex, "Failed to parse code query as phrase: {Query}, falling back to standard", queryText);
+                    contentQuery = codeParser.Parse(EscapeQueryText(queryText));
                 }
-                
-                // For substring matching on a non-tokenized field, we need to use WildcardQuery
-                // Wrap the query with wildcards to find it anywhere in the content
-                var wildcardPattern = $"*{EscapeWildcardChars(codeQuery)}*";
-                contentQuery = new WildcardQuery(new Term(fieldName, wildcardPattern));
-                Logger.LogDebug("Code search: using wildcard match on {Field} field for '{Query}' (pattern: {Pattern}, case sensitive: {CaseSensitive})", 
-                    fieldName, queryText, wildcardPattern, caseSensitive);
                 break;
             
             default: // standard
@@ -1273,11 +1269,6 @@ Not for: File name searches (use file_search), directory searches (use directory
         return escapedQuery;
     }
 
-    private static string EscapeWildcardChars(string query)
-    {
-        // For code search, escape * and ? to treat them as literals
-        return query.Replace("*", "\\*").Replace("?", "\\?");
-    }
 
     private static string EscapeQueryTextForFuzzy(string query)
     {
@@ -1510,7 +1501,7 @@ Example: 50 results with context=3 ≈ 5,000 tokens")]
 - wildcard: Pattern matching with * and ?
 - phrase: Exact phrase in quotes
 - regex: Full regex support with capturing groups
-- code: Code-aware search that handles escaped quotes and preserves exact patterns")]
+- code: Code-aware search that preserves exact token sequences using phrase matching")]
     public string? SearchType { get; set; }
     
     [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.")]
