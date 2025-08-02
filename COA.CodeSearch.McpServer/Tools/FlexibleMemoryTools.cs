@@ -1477,6 +1477,6 @@ public class StoreMemoryParams
     [Description("Related files")]
     public string[]? Files { get; set; }
     
-    [Description("Custom fields as JSON object (importance, urgency, category, etc.)")]
+    [Description("Custom fields as key-value pairs. Example: {\"priority\": \"high\", \"category\": \"bug\", \"status\": \"pending\"}")]
     public Dictionary<string, JsonElement>? Fields { get; set; }
 }
