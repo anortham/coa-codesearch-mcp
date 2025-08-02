@@ -25,6 +25,7 @@ public class UnifiedMemoryService
     private readonly JsonMemoryBackupService? _backupService;
     private readonly SemanticSearchTool? _semanticSearchTool;
     private readonly HybridSearchTool? _hybridSearchTool;
+    private readonly IMemoryLifecycleService? _lifecycleService;
 
     public UnifiedMemoryService(
         FlexibleMemoryService memoryService,
@@ -37,7 +38,8 @@ public class UnifiedMemoryService
         MemoryGraphNavigatorTool? graphNavigatorTool = null,
         JsonMemoryBackupService? backupService = null,
         SemanticSearchTool? semanticSearchTool = null,
-        HybridSearchTool? hybridSearchTool = null)
+        HybridSearchTool? hybridSearchTool = null,
+        IMemoryLifecycleService? lifecycleService = null)
     {
         _memoryService = memoryService;
         _logger = logger;
@@ -50,6 +52,7 @@ public class UnifiedMemoryService
         _backupService = backupService;
         _semanticSearchTool = semanticSearchTool;
         _hybridSearchTool = hybridSearchTool;
+        _lifecycleService = lifecycleService;
     }
 
     /// <summary>
@@ -1008,16 +1011,333 @@ public class UnifiedMemoryService
     /// <summary>
     /// Handle memory management operations
     /// </summary>
-    private Task<UnifiedMemoryResult> HandleMemoryManageAsync(
+    private async Task<UnifiedMemoryResult> HandleMemoryManageAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        if (_lifecycleService == null)
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "lifecycle_unavailable",
+                Message = "Memory lifecycle service is not available"
+            };
+        }
+        
+        var content = command.Content?.ToLowerInvariant() ?? "";
+        
+        // Check for pending resolutions review
+        if (ContainsAny(content, "pending resolution", "review resolution", "pending resolutions"))
+        {
+            return await HandlePendingResolutionsAsync(cancellationToken);
+        }
+        
+        // Check for stale memory check
+        if (ContainsAny(content, "stale", "check stale", "stale memories", "old memories"))
+        {
+            return await HandleStaleMemoriesAsync(cancellationToken);
+        }
+        
+        // Check for archive operations
+        if (ContainsAny(content, "archive"))
+        {
+            return await HandleArchiveMemoriesAsync(command, cancellationToken);
+        }
+        
+        // Check for resolution feedback
+        if (ContainsAny(content, "confirm resolution", "reject resolution", "resolution feedback"))
+        {
+            return await HandleResolutionFeedbackAsync(command, cancellationToken);
+        }
+        
+        // Check for delete operations
+        if (ContainsAny(content, "delete"))
+        {
+            return await HandleDeleteMemoriesAsync(command, cancellationToken);
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = false,
+            Action = "memory_manage_unclear",
+            Message = "Memory management command not understood. Try: 'review pending resolutions', 'check stale memories', 'archive old memories', or 'confirm resolution for [memory id]'",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "review_resolutions",
+                    Description = "Review pending resolutions",
+                    Command = "memory \"review pending resolutions\"",
+                    Priority = "high"
+                },
+                new ActionSuggestion
+                {
+                    Id = "check_stale",
+                    Description = "Check for stale memories",
+                    Command = "memory \"check stale memories\"",
+                    Priority = "medium"
+                },
+                new ActionSuggestion
+                {
+                    Id = "archive_old",
+                    Description = "Archive old memories",
+                    Command = "memory \"archive technical debt older than 90 days\"",
+                    Priority = "medium"
+                }
+            }
+        };
+    }
+    
+    /// <summary>
+    /// Handle pending resolutions review
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandlePendingResolutionsAsync(CancellationToken cancellationToken)
+    {
+        var result = await _lifecycleService!.GetPendingResolutionsAsync(50, cancellationToken);
+        
+        if (!result.Success)
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "pending_resolutions_error",
+                Message = result.Message
+            };
+        }
+        
+        if (!result.PendingResolutions.Any())
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = true,
+                Action = "no_pending_resolutions",
+                Message = "No pending resolutions found"
+            };
+        }
+        
+        var nextSteps = new List<ActionSuggestion>();
+        foreach (var pr in result.PendingResolutions.Take(3))
+        {
+            nextSteps.Add(new ActionSuggestion
+            {
+                Id = $"confirm_{pr.Id}",
+                Description = $"Confirm resolution (confidence: {pr.Confidence:F2})",
+                Command = $"memory \"confirm resolution for {pr.OriginalMemoryId}\"",
+                Priority = pr.Confidence > 0.7f ? "high" : "medium"
+            });
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = true,
+            Action = "pending_resolutions_found",
+            Message = $"Found {result.TotalCount} pending resolutions",
+            Metadata = new Dictionary<string, object>
+            {
+                ["totalCount"] = result.TotalCount,
+                ["pendingResolutions"] = result.PendingResolutions
+            },
+            NextSteps = nextSteps
+        };
+    }
+    
+    /// <summary>
+    /// Handle stale memory check
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleStaleMemoriesAsync(CancellationToken cancellationToken)
+    {
+        var result = await _lifecycleService!.ManuallyCheckStaleMemoriesAsync(cancellationToken);
+        
+        if (!result.Success)
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "stale_check_error",
+                Message = result.Message
+            };
+        }
+        
+        var nextSteps = new List<ActionSuggestion>();
+        if (result.MemoriesMarkedStale > 0)
+        {
+            nextSteps.Add(new ActionSuggestion
+            {
+                Id = "archive_stale",
+                Description = "Archive all stale memories",
+                Command = "memory \"archive memories with status stale\"",
+                Priority = "high"
+            });
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = true,
+            Action = "stale_memories_checked",
+            Message = result.Message,
+            Metadata = new Dictionary<string, object>
+            {
+                ["staleCount"] = result.StaleMemoriesFound,
+                ["markedCount"] = result.MemoriesMarkedStale,
+                ["staleMemories"] = result.StaleMemories.Select(m => new
+                {
+                    m.Id,
+                    m.Type,
+                    m.Created,
+                    Summary = m.Content.Length > 100 ? m.Content.Substring(0, 100) + "..." : m.Content
+                }).ToList()
+            },
+            NextSteps = nextSteps
+        };
+    }
+    
+    /// <summary>
+    /// Handle archive memories
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleArchiveMemoriesAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        var content = command.Content ?? "";
+        var request = ParseArchiveRequest(content);
+        
+        var result = await _lifecycleService!.ArchiveMemoriesAsync(request, cancellationToken);
+        
+        if (!result.Success)
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "archive_error",
+                Message = result.Message
+            };
+        }
+        
+        return new UnifiedMemoryResult
+        {
+            Success = true,
+            Action = "memories_archived",
+            Message = result.Message,
+            Metadata = new Dictionary<string, object>
+            {
+                ["archivedCount"] = result.MemoriesArchived,
+                ["archivedIds"] = result.ArchivedMemoryIds
+            }
+        };
+    }
+    
+    /// <summary>
+    /// Handle resolution feedback
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleResolutionFeedbackAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        var content = command.Content ?? "";
+        var isConfirm = ContainsAny(content, "confirm");
+        var memoryId = ExtractMemoryId(content);
+        
+        if (string.IsNullOrEmpty(memoryId))
+        {
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "feedback_missing_id",
+                Message = "Memory ID not found in command. Use: 'confirm resolution for [memory id]'"
+            };
+        }
+        
+        await _lifecycleService!.RecordResolutionFeedbackAsync(memoryId, isConfirm);
+        
+        return new UnifiedMemoryResult
+        {
+            Success = true,
+            Action = isConfirm ? "resolution_confirmed" : "resolution_rejected",
+            Message = $"Resolution feedback recorded for memory {memoryId}"
+        };
+    }
+    
+    /// <summary>
+    /// Handle delete memories (with safety)
+    /// </summary>
+    private Task<UnifiedMemoryResult> HandleDeleteMemoriesAsync(
         UnifiedMemoryCommand command,
         CancellationToken cancellationToken)
     {
         return Task.FromResult(new UnifiedMemoryResult
         {
             Success = false,
-            Action = "memory_manage_not_implemented",
-            Message = "Memory management functionality not yet implemented. Use search and store commands instead."
+            Action = "delete_requires_confirmation",
+            Message = "Delete operations require explicit confirmation. Archive memories instead for safer management.",
+            NextSteps = new List<ActionSuggestion>
+            {
+                new ActionSuggestion
+                {
+                    Id = "archive_instead",
+                    Description = "Archive memories instead",
+                    Command = "memory \"archive old memories\"",
+                    Priority = "high"
+                }
+            }
         });
+    }
+    
+    /// <summary>
+    /// Parse archive request from natural language
+    /// </summary>
+    private ArchiveMemoriesRequest ParseArchiveRequest(string content)
+    {
+        var request = new ArchiveMemoriesRequest();
+        
+        // Extract memory type
+        var typeMatch = Regex.Match(content, @"\b(technical\s*debt|bug|question|architectural|security|code\s*pattern)\b", RegexOptions.IgnoreCase);
+        if (typeMatch.Success)
+        {
+            request.MemoryType = typeMatch.Value.Replace(" ", "");
+        }
+        
+        // Extract age
+        var ageMatch = Regex.Match(content, @"older\s+than\s+(\d+)\s*days?", RegexOptions.IgnoreCase);
+        if (ageMatch.Success && int.TryParse(ageMatch.Groups[1].Value, out var days))
+        {
+            request.OlderThanDays = days;
+        }
+        
+        // Check for status
+        if (ContainsAny(content, "resolved"))
+        {
+            request.Status = "resolved";
+            request.IncludeResolved = true;
+        }
+        else if (ContainsAny(content, "stale"))
+        {
+            request.Status = "stale";
+        }
+        
+        return request;
+    }
+    
+    /// <summary>
+    /// Extract memory ID from command
+    /// </summary>
+    private string ExtractMemoryId(string content)
+    {
+        // Look for GUID pattern
+        var guidMatch = Regex.Match(content, @"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}", RegexOptions.IgnoreCase);
+        if (guidMatch.Success)
+        {
+            return guidMatch.Value;
+        }
+        
+        // Look for "for [id]" pattern
+        var forMatch = Regex.Match(content, @"for\s+(\S+)", RegexOptions.IgnoreCase);
+        if (forMatch.Success)
+        {
+            return forMatch.Groups[1].Value;
+        }
+        
+        return "";
     }
 
     /// <summary>
