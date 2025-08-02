@@ -11,7 +11,7 @@ namespace COA.CodeSearch.McpServer.Services;
 /// Service that manages the lifecycle of memories, automatically resolving or updating them
 /// based on file changes and other events
 /// </summary>
-public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
+public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber, IMemoryLifecycleService
 {
     private readonly ILogger<MemoryLifecycleService> _logger;
     private readonly IMemoryService _memoryService;
@@ -562,6 +562,234 @@ public class MemoryLifecycleService : BackgroundService, IFileChangeSubscriber
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error during periodic cleanup of pending resolutions cache");
+        }
+    }
+    
+    /// <summary>
+    /// Manually trigger a check for stale memories - implements IMemoryLifecycleService
+    /// </summary>
+    public async Task<StaleMemoryCheckResult> ManuallyCheckStaleMemoriesAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            _logger.LogInformation("Manually triggered stale memory check");
+            
+            var staleThreshold = DateTime.UtcNow.AddDays(-_options.Value.StaleAfterDays);
+            
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = "*",
+                Facets = new Dictionary<string, string>
+                {
+                    ["status"] = "pending"
+                },
+                MaxResults = 100,
+                IncludeArchived = false
+            };
+            
+            var results = await _memoryService.SearchMemoriesAsync(searchRequest);
+            
+            var staleMemories = results.Memories
+                .Where(m => m.Created < staleThreshold)
+                .ToList();
+                
+            var markedCount = 0;
+            foreach (var memory in staleMemories)
+            {
+                await MarkMemoryAsStaleAsync(memory);
+                markedCount++;
+            }
+            
+            return new StaleMemoryCheckResult
+            {
+                Success = true,
+                StaleMemoriesFound = staleMemories.Count,
+                MemoriesMarkedStale = markedCount,
+                StaleMemories = staleMemories,
+                Message = $"Found and marked {markedCount} stale memories"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error during manual stale memory check");
+            return new StaleMemoryCheckResult
+            {
+                Success = false,
+                Message = $"Error checking stale memories: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Get pending resolution memories - implements IMemoryLifecycleService
+    /// </summary>
+    public async Task<PendingResolutionResult> GetPendingResolutionsAsync(int maxResults = 50, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = "type:PendingResolution",
+                MaxResults = maxResults,
+                IncludeArchived = false,
+                OrderBy = "created",
+                OrderDescending = true
+            };
+            
+            var results = await _memoryService.SearchMemoriesAsync(searchRequest);
+            
+            var pendingResolutions = new List<PendingResolutionEntry>();
+            foreach (var memory in results.Memories)
+            {
+                pendingResolutions.Add(new PendingResolutionEntry
+                {
+                    Id = memory.Id,
+                    OriginalMemoryId = memory.GetField<string>("originalMemoryId") ?? "",
+                    Confidence = memory.GetField<float>("confidence"),
+                    ChangeType = memory.GetField<string>("changeType") ?? "",
+                    Content = memory.Content,
+                    Created = memory.Created,
+                    Status = memory.GetField<string>("status") ?? "pending_review"
+                });
+            }
+            
+            return new PendingResolutionResult
+            {
+                Success = true,
+                TotalCount = results.TotalFound,
+                PendingResolutions = pendingResolutions,
+                Message = $"Found {results.TotalFound} pending resolutions"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting pending resolutions");
+            return new PendingResolutionResult
+            {
+                Success = false,
+                Message = $"Error getting pending resolutions: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Archive memories based on criteria - implements IMemoryLifecycleService
+    /// </summary>
+    public async Task<ArchiveMemoriesResult> ArchiveMemoriesAsync(ArchiveMemoriesRequest request, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var query = new List<string>();
+            
+            if (!string.IsNullOrEmpty(request.MemoryType))
+                query.Add($"type:{request.MemoryType}");
+                
+            if (!string.IsNullOrEmpty(request.Status))
+                query.Add($"status:{request.Status}");
+                
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = query.Any() ? string.Join(" AND ", query) : "*",
+                MaxResults = request.MaxToArchive,
+                IncludeArchived = false
+            };
+            
+            var results = await _memoryService.SearchMemoriesAsync(searchRequest);
+            
+            var memoriesToArchive = results.Memories.AsEnumerable();
+            
+            // Filter by age if specified
+            if (request.OlderThanDays.HasValue)
+            {
+                var cutoffDate = DateTime.UtcNow.AddDays(-request.OlderThanDays.Value);
+                memoriesToArchive = memoriesToArchive.Where(m => m.Created < cutoffDate);
+            }
+            
+            // Include resolved if requested
+            if (request.IncludeResolved)
+            {
+                memoriesToArchive = memoriesToArchive.Where(m => 
+                    m.GetField<string>("status")?.Equals("resolved", StringComparison.OrdinalIgnoreCase) == true ||
+                    m.GetField<string>("status") != "resolved");
+            }
+            else
+            {
+                memoriesToArchive = memoriesToArchive.Where(m => 
+                    m.GetField<string>("status")?.Equals("resolved", StringComparison.OrdinalIgnoreCase) != true);
+            }
+            
+            var archivedIds = new List<string>();
+            foreach (var memory in memoriesToArchive.Take(request.MaxToArchive))
+            {
+                var updateRequest = new MemoryUpdateRequest
+                {
+                    Id = memory.Id,
+                    FieldUpdates = MemoryLifecycleExtensions.CreateFieldUpdates(new Dictionary<string, object?>
+                    {
+                        ["isArchived"] = true,
+                        ["archivedAt"] = DateTime.UtcNow,
+                        ["archivedBy"] = "UnifiedMemoryService"
+                    })
+                };
+                
+                await _memoryService.UpdateMemoryAsync(updateRequest);
+                archivedIds.Add(memory.Id);
+            }
+            
+            return new ArchiveMemoriesResult
+            {
+                Success = true,
+                MemoriesArchived = archivedIds.Count,
+                ArchivedMemoryIds = archivedIds,
+                Message = $"Successfully archived {archivedIds.Count} memories"
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error archiving memories");
+            return new ArchiveMemoriesResult
+            {
+                Success = false,
+                Message = $"Error archiving memories: {ex.Message}"
+            };
+        }
+    }
+    
+    /// <summary>
+    /// Get confidence score for a memory - implements IMemoryLifecycleService
+    /// </summary>
+    public Task<MemoryConfidenceResult> GetMemoryConfidenceAsync(string memoryId, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            if (_confidenceCache.TryGetValue(memoryId, out var cachedData))
+            {
+                return Task.FromResult(new MemoryConfidenceResult
+                {
+                    Success = true,
+                    MemoryId = memoryId,
+                    Confidence = cachedData.Confidence,
+                    CalculatedAt = cachedData.CalculatedAt,
+                    Message = "Retrieved cached confidence score"
+                });
+            }
+            
+            return Task.FromResult(new MemoryConfidenceResult
+            {
+                Success = false,
+                MemoryId = memoryId,
+                Message = "No confidence score available for this memory"
+            });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error getting memory confidence");
+            return Task.FromResult(new MemoryConfidenceResult
+            {
+                Success = false,
+                MemoryId = memoryId,
+                Message = $"Error getting confidence: {ex.Message}"
+            });
         }
     }
     
