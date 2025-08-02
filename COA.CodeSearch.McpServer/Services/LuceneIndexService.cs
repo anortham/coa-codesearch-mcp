@@ -1033,29 +1033,56 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             {
                 File.Move(tempPath, metadataPath, overwrite: true);
             }
-            catch (UnauthorizedAccessException)
+            catch (Exception moveEx) when (moveEx is UnauthorizedAccessException || moveEx is IOException)
             {
-                _logger.LogWarning("Access denied when overwriting {Path}, attempting alternative approach", metadataPath);
+                _logger.LogWarning(moveEx, "Failed to overwrite {Path}, attempting alternative approach", metadataPath);
                 
-                // If we can't overwrite due to permissions, try to delete first
-                try
+                // Try a more robust approach with retries
+                const int maxAttempts = 3;
+                Exception? lastException = null;
+                
+                for (int attempt = 1; attempt <= maxAttempts; attempt++)
                 {
-                    if (File.Exists(metadataPath))
+                    try
                     {
-                        // Set file attributes to normal to remove any readonly flags
-                        File.SetAttributes(metadataPath, FileAttributes.Normal);
-                        File.Delete(metadataPath);
+                        if (File.Exists(metadataPath))
+                        {
+                            // Wait a bit before retry to let any transient locks release
+                            if (attempt > 1)
+                            {
+                                await Task.Delay(100 * attempt).ConfigureAwait(false);
+                            }
+                            
+                            // Set file attributes to normal to remove any readonly flags
+                            try { File.SetAttributes(metadataPath, FileAttributes.Normal); } catch { }
+                            
+                            // Try to delete the file
+                            File.Delete(metadataPath);
+                        }
+                        
+                        // Now move the temp file
+                        File.Move(tempPath, metadataPath);
+                        _logger.LogInformation("Successfully saved metadata using delete-then-move approach on attempt {Attempt}", attempt);
+                        return;
                     }
-                    File.Move(tempPath, metadataPath);
-                    _logger.LogInformation("Successfully saved metadata using delete-then-move approach");
+                    catch (Exception ex)
+                    {
+                        lastException = ex;
+                        if (attempt < maxAttempts)
+                        {
+                            _logger.LogDebug("Attempt {Attempt} failed, retrying: {Message}", attempt, ex.Message);
+                        }
+                    }
                 }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Failed to save metadata even with alternative approach");
-                    // If still failing, clean up temp file and rethrow
-                    try { File.Delete(tempPath); } catch { }
-                    throw;
-                }
+                
+                // All attempts failed
+                _logger.LogError(lastException, "Failed to save metadata after {MaxAttempts} attempts", maxAttempts);
+                
+                // Clean up temp file
+                try { File.Delete(tempPath); } catch { }
+                
+                // Don't throw - just log the error and continue
+                // This prevents the operation from failing completely due to metadata issues
             }
         }, metadataPath, "save metadata").ConfigureAwait(false);
     }
