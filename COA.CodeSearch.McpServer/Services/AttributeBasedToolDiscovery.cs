@@ -313,6 +313,32 @@ namespace COA.CodeSearch.McpServer.Services
             return schema;
         }
 
+        private object? DeserializeParameter(JsonElement element, Type targetType)
+        {
+            // Special handling for Dictionary<string, JsonElement>
+            var nonNullableType = Nullable.GetUnderlyingType(targetType) ?? targetType;
+            if (nonNullableType == typeof(Dictionary<string, JsonElement>))
+            {
+                if (element.ValueKind == JsonValueKind.Null)
+                    return null;
+                    
+                var dict = new Dictionary<string, JsonElement>();
+                if (element.ValueKind == JsonValueKind.Object)
+                {
+                    foreach (var property in element.EnumerateObject())
+                    {
+                        dict[property.Name] = property.Value.Clone();
+                    }
+                }
+                return dict;
+            }
+            
+            // Default deserialization for other types
+            var json = element.GetRawText();
+            return JsonSerializer.Deserialize(json, targetType,
+                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+        }
+
         private Func<JsonElement?, CancellationToken, Task<CallToolResult>> CreateHandler(
             MethodInfo method, object? toolInstance)
         {
@@ -339,9 +365,7 @@ namespace COA.CodeSearch.McpServer.Services
                         // Single complex parameter - deserialize entire args to it
                         if (args.HasValue)
                         {
-                            var json = args.Value.GetRawText();
-                            invokeArgs[0] = JsonSerializer.Deserialize(json, methodParams[0].ParameterType,
-                                new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                            invokeArgs[0] = DeserializeParameter(args.Value, methodParams[0].ParameterType);
                         }
                     }
                     else
@@ -358,9 +382,7 @@ namespace COA.CodeSearch.McpServer.Services
                                 }
                                 else if (args.Value.TryGetProperty(param.Name!, out var propValue))
                                 {
-                                    var json = propValue.GetRawText();
-                                    invokeArgs[i] = JsonSerializer.Deserialize(json, param.ParameterType,
-                                        new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+                                    invokeArgs[i] = DeserializeParameter(propValue, param.ParameterType);
                                 }
                                 else if (param.HasDefaultValue)
                                 {
