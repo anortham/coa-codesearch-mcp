@@ -10,4 +10,5 @@ public interface IMemoryService
     Task<FlexibleMemorySearchResult> SearchMemoriesAsync(FlexibleMemorySearchRequest request);
     Task<bool> UpdateMemoryAsync(MemoryUpdateRequest request);
     Task<bool> StoreMemoryAsync(FlexibleMemoryEntry memory);
+    Task<bool> DeleteMemoryAsync(string memoryId);
 }

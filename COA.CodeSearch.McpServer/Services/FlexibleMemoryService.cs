@@ -238,6 +238,67 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     }
     
     /// <summary>
+    /// Delete a memory by ID
+    /// </summary>
+    public async Task<bool> DeleteMemoryAsync(string memoryId)
+    {
+        var context = new ErrorContext("DeleteMemory", additionalData: new Dictionary<string, object>
+        {
+            ["MemoryId"] = memoryId
+        });
+
+        try
+        {
+            return await _errorHandling.ExecuteWithErrorHandlingAsync(async () =>
+            {
+                // Validate memory ID
+                if (string.IsNullOrEmpty(memoryId))
+                {
+                    _logger.LogWarning("DeleteMemoryAsync called with empty memory ID");
+                    return false;
+                }
+
+                // Check if memory exists first
+                var existing = await GetMemoryByIdAsync(memoryId);
+                if (existing == null)
+                {
+                    _logger.LogWarning("Memory not found for deletion: {Id}", memoryId);
+                    return false;
+                }
+
+                // Determine which workspace to delete from
+                var workspacePath = existing.IsShared ? _projectMemoryWorkspace : _localMemoryWorkspace;
+
+                // Get the index writer
+                var writer = await _indexService.GetIndexWriterAsync(workspacePath);
+
+                // Delete the document by ID term
+                var idTerm = new Term("id", memoryId);
+                writer.DeleteDocuments(idTerm);
+
+                // Commit the changes
+                await _indexService.CommitAsync(workspacePath);
+
+                // Publish deletion event
+                await _eventPublisher.PublishMemoryStorageEventAsync(new MemoryStorageEvent
+                {
+                    Memory = existing,
+                    Action = MemoryStorageAction.Deleted,
+                    Timestamp = DateTime.UtcNow
+                });
+
+                _logger.LogInformation("Successfully deleted memory: {Id} of type {Type}", memoryId, existing.Type);
+                return true;
+            }, context, ErrorSeverity.Recoverable);
+        }
+        catch (Exception ex)
+        {
+            _errorHandling.LogError(ex, context, ErrorSeverity.Recoverable);
+            return false;
+        }
+    }
+    
+    /// <summary>
     /// Get a memory by ID
     /// </summary>
     public async Task<FlexibleMemoryEntry?> GetMemoryByIdAsync(string id)

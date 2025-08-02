@@ -367,6 +367,90 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
         }
     }
     
+    [McpServerTool(Name = "delete_memory")]
+    [Description(@"Delete a memory by ID with safety checks.
+Returns: Success status and confirmation message.
+Prerequisites: Memory must exist.
+Error handling: Returns error if memory not found.
+Use cases: Removing obsolete or incorrect memories.
+Important: This is a permanent operation. Consider archiving instead for safer memory management.")]
+    public async Task<DeleteMemoryResult> DeleteMemoryAsync(DeleteMemoryParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        return await DeleteMemoryAsync(
+            ValidateRequired(parameters.MemoryId, "memoryId"),
+            parameters.Confirm ?? false);
+    }
+    
+    /// <summary>
+    /// Delete a memory with confirmation
+    /// </summary>
+    public async Task<DeleteMemoryResult> DeleteMemoryAsync(string memoryId, bool confirm = false)
+    {
+        try
+        {
+            // Safety check - require explicit confirmation
+            if (!confirm)
+            {
+                // First, check if the memory exists and get its details
+                var memory = await _memoryService.GetMemoryByIdAsync(memoryId);
+                if (memory == null)
+                {
+                    return new DeleteMemoryResult
+                    {
+                        Success = false,
+                        Message = $"Memory with ID '{memoryId}' not found"
+                    };
+                }
+                
+                return new DeleteMemoryResult
+                {
+                    Success = false,
+                    RequiresConfirmation = true,
+                    MemoryPreview = new MemoryPreview
+                    {
+                        Id = memory.Id,
+                        Type = memory.Type,
+                        Content = memory.Content.Length > 100 ? memory.Content.Substring(0, 100) + "..." : memory.Content,
+                        Created = memory.Created,
+                        IsShared = memory.IsShared
+                    },
+                    Message = $"Confirmation required to delete {memory.Type} memory. This action cannot be undone. Call again with confirm=true to proceed."
+                };
+            }
+            
+            // Perform the deletion
+            var success = await _memoryService.DeleteMemoryAsync(memoryId);
+            
+            if (success)
+            {
+                return new DeleteMemoryResult
+                {
+                    Success = true,
+                    Message = $"Successfully deleted memory '{memoryId}'"
+                };
+            }
+            else
+            {
+                return new DeleteMemoryResult
+                {
+                    Success = false,
+                    Message = $"Failed to delete memory '{memoryId}'. It may not exist or there was an error."
+                };
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error deleting memory {MemoryId}", memoryId);
+            return new DeleteMemoryResult
+            {
+                Success = false,
+                Message = $"Error deleting memory: {ex.Message}"
+            };
+        }
+    }
+    
     /// <summary>
     /// Get memory by ID
     /// </summary>
@@ -1479,4 +1563,39 @@ public class StoreMemoryParams
     
     [Description("Custom fields as key-value pairs. Example: {\"priority\": \"high\", \"category\": \"bug\", \"status\": \"pending\"}")]
     public Dictionary<string, JsonElement>? Fields { get; set; }
+}
+
+/// <summary>
+/// Parameters for DeleteMemory tool
+/// </summary>
+public class DeleteMemoryParams
+{
+    [Description("The ID of the memory to delete")]
+    public string? MemoryId { get; set; }
+    
+    [Description("Confirmation flag - must be true to actually delete the memory")]
+    public bool? Confirm { get; set; }
+}
+
+/// <summary>
+/// Result for delete memory operation
+/// </summary>
+public class DeleteMemoryResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public bool RequiresConfirmation { get; set; }
+    public MemoryPreview? MemoryPreview { get; set; }
+}
+
+/// <summary>
+/// Preview of a memory for confirmation
+/// </summary>
+public class MemoryPreview
+{
+    public string Id { get; set; } = "";
+    public string Type { get; set; } = "";
+    public string Content { get; set; } = "";
+    public DateTime Created { get; set; }
+    public bool IsShared { get; set; }
 }
