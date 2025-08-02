@@ -1099,11 +1099,26 @@ public class UnifiedMemoryService
     #region Helper Methods
 
     /// <summary>
-    /// Check if content contains any of the specified keywords
+    /// Check if content contains any of the specified keywords as whole words
     /// </summary>
     private static bool ContainsAny(string content, params string[] keywords)
     {
-        return keywords.Any(keyword => content.Contains(keyword, StringComparison.OrdinalIgnoreCase));
+        // For single words, check word boundaries
+        // For phrases with spaces, use regular contains
+        return keywords.Any(keyword =>
+        {
+            if (keyword.Contains(' '))
+            {
+                // Multi-word phrases use substring matching
+                return content.Contains(keyword, StringComparison.OrdinalIgnoreCase);
+            }
+            else
+            {
+                // Single words require word boundary matching
+                var pattern = $@"\b{Regex.Escape(keyword)}\b";
+                return Regex.IsMatch(content, pattern, RegexOptions.IgnoreCase);
+            }
+        });
     }
 
     /// <summary>
