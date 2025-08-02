@@ -72,7 +72,22 @@ AI-optimized: Provides actionable insights with confidence scores and prioritize
             };
         }
 
-        var patternTypes = parameters.PatternTypes?.Select(pt => Enum.Parse<PatternType>(pt, true)).ToArray() ?? new PatternType[0];
+        var patternTypes = parameters.PatternTypes?
+            .Select(pt => 
+            {
+                if (Enum.TryParse<PatternType>(pt, true, out var result))
+                {
+                    return result;
+                }
+                else
+                {
+                    Logger.LogWarning("Invalid pattern type '{PatternType}' - skipping", pt);
+                    return (PatternType?)null;
+                }
+            })
+            .Where(pt => pt.HasValue)
+            .Select(pt => pt!.Value)
+            .ToArray() ?? new PatternType[0];
         var depth = Enum.TryParse<PatternDepth>(parameters.Depth, true, out var parsedDepth) ? parsedDepth : PatternDepth.Shallow;
         
         return await ExecuteAsync(
