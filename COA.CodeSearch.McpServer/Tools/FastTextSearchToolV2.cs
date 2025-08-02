@@ -1057,9 +1057,19 @@ Not for: File name searches (use file_search), directory searches (use directory
                 {
                     Logger.LogWarning(ex, "Invalid regex pattern: {Query}, falling back to escaped standard search", queryText);
                     // Fall back to standard search with escaping
-                    var fallbackParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                    fallbackParser.DefaultOperator = Operator.AND;
-                    contentQuery = fallbackParser.Parse(EscapeQueryText(queryText));
+                    try
+                    {
+                        var fallbackParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                        fallbackParser.DefaultOperator = Operator.AND;
+                        contentQuery = fallbackParser.Parse(EscapeQueryText(queryText));
+                    }
+                    catch (ParseException parseEx)
+                    {
+                        Logger.LogWarning(parseEx, "Fallback query parsing also failed for: {Query}, using simple term query", queryText);
+                        // If even the escaped query fails to parse, fall back to a simple term query
+                        // This ensures we always return some results rather than failing completely
+                        contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
+                    }
                 }
                 break;
             
