@@ -139,6 +139,7 @@ var host = Host.CreateDefaultBuilder(args)
         
         // Memory lifecycle service
         services.AddSingleton<MemoryLifecycleService>();
+        services.AddSingleton<IMemoryLifecycleService>(provider => provider.GetRequiredService<MemoryLifecycleService>());
         services.AddSingleton<IFileChangeSubscriber>(provider => provider.GetRequiredService<MemoryLifecycleService>());
         services.AddHostedService(provider => provider.GetRequiredService<MemoryLifecycleService>());
         
