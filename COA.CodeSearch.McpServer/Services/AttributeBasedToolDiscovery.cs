@@ -323,6 +323,8 @@ namespace COA.CodeSearch.McpServer.Services
                     return null;
                     
                 var dict = new Dictionary<string, JsonElement>();
+                
+                // Handle object format: {"key": "value", ...}
                 if (element.ValueKind == JsonValueKind.Object)
                 {
                     foreach (var property in element.EnumerateObject())
@@ -330,8 +332,27 @@ namespace COA.CodeSearch.McpServer.Services
                         dict[property.Name] = property.Value.Clone();
                     }
                 }
+                // Handle array format: [{"key": "priority", "value": "high"}, ...]
+                else if (element.ValueKind == JsonValueKind.Array)
+                {
+                    foreach (var item in element.EnumerateArray())
+                    {
+                        if (item.ValueKind == JsonValueKind.Object &&
+                            item.TryGetProperty("key", out var keyProp) &&
+                            item.TryGetProperty("value", out var valueProp))
+                        {
+                            var key = keyProp.GetString();
+                            if (!string.IsNullOrEmpty(key))
+                            {
+                                dict[key] = valueProp.Clone();
+                            }
+                        }
+                    }
+                }
+                
                 return dict;
             }
+            
             
             // Default deserialization for other types
             var json = element.GetRawText();
