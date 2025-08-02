@@ -19,15 +19,18 @@ public class FlexibleMemoryTools : ITool
     private readonly ILogger<FlexibleMemoryTools> _logger;
     private readonly FlexibleMemoryService _memoryService;
     private readonly IPathResolutionService _pathResolution;
+    private readonly IMemoryQualityValidator? _qualityValidator;
     
     public FlexibleMemoryTools(
         ILogger<FlexibleMemoryTools> logger, 
         FlexibleMemoryService memoryService,
-        IPathResolutionService pathResolution)
+        IPathResolutionService pathResolution,
+        IMemoryQualityValidator? qualityValidator = null)
     {
         _logger = logger;
         _memoryService = memoryService;
         _pathResolution = pathResolution;
+        _qualityValidator = qualityValidator;
     }
     
     [McpServerTool(Name = "store_memory")]
@@ -1166,6 +1169,175 @@ Important: This is a permanent operation. Consider archiving instead for safer m
         }
     }
     
+    [McpServerTool(Name = "suggest_quality_based_archiving")]
+    [Description(@"Analyze memory quality and suggest archiving for low-quality memories.
+Returns: List of memories with quality scores and archiving suggestions.
+Prerequisites: Quality validator must be available.
+Use cases: Memory maintenance, quality improvement, cleaning up low-value memories.
+Important: This only suggests archiving - actual archiving requires confirmation.")]
+    public async Task<QualityBasedArchivingSuggestions> SuggestQualityBasedArchivingAsync(QualityArchivingParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        
+        return await SuggestQualityBasedArchivingAsync(
+            parameters.MemoryType,
+            parameters.QualityThreshold ?? 0.5,
+            parameters.MaxResults ?? 50,
+            parameters.IncludeImprovementSuggestions ?? true);
+    }
+    
+    /// <summary>
+    /// Analyze memories and suggest archiving based on quality scores
+    /// </summary>
+    public async Task<QualityBasedArchivingSuggestions> SuggestQualityBasedArchivingAsync(
+        string? memoryType = null,
+        double qualityThreshold = 0.5,
+        int maxResults = 50,
+        bool includeImprovementSuggestions = true)
+    {
+        try
+        {
+            if (_qualityValidator == null)
+            {
+                return new QualityBasedArchivingSuggestions
+                {
+                    Success = false,
+                    Message = "Quality validator is not available. Cannot assess memory quality."
+                };
+            }
+            
+            // Search for memories to analyze
+            var searchRequest = new FlexibleMemorySearchRequest
+            {
+                Query = string.IsNullOrEmpty(memoryType) ? "*" : $"type:{memoryType}",
+                MaxResults = maxResults,
+                IncludeArchived = false // Don't analyze already archived memories
+            };
+            
+            var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
+            
+            if (!searchResult.Memories.Any())
+            {
+                return new QualityBasedArchivingSuggestions
+                {
+                    Success = true,
+                    Message = "No memories found to analyze",
+                    TotalAnalyzed = 0,
+                    SuggestedForArchiving = 0
+                };
+            }
+            
+            // Analyze quality for each memory
+            var suggestions = new List<MemoryArchivingSuggestion>();
+            var options = new QualityValidationOptions
+            {
+                PassingThreshold = qualityThreshold,
+                IncludeImprovementSuggestions = includeImprovementSuggestions
+            };
+            
+            foreach (var memory in searchResult.Memories)
+            {
+                var qualityScore = await _qualityValidator.ValidateQualityAsync(memory, options);
+                
+                var suggestion = new MemoryArchivingSuggestion
+                {
+                    MemoryId = memory.Id,
+                    MemoryType = memory.Type,
+                    ContentPreview = memory.Content.Length > 100 ? 
+                        memory.Content.Substring(0, 100) + "..." : memory.Content,
+                    Created = memory.Created,
+                    LastModified = memory.Modified,
+                    QualityScore = qualityScore.OverallScore,
+                    PassesThreshold = qualityScore.PassesThreshold,
+                    ShouldArchive = !qualityScore.PassesThreshold,
+                    ArchivingReason = GenerateArchivingReason(qualityScore),
+                    QualityIssues = qualityScore.Issues
+                        .Where(i => i.Severity >= QualitySeverity.Major)
+                        .Select(i => $"{i.Category}: {i.Description}")
+                        .ToList(),
+                    ImprovementSuggestions = includeImprovementSuggestions ? 
+                        qualityScore.Suggestions
+                            .Where(s => s.ExpectedImpact >= 0.1)
+                            .Select(s => $"{s.Category}: {s.ActionText} (Impact: {s.ExpectedImpact:P0})")
+                            .ToList() : 
+                        new List<string>()
+                };
+                
+                suggestions.Add(suggestion);
+            }
+            
+            // Sort by quality score (lowest first)
+            var orderedSuggestions = suggestions.OrderBy(s => s.QualityScore).ToList();
+            var archiveCandidates = orderedSuggestions.Where(s => s.ShouldArchive).ToList();
+            
+            return new QualityBasedArchivingSuggestions
+            {
+                Success = true,
+                Message = $"Analyzed {suggestions.Count} memories. {archiveCandidates.Count} suggested for archiving.",
+                TotalAnalyzed = suggestions.Count,
+                SuggestedForArchiving = archiveCandidates.Count,
+                QualityThreshold = qualityThreshold,
+                Suggestions = orderedSuggestions,
+                ArchivingCommand = archiveCandidates.Any() ? 
+                    GenerateArchivingCommand(archiveCandidates) : null
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error analyzing memories for quality-based archiving");
+            return new QualityBasedArchivingSuggestions
+            {
+                Success = false,
+                Message = $"Error: {ex.Message}"
+            };
+        }
+    }
+    
+    private string GenerateArchivingReason(MemoryQualityScore qualityScore)
+    {
+        var reasons = new List<string>();
+        
+        if (qualityScore.OverallScore < 0.3)
+            reasons.Add("Very low quality score");
+        else if (qualityScore.OverallScore < 0.5)
+            reasons.Add("Below average quality");
+            
+        var criticalIssues = qualityScore.Issues.Count(i => i.Severity == QualitySeverity.Critical);
+        var majorIssues = qualityScore.Issues.Count(i => i.Severity == QualitySeverity.Major);
+        
+        if (criticalIssues > 0)
+            reasons.Add($"{criticalIssues} critical issues");
+        if (majorIssues > 0)
+            reasons.Add($"{majorIssues} major issues");
+            
+        if (!reasons.Any())
+            reasons.Add("Below quality threshold");
+            
+        return string.Join(", ", reasons);
+    }
+    
+    private string GenerateArchivingCommand(List<MemoryArchivingSuggestion> candidates)
+    {
+        // Group by type for more efficient archiving
+        var byType = candidates.GroupBy(c => c.MemoryType);
+        var commands = new List<string>();
+        
+        foreach (var group in byType)
+        {
+            var ids = group.Select(g => g.MemoryId).ToList();
+            if (ids.Count == 1)
+            {
+                commands.Add($"archive_memory --id \"{ids[0]}\"");
+            }
+            else
+            {
+                commands.Add($"archive_memories --type \"{group.Key}\" --ids [{string.Join(", ", ids.Select(id => $"\"{id}\""))}]");
+            }
+        }
+        
+        return string.Join(" && ", commands);
+    }
+    
     private List<MemoryHealthIssue> AnalyzeMemoryHealth(List<FlexibleMemoryEntry> memories, MemoryStatistics stats)
     {
         var issues = new List<MemoryHealthIssue>();
@@ -1598,4 +1770,54 @@ public class MemoryPreview
     public string Content { get; set; } = "";
     public DateTime Created { get; set; }
     public bool IsShared { get; set; }
+}
+
+/// <summary>
+/// Parameters for quality-based archiving suggestions
+/// </summary>
+public class QualityArchivingParams
+{
+    [Description("Memory type to filter by (optional - analyzes all types if not specified)")]
+    public string? MemoryType { get; set; }
+    
+    [Description("Quality threshold below which memories should be archived (0.0-1.0, default: 0.5)")]
+    public double? QualityThreshold { get; set; }
+    
+    [Description("Maximum number of memories to analyze (default: 50)")]
+    public int? MaxResults { get; set; }
+    
+    [Description("Include improvement suggestions for memories that could be enhanced (default: true)")]
+    public bool? IncludeImprovementSuggestions { get; set; }
+}
+
+/// <summary>
+/// Result of quality-based archiving analysis
+/// </summary>
+public class QualityBasedArchivingSuggestions
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public int TotalAnalyzed { get; set; }
+    public int SuggestedForArchiving { get; set; }
+    public double QualityThreshold { get; set; }
+    public List<MemoryArchivingSuggestion> Suggestions { get; set; } = new();
+    public string? ArchivingCommand { get; set; }
+}
+
+/// <summary>
+/// Individual memory archiving suggestion
+/// </summary>
+public class MemoryArchivingSuggestion
+{
+    public string MemoryId { get; set; } = "";
+    public string MemoryType { get; set; } = "";
+    public string ContentPreview { get; set; } = "";
+    public DateTime Created { get; set; }
+    public DateTime LastModified { get; set; }
+    public double QualityScore { get; set; }
+    public bool PassesThreshold { get; set; }
+    public bool ShouldArchive { get; set; }
+    public string ArchivingReason { get; set; } = "";
+    public List<string> QualityIssues { get; set; } = new();
+    public List<string> ImprovementSuggestions { get; set; } = new();
 }
