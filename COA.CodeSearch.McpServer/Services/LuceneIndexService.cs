@@ -1029,7 +1029,34 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
             }
             
             // Atomic move - this prevents partial writes
-            File.Move(tempPath, metadataPath, overwrite: true);
+            try
+            {
+                File.Move(tempPath, metadataPath, overwrite: true);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _logger.LogWarning("Access denied when overwriting {Path}, attempting alternative approach", metadataPath);
+                
+                // If we can't overwrite due to permissions, try to delete first
+                try
+                {
+                    if (File.Exists(metadataPath))
+                    {
+                        // Set file attributes to normal to remove any readonly flags
+                        File.SetAttributes(metadataPath, FileAttributes.Normal);
+                        File.Delete(metadataPath);
+                    }
+                    File.Move(tempPath, metadataPath);
+                    _logger.LogInformation("Successfully saved metadata using delete-then-move approach");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to save metadata even with alternative approach");
+                    // If still failing, clean up temp file and rethrow
+                    try { File.Delete(tempPath); } catch { }
+                    throw;
+                }
+            }
         }, metadataPath, "save metadata").ConfigureAwait(false);
     }
     
