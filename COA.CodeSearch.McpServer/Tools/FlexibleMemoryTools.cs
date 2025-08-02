@@ -455,6 +455,108 @@ Important: This is a permanent operation. Consider archiving instead for safer m
     }
     
     /// <summary>
+    /// Bulk delete memories MCP tool
+    /// </summary>
+    [McpServerTool(Name = "bulk_delete_memories")]
+    [Description("Delete multiple memories at once by providing a list of memory IDs. Requires confirmation. Returns a summary of successes and failures.")]
+    public async Task<BulkDeleteMemoriesResult> BulkDeleteMemoriesAsync(BulkDeleteMemoriesParams parameters)
+    {
+        if (parameters == null) throw new InvalidParametersException("Parameters are required");
+        if (parameters.MemoryIds == null || parameters.MemoryIds.Length == 0)
+            throw new InvalidParametersException("memoryIds array is required and must not be empty");
+        
+        return await BulkDeleteMemoriesAsync(
+            parameters.MemoryIds,
+            parameters.Confirm ?? false);
+    }
+    
+    /// <summary>
+    /// Implementation of bulk delete memories
+    /// </summary>
+    public async Task<BulkDeleteMemoriesResult> BulkDeleteMemoriesAsync(string[] memoryIds, bool confirm)
+    {
+        var result = new BulkDeleteMemoriesResult
+        {
+            TotalRequested = memoryIds.Length,
+            Successful = new List<string>(),
+            Failed = new List<BulkDeleteFailure>()
+        };
+
+        // Safety check - require explicit confirmation
+        if (!confirm)
+        {
+            result.Success = false;
+            result.Message = $"This will delete {memoryIds.Length} memories. Call again with confirm=true to proceed.";
+            result.RequiresConfirmation = true;
+            
+            // Preview first few memories
+            var previewCount = Math.Min(5, memoryIds.Length);
+            var previews = new List<string>();
+            
+            for (int i = 0; i < previewCount; i++)
+            {
+                var memory = await _memoryService.GetMemoryByIdAsync(memoryIds[i]);
+                if (memory != null)
+                {
+                    var preview = $"- {memory.Type}: {memory.Content.Substring(0, Math.Min(80, memory.Content.Length))}...";
+                    previews.Add(preview);
+                }
+            }
+            
+            if (previews.Any())
+            {
+                result.Message += $"\n\nPreview of memories to delete:\n{string.Join("\n", previews)}";
+                if (memoryIds.Length > previewCount)
+                {
+                    result.Message += $"\n... and {memoryIds.Length - previewCount} more";
+                }
+            }
+            
+            return result;
+        }
+
+        // Perform bulk deletion
+        foreach (var memoryId in memoryIds)
+        {
+            try
+            {
+                var deleted = await _memoryService.DeleteMemoryAsync(memoryId);
+                if (deleted)
+                {
+                    result.Successful.Add(memoryId);
+                }
+                else
+                {
+                    result.Failed.Add(new BulkDeleteFailure
+                    {
+                        MemoryId = memoryId,
+                        Reason = "Memory not found or already deleted"
+                    });
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error deleting memory {MemoryId} during bulk operation", memoryId);
+                result.Failed.Add(new BulkDeleteFailure
+                {
+                    MemoryId = memoryId,
+                    Reason = ex.Message
+                });
+            }
+        }
+
+        result.Success = result.Failed.Count == 0;
+        result.Message = $"Deleted {result.Successful.Count} of {result.TotalRequested} memories.";
+        
+        if (result.Failed.Any())
+        {
+            result.Message += $" {result.Failed.Count} failed.";
+        }
+
+        return result;
+    }
+    
+    /// <summary>
     /// Get memory by ID
     /// </summary>
     public async Task<GetMemoryResult> GetMemoryByIdAsync(string id)
@@ -1820,4 +1922,38 @@ public class MemoryArchivingSuggestion
     public string ArchivingReason { get; set; } = "";
     public List<string> QualityIssues { get; set; } = new();
     public List<string> ImprovementSuggestions { get; set; } = new();
+}
+
+/// <summary>
+/// Parameters for bulk delete memories
+/// </summary>
+public class BulkDeleteMemoriesParams
+{
+    [Description("Array of memory IDs to delete")]
+    public string[]? MemoryIds { get; set; }
+    
+    [Description("Confirmation flag - must be true to actually delete the memories")]
+    public bool? Confirm { get; set; }
+}
+
+/// <summary>
+/// Result of bulk delete operation
+/// </summary>
+public class BulkDeleteMemoriesResult
+{
+    public bool Success { get; set; }
+    public string Message { get; set; } = "";
+    public bool RequiresConfirmation { get; set; }
+    public int TotalRequested { get; set; }
+    public List<string> Successful { get; set; } = new();
+    public List<BulkDeleteFailure> Failed { get; set; } = new();
+}
+
+/// <summary>
+/// Details of a failed deletion in bulk operation
+/// </summary>
+public class BulkDeleteFailure
+{
+    public string MemoryId { get; set; } = "";
+    public string Reason { get; set; } = "";
 }
