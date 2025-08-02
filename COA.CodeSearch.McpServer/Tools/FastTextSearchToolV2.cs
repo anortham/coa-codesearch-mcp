@@ -1187,6 +1187,13 @@ Not for: File name searches (use file_search), directory searches (use directory
         
         try
         {
+            // Check if file exists before attempting to open
+            if (!File.Exists(filePath))
+            {
+                Logger.LogDebug("File not found, skipping context extraction: {FilePath}", filePath);
+                return contextResults;
+            }
+            
             var queryLower = query.ToLowerInvariant();
             
             await using var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read, FileShare.Read, 4096, FileOptions.Asynchronous | FileOptions.SequentialScan);
