@@ -54,14 +54,17 @@ public class EscapeQueryTextTests
             if (input.Contains('{')) Assert.Contains("\\{", result);
             if (input.Contains('}')) Assert.Contains("\\}", result);
             
-            // Square brackets should now be escaped (changed from previous behavior)
+            // Square brackets are NOT escaped per recent fix (50f7228)
+            // They are handled separately in BuildQuery method for literal/code search
             if (input.Contains('['))
             {
-                Assert.Contains("\\[", result);
+                Assert.Contains("[", result);
+                Assert.DoesNotContain("\\[", result);
             }
             if (input.Contains(']'))
             {
-                Assert.Contains("\\]", result);
+                Assert.Contains("]", result);
+                Assert.DoesNotContain("\\]", result);
             }
             if (input.Contains('@'))
             {
