@@ -61,6 +61,12 @@ public interface IPathResolutionService
     /// <returns>The full path to the index root directory</returns>
     string GetIndexRootPath();
     
+    /// <summary>
+    /// Gets the checkpoint ID file path
+    /// </summary>
+    /// <returns>The full path to the checkpoint.id file</returns>
+    string GetCheckpointIdPath();
+    
     
     // Safe file system operations
     

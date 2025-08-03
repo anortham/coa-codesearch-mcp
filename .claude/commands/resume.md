@@ -1,5 +1,5 @@
 ---
-allowed-tools: ["mcp__codesearch__recall_context", "mcp__codesearch__search_memories", "mcp__codesearch__load_context", "mcp__codesearch__unified_memory"]
+allowed-tools: ["mcp__codesearch__get_latest_checkpoint", "mcp__codesearch__load_context"]
 description: "Resume work from the most recent checkpoint"
 ---
 
@@ -8,24 +8,16 @@ Load the most recent checkpoint and continue work from where we left off.
 $ARGUMENTS
 
 Steps:
-1. Use ONE search query to find the most recent checkpoint:
-   ```
-   search_memories with:
-   - query: "Session Checkpoint"
-   - types: ["WorkSession"] 
-   - orderBy: "created"
-   - orderDescending: true
-   - maxResults: 1
-   - mode: "full"
-   ```
-   
-   IMPORTANT: The 'created' field is in UTC. Select the checkpoint with the latest UTC timestamp, 
-   which represents the most recent checkpoint regardless of the local time shown in the title.
+1. Use get_latest_checkpoint to retrieve the most recent checkpoint
+   - This automatically returns the checkpoint with the highest sequential ID
+   - No need to worry about time zones or sorting
 
 2. If a checkpoint is found:
+   - Display the checkpoint ID (e.g., "Resuming from CHECKPOINT-00003")
    - Extract and display the full checkpoint content
-   - The checkpoint already contains all needed sections:
-     - Timestamp (in title)
+   - The checkpoint contains:
+     - Checkpoint ID
+     - Creation timestamp
      - What was accomplished
      - Current state
      - Next steps
@@ -33,8 +25,6 @@ Steps:
 
 3. If no checkpoint found:
    - Fall back to load_context for general project memories
-   - Display: "No recent checkpoint found. Here's the current project context:"
+   - Display: "No checkpoint found. Loading general project context..."
 
-4. End with: "Ready to continue from checkpoint. What would you like to work on?"
-
-IMPORTANT: Use only ONE search query. The full mode will return complete content in a single call.
+4. End with: "Ready to continue. What would you like to work on?"
