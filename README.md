@@ -395,60 +395,44 @@ See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for:
 }
 ```
 
-## 🤖 Claude Code Usage Best Practices
+## 🤖 Claude Code Integration
 
-### Recommended Global CLAUDE.md Settings
+This MCP server works seamlessly with Claude Code. The project includes:
 
-For optimal Claude Code experience across ALL your projects, add these patterns to your global `~/.claude/CLAUDE.md`:
+- **Custom slash commands** (`/checkpoint` and `/resume`) for session management
+- **Project-specific instructions** in `CLAUDE.md` for optimal tool usage
+- **AI-optimized responses** with progressive disclosure and token optimization
 
-```markdown
-## MCP Tool Usage Best Practices
+### Memory System Best Practices
 
-### CoA CodeSearch MCP Server - Efficient Tool Usage
-- **ALWAYS use MCP tools directly** for search operations
-- **DON'T use Task tool** for simple content searches or file finding
-- **DO use text_search with contextLines** for code snippets and context
-- **Trust summary mode insights** - hotspots and actions often contain what you need
-- **Use batch_operations** for multiple related searches, not Task tool
+When using the memory system:
 
-### Common Anti-Patterns to Avoid
-❌ Task tool for text search → ✅ mcp__codesearch__text_search with contextLines  
-❌ Task tool for file finding → ✅ mcp__codesearch__file_search  
-❌ Ignoring summary insights → ✅ Use hotspots and actionable suggestions  
-❌ Multiple separate tools → ✅ mcp__codesearch__batch_operations  
+1. **Start each session** with `recall_context` to load relevant project knowledge
+2. **Use natural language** with `unified_memory` for intuitive memory operations
+3. **Store important findings** as you work to build project knowledge over time
+4. **Backup memories** to JSON for version control and team sharing
 
-### Efficient Search Patterns
-1. **Index first**: `mcp__codesearch__index_workspace` (required once per session)
-2. **Discover workflows**: `workflow_discovery --goal "your task"` (learn tool chains)
-3. **Search content**: `text_search --query "pattern" --contextLines 3` (standardized parameter)
-4. **Explore results**: Use hotspots and insights from summary mode
-5. **Drill down**: Use provided actions or `responseMode: "full"` only when needed
+### Lucene Query Syntax
 
-### Memory System Workflow  
-1. **Start sessions**: `recall_context --query "what I'm working on"`
-2. **Natural language**: `unified_memory --command "remember that UserService needs refactoring"`
-3. **Store findings**: `store_memory --type "TechnicalDebt" --content "..."`  
-4. **Find related**: `search_memories --query "authentication"`
-5. **Semantic search**: `semantic_search --query "performance issues in login"`
+The memory search uses Lucene syntax. Key patterns:
 
-### Lucene Query Patterns for Memory Search
+- **Simple search**: `authentication` (finds all mentions)
 - **Wildcards**: `auth*` (matches auth, authentication, authorization)
-- **Boolean**: `auth OR authentication`, `bug AND performance`
-- **Fuzzy**: `perfomance~` (matches performance with typo tolerance)
-- **Regex**: `/auth.*/` (use forward slashes for regex patterns)
 - **Field search**: `type:TechnicalDebt` (search specific fields)
+- **Boolean**: `auth AND login`, `bug OR issue`
+- **Fuzzy**: `authenticaton~` (handles typos)
 
-**Special Characters to Avoid**: `:` `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
-Unless using them for Lucene syntax (e.g., `:` for field search, `*` for wildcards)
+**Avoid special characters** in queries unless using Lucene syntax:
+`:` `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
 
-### AI-Optimized Features
-- **Unified responses**: All tools follow consistent format for easy parsing
-- **Progressive disclosure**: Automatic summary mode at 5000 tokens
-- **Actionable errors**: Get specific recovery steps, not generic messages
-- **Parameter standardization**: Use `query` for all search tools
-```
+### Tool Selection Guidelines
 
-Copy this guidance to your global configuration for consistent tool usage across all projects.
+- **For simple searches**: Use `text_search`, `file_search` directly
+- **For complex analysis**: Use `search_assistant` for multi-step operations
+- **For pattern analysis**: Use `pattern_detector` for architectural insights
+- **For multiple operations**: Use `batch_operations` instead of sequential calls
+
+See the project's `CLAUDE.md` file for detailed instructions and examples.
 
 ## 🐛 Troubleshooting
 
