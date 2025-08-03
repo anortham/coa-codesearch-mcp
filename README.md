@@ -430,7 +430,14 @@ For optimal Claude Code experience across ALL your projects, add these patterns 
 4. **Find related**: `search_memories --query "authentication"`
 5. **Semantic search**: `semantic_search --query "performance issues in login"`
 
-**Note**: Memory search uses Lucene query syntax. Avoid special characters like `:` in queries.
+### Lucene Query Patterns for Memory Search
+- **Wildcards**: `auth*` (matches auth, authentication, authorization)
+- **Boolean**: `auth OR authentication`, `bug AND performance`
+- **Fuzzy**: `perfomance~` (matches performance with typo tolerance)
+- **Regex**: `/auth.*/` (use forward slashes for regex patterns)
+- **Field search**: `type:TechnicalDebt` (search specific fields)
+
+**Note**: Avoid special characters like `:` in queries unless using field syntax.
 See [Memory System Guide](docs/MEMORY_SYSTEM.md#lucene-query-syntax) for details.
 
 ### AI-Optimized Features
