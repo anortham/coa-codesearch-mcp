@@ -11,7 +11,7 @@ Steps:
 1. Use ONE search query to find the most recent checkpoint:
    ```
    search_memories with:
-   - query: "**Session Checkpoint"
+   - query: "Session Checkpoint"
    - types: ["WorkSession"] 
    - orderBy: "created"
    - orderDescending: true
