@@ -301,11 +301,7 @@ public class CodeAnalyzerTests
         
         // Assert
         Assert.Contains("Repository<T>", tokens);
-        Assert.Contains(": IRepository", tokens);
-        // Note: IRepository<T> is split into ": IRepository" and then "<", "T", ">"
-        Assert.Contains("<", tokens);
-        Assert.Contains("T", tokens);
-        Assert.Contains(">", tokens);
+        Assert.Contains(": IRepository<T>", tokens); // Now the whole type annotation is kept together
         Assert.Contains(": Entity", tokens);
     }
     
