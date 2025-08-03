@@ -158,6 +158,11 @@ public class PathResolutionService : IPathResolutionService
         return indexRoot;
     }
     
+    public string GetCheckpointIdPath()
+    {
+        return Path.Combine(_basePath, "checkpoint.id");
+    }
+    
     
     // Safe file system operations implementation
     
