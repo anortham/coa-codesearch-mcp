@@ -273,26 +273,11 @@ stages:
               artifactName: "packages"
               downloadPath: "$(System.ArtifactsDirectory)"
 
-          - powershell: |
-              $feedUrl = "https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json"
-              $packages = Get-ChildItem -Path "$(System.ArtifactsDirectory)\packages\*.nupkg"
-              
-              foreach ($package in $packages) {
-                  Write-Host "Pushing package: $($package.Name)"
-                  & dotnet nuget push $package.FullName --source $feedUrl --api-key AzureDevOps --skip-duplicate
-                  
-                  if ($LASTEXITCODE -eq 0) {
-                      Write-Host "Successfully pushed: $($package.Name)" -ForegroundColor Green
-                  }
-                  elseif ($LASTEXITCODE -eq 1) {
-                      # Check if it's a duplicate error
-                      Write-Host "Package $($package.Name) already exists, skipping..." -ForegroundColor Yellow
-                  }
-                  else {
-                      Write-Host "Failed to push $($package.Name) with exit code: $LASTEXITCODE" -ForegroundColor Red
-                      exit $LASTEXITCODE
-                  }
-              }
+          - task: NuGetCommand@2
             displayName: "Push packages to COA Azure DevOps feed"
-            env:
-              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+            inputs:
+              command: 'push'
+              packagesToPush: '$(System.ArtifactsDirectory)/packages/*.nupkg'
+              nuGetFeedType: 'internal'
+              publishVstsFeed: 'COA'
+              allowPackageConflicts: true
