@@ -36,7 +36,7 @@ public class MemorySearchResponseBuilder : BaseResponseBuilder
         var tokenBudget = mode == ResponseMode.Summary ? SummaryTokenBudget : FullTokenBudget;
         
         // Build structured data efficiently
-        var data = BuildMemorySearchData(searchResult, request, tokenBudget);
+        var data = BuildMemorySearchData(searchResult, request, tokenBudget, mode);
 
         // Generate contextual actions
         var actions = GenerateActions(new
@@ -296,7 +296,8 @@ public class MemorySearchResponseBuilder : BaseResponseBuilder
     private MemorySearchData BuildMemorySearchData(
         FlexibleMemorySearchResult searchResult, 
         FlexibleMemorySearchRequest request,
-        int tokenBudget)
+        int tokenBudget,
+        ResponseMode mode)
     {
         var data = new MemorySearchData();
         
@@ -310,7 +311,7 @@ public class MemorySearchResponseBuilder : BaseResponseBuilder
             {
                 Id = m.Id,
                 Type = m.Type,
-                Content = TruncateContent(m.Content, 200),
+                Content = mode == ResponseMode.Full ? m.Content : TruncateContent(m.Content, 200),
                 Created = m.Created,
                 IsShared = m.IsShared,
                 Score = 1.0f, // TODO: Add score support to FlexibleMemoryEntry
