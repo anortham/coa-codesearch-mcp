@@ -76,6 +76,12 @@ search_memories --query "\"Session Checkpoint\""
 
 # ✅ CORRECT - Use field specification properly
 search_memories --query "type:WorkSession AND Session"
+
+# ✅ CORRECT - Use regex with forward slashes
+search_memories --query "/auth.*/"  # Finds auth, authentication, authorization, etc.
+
+# ❌ WRONG - Regex without forward slashes doesn't work
+search_memories --query "auth.*"  # This looks for literal "auth.*" text
 ```
 
 ### Field Names You Can Search
@@ -92,8 +98,9 @@ When using field:value syntax, these are the valid field names:
 1. **Avoid special characters** in search terms unless using them for Lucene syntax
 2. **Use wildcards** (`*`) for flexible matching instead of trying exact phrases with punctuation
 3. **Use field searches** when you know the specific field (e.g., `type:WorkSession`)
-4. **Keep queries simple** - The synonym expansion in MemoryAnalyzer will handle variations
-5. **Don't fight Lucene** - Work with its syntax, not against it
+4. **Use regex patterns** with forward slashes (e.g., `/auth.*/`) for complex pattern matching
+5. **Keep queries simple** - StandardAnalyzer handles case-insensitivity and tokenization
+6. **Don't fight Lucene** - Work with its syntax, not against it
 
 ### Why This Matters
 
