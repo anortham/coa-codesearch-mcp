@@ -18,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Collections.Generic;
 using System.IO;
 using System.Text;
 
@@ -181,11 +182,19 @@ Not for: File name searches (use file_search), directory searches (use directory
                 };
             }
 
-            // Check for minimum query length and single punctuation
-            if (query.Trim().Length < 2)
+            // Meaningful two-character operators that are allowed
+            var allowedTwoCharOperators = new HashSet<string> { "=>", "??", "?.", "::", "->", "+=", "-=", "*=", "/=", "==", "!=", ">=", "<=", "&&", "||", "<<", ">>" };
+            
+            // Check for minimum query length
+            var trimmedQuery = query.Trim();
+            if (trimmedQuery.Length < 3)
             {
-                // Allow single letters/numbers but not single punctuation
-                if (query.Trim().Length == 1 && !char.IsLetterOrDigit(query.Trim()[0]))
+                // Only allow specific meaningful two-character operators
+                if (trimmedQuery.Length == 2 && allowedTwoCharOperators.Contains(trimmedQuery))
+                {
+                    // This is an allowed two-character operator, continue processing
+                }
+                else
                 {
                     return new
                     {
@@ -193,37 +202,18 @@ Not for: File name searches (use file_search), directory searches (use directory
                         error = new
                         {
                             code = ErrorCodes.VALIDATION_ERROR,
-                            message = $"Single punctuation character '{query}' is too broad for search. This would match nearly every line of code.",
+                            message = $"Search query '{query}' is too short. Minimum 3 characters required.",
                             recovery = new
                             {
-                                suggestion = "Use a more specific search pattern",
-                                examples = new[] { ".ToString()", "catch (", "=>", "async Task" }
+                                suggestion = "Use a more specific search pattern (3+ characters)",
+                                examples = searchType == "literal" 
+                                    ? new[] { ".ToString()", "GetHashCode()", "async Task", "catch (Exception" }
+                                    : new[] { "ToString", "Exception", "async", "interface" },
+                                allowedTwoChar = "Allowed 2-char operators: =>, ??, ?., ::, ->, +=, -=, ==, !=, >=, <=, &&, ||, <<, >>"
                             }
                         }
                     };
                 }
-            }
-
-            // Warn about overly broad searches
-            var commonPunctuation = new[] { "(", ")", "{", "}", "[", "]", ";", ",", ".", ":", "\"", "'", "<", ">", "/", "\\" };
-            if (query.Trim().Length <= 2 && commonPunctuation.Contains(query.Trim()))
-            {
-                return new
-                {
-                    success = false,
-                    error = new
-                    {
-                        code = ErrorCodes.VALIDATION_ERROR,
-                        message = $"Search query '{query}' is too broad and would match too many results",
-                        recovery = new
-                        {
-                            suggestion = "Use a more specific pattern that includes context",
-                            examples = searchType == "literal" 
-                                ? new[] { ".GetHashCode()", "new List<", "async (", "} catch" }
-                                : new[] { "GetHashCode", "List AND generic", "async", "catch" }
-                        }
-                    }
-                };
             }
 
             if (string.IsNullOrWhiteSpace(workspacePath))
