@@ -38,10 +38,10 @@ public class FastTextSearchToolV2 : ClaudeOptimizedToolBase
     private readonly IQueryCacheService _queryCacheService;
     private readonly IFieldSelectorService _fieldSelectorService;
     
-    // Lucene special characters that need escaping (excluding [ and ] which cause issues)
-    private static readonly char[] LuceneSpecialChars = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '~', '*', '?', ':', '\\', '/', '<', '>' };
-    private static readonly char[] LuceneSpecialCharsExceptWildcard = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '~', ':', '\\', '/', '<', '>' };
-    private static readonly char[] LuceneSpecialCharsExceptFuzzy = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '^', '"', '*', '?', ':', '\\', '/', '<', '>' };
+    // Lucene special characters that need escaping
+    private static readonly char[] LuceneSpecialChars = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', '*', '?', ':', '\\', '/', '<', '>' };
+    private static readonly char[] LuceneSpecialCharsExceptWildcard = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '~', ':', '\\', '/', '<', '>' };
+    private static readonly char[] LuceneSpecialCharsExceptFuzzy = { '+', '-', '=', '&', '|', '!', '(', ')', '{', '}', '[', ']', '^', '"', '*', '?', ':', '\\', '/', '<', '>' };
     private readonly IStreamingResultService _streamingResultService;
     private readonly IErrorRecoveryService _errorRecoveryService;
     private readonly SearchResultResourceProvider? _searchResultResourceProvider;
@@ -1073,63 +1073,28 @@ Not for: File name searches (use file_search), directory searches (use directory
                 }
                 break;
             
+            case "literal":
             case "code":
-                // Use phrase query for exact code patterns - preserves exact sequence of tokens
-                // This helps find patterns like [McpServerTool(Name = "roslyn_")] in C# code
-                var codeParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                codeParser.DefaultOperator = Operator.AND;
-                
-                try
+                // Literal search - treats the entire query as a phrase for exact matching
+                // This helps find patterns like [Fact] or [HttpGet] in C# code
+                // We use PhraseQuery to avoid issues with special characters in QueryParser
+                var phraseQuery = new PhraseQuery();
+                var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                int position = 0;
+                foreach (var term in terms)
                 {
-                    // Use phrase query to preserve exact token sequence
-                    // This will match the exact sequence of tokens after analysis
-                    contentQuery = codeParser.Parse($"\"{EscapeQueryText(queryText)}\"");
-                    Logger.LogDebug("Code search: using phrase query for '{Query}' (case sensitive: {CaseSensitive})", 
-                        queryText, caseSensitive);
+                    phraseQuery.Add(new Term("content", term.ToLowerInvariant()), position++);
                 }
-                catch (ParseException ex)
-                {
-                    Logger.LogWarning(ex, "Failed to parse code query as phrase: {Query}, falling back to standard", queryText);
-                    contentQuery = codeParser.Parse(EscapeQueryText(queryText));
-                }
+                contentQuery = phraseQuery;
+                Logger.LogDebug("Literal/Code search: created phrase query for '{Query}'", queryText);
                 break;
             
             default: // standard
-                // Check for problematic patterns upfront
-                if (HasProblematicPattern(queryText))
-                {
-                    Logger.LogDebug("Query '{Query}' contains problematic patterns, using phrase query approach", queryText);
-                    // Use the query parser with phrase syntax for problematic patterns
-                    var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                    standardParser.DefaultOperator = Operator.AND;
-                    try
-                    {
-                        // Wrap in quotes to make it a phrase query
-                        contentQuery = standardParser.Parse($"\"{queryText}\"");
-                    }
-                    catch
-                    {
-                        // If even phrase parsing fails, fall back to term query
-                        contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
-                    }
-                }
-                else
-                {
-                    var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-                    standardParser.DefaultOperator = Operator.AND;
-                    var escapedQuery = EscapeQueryText(queryText);
-                    try
-                    {
-                        contentQuery = standardParser.Parse(escapedQuery);
-                    }
-                    catch (ParseException ex)
-                    {
-                        Logger.LogWarning(ex, "Failed to parse query even after escaping: {Query}, trying alternative approach", queryText);
-                        
-                        // Fall back to simple term query for unexpected parse errors
-                        contentQuery = new TermQuery(new Term("content", queryText.ToLowerInvariant()));
-                    }
-                }
+                var standardParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                standardParser.DefaultOperator = Operator.AND;
+                standardParser.AllowLeadingWildcard = true;
+                var escapedQuery = EscapeQueryText(queryText);
+                contentQuery = standardParser.Parse(escapedQuery);
                 break;
         }
 
@@ -1299,38 +1264,6 @@ Not for: File name searches (use file_search), directory searches (use directory
         return escapedQuery;
     }
 
-    private static bool HasUnmatchedBraces(string query)
-    {
-        // Check if query has unmatched curly braces that would cause parse errors
-        var openBraces = query.Count(c => c == '{');
-        var closeBraces = query.Count(c => c == '}');
-        return openBraces != closeBraces;
-    }
-
-    private static bool HasProblematicPattern(string query)
-    {
-        // Check for patterns that cause Lucene parse errors
-        if (string.IsNullOrWhiteSpace(query))
-            return false;
-
-        // Unmatched braces
-        if (HasUnmatchedBraces(query))
-            return true;
-
-        // Square brackets (often problematic)
-        if (query.Contains('[') || query.Contains(']'))
-            return true;
-
-        // Escaped braces that still cause issues
-        var trimmed = query.Trim();
-        if (trimmed.EndsWith('{') || trimmed.StartsWith('}') || 
-            trimmed == "{" || trimmed == "}" || trimmed == "{ }")
-            return true;
-
-        // Other known problematic patterns can be added here
-        
-        return false;
-    }
 
 
     private Task<object> HandleDetailRequestAsync(DetailRequest request, CancellationToken cancellationToken)
@@ -1391,44 +1324,28 @@ Not for: File name searches (use file_search), directory searches (use directory
             
             Query luceneQuery;
             
-            // Check for problematic patterns first
-            if (HasProblematicPattern(query) && searchType != "fuzzy" && searchType != "phrase")
+            // Simplified query building for alternate search
+            try
             {
-                Logger.LogDebug("Alternate search query '{Query}' contains problematic patterns, using phrase query", query);
-                // Use the query parser with phrase syntax for problematic patterns
-                try
+                if (searchType == "fuzzy")
                 {
-                    luceneQuery = parser.Parse($"\"{query}\"");
+                    // AI agents should include ~ in their fuzzy queries
+                    luceneQuery = parser.Parse(EscapeQueryText(query));
                 }
-                catch
+                else if (searchType == "phrase")
                 {
-                    // Fall back to term query if phrase parsing fails
-                    luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
+                    luceneQuery = parser.Parse($"\"{EscapeQueryText(query)}\"");
+                }
+                else
+                {
+                    luceneQuery = parser.Parse(EscapeQueryText(query));
                 }
             }
-            else
+            catch (ParseException ex)
             {
-                try
-                {
-                    if (searchType == "fuzzy" && !query.Contains("~"))
-                    {
-                        luceneQuery = parser.Parse(EscapeQueryText(query) + "~");
-                    }
-                    else if (searchType == "phrase")
-                    {
-                        luceneQuery = parser.Parse($"\"{EscapeQueryText(query)}\"");
-                    }
-                    else
-                    {
-                        luceneQuery = parser.Parse(EscapeQueryText(query));
-                    }
-                }
-                catch (ParseException ex)
-                {
-                    Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
-                    // Fall back to term query
-                    luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
-                }
+                Logger.LogWarning(ex, "Failed to parse query in CheckAlternateSearchResults: {Query}, using fallback", query);
+                // Fall back to term query
+                luceneQuery = new TermQuery(new Term("content", query.ToLowerInvariant()));
             }
             
             // Search without restrictions
@@ -1513,12 +1430,13 @@ Example: 50 results with context=3 ≈ 5,000 tokens")]
     public bool? CaseSensitive { get; set; }
     
     [Description(@"Search algorithm:
-- standard: Exact substring match (case-insensitive by default)
-- fuzzy: Approximate match allowing typos (append ~ to terms)  
-- wildcard: Pattern matching with * and ?
-- phrase: Exact phrase in quotes
-- regex: Full regex support with capturing groups
-- code: Code-aware search that preserves exact token sequences using phrase matching")]
+- standard: Substring match with special char escaping (for mixed code/text)
+- literal: Escapes ALL special chars (for exact code patterns like 'if (x && y)')
+- wildcard: Direct pattern matching with * and ? (no escaping)
+- fuzzy: Approximate match (must include ~ like 'configuraiton~')
+- phrase: Exact phrase match
+- regex: Full regex support (no escaping)
+- code: Same as literal (deprecated, use literal)")]
     public string? SearchType { get; set; }
     
     [Description("Response mode: 'summary' (default) or 'full'. Auto-switches to summary when response exceeds 5000 tokens.")]

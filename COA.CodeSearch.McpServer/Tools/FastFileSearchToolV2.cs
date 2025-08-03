@@ -363,21 +363,13 @@ Not for: Text content searches (use text_search), directory searches (use direct
         
         parser.AllowLeadingWildcard = true;
         
-        if (!query.Contains('*') && !query.Contains('?') && !query.Contains('~'))
-        {
-            query = $"*{query}*";
-        }
-        
+        // AI agents can add wildcards explicitly if needed
         return parser.Parse(query);
     }
 
     private Query BuildFuzzyQuery(string query)
     {
-        if (!query.Contains('~'))
-        {
-            query = $"{query}~";
-        }
-        
+        // AI agents should add ~ explicitly for fuzzy search
         using var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(Version);
         var parser = new QueryParser(Version, "filename_text", analyzer);
         return parser.Parse(query);
@@ -385,11 +377,7 @@ Not for: Text content searches (use text_search), directory searches (use direct
 
     private Query BuildWildcardQuery(string query)
     {
-        if (!query.Contains('*') && !query.Contains('?'))
-        {
-            query = $"*{query}*";
-        }
-        
+        // AI agents should add wildcards explicitly
         // Use the non-analyzed "filename_lower" field for wildcard searches to ensure predictable
         // pattern matching for AI agents with case-insensitive behavior across all platforms.
         return new WildcardQuery(new Term("filename_lower", query.ToLowerInvariant()));
@@ -477,9 +465,9 @@ public class FastFileSearchV2Params
     public string? WorkspacePath { get; set; }
     
     [Description(@"Search algorithm for file names:
-- standard: Contains match (UserService matches UserService.cs)
-- fuzzy: Typo-tolerant (UserSrvc~ finds UserService.cs)
-- wildcard: Pattern matching (User*.cs finds UserService.cs)
+- standard: Contains match (query 'UserService' matches UserService.cs)
+- wildcard: Pattern matching (query 'User*.cs' finds UserService.cs) 
+- fuzzy: Typo-tolerant (query 'UserSrvc~' finds UserService.cs)
 - exact: Exact filename match
 - regex: Regular expressions on relative paths - examples:
   * '.*Test.*\.cs' - files with 'Test' in name

@@ -54,16 +54,14 @@ public class EscapeQueryTextTests
             if (input.Contains('{')) Assert.Contains("\\{", result);
             if (input.Contains('}')) Assert.Contains("\\}", result);
             
-            // Square brackets and @ should not be escaped
+            // Square brackets should now be escaped (changed from previous behavior)
             if (input.Contains('['))
             {
-                Assert.Contains("[", result);
-                Assert.DoesNotContain("\\[", result);
+                Assert.Contains("\\[", result);
             }
             if (input.Contains(']'))
             {
-                Assert.Contains("]", result);
-                Assert.DoesNotContain("\\]", result);
+                Assert.Contains("\\]", result);
             }
             if (input.Contains('@'))
             {

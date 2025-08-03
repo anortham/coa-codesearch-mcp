@@ -256,14 +256,16 @@ public class FastTextSearchV2Test : LuceneTestBase
         // Arrange - index the workspace first
         await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
         
-        // Act - search for [Fact] attribute (common in test files)
+        // Act - search for [Fact] attribute (common in test files) using literal search
         var result = await _tool.ExecuteAsync(
             query: "[Fact]",
             workspacePath: _testWorkspacePath,
             filePattern: null,
             extensions: null,
             contextLines: 2,
-            maxResults: 10);
+            maxResults: 10,
+            caseSensitive: false,
+            searchType: "literal");
         
         // Assert - should not throw and should return results
         result.Should().NotBeNull();
@@ -296,14 +298,16 @@ public class FastTextSearchV2Test : LuceneTestBase
         // Arrange - index the workspace first
         await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
         
-        // Act - search for [Theory] attribute
+        // Act - search for [Theory] attribute using literal search
         var result = await _tool.ExecuteAsync(
             query: "[Theory]",
             workspacePath: _testWorkspacePath,
             filePattern: null,
             extensions: null,
             contextLines: 0,
-            maxResults: 10);
+            maxResults: 10,
+            caseSensitive: false,
+            searchType: "literal");
         
         // Assert - should not throw
         result.Should().NotBeNull();
@@ -327,14 +331,16 @@ public class FastTextSearchV2Test : LuceneTestBase
         // Arrange - index the workspace first
         await _indexTool.ExecuteAsync(_testWorkspacePath, forceRebuild: true);
         
-        // Act - search for more complex pattern with square brackets
+        // Act - search for more complex pattern with square brackets using literal search
         var result = await _tool.ExecuteAsync(
             query: "[Fact] test",
             workspacePath: _testWorkspacePath,
             filePattern: null,
             extensions: null,
             contextLines: 0,
-            maxResults: 10);
+            maxResults: 10,
+            caseSensitive: false,
+            searchType: "literal");
         
         // Assert - should not throw
         result.Should().NotBeNull();
