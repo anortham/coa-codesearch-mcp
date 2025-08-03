@@ -942,73 +942,39 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     }
     
     /// <summary>
-    /// Build text query using MultiFieldQueryParser with field boosting
-    /// Enhanced version that maintains compatibility while adding improvements
+    /// Build text query using MultiFieldQueryParser - simplified for AI agents
     /// </summary>
     private async Task<Query> BuildTextQueryAsync(string queryText)
     {
+        // Always use StandardAnalyzer (no more MemoryAnalyzer)
+        var analyzer = await _indexService.GetAnalyzerAsync(_projectMemoryWorkspace);
+        
+        // Configure multi-field search with boosts
+        var fields = new[] { "content", "type", "_all" };
+        var boosts = new Dictionary<string, float>
+        {
+            ["content"] = 2.0f,  // Content is most important
+            ["type"] = 1.5f,     // Type is moderately important
+            ["_all"] = 1.0f      // Fallback field
+        };
+        
+        // Create parser configured for AI agents
+        var parser = new MultiFieldQueryParser(LUCENE_VERSION, fields, analyzer, boosts);
+        parser.DefaultOperator = QueryParserBase.AND_OPERATOR; // AND is more precise for AI
+        parser.AllowLeadingWildcard = true; // Allow queries like *Service
+        
         try
         {
-            // Always use the configured analyzer for consistency
-            // This ensures synonyms work correctly for both indexing and searching
-            var analyzer = await _indexService.GetAnalyzerAsync(_projectMemoryWorkspace);
-            
-            // Try the MultiFieldQueryParser approach
-            var query = await TryBuildMultiFieldQueryAsync(queryText, analyzer);
-            if (query != null)
-            {
-                _logger.LogInformation("MultiFieldQueryParser: '{Query}' -> '{ParsedQuery}'", 
-                    queryText, query.ToString());
-                return query;
-            }
-            
-            // Fallback to single-field approach for compatibility
-            _logger.LogInformation("Falling back to single-field QueryParser for: {Query}", queryText);
-            var parser = new QueryParser(LUCENE_VERSION, "_all", analyzer);
             return parser.Parse(queryText);
         }
-        catch (Exception ex)
+        catch (ParseException ex)
         {
-            _logger.LogWarning(ex, "All query parsing failed for: {Query}", queryText);
-            // Final fallback to simple term query
-            return new TermQuery(new Term("_all", queryText));
+            // If AI agent sends malformed query, log it and use simple term query
+            _logger.LogWarning(ex, "Query parsing failed for: {Query}", queryText);
+            return new TermQuery(new Term("_all", queryText.ToLowerInvariant()));
         }
     }
-    
-    /// <summary>
-    /// Try to build query using MultiFieldQueryParser with enhancements
-    /// </summary>
-    private Task<Query?> TryBuildMultiFieldQueryAsync(string queryText, Analyzer analyzer)
-    {
-        try
-        {
-            // Configure multi-field search with boosts
-            var fields = new[] { "content", "type", "_all" };
-            var boosts = new Dictionary<string, float>
-            {
-                ["content"] = 2.0f,  // Content is most important
-                ["type"] = 1.5f,     // Type is moderately important
-                ["_all"] = 1.0f      // Fallback field
-            };
-            
-            // Create MultiFieldQueryParser with the same analyzer used for indexing
-            var parser = new MultiFieldQueryParser(LUCENE_VERSION, fields, analyzer, boosts);
-            
-            // Configure for AI agents who can construct proper queries
-            parser.DefaultOperator = QueryParserBase.AND_OPERATOR; // AND is more precise
-            parser.AllowLeadingWildcard = true;
-            // Remove artificial "natural language" settings - AI agents don't need them
-            
-            // Parse and return
-            var query = parser.Parse(queryText);
-            return Task.FromResult<Query?>(query);
-        }
-        catch
-        {
-            // Return null to indicate fallback should be used
-            return Task.FromResult<Query?>(null);
-        }
-    }
+    // Removed TryBuildMultiFieldQueryAsync - simplified into BuildTextQueryAsync
     
     
     private async Task<Query> BuildQueryAsync(FlexibleMemorySearchRequest request)

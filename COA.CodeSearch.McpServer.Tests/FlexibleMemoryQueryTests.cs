@@ -57,7 +57,9 @@ public class FlexibleMemoryQueryTests
                 It.IsAny<CancellationToken>()))
             .Returns<Func<Task>, ErrorContext, ErrorSeverity, CancellationToken>((func, context, severity, ct) => func());
         
-        // MemoryAnalyzer is now managed by LuceneIndexService
+        // Setup mock to return StandardAnalyzer for GetAnalyzerAsync
+        _indexServiceMock.Setup(x => x.GetAnalyzerAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new Lucene.Net.Analysis.Standard.StandardAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48));
         
         var facetingServiceMock = new Mock<MemoryFacetingService>(Mock.Of<ILogger<MemoryFacetingService>>(), Mock.Of<IPathResolutionService>());
         var scoringServiceMock = Mock.Of<IScoringService>();
