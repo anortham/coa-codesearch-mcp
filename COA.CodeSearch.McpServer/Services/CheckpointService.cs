@@ -143,21 +143,14 @@ public class CheckpointService
             
             var checkpointId = $"CHECKPOINT-{currentId.Value:D5}";
             
-            // Search for the checkpoint by ID
-            var searchRequest = new FlexibleMemorySearchRequest
-            {
-                Query = $"id:{checkpointId}",
-                Types = new[] { "Checkpoint" },
-                MaxResults = 1
-            };
-            
-            var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
-            if (searchResult.Memories.Any())
+            // Get the checkpoint directly by ID
+            var checkpoint = await _memoryService.GetMemoryByIdAsync(checkpointId);
+            if (checkpoint != null)
             {
                 return new GetCheckpointResult
                 {
                     Success = true,
-                    Checkpoint = searchResult.Memories.First()
+                    Checkpoint = checkpoint
                 };
             }
             
