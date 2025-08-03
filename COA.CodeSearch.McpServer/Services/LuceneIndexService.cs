@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Infrastructure;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
@@ -93,8 +94,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
     private readonly IPathResolutionService _pathResolution;
-    private readonly StandardAnalyzer _standardAnalyzer;
-    // Removed MemoryAnalyzer - using StandardAnalyzer for all indexes
+    private readonly CodeAnalyzer _codeAnalyzer;
+    private readonly StandardAnalyzer _standardAnalyzer; // Keep for backward compatibility
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
@@ -159,8 +160,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
-        _standardAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-        // Removed MemoryAnalyzer - using StandardAnalyzer for all indexes
+        _codeAnalyzer = new CodeAnalyzer(LuceneVersion.LUCENE_48);
+        _standardAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48); // Keep for memory indexes
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
@@ -170,13 +171,21 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     /// <summary>
-    /// Get analyzer for workspace - now always returns StandardAnalyzer
-    /// AI agents don't need synonym expansion or stemming
+    /// Get analyzer for workspace - returns CodeAnalyzer for code, StandardAnalyzer for memory
     /// </summary>
     private Analyzer GetAnalyzerForWorkspace(string pathToCheck)
     {
-        _logger.LogDebug("Using StandardAnalyzer for all paths (AI-optimized): {Path}", pathToCheck);
-        return _standardAnalyzer;
+        // Use StandardAnalyzer for memory indexes
+        if (pathToCheck.Contains(".codesearch", StringComparison.OrdinalIgnoreCase) && 
+            pathToCheck.Contains("memory", StringComparison.OrdinalIgnoreCase))
+        {
+            _logger.LogDebug("Using StandardAnalyzer for memory index: {Path}", pathToCheck);
+            return _standardAnalyzer;
+        }
+        
+        // Use CodeAnalyzer for all code indexes
+        _logger.LogDebug("Using CodeAnalyzer for code index: {Path}", pathToCheck);
+        return _codeAnalyzer;
     }
     
     /// <summary>
@@ -1789,8 +1798,8 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         await Task.WhenAll(disposeTasks).ConfigureAwait(false);
         
         _indexes.Clear();
+        _codeAnalyzer?.Dispose();
         _standardAnalyzer?.Dispose();
-        // Removed MemoryAnalyzer disposal
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
         
