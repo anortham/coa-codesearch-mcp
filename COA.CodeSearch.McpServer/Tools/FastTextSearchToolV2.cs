@@ -1083,12 +1083,39 @@ Not for: File name searches (use file_search), directory searches (use directory
                 break;
             
             case "regex":
-                // For regex queries, use RegexpQuery directly without escaping
+                // For regex queries, we need special handling since RegexpQuery only works on single terms
                 try
                 {
                     // Validate regex first
                     _ = new System.Text.RegularExpressions.Regex(queryText);
-                    contentQuery = new RegexpQuery(new Term("content", queryText));
+                    
+                    // Try to optimize simple regex patterns
+                    if (queryText.Contains(".*") || queryText.Contains(".+"))
+                    {
+                        // Patterns like "async.*Task" need special handling
+                        // Convert to a phrase query with slop for better performance
+                        var parts = System.Text.RegularExpressions.Regex.Split(queryText, @"\.\*|\.\+");
+                        if (parts.Length == 2 && !string.IsNullOrWhiteSpace(parts[0]) && !string.IsNullOrWhiteSpace(parts[1]))
+                        {
+                            Logger.LogInformation("Regex search: Converting pattern '{Query}' to phrase query with slop", queryText);
+                            var phraseQuery = new PhraseQuery();
+                            phraseQuery.Slop = 20; // Allow up to 20 words between terms
+                            phraseQuery.Add(new Term("content", parts[0].ToLowerInvariant()));
+                            phraseQuery.Add(new Term("content", parts[1].ToLowerInvariant()));
+                            contentQuery = phraseQuery;
+                        }
+                        else
+                        {
+                            // Complex regex - use standard RegexpQuery but warn about limitations
+                            Logger.LogWarning("Complex regex pattern '{Query}' - will only match individual terms, not sequences", queryText);
+                            contentQuery = new RegexpQuery(new Term("content", queryText.ToLowerInvariant()));
+                        }
+                    }
+                    else
+                    {
+                        // Simple regex without .* or .+
+                        contentQuery = new RegexpQuery(new Term("content", queryText.ToLowerInvariant()));
+                    }
                 }
                 catch (Exception ex)
                 {
