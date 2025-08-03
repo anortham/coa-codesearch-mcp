@@ -48,35 +48,37 @@ AI agents can use these Lucene features directly:
 
 ## Removal Checklist
 
-### Phase 1: Complete Current Changes
-- [ ] Finish removing enableQueryExpansion parameter from all methods
-- [ ] Remove the parameter from FlexibleMemorySearchRequest model
-- [ ] Update all callers to not pass this parameter
-- [ ] Test that searches still work
+### Phase 1: Complete Current Changes (COMPLETED)
+- [x] Finish removing enableQueryExpansion parameter from all methods
+- [x] Remove the parameter from FlexibleMemorySearchRequest model
+- [x] Update all callers to not pass this parameter
+- [x] Test that searches still work
 
-### Phase 2: Remove MemoryAnalyzer
-- [ ] Replace MemoryAnalyzer with StandardAnalyzer everywhere
-- [ ] Update LuceneIndexService to use only StandardAnalyzer
-- [ ] Remove MemoryAnalyzer.cs file
-- [ ] Remove MemoryAnalyzerTests.cs
-- [ ] Update all test infrastructure that creates MemoryAnalyzer
-- [ ] Re-index all existing data with StandardAnalyzer
+### Phase 2: Remove MemoryAnalyzer (COMPLETED)
+- [x] Replace MemoryAnalyzer with StandardAnalyzer everywhere
+- [x] Update LuceneIndexService to use only StandardAnalyzer
+- [x] Remove MemoryAnalyzer.cs file
+- [x] Remove MemoryAnalyzerTests.cs
+- [x] Update all test infrastructure that creates MemoryAnalyzer
+- [ ] Re-index all existing data with StandardAnalyzer (user action required)
 
-### Phase 3: Remove Unused Fields
-- [ ] Remove content.raw field creation from CreateDocument methods
-- [ ] Remove any other .raw fields if they exist
-- [ ] Update tests that might expect these fields
+### Phase 3: Remove Unused Fields (COMPLETED)
+- [x] Remove content.raw field creation from CreateDocument methods
+- [x] Remove any other .raw fields if they exist
+- [x] Update tests that might expect these fields
 
-### Phase 4: Simplify Query Processing
-- [ ] Remove TryBuildMultiFieldQueryAsync complexity
-- [ ] Use consistent QueryParser configuration (AND operator, no fuzzy settings)
-- [ ] Remove multiple fallback levels
-- [ ] Simplify BuildTextQueryAsync to single code path
+### Phase 4: Simplify Query Processing (COMPLETED)
+- [x] Remove TryBuildMultiFieldQueryAsync complexity
+- [x] Use consistent QueryParser configuration (AND operator, no fuzzy settings)
+- [x] Remove multiple fallback levels
+- [x] Simplify BuildTextQueryAsync to single code path
 
-### Phase 5: Document for AI Agents
-- [ ] Update all tool descriptions to mention available query syntax
-- [ ] Add examples using regex, wildcards, boolean operators
-- [ ] Remove any documentation about synonym expansion
+### Phase 5: Document for AI Agents (COMPLETED)
+- [x] Update search_memories tool description with Lucene query syntax
+- [x] Add examples: wildcards, boolean, phrases, fields, fuzzy, regex
+- [x] Document that default operator is AND
+- [x] Note that leading wildcards are supported
+- [x] Remove mentions of "intelligent query expansion"
 
 ## Impact Analysis
 
