@@ -104,11 +104,40 @@ AI agents can use these Lucene features directly:
 
 ## Special Symbol Handling to Review
 
-Need to investigate:
-- [ ] How we handle colons in queries (Lucene field specifier)
-- [ ] Leading wildcard support
-- [ ] Escape character handling
-- [ ] Special characters in regex patterns
+### Found Lucene Workarounds:
+
+1. **Colon Handling** (COA.CodeSearch.McpServer\.claude\commands\resume.md)
+   - Changed "Session Checkpoint:" to "**Session Checkpoint" to avoid colon being interpreted as field specifier
+   - Lucene treats `field:value` as field-specific search
+
+2. **Special Character Escaping** (FastTextSearchToolV2.cs)
+   - Three different escape methods for different query types:
+     - `EscapeQueryText`: Escapes all Lucene special chars
+     - `EscapeQueryTextForWildcard`: Escapes all except * and ?
+     - `EscapeQueryTextForFuzzy`: Escapes all except ~
+   - Special chars: `+ - = & | ! ( ) { } ^ " ~ * ? : \ / < >`
+   - Note: `[ ]` excluded from escaping as they cause issues even when escaped
+
+3. **Problematic Pattern Detection** (FastTextSearchToolV2.cs)
+   - `HasProblematicPattern` checks for:
+     - Unmatched braces `{ }`
+     - Square brackets `[ ]`
+     - Trailing/leading braces
+   - Falls back to phrase queries or term queries when detected
+
+4. **Auto-Wildcard Addition** (Multiple tools)
+   - Standard search auto-adds wildcards: `query` → `*query*`
+   - Only if query doesn't already contain `*`, `?`, or `~`
+
+5. **AllowLeadingWildcard** (All search tools)
+   - Set to `true` on all QueryParser instances
+   - Allows queries like `*Service` which Lucene normally rejects
+
+### Recommendations:
+- Remove all escape logic - AI agents can handle raw Lucene syntax
+- Remove problematic pattern detection - AI agents won't create malformed queries
+- Remove auto-wildcard addition - AI agents can add wildcards explicitly
+- Keep AllowLeadingWildcard=true - useful feature for AI agents
 
 ## Recommendation
 

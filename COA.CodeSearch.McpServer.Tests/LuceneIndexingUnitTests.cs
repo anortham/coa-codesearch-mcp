@@ -38,12 +38,11 @@ public class LuceneIndexingUnitTests : IDisposable
         _configuration = configBuilder.Build();
 
         var pathResolutionService = new PathResolutionService(_configuration);
-        var memoryAnalyzer = new MemoryAnalyzer(_loggerFactory.CreateLogger<MemoryAnalyzer>());
+        // Removed MemoryAnalyzer - using StandardAnalyzer only
         _luceneIndexService = new LuceneIndexService(
             _loggerFactory.CreateLogger<LuceneIndexService>(),
             _configuration,
-            pathResolutionService,
-            memoryAnalyzer);
+            pathResolutionService);
 
         _fileIndexingService = new FileIndexingService(
             _loggerFactory.CreateLogger<FileIndexingService>(),

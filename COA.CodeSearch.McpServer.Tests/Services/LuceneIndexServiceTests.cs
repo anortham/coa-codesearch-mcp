@@ -41,8 +41,8 @@ public class LuceneIndexServiceTests : IDisposable
         _mockPathResolution.Setup(x => x.GetWorkspaceMetadataPath())
             .Returns(Path.Combine(_testBasePath, "workspace_metadata.json"));
 
-        var memoryAnalyzer = new MemoryAnalyzer(Mock.Of<ILogger<MemoryAnalyzer>>());
-        _service = new LuceneIndexService(_mockLogger.Object, _mockConfiguration.Object, _mockPathResolution.Object, memoryAnalyzer);
+        // Removed MemoryAnalyzer - using StandardAnalyzer only
+        _service = new LuceneIndexService(_mockLogger.Object, _mockConfiguration.Object, _mockPathResolution.Object);
     }
 
     [Fact]

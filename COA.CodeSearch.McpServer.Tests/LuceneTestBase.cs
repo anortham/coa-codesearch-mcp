@@ -91,8 +91,7 @@ public abstract class LuceneTestBase : IDisposable
             config.EnableBackpressure = true;
         });
         
-        // Lucene services
-        services.AddSingleton<MemoryAnalyzer>();
+        // Lucene services - removed MemoryAnalyzer, using StandardAnalyzer only
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());

@@ -58,7 +58,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
-        services.AddSingleton<MemoryAnalyzer>();
+        // Removed MemoryAnalyzer - using StandardAnalyzer only
         services.AddSingleton<MemoryFacetingService>();
         services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<IMemoryEventPublisher, MemoryEventPublisher>();
@@ -339,7 +339,7 @@ public class MemorySystemPathIntegrationTests : IDisposable
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<IErrorHandlingService, ErrorHandlingService>();
         services.AddSingleton<IMemoryValidationService, MemoryValidationService>();
-        services.AddSingleton<MemoryAnalyzer>();
+        // Removed MemoryAnalyzer - using StandardAnalyzer only
         services.AddSingleton<MemoryFacetingService>();
         services.AddSingleton<IScoringService, ScoringService>();
         services.AddSingleton<IMemoryEventPublisher, MemoryEventPublisher>();

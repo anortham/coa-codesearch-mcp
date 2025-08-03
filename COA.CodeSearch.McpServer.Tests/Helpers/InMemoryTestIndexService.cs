@@ -18,14 +18,12 @@ namespace COA.CodeSearch.McpServer.Tests.Helpers;
 public class InMemoryTestIndexService : ILuceneIndexService
 {
     private readonly ConcurrentDictionary<string, InMemoryIndex> _indexes = new();
-    private readonly MemoryAnalyzer _analyzer;
+    private readonly StandardAnalyzer _analyzer;
     
     public InMemoryTestIndexService()
     {
-        // Use MemoryAnalyzer to match production behavior
-        var loggerFactory = LoggerFactory.Create(builder => builder.AddConsole());
-        var logger = loggerFactory.CreateLogger<MemoryAnalyzer>();
-        _analyzer = new MemoryAnalyzer(logger);
+        // Use StandardAnalyzer to match production behavior (MemoryAnalyzer removed)
+        _analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
     }
     
     private Analyzer GetAnalyzer()
