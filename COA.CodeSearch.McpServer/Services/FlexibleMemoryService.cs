@@ -513,8 +513,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Content: Keep stored for display, searchable via _all field
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
-        // Add raw field for precise searching (not analyzed)
-        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
+        // Removed content.raw - AI agents don't need it, they can use proper Lucene syntax
         
         // Date fields with custom field type for proper numeric range query support
         var dateFieldType = new FieldType 
@@ -605,8 +604,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // Content: Keep stored for display, searchable via _all field
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
-        // Add raw field for precise searching (not analyzed)
-        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
+        // Removed content.raw - AI agents don't need it, they can use proper Lucene syntax
         
         // Date fields with custom field type for proper numeric range query support
         var dateFieldType = new FieldType 
