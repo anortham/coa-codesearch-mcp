@@ -400,8 +400,7 @@ public class UnifiedMemoryService
             else if (_memoryTools != null)
             {
                 // Default to regular text search
-                // Use enableQueryExpansion: false for Precise mode, true for regular Text mode
-                var enableExpansion = searchMode != SearchMode.Precise;
+                // Always use the same analyzer for consistency
                 
                 var memoryResult = await _memoryTools.SearchMemoriesAsync(
                     command.Content, // query
@@ -413,8 +412,8 @@ public class UnifiedMemoryService
                     20, // maxResults
                     false, // includeArchived
                     true, // boostRecent
-                    true, // boostFrequent
-                    enableExpansion // enableQueryExpansion
+                    true // boostFrequent
+                    // Removed enableQueryExpansion parameter
                 );
                 results.AddRange(memoryResult.Memories);
             }

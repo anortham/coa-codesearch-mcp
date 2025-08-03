@@ -213,8 +213,7 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
         int maxResults = 50,
         bool includeArchived = false,
         bool boostRecent = false,
-        bool boostFrequent = false,
-        bool? enableQueryExpansion = null)
+        bool boostFrequent = false)
     {
         try
         {
@@ -228,8 +227,8 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
                 MaxResults = maxResults,
                 IncludeArchived = includeArchived,
                 BoostRecent = boostRecent,
-                BoostFrequent = boostFrequent,
-                EnableQueryExpansion = enableQueryExpansion
+                BoostFrequent = boostFrequent
+                // Removed EnableQueryExpansion - always use configured analyzer
             };
             
             if (!string.IsNullOrEmpty(dateRange))
