@@ -437,8 +437,8 @@ For optimal Claude Code experience across ALL your projects, add these patterns 
 - **Regex**: `/auth.*/` (use forward slashes for regex patterns)
 - **Field search**: `type:TechnicalDebt` (search specific fields)
 
-**Note**: Avoid special characters like `:` in queries unless using field syntax.
-See [Memory System Guide](docs/MEMORY_SYSTEM.md#lucene-query-syntax) for details.
+**Special Characters to Avoid**: `:` `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
+Unless using them for Lucene syntax (e.g., `:` for field search, `*` for wildcards)
 
 ### AI-Optimized Features
 - **Unified responses**: All tools follow consistent format for easy parsing
