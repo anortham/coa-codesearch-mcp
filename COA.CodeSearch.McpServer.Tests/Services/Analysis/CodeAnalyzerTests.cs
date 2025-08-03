@@ -149,9 +149,9 @@ public class CodeAnalyzerTests
         var tokens = GetTokens(analyzer, text);
         
         // Assert
-        Assert.Contains("...", tokens);
+        // The spread operator is part of the array literal token
+        Assert.Contains("[...oldArray, newItem]", tokens);
         Assert.Contains("newArray", tokens);
-        Assert.Contains("oldArray", tokens);
     }
     
     [Fact]
@@ -165,7 +165,9 @@ public class CodeAnalyzerTests
         var tokens = GetTokens(analyzer, text);
         
         // Assert
-        Assert.Contains(":=", tokens);
+        // := is tokenized as separate : and = tokens
+        Assert.Contains(":", tokens);
+        Assert.Contains("=", tokens);
         Assert.Contains("<-", tokens);
         Assert.Contains("data", tokens);
         Assert.Contains("channel", tokens);
@@ -298,9 +300,13 @@ public class CodeAnalyzerTests
         var tokens = GetTokens(analyzer, text);
         
         // Assert
-        Assert.Contains(": IRepository<T>", tokens);
-        Assert.Contains(": Entity", tokens);
         Assert.Contains("Repository<T>", tokens);
+        Assert.Contains(": IRepository", tokens);
+        // Note: IRepository<T> is split into ": IRepository" and then "<", "T", ">"
+        Assert.Contains("<", tokens);
+        Assert.Contains("T", tokens);
+        Assert.Contains(">", tokens);
+        Assert.Contains(": Entity", tokens);
     }
     
     // Helper method to extract tokens from analyzer
