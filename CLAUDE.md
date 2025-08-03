@@ -49,66 +49,55 @@
 - **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
 - **NEVER** check in broken builds or failing tests! BUILD -> TEST -> COMMIT IN THAT ORDER
 
-## 🔍 Lucene Query Syntax for AI Agents
+## 🔍 Search System with CodeAnalyzer
 
-As an AI agent, you should use proper Lucene syntax for predictable, consistent search results. The memory search system uses Lucene's query parser, which has special characters and syntax rules.
+This project uses a custom CodeAnalyzer that preserves programming language patterns, making searches more intuitive for code.
 
-### Special Characters That Need Escaping
+### How CodeAnalyzer Changes Search
 
-The following characters have special meaning in Lucene and will break queries if not handled properly:
-- `:` (colon) - Used for field specification (e.g., `type:TechnicalDebt`)
-- `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
+With CodeAnalyzer, many code patterns are preserved as single tokens:
+- `: ITool` - Interface implementations
+- `[Fact]` - Attributes
+- `->method()` - Pointer access
+- `Task<string>` - Generic types
+- `: IRepository<T>` - Generic interfaces
 
-### Query Examples for AI Agents
+### Text Search Examples
 
 ```bash
-# ❌ WRONG - Colon breaks the parser
-search_memories --query "Session Checkpoint:"
+# Search for code patterns directly
+mcp__codesearch__text_search --query ": ITool" --searchType "literal"
+mcp__codesearch__text_search --query "[Fact]" --searchType "literal"
+mcp__codesearch__text_search --query "async Task" --searchType "code"
 
-# ✅ CORRECT - Avoid special characters
-search_memories --query "Session Checkpoint"
-
-# ✅ CORRECT - Use wildcards
-search_memories --query "Session Checkpoint*"
-
-# ✅ CORRECT - Use quotes for exact phrases (but still avoid colons)
-search_memories --query "\"Session Checkpoint\""
-
-# ✅ CORRECT - Use field specification properly
-search_memories --query "type:WorkSession AND Session"
-
-# ✅ CORRECT - Use regex with forward slashes
-search_memories --query "/auth.*/"  # Finds auth, authentication, authorization, etc.
-
-# ❌ WRONG - Regex without forward slashes doesn't work
-search_memories --query "auth.*"  # This looks for literal "auth.*" text
+# Regex patterns spanning multiple words need special handling
+mcp__codesearch__text_search --query "async.*Task" --searchType "regex"
 ```
 
-### Field Names You Can Search
+### Memory Search Syntax
 
-When using field:value syntax, these are the valid field names:
-- `type` - Memory type (e.g., `type:TechnicalDebt`)
-- `content` - Main content field
-- `file` - Related files
-- `session_id` - Session identifier
-- `is_shared` - Sharing status
+Memory search still uses standard Lucene syntax:
 
-### Best Practices for AI Agents
+```bash
+# Simple searches
+search_memories --query "Session Checkpoint"
 
-1. **Avoid special characters** in search terms unless using them for Lucene syntax
-2. **Use wildcards** (`*`) for flexible matching instead of trying exact phrases with punctuation
-3. **Use field searches** when you know the specific field (e.g., `type:WorkSession`)
-4. **Use regex patterns** with forward slashes (e.g., `/auth.*/`) for complex pattern matching
-5. **Keep queries simple** - StandardAnalyzer handles case-insensitivity and tokenization
-6. **Don't fight Lucene** - Work with its syntax, not against it
+# Field searches
+search_memories --query "type:WorkSession"
 
-### Why This Matters
+# Boolean queries
+search_memories --query "authentication AND login"
 
-The codebase previously had complex "natural language" query processing that tried to make Lucene behave like a natural language search engine. This has been removed because:
-- AI agents can easily learn proper Lucene syntax
-- Predictable behavior is more valuable than "natural" queries
-- Complex preprocessing made results unpredictable
-- Multiple query manipulation layers caused maintenance issues
+# Wildcards
+search_memories --query "auth*"
+```
+
+### Important Notes
+
+1. **Code search vs Memory search**: Code files use CodeAnalyzer, memory search uses standard analysis
+2. **Literal search**: Use for exact code patterns with punctuation
+3. **Code search**: Same as literal, optimized for code patterns
+4. **Regex search**: Patterns like `async.*Task` are converted to phrase queries with slop
 
 ## 📋 Quick Reference
 
@@ -190,7 +179,8 @@ mcp__codesearch__search_memories --query "recent decisions" --boostRecent true
 
 High-performance MCP server in .NET 9.0 providing text search and intelligent memory management. Features:
 
-- Lucene-powered millisecond text search
+- Lucene-powered millisecond text search with custom CodeAnalyzer
+- **CodeAnalyzer**: Preserves code patterns like `: ITool`, `[Fact]`, generics
 - Intelligent memory system for architectural knowledge
 - **🆕 Phase 3 Complete**: Advanced Memory Intelligence with natural language commands, semantic search, and temporal scoring
 - File discovery and analysis tools
