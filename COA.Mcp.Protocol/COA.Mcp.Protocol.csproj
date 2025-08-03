@@ -12,7 +12,6 @@
     
     <!-- Package Metadata -->
     <PackageId>COA.Mcp.Protocol</PackageId>
-    <Version>1.0.0</Version>
     <Authors>Children of Alabama</Authors>
     <Description>MCP protocol types and interfaces for Model Context Protocol servers</Description>
     <PackageProjectUrl>https://github.com/coa/codesearch-mcp</PackageProjectUrl>
