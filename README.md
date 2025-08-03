@@ -272,6 +272,35 @@ search_assistant --goal "Understand authentication implementation" \
   --workspacePath "C:/YourProject"
 ```
 
+## 📝 Custom Slash Commands
+
+This project includes custom slash commands in `.claude/commands/` that enhance your workflow:
+
+### `/checkpoint` - Save Session Progress
+Creates a timestamped checkpoint of your current work session:
+```
+/checkpoint
+```
+- Automatically captures what you've accomplished
+- Records current state and context
+- Lists next steps to continue
+- Saves files being worked on
+- Perfect for ending work sessions or switching tasks
+
+### `/resume` - Continue From Last Checkpoint
+Loads your most recent checkpoint and displays:
+```
+/resume
+```
+- Last checkpoint timestamp
+- What was accomplished
+- Current state summary
+- Next steps (numbered list)
+- Recent files modified in last 24 hours
+- Ends with "Ready to continue from checkpoint. What would you like to work on?"
+
+These commands are checked into source control, so all team members can benefit from consistent session management.
+
 ## 🤖 AI Agent Optimizations
 
 This MCP server is specifically designed for optimal AI agent experience with comprehensive UX improvements:
