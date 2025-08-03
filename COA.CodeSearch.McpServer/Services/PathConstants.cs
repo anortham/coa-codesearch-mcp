@@ -25,7 +25,7 @@ public static class PathConstants
     // Excluded directories (common across services)
     public static readonly string[] DefaultExcludedDirectories = 
     {
-        "bin", "obj", "node_modules", ".git", ".vs", "packages", "TestResults", BaseDirectoryName
+        "bin", "obj", "node_modules", ".git", ".vs", "packages", "TestResults", BaseDirectoryName, ".codenav"
     };
     
     // Hash settings
