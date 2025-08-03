@@ -234,7 +234,7 @@ Query Syntax (AI-optimized):
 - Phrases: ""exact phrase match""
 - Fields: type:TechnicalDebt, content:authentication
 - Fuzzy: authentication~ (typo tolerance)
-- Regex: /auth(entication|orization)?/
+- Regex: /auth(entication|orization)?/ (use forward slashes for regex patterns)
 - Default operator: AND (all terms must match)
 - Leading wildcards: Supported (*Service works)",
             inputSchema: new
