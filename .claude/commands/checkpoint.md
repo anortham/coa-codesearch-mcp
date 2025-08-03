@@ -1,5 +1,5 @@
 ---
-allowed-tools: ["mcp__codesearch__unified_memory", "mcp__codesearch__store_memory", "mcp__codesearch__recall_context"]
+allowed-tools: ["mcp__codesearch__store_memory"]
 description: "Create a timestamped checkpoint memory of current work session"
 ---
 
@@ -38,9 +38,10 @@ Format example:
 - path/to/file2.md (what changed)
 ```
 
-Then:
-1. Provide the memory ID for easy recall
-2. Show a brief summary of what was saved
-3. Remind user: "Use /resume to continue from this checkpoint"
-
-Use the unified_memory tool with "save work session:" prefix.
+Steps:
+1. Use store_memory with memoryType="WorkSession" and isShared=false
+2. Include the full formatted content as shown above
+3. Add all relevant files from this session to the files parameter
+4. After saving, provide the memory ID for easy recall
+5. Show a brief summary of what was saved
+6. Remind user: "Use /resume to continue from this checkpoint"
