@@ -1,28 +1,21 @@
 ---
-allowed-tools: ["mcp__codesearch__store_memory"]
-description: "Create a timestamped checkpoint memory of current work session"
+allowed-tools: ["mcp__codesearch__store_checkpoint"]
+description: "Create a checkpoint of current work session with sequential ID"
 ---
 
-Using the information below, please save a new WorkSession memory with a clear timestamp:
+Create a checkpoint with the following information:
 
 $ARGUMENTS
 
-The memory MUST start with:
-**Session Checkpoint: [Current Local Time]**
-
-Include in the memory:
-- Use your current LOCAL TIME (not UTC) for the timestamp
-- Format: "YYYY-MM-DD HH:MM Local Time" (e.g., "2025-08-03 15:30 Local Time")
+Include in the checkpoint:
 - What was accomplished in this session
 - Current state/progress  
 - Next steps/todos (be specific)
 - Any blockers or problems encountered
 - Key files modified in this session
 
-Format example:
+Format the content as:
 ```
-**Session Checkpoint: 2025-08-03 15:30 Local Time**
-
 ## Accomplished
 - [Specific task 1]
 - [Specific task 2]
@@ -40,9 +33,7 @@ Format example:
 ```
 
 Steps:
-1. Use store_memory with memoryType="WorkSession" and isShared=false
-2. Include the full formatted content as shown above
-3. Add all relevant files from this session to the files parameter
-4. After saving, provide the memory ID for easy recall
-5. Show a brief summary of what was saved
-6. Remind user: "Use /resume to continue from this checkpoint"
+1. Use store_checkpoint with the formatted content
+2. The system will automatically assign a sequential checkpoint ID
+3. Show the checkpoint ID that was created
+4. Remind user: "Use /resume to continue from this checkpoint"
