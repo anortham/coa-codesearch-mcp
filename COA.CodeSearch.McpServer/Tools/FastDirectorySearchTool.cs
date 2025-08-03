@@ -410,22 +410,13 @@ Not for: File searches (use file_search), text content searches (use text_search
         var parser = new QueryParser(Version, "directory_text", analyzer);
         parser.AllowLeadingWildcard = true;
         
-        // If query doesn't contain special operators, add wildcards
-        if (!query.Contains('*') && !query.Contains('?') && !query.Contains('~'))
-        {
-            query = $"*{query}*";
-        }
-        
+        // AI agents can add wildcards explicitly if needed
         return parser.Parse(query);
     }
 
     private Query BuildFuzzyQuery(string query)
     {
-        if (!query.Contains('~'))
-        {
-            query = $"{query}~";
-        }
-        
+        // AI agents should add ~ explicitly for fuzzy search
         using var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(Version);
         var parser = new QueryParser(Version, "directory_text", analyzer);
         return parser.Parse(query);
@@ -433,11 +424,7 @@ Not for: File searches (use file_search), text content searches (use text_search
 
     private Query BuildWildcardQuery(string query)
     {
-        if (!query.Contains('*') && !query.Contains('?'))
-        {
-            query = $"*{query}*";
-        }
-        
+        // AI agents should add wildcards explicitly
         return new WildcardQuery(new Term("directory_text", query.ToLower()));
     }
 
@@ -486,9 +473,9 @@ public class FastDirectorySearchParams
     public string? WorkspacePath { get; set; }
     
     [Description(@"Search algorithm for directory names:
-- standard: Contains match (Service matches Services/)
-- fuzzy: Typo-tolerant (Servces~ finds Services/)
-- wildcard: Pattern matching (User* finds UserService/)
+- standard: Contains match (query 'Service' matches Services/)
+- wildcard: Pattern matching (query 'User*' finds UserService/)
+- fuzzy: Typo-tolerant (query 'Servces~' finds Services/)
 - exact: Exact directory name match
 - regex: Regular expressions (^src/.*/models$)")]
     public string? SearchType { get; set; }
