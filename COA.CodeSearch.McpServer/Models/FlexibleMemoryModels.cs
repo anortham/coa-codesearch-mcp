@@ -366,10 +366,7 @@ public class FlexibleMemorySearchRequest
     /// </summary>
     public TemporalScoringMode TemporalScoring { get; set; } = TemporalScoringMode.None;
     
-    /// <summary>
-    /// Enable query expansion with synonyms (true = fuzzy search, false = precise search)
-    /// </summary>
-    public bool? EnableQueryExpansion { get; set; }
+    // Removed EnableQueryExpansion - always use configured analyzer for consistency
 }
 
 /// <summary>

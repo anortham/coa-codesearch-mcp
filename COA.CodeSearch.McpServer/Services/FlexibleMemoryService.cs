@@ -947,53 +947,25 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     /// Build text query using MultiFieldQueryParser with field boosting
     /// Enhanced version that maintains compatibility while adding improvements
     /// </summary>
-    private async Task<Query> BuildTextQueryAsync(string queryText, bool enableQueryExpansion = true)
+    private async Task<Query> BuildTextQueryAsync(string queryText)
     {
         try
         {
-            // For precise search (no query expansion), use standard analyzer but no synonyms
-            if (!enableQueryExpansion)
-            {
-                _logger.LogInformation("Building precise query without synonym expansion for: {Query}", queryText);
-                
-                // Use MultiFieldQueryParser with StandardAnalyzer (no synonyms)
-                // This allows normal tokenization and searching but without synonym expansion
-                var preciseAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-                var preciseParser = new MultiFieldQueryParser(
-                    LuceneVersion.LUCENE_48,
-                    new[] { "content", "type", "file", "_all" },
-                    preciseAnalyzer,
-                    new Dictionary<string, float>
-                    {
-                        { "content", 2.0f },
-                        { "type", 1.5f },
-                        { "file", 1.0f },
-                        { "_all", 0.5f }
-                    });
-                
-                preciseParser.DefaultOperator = QueryParserBase.AND_OPERATOR;
-                preciseParser.AllowLeadingWildcard = true;
-                
-                var preciseQuery = preciseParser.Parse(queryText);
-                _logger.LogInformation("Created precise query without synonyms for: {Query}", queryText);
-                
-                return preciseQuery;
-            }
-            
-            // For fuzzy search (with query expansion), use the normal analyzer
+            // Always use the configured analyzer for consistency
+            // This ensures synonyms work correctly for both indexing and searching
             var analyzer = await _indexService.GetAnalyzerAsync(_projectMemoryWorkspace);
             
-            // First try the enhanced MultiFieldQueryParser approach
-            var enhancedQuery = await TryBuildMultiFieldQueryAsync(queryText, analyzer);
-            if (enhancedQuery != null)
+            // Try the MultiFieldQueryParser approach
+            var query = await TryBuildMultiFieldQueryAsync(queryText, analyzer);
+            if (query != null)
             {
-                _logger.LogInformation("MultiFieldQueryParser: '{Query}' -> '{ParsedQuery}' (expansion: {Expansion})", 
-                    queryText, enhancedQuery.ToString(), enableQueryExpansion);
-                return enhancedQuery;
+                _logger.LogInformation("MultiFieldQueryParser: '{Query}' -> '{ParsedQuery}'", 
+                    queryText, query.ToString());
+                return query;
             }
             
-            // Fallback to original single-field approach for compatibility
-            _logger.LogInformation("Falling back to original QueryParser approach for: {Query}", queryText);
+            // Fallback to single-field approach for compatibility
+            _logger.LogInformation("Falling back to single-field QueryParser for: {Query}", queryText);
             var parser = new QueryParser(LUCENE_VERSION, "_all", analyzer);
             return parser.Parse(queryText);
         }
@@ -1024,11 +996,10 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Create MultiFieldQueryParser with the same analyzer used for indexing
             var parser = new MultiFieldQueryParser(LUCENE_VERSION, fields, analyzer, boosts);
             
-            // Configure for natural language queries
-            parser.DefaultOperator = Lucene.Net.QueryParsers.Classic.Operator.OR;
-            parser.PhraseSlop = 2;
-            parser.FuzzyMinSim = 0.7f;
+            // Configure for AI agents who can construct proper queries
+            parser.DefaultOperator = QueryParserBase.AND_OPERATOR; // AND is more precise
             parser.AllowLeadingWildcard = true;
+            // Remove artificial "natural language" settings - AI agents don't need them
             
             // Parse and return
             var query = parser.Parse(queryText);
@@ -1049,7 +1020,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         // Main search query
         if (!string.IsNullOrWhiteSpace(request.Query) && request.Query != "*")
         {
-            var textQuery = await BuildTextQueryAsync(request.Query, request.EnableQueryExpansion ?? true);
+            var textQuery = await BuildTextQueryAsync(request.Query);
             booleanQuery.Add(textQuery, Occur.MUST);
         }
         

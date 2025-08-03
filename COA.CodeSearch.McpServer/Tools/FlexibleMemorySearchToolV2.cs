@@ -80,7 +80,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
             parameters.IncludeArchived ?? false,
             parameters.BoostRecent ?? false,
             parameters.BoostFrequent ?? false,
-            parameters.EnableQueryExpansion ?? true,
+            // Removed EnableQueryExpansion - always use configured analyzer
             parameters.EnableContextAwareness ?? true,
             parameters.CurrentFile,
             parameters.RecentFiles,
@@ -103,8 +103,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
         bool includeArchived = false,
         bool boostRecent = false,
         bool boostFrequent = false,
-        // Query expansion parameter
-        bool enableQueryExpansion = true,
+        // Removed enableQueryExpansion - always use configured analyzer
         // Context awareness feature
         bool enableContextAwareness = true,
         string? currentFile = null,
@@ -142,7 +141,7 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                 IncludeArchived = includeArchived,
                 BoostRecent = boostRecent,
                 BoostFrequent = boostFrequent,
-                EnableQueryExpansion = enableQueryExpansion,
+                // Removed EnableQueryExpansion - always use configured analyzer
                 EnableHighlighting = enableHighlighting,
                 MaxFragments = maxFragments,
                 FragmentSize = fragmentSize
@@ -517,8 +516,7 @@ public class FlexibleMemorySearchV2Params
     [Description("Boost frequently accessed memories")]
     public bool? BoostFrequent { get; set; }
     
-    [Description("Enable automatic query expansion with synonyms and related terms")]
-    public bool? EnableQueryExpansion { get; set; }
+    // Removed EnableQueryExpansion - always use configured analyzer for consistency
     
     [Description("Enable context-aware memory boosting based on current work")]
     public bool? EnableContextAwareness { get; set; }

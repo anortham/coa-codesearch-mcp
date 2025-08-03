@@ -244,7 +244,6 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     boostRecent = new { type = "boolean", description = "Boost recently created memories", @default = false },
                     boostFrequent = new { type = "boolean", description = "Boost frequently accessed memories", @default = false },
                     // New intelligent features
-                    enableQueryExpansion = new { type = "boolean", description = "Enable automatic query expansion with synonyms and related terms", @default = true },
                     enableContextAwareness = new { type = "boolean", description = "Enable context-aware memory boosting based on current work", @default = true },
                     currentFile = new { type = "string", description = "Path to current file being worked on (for context awareness)" },
                     recentFiles = new { type = "array", items = new { type = "string" }, description = "Recently accessed files (for context awareness)" },
@@ -278,8 +277,6 @@ Features: Query expansion, context awareness, faceted filtering, smart ranking."
                     parameters?.IncludeArchived ?? false,
                     parameters?.BoostRecent ?? false,
                     parameters?.BoostFrequent ?? false,
-                    // Query expansion parameter
-                    parameters?.EnableQueryExpansion ?? true,
                     // Context awareness feature
                     parameters?.EnableContextAwareness ?? true,
                     parameters?.CurrentFile,
