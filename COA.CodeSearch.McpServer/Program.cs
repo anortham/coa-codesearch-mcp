@@ -154,10 +154,10 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<ClaudeMemoryService>();
         services.AddSingleton<JsonMemoryBackupService>();
         
-        // Flexible Memory System (analyzer for memory search with synonyms)
-        services.AddSingleton<MemoryAnalyzer>();
+        // Removed MemoryAnalyzer - AI agents don't need synonym expansion
+        // All searches now use StandardAnalyzer for consistency and predictability
         
-        // Lucene services (uses path-based analyzer selection: StandardAnalyzer for code, MemoryAnalyzer for memory)
+        // Lucene services (uses StandardAnalyzer for all indexes)
         services.AddSingleton<LuceneIndexService>();
         services.AddSingleton<ILuceneWriterManager>(provider => provider.GetRequiredService<LuceneIndexService>());
         services.AddSingleton<ILuceneIndexService>(provider => provider.GetRequiredService<LuceneIndexService>());

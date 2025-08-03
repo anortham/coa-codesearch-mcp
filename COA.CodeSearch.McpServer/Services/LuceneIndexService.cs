@@ -94,7 +94,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     private readonly IConfiguration _configuration;
     private readonly IPathResolutionService _pathResolution;
     private readonly StandardAnalyzer _standardAnalyzer;
-    private readonly MemoryAnalyzer _memoryAnalyzer;
+    // Removed MemoryAnalyzer - using StandardAnalyzer for all indexes
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly TimeSpan _lockTimeout;
     private readonly AsyncLock _writerLock = new("writer-lock");  // Using AsyncLock to enforce timeout usage
@@ -154,13 +154,13 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         }
     }
     
-    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration, IPathResolutionService pathResolution, MemoryAnalyzer memoryAnalyzer)
+    public LuceneIndexService(ILogger<LuceneIndexService> logger, IConfiguration configuration, IPathResolutionService pathResolution)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
         _standardAnalyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-        _memoryAnalyzer = memoryAnalyzer ?? throw new ArgumentNullException(nameof(memoryAnalyzer));
+        // Removed MemoryAnalyzer - using StandardAnalyzer for all indexes
         
         // Default 15 minute timeout for stuck locks (same as intranet)
         _lockTimeout = TimeSpan.FromMinutes(configuration.GetValue<int>("Lucene:LockTimeoutMinutes", 15));
@@ -170,33 +170,13 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
     }
     
     /// <summary>
-    /// Select appropriate analyzer based on workspace or index path
-    /// Memory paths use MemoryAnalyzer (with synonyms), code paths use StandardAnalyzer
+    /// Get analyzer for workspace - now always returns StandardAnalyzer
+    /// AI agents don't need synonym expansion or stemming
     /// </summary>
     private Analyzer GetAnalyzerForWorkspace(string pathToCheck)
     {
-        try
-        {
-            // Check if this is a memory path (works for both workspace paths and index paths since they're the same for memory)
-            var projectMemoryPath = _pathResolution.GetProjectMemoryPath();
-            var localMemoryPath = _pathResolution.GetLocalMemoryPath();
-            
-            if (pathToCheck.Equals(projectMemoryPath, StringComparison.OrdinalIgnoreCase) ||
-                pathToCheck.Equals(localMemoryPath, StringComparison.OrdinalIgnoreCase) ||
-                _pathResolution.IsProtectedPath(pathToCheck))
-            {
-                _logger.LogDebug("Using MemoryAnalyzer for memory path: {Path}", pathToCheck);
-                return _memoryAnalyzer;
-            }
-            
-            _logger.LogDebug("Using StandardAnalyzer for code path: {Path}", pathToCheck);
-            return _standardAnalyzer;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error determining analyzer for path {Path}, defaulting to StandardAnalyzer", pathToCheck);
-            return _standardAnalyzer;
-        }
+        _logger.LogDebug("Using StandardAnalyzer for all paths (AI-optimized): {Path}", pathToCheck);
+        return _standardAnalyzer;
     }
     
     /// <summary>
@@ -1810,7 +1790,7 @@ public class LuceneIndexService : ILuceneIndexService, ILuceneWriterManager, IAs
         
         _indexes.Clear();
         _standardAnalyzer?.Dispose();
-        _memoryAnalyzer?.Dispose();
+        // Removed MemoryAnalyzer disposal
         _writerLock?.Dispose();
         _metadataLock?.Dispose();
         
