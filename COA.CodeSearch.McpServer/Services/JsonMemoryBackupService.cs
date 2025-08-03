@@ -423,8 +423,7 @@ public class JsonMemoryBackupService : IDisposable
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
-        // Add raw field for precise searching (not analyzed)
-        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
+        // Removed content.raw - AI agents don't need it, they can use proper Lucene syntax
         doc.Add(new StringField("created", memory.Created.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("modified", memory.Modified.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
@@ -742,8 +741,7 @@ internal class WorkspaceSnapshotTracker
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
         doc.Add(new TextField("content", memory.Content, Field.Store.YES));
-        // Add raw field for precise searching (not analyzed)
-        doc.Add(new StringField("content.raw", memory.Content, Field.Store.NO));
+        // Removed content.raw - AI agents don't need it, they can use proper Lucene syntax
         doc.Add(new StringField("created", memory.Created.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("modified", memory.Modified.Ticks.ToString(), Field.Store.YES));
         doc.Add(new StringField("is_shared", memory.IsShared.ToString(), Field.Store.YES));
