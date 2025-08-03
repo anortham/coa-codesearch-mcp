@@ -121,7 +121,7 @@ Blazing fast text search across entire codebase with AI-optimized insights. Sear
 **Parameters:**
 - `query` (string, required): Text to search for
 - `workspacePath` (string, required): Path to workspace
-- `searchType` (string, optional): "standard", "wildcard", "fuzzy", "phrase", "regex"
+- `searchType` (string, optional): "standard", "wildcard", "fuzzy", "phrase", "regex", "literal", "code"
 - `caseSensitive` (boolean, optional): Case sensitive search (default: false)
 - `filePattern` (string, optional): Filter by file pattern (e.g., "*.cs")
 - `extensions` (array, optional): Filter by extensions [".cs", ".ts"]
@@ -162,6 +162,8 @@ fast_text_search --query "authentication" --workspacePath "C:/project" --respons
 - Supports wildcards (*), fuzzy (~), phrases ("exact match")
 - Use filePattern for faster searches in specific areas
 - Provides insights on code organization
+- Use `searchType: "literal"` or `"code"` to search for exact code patterns with special characters (e.g., `[Fact]`, `if (x && y)`)
+  - "literal" and "code" are aliases - both escape special characters for exact matching
 
 ### file_search
 

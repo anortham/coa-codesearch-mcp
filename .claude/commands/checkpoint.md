@@ -8,10 +8,11 @@ Using the information below, please save a new WorkSession memory with a clear t
 $ARGUMENTS
 
 The memory MUST start with:
-**Session Checkpoint: [Current Date/Time]**
+**Session Checkpoint: [Current Local Time]**
 
 Include in the memory:
-- Timestamp (e.g., "2025-08-03 15:30 Local Time")
+- Use your current LOCAL TIME (not UTC) for the timestamp
+- Format: "YYYY-MM-DD HH:MM Local Time" (e.g., "2025-08-03 15:30 Local Time")
 - What was accomplished in this session
 - Current state/progress  
 - Next steps/todos (be specific)
@@ -20,7 +21,7 @@ Include in the memory:
 
 Format example:
 ```
-**Session Checkpoint: 2025-08-03 15:30**
+**Session Checkpoint: 2025-08-03 15:30 Local Time**
 
 ## Accomplished
 - [Specific task 1]
