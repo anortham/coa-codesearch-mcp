@@ -837,9 +837,18 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             }
             
             
-            // Execute search  
-            
-            var topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
+            // Execute search with sorting
+            TopDocs topDocs;
+            if (!string.IsNullOrEmpty(request.OrderBy))
+            {
+                // Use Lucene sorting for better performance and accuracy
+                Sort sort = CreateLuceneSort(request.OrderBy, request.OrderDescending);
+                topDocs = searcher.Search(finalQuery, request.MaxResults * 2, sort); // Get extra for filtering
+            }
+            else
+            {
+                topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
+            }
             _logger.LogInformation("Search returned {HitCount} hits", topDocs.TotalHits);
             
             // Setup highlighting if enabled
@@ -892,6 +901,49 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         highlighter.TextFragmenter = fragmenter;
         
         return highlighter;
+    }
+    
+    /// <summary>
+    /// Create Lucene Sort object for field-based sorting
+    /// </summary>
+    private Sort CreateLuceneSort(string orderBy, bool orderDescending)
+    {
+        SortField sortField;
+        
+        switch (orderBy.ToLower())
+        {
+            case "created":
+                // Sort by created timestamp (stored as long)
+                sortField = new SortField("created", SortFieldType.INT64, orderDescending);
+                break;
+                
+            case "modified":
+                // Sort by modified timestamp (stored as long)
+                sortField = new SortField("modified", SortFieldType.INT64, orderDescending);
+                break;
+                
+            case "type":
+                // Sort by type (string field)
+                sortField = new SortField("type", SortFieldType.STRING, orderDescending);
+                break;
+                
+            case "score":
+                // Sort by relevance score (default Lucene behavior)
+                sortField = SortField.FIELD_SCORE;
+                if (orderDescending) // Score is naturally descending, so flip if ascending requested
+                {
+                    sortField = new SortField(null, SortFieldType.SCORE, false);
+                }
+                break;
+                
+            default:
+                // For custom fields, try to sort as string
+                var fieldName = $"field_{orderBy}";
+                sortField = new SortField(fieldName, SortFieldType.STRING, orderDescending);
+                break;
+        }
+        
+        return new Sort(sortField);
     }
     
     /// <summary>
