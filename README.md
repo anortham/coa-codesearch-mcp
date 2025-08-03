@@ -397,42 +397,13 @@ See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for:
 
 ## 🤖 Claude Code Integration
 
-This MCP server works seamlessly with Claude Code. The project includes:
+This MCP server is designed for Claude Code and includes:
 
 - **Custom slash commands** (`/checkpoint` and `/resume`) for session management
-- **Project-specific instructions** in `CLAUDE.md` for optimal tool usage
-- **AI-optimized responses** with progressive disclosure and token optimization
+- **Project-specific guidance** in `CLAUDE.md` with detailed examples
+- **AI-optimized responses** with progressive disclosure and token management
 
-### Memory System Best Practices
-
-When using the memory system:
-
-1. **Start each session** with `recall_context` to load relevant project knowledge
-2. **Use natural language** with `unified_memory` for intuitive memory operations
-3. **Store important findings** as you work to build project knowledge over time
-4. **Backup memories** to JSON for version control and team sharing
-
-### Lucene Query Syntax
-
-The memory search uses Lucene syntax. Key patterns:
-
-- **Simple search**: `authentication` (finds all mentions)
-- **Wildcards**: `auth*` (matches auth, authentication, authorization)
-- **Field search**: `type:TechnicalDebt` (search specific fields)
-- **Boolean**: `auth AND login`, `bug OR issue`
-- **Fuzzy**: `authenticaton~` (handles typos)
-
-**Avoid special characters** in queries unless using Lucene syntax:
-`:` `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
-
-### Tool Selection Guidelines
-
-- **For simple searches**: Use `text_search`, `file_search` directly
-- **For complex analysis**: Use `search_assistant` for multi-step operations
-- **For pattern analysis**: Use `pattern_detector` for architectural insights
-- **For multiple operations**: Use `batch_operations` instead of sequential calls
-
-See the project's `CLAUDE.md` file for detailed instructions and examples.
+For detailed usage instructions and best practices, see the project's `CLAUDE.md` file.
 
 ## 🐛 Troubleshooting
 
