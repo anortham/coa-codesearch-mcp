@@ -49,6 +49,60 @@
 - **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
 - **NEVER** check in broken builds or failing tests! BUILD -> TEST -> COMMIT IN THAT ORDER
 
+## 🔍 Lucene Query Syntax for AI Agents
+
+As an AI agent, you should use proper Lucene syntax for predictable, consistent search results. The memory search system uses Lucene's query parser, which has special characters and syntax rules.
+
+### Special Characters That Need Escaping
+
+The following characters have special meaning in Lucene and will break queries if not handled properly:
+- `:` (colon) - Used for field specification (e.g., `type:TechnicalDebt`)
+- `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
+
+### Query Examples for AI Agents
+
+```bash
+# ❌ WRONG - Colon breaks the parser
+search_memories --query "Session Checkpoint:"
+
+# ✅ CORRECT - Avoid special characters
+search_memories --query "Session Checkpoint"
+
+# ✅ CORRECT - Use wildcards
+search_memories --query "Session Checkpoint*"
+
+# ✅ CORRECT - Use quotes for exact phrases (but still avoid colons)
+search_memories --query "\"Session Checkpoint\""
+
+# ✅ CORRECT - Use field specification properly
+search_memories --query "type:WorkSession AND Session"
+```
+
+### Field Names You Can Search
+
+When using field:value syntax, these are the valid field names:
+- `type` - Memory type (e.g., `type:TechnicalDebt`)
+- `content` - Main content field
+- `file` - Related files
+- `session_id` - Session identifier
+- `is_shared` - Sharing status
+
+### Best Practices for AI Agents
+
+1. **Avoid special characters** in search terms unless using them for Lucene syntax
+2. **Use wildcards** (`*`) for flexible matching instead of trying exact phrases with punctuation
+3. **Use field searches** when you know the specific field (e.g., `type:WorkSession`)
+4. **Keep queries simple** - The synonym expansion in MemoryAnalyzer will handle variations
+5. **Don't fight Lucene** - Work with its syntax, not against it
+
+### Why This Matters
+
+The codebase previously had complex "natural language" query processing that tried to make Lucene behave like a natural language search engine. This has been removed because:
+- AI agents can easily learn proper Lucene syntax
+- Predictable behavior is more valuable than "natural" queries
+- Complex preprocessing made results unpredictable
+- Multiple query manipulation layers caused maintenance issues
+
 ## 📋 Quick Reference
 
 ### Essential Commands
