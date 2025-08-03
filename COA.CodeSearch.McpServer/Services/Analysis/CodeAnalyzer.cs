@@ -71,7 +71,7 @@ public sealed class CodeTokenizer : Tokenizer
     // Regex patterns for code constructs
     private static readonly Regex CodePatternRegex = new Regex(
         @"(::\w+|" +                    // C++ namespace (::std)
-        @":\s*\w+|" +                   // Type annotation (: ITool)
+        @":\s*\w+(<[^>]+>)?|" +         // Type annotation with optional generics (: ITool, : IRepository<T>)
         @"->\w*|" +                     // Pointer access (->method)
         @"=>\s*|" +                     // Lambda arrow
         @"\.\.\.|" +                    // Spread operator
@@ -163,6 +163,26 @@ public sealed class CodeTokenizer : Tokenizer
                         tokenBuilder.Append(_buffer[_bufferPosition]);
                         _bufferPosition++;
                         _offset++;
+                    }
+                    
+                    // Check for generic type parameters after the identifier
+                    if (_bufferPosition < _bufferSize && _buffer[_bufferPosition] == '<')
+                    {
+                        tokenBuilder.Append('<');
+                        _bufferPosition++;
+                        _offset++;
+                        
+                        int angleDepth = 1;
+                        while (_bufferPosition < _bufferSize && angleDepth > 0)
+                        {
+                            var ch = _buffer[_bufferPosition];
+                            tokenBuilder.Append(ch);
+                            _bufferPosition++;
+                            _offset++;
+                            
+                            if (ch == '<') angleDepth++;
+                            else if (ch == '>') angleDepth--;
+                        }
                     }
                 }
                 else if (_bufferPosition < _bufferSize && _buffer[_bufferPosition] == ':')
