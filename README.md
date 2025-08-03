@@ -16,6 +16,7 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 - **⚡ Confidence-Based Limiting**: Dynamic result counts based on score distribution (60-85% token savings)
 - **🔗 Resource URI System**: Two-tier access with minimal initial responses + full results on demand
 - **📊 Standardized Responses**: Unified `resultsSummary` format across all search tools
+- **🔍 CodeAnalyzer**: Custom Lucene analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
 
 ### Performance
 - Startup: < 500ms (simplified architecture)
@@ -466,6 +467,15 @@ log_diagnostics --action cleanup --cleanup true
 system_health_check  # Comprehensive system status
 tool_usage_analytics --action summary  # Tool performance insights
 ```
+
+## 📚 Documentation
+
+- [CodeAnalyzer Documentation](docs/CODE_ANALYZER.md) - How the custom code analyzer works
+- [CodeAnalyzer Implementation Guide](docs/CODE_ANALYZER_IMPLEMENTATION.md) - Technical implementation details
+- [Memory System Guide](docs/MEMORY_SYSTEM.md) - Complete memory tools documentation
+- [Tool Reference](docs/TOOLS.md) - Comprehensive tool documentation
+- [Configuration Guide](docs/CONFIGURATION.md) - All configuration options
+- [Architecture Decisions](docs/ARCHITECTURE.md) - Design patterns and decisions
 
 ## 📄 License
 
