@@ -121,11 +121,11 @@ Configure the confidence-based result limiting for 60-85% token reduction:
     ],
     "ExcludePatterns": [              // Patterns to exclude from indexing
       "bin", "obj", "node_modules", ".git", ".vs", "packages", 
-      "TestResults", ".codesearch"
+      "TestResults", ".codesearch", ".codenav"
     ],
     "ExcludedDirectories": [          // Directories to skip
       "bin", "obj", "node_modules", ".git", ".vs", "packages", 
-      "TestResults", ".codesearch"
+      "TestResults", ".codesearch", ".codenav"
     ],
     "IndexSettings": {
       "MaxFieldLength": 1000000,      // Maximum field length
