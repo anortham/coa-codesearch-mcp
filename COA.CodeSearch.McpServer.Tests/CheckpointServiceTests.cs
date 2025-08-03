@@ -112,15 +112,8 @@ public class CheckpointServiceTests : IDisposable
             Created = DateTime.UtcNow
         };
         
-        _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.Is<FlexibleMemorySearchRequest>(
-                r => r.Query == "id:CHECKPOINT-00003" && 
-                     r.Types != null && r.Types.Contains("Checkpoint") &&
-                     r.MaxResults == 1)))
-            .ReturnsAsync(new FlexibleMemorySearchResult
-            {
-                Memories = new List<FlexibleMemoryEntry> { expectedCheckpoint },
-                TotalFound = 1
-            });
+        _memoryServiceMock.Setup(x => x.GetMemoryByIdAsync("CHECKPOINT-00003"))
+            .ReturnsAsync(expectedCheckpoint);
 
         // Act
         var result = await _checkpointService.GetLatestCheckpointAsync();
