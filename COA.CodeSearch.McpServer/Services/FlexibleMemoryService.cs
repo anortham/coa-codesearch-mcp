@@ -100,7 +100,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             // Apply additional filtering
             var filtered = ApplyFilters(allMemories, request);
             
-            // Apply sorting
+            // Apply sorting (only for score-based boosting, not field sorting which is done by Lucene)
             var sorted = ApplySorting(filtered, request);
             
             // Calculate facets using native Lucene faceting on both project and local indices
@@ -841,9 +841,17 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             TopDocs topDocs;
             if (!string.IsNullOrEmpty(request.OrderBy))
             {
-                // Use Lucene sorting for better performance and accuracy
-                Sort sort = CreateLuceneSort(request.OrderBy, request.OrderDescending);
-                topDocs = searcher.Search(finalQuery, request.MaxResults * 2, sort); // Get extra for filtering
+                try
+                {
+                    // Use Lucene sorting for better performance and accuracy
+                    Sort sort = CreateLuceneSort(request.OrderBy, request.OrderDescending);
+                    topDocs = searcher.Search(finalQuery, request.MaxResults * 2, sort); // Get extra for filtering
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to apply Lucene sort for field {OrderBy}, falling back to unsorted search", request.OrderBy);
+                    topDocs = searcher.Search(finalQuery, request.MaxResults * 2); // Get extra for filtering
+                }
             }
             else
             {
@@ -1174,6 +1182,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     
     private List<FlexibleMemoryEntry> ApplySorting(List<FlexibleMemoryEntry> memories, FlexibleMemorySearchRequest request)
     {
+        // Note: Field-based sorting (created, modified, type) is now handled by Lucene at query time
+        // This method handles score-based boosting and fallback sorting for custom fields
+        
         var query = memories.AsQueryable();
         
         // Apply boosting for scoring
@@ -1198,72 +1209,51 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 m.SetField("_score", score);
                 return m;
             }).ToList();
-        }
-        
-        // Apply sorting
-        if (!string.IsNullOrEmpty(request.OrderBy))
-        {
-            switch (request.OrderBy.ToLower())
+            
+            // Sort by the computed score if no other sorting is specified
+            if (string.IsNullOrEmpty(request.OrderBy) || request.OrderBy.ToLower() == "score")
             {
-                case "created":
-                    query = request.OrderDescending ? 
-                        query.OrderByDescending(m => m.Created) : 
-                        query.OrderBy(m => m.Created);
-                    break;
-                    
-                case "modified":
-                    query = request.OrderDescending ? 
-                        query.OrderByDescending(m => m.Modified) : 
-                        query.OrderBy(m => m.Modified);
-                    break;
-                    
-                case "type":
-                    query = request.OrderDescending ? 
-                        query.OrderByDescending(m => m.Type) : 
-                        query.OrderBy(m => m.Type);
-                    break;
-                    
-                case "score":
-                    query = query.OrderByDescending(m => m.GetField<double>("_score"));
-                    break;
-                    
-                default:
-                    // Try to sort by extended field
-                    var fieldName = request.OrderBy;
-                    var memoriesList = query.ToList();
-                    
-                    if (request.OrderDescending)
-                    {
-                        memoriesList = memoriesList.OrderByDescending(m => 
-                        {
-                            var fieldValue = m.GetField<object>(fieldName);
-                            return fieldValue?.ToString() ?? "";
-                        }).ToList();
-                    }
-                    else
-                    {
-                        memoriesList = memoriesList.OrderBy(m => 
-                        {
-                            var fieldValue = m.GetField<object>(fieldName);
-                            return fieldValue?.ToString() ?? "";
-                        }).ToList();
-                    }
-                    
-                    return memoriesList;
+                query = query.OrderByDescending(m => m.GetField<double>("_score"));
+                return query.ToList();
             }
         }
-        else if (request.BoostRecent || request.BoostFrequent)
+        
+        // For custom fields that Lucene couldn't sort, apply post-processing sort
+        if (!string.IsNullOrEmpty(request.OrderBy) && 
+            !new[] { "created", "modified", "type", "score" }.Contains(request.OrderBy.ToLower()))
         {
-            // Default to score-based sorting if boosting is enabled
-            query = query.OrderByDescending(m => m.GetField<double>("_score"));
-        }
-        else
-        {
-            // Default to newest first
-            query = query.OrderByDescending(m => m.Created);
+            var fieldName = request.OrderBy;
+            var memoriesList = memories;
+            
+            if (request.OrderDescending)
+            {
+                memoriesList = memoriesList.OrderByDescending(m => 
+                {
+                    var fieldValue = m.GetField<object>(fieldName);
+                    // Special handling for numeric fields - convert to comparable values
+                    if (fieldValue is int intVal) return (IComparable)intVal;
+                    if (fieldValue is long longVal) return (IComparable)longVal;
+                    if (fieldValue is double doubleVal) return (IComparable)doubleVal;
+                    return (IComparable)(fieldValue?.ToString() ?? "");
+                }).ToList();
+            }
+            else
+            {
+                memoriesList = memoriesList.OrderBy(m => 
+                {
+                    var fieldValue = m.GetField<object>(fieldName);
+                    // Special handling for numeric fields - convert to comparable values
+                    if (fieldValue is int intVal) return (IComparable)intVal;
+                    if (fieldValue is long longVal) return (IComparable)longVal;
+                    if (fieldValue is double doubleVal) return (IComparable)doubleVal;
+                    return (IComparable)(fieldValue?.ToString() ?? "");
+                }).ToList();
+            }
+            return memoriesList;
         }
         
-        return query.ToList();
+        // For standard fields, Lucene has already sorted the results
+        return memories;
     }
     
     private async Task<Dictionary<string, Dictionary<string, int>>> CalculateFacetsAsync(string workspacePath, IndexSearcher searcher, Query query)
