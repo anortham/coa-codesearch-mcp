@@ -79,6 +79,52 @@ mcp__codesearch__search_memories
   --orderBy "priority"
 ```
 
+#### Lucene Query Syntax
+
+The memory search uses Apache Lucene's query parser, which has special characters and syntax rules. Understanding these will help you write more effective queries.
+
+**Special Characters**
+
+These characters have special meaning in Lucene and may cause query parsing errors if not handled:
+- `:` (colon) - Used for field searches (e.g., `type:TechnicalDebt`)
+- `+` `-` `&&` `||` `!` `(` `)` `{` `}` `[` `]` `^` `"` `~` `*` `?` `\` `/`
+
+**Query Examples**
+
+```bash
+# ❌ AVOID - Special characters can break parsing
+mcp__codesearch__search_memories --query "Session Checkpoint:"
+
+# ✅ BETTER - Simple terms without special characters
+mcp__codesearch__search_memories --query "Session Checkpoint"
+
+# ✅ WILDCARDS - Use * for flexible matching
+mcp__codesearch__search_memories --query "Session*"
+
+# ✅ PHRASES - Use quotes for exact phrases
+mcp__codesearch__search_memories --query "\"authentication bug\""
+
+# ✅ FIELD SEARCH - Search specific fields
+mcp__codesearch__search_memories --query "type:WorkSession"
+
+# ✅ BOOLEAN - Combine terms with AND, OR, NOT
+mcp__codesearch__search_memories --query "authentication AND (bug OR error)"
+```
+
+**Searchable Fields**
+- `type` - Memory type (e.g., `type:TechnicalDebt`)
+- `content` - Main content text
+- `file` - Associated files
+- `session_id` - Session identifier
+- `is_shared` - true/false for shared memories
+- Custom fields added via the `fields` parameter
+
+**Tips**
+- Keep queries simple - the built-in synonym expansion will handle variations
+- Use wildcards (*) instead of trying to match punctuation exactly
+- Field searches are exact matches (no synonym expansion)
+- The query parser is case-insensitive
+
 ### Managing Memories
 
 **Update memory**:
