@@ -222,18 +222,27 @@ Not for: Temporary notes (use store_temporary_memory), file storage (use Write t
     {
         registry.RegisterTool<SearchMemoriesV2Params>(
             name: ToolNames.SearchMemories,
-            description: @"Searches stored memories with intelligent query expansion.
+            description: @"Searches stored memories using Lucene query syntax.
 Returns: Matching memories with scores, metadata, and relationships.
 Prerequisites: None - searches existing memory database.
 Error handling: Returns empty results if no matches found.
 Use cases: Finding past decisions, reviewing technical debt, discovering patterns.
-Features: Query expansion, context awareness, faceted filtering, smart ranking.",
+
+Query Syntax (AI-optimized):
+- Wildcards: auth* (prefix), *Service (suffix), *auth* (contains)
+- Boolean: auth OR authentication, bug AND performance
+- Phrases: ""exact phrase match""
+- Fields: type:TechnicalDebt, content:authentication
+- Fuzzy: authentication~ (typo tolerance)
+- Regex: /auth(entication|orization)?/
+- Default operator: AND (all terms must match)
+- Leading wildcards: Supported (*Service works)",
             inputSchema: new
             {
                 type = "object",
                 properties = new
                 {
-                    query = new { type = "string", description = "Search query (* for all)" },
+                    query = new { type = "string", description = "Lucene query syntax: wildcards (auth*), boolean (A AND B), phrases (\"exact match\"), fields (type:value). Use * for all." },
                     types = new { type = "array", items = new { type = "string" }, description = "Filter by memory types" },
                     dateRange = new { type = "string", description = "Relative time: 'last-week', 'last-month', 'last-7-days'" },
                     facets = new { type = "object", additionalProperties = true, description = "Field filters (e.g., {\"status\": \"pending\", \"priority\": \"high\"})" },
@@ -690,7 +699,7 @@ public class SearchMemoriesV2Params
     public bool? BoostRecent { get; set; }
     public bool? BoostFrequent { get; set; }
     // New intelligent features
-    public bool? EnableQueryExpansion { get; set; } = true;
+    // Removed EnableQueryExpansion - always use configured analyzer
     public bool? EnableContextAwareness { get; set; } = true;
     public string? CurrentFile { get; set; }
     public string[]? RecentFiles { get; set; }
