@@ -26,7 +26,7 @@ public class RegexSearchService
     /// <summary>
     /// Performs a regex search across documents, handling patterns that may span multiple tokens.
     /// </summary>
-    public async Task<List<Document>> SearchWithRegexAsync(
+    public Task<List<Document>> SearchWithRegexAsync(
         IndexSearcher searcher,
         string regexPattern,
         int maxResults,
@@ -61,7 +61,7 @@ public class RegexSearchService
         _logger.LogInformation("Regex search found {Count} matches for pattern '{Pattern}'", 
             results.Count, regexPattern);
         
-        return results;
+        return Task.FromResult(results);
     }
 
     /// <summary>
