@@ -8,6 +8,7 @@ using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Protocol;
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
+using Lucene.Net.Analysis.TokenAttributes;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -17,6 +18,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Text;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -175,6 +177,51 @@ Not for: File name searches (use file_search), directory searches (use directory
                         code = ErrorCodes.VALIDATION_ERROR,
                         message = "Search query cannot be empty",
                         recovery = _errorRecoveryService.GetValidationErrorRecovery("searchQuery", "non-empty string")
+                    }
+                };
+            }
+
+            // Check for minimum query length and single punctuation
+            if (query.Trim().Length < 2)
+            {
+                // Allow single letters/numbers but not single punctuation
+                if (query.Trim().Length == 1 && !char.IsLetterOrDigit(query.Trim()[0]))
+                {
+                    return new
+                    {
+                        success = false,
+                        error = new
+                        {
+                            code = ErrorCodes.VALIDATION_ERROR,
+                            message = $"Single punctuation character '{query}' is too broad for search. This would match nearly every line of code.",
+                            recovery = new
+                            {
+                                suggestion = "Use a more specific search pattern",
+                                examples = new[] { ".ToString()", "catch (", "=>", "async Task" }
+                            }
+                        }
+                    };
+                }
+            }
+
+            // Warn about overly broad searches
+            var commonPunctuation = new[] { "(", ")", "{", "}", "[", "]", ";", ",", ".", ":", "\"", "'", "<", ">", "/", "\\" };
+            if (query.Trim().Length <= 2 && commonPunctuation.Contains(query.Trim()))
+            {
+                return new
+                {
+                    success = false,
+                    error = new
+                    {
+                        code = ErrorCodes.VALIDATION_ERROR,
+                        message = $"Search query '{query}' is too broad and would match too many results",
+                        recovery = new
+                        {
+                            suggestion = "Use a more specific pattern that includes context",
+                            examples = searchType == "literal" 
+                                ? new[] { ".GetHashCode()", "new List<", "async (", "} catch" }
+                                : new[] { "GetHashCode", "List AND generic", "async", "catch" }
+                        }
                     }
                 };
             }
@@ -1104,16 +1151,44 @@ Not for: File name searches (use file_search), directory searches (use directory
                 }
                 else
                 {
-                    // For queries without special characters, use PhraseQuery directly
-                    var phraseQuery = new PhraseQuery();
-                    var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    int position = 0;
-                    foreach (var term in terms)
+                    // For literal/code search, we need to analyze the query with CodeAnalyzer
+                    // to get the same tokens that were indexed
+                    using (var tokenStream = analyzer.GetTokenStream("content", new StringReader(queryText)))
                     {
-                        phraseQuery.Add(new Term("content", term.ToLowerInvariant()), position++);
+                        var termAttr = tokenStream.AddAttribute<ICharTermAttribute>();
+                        tokenStream.Reset();
+                        
+                        var tokens = new List<string>();
+                        while (tokenStream.IncrementToken())
+                        {
+                            tokens.Add(termAttr.ToString());
+                        }
+                        tokenStream.End();
+                        
+                        if (tokens.Count == 0)
+                        {
+                            // No tokens found - create a query that matches nothing
+                            contentQuery = new TermQuery(new Term("content", "$$NO_MATCH$$"));
+                            Logger.LogWarning("Literal search: no tokens found in '{Query}'", queryText);
+                        }
+                        else if (tokens.Count == 1)
+                        {
+                            // Single token - use TermQuery
+                            contentQuery = new TermQuery(new Term("content", tokens[0]));
+                            Logger.LogInformation("Literal search: single token '{Token}' from '{Query}'", tokens[0], queryText);
+                        }
+                        else
+                        {
+                            // Multiple tokens - use PhraseQuery with exact positions
+                            var phraseQuery = new PhraseQuery();
+                            for (int i = 0; i < tokens.Count; i++)
+                            {
+                                phraseQuery.Add(new Term("content", tokens[i]), i);
+                            }
+                            contentQuery = phraseQuery;
+                            Logger.LogInformation("Literal search: phrase query with {Count} tokens from '{Query}'", tokens.Count, queryText);
+                        }
                     }
-                    contentQuery = phraseQuery;
-                    Logger.LogInformation("Literal search: created phrase query for '{Query}' with {TermCount} terms", queryText, terms.Length);
                 }
                 break;
             
