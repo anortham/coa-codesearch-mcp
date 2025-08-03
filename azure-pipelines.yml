@@ -30,7 +30,7 @@ pool:
 variables:
   buildConfiguration: "Release"
   dotnetSdkVersion: "9.x"
-  # Base version
+  # Base version for McpServer
   majorVersion: 1
   minorVersion: 3
   # Auto-incrementing patch version - increments on every build
@@ -38,6 +38,11 @@ variables:
   patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
   versionPrefix: "$(majorVersion).$(minorVersion).$(patchVersion)"
   versionSuffix: ""
+  # Protocol package version - update manually when protocol changes
+  protocolMajorVersion: 1
+  protocolMinorVersion: 0
+  protocolPatchVersion: 1
+  protocolVersion: "$(protocolMajorVersion).$(protocolMinorVersion).$(protocolPatchVersion)"
   # Windows-specific settings
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
@@ -223,7 +228,7 @@ stages:
               packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
               nobuild: true
               versioningScheme: "off"
-              arguments: "$(versionArguments) --no-restore"
+              arguments: "-p:VersionPrefix=$(protocolVersion) --no-restore"
 
           - task: DotNetCoreCLI@2
             displayName: "Pack COA.CodeSearch.McpServer"
@@ -268,12 +273,26 @@ stages:
               artifactName: "packages"
               downloadPath: "$(System.ArtifactsDirectory)"
 
-          - task: DotNetCoreCLI@2
-            displayName: "Push to COA Azure DevOps feed"
-            inputs:
-              command: "push"
-              packagesToPush: '$(System.ArtifactsDirectory)\packages\*.nupkg'
-              nuGetFeedType: "internal"
-              publishVstsFeed: "COA"
-              allowPackageConflicts: true
-              arguments: "--skip-duplicate"
+          - powershell: |
+              $feedUrl = "https://childrensal.pkgs.visualstudio.com/_packaging/COA/nuget/v3/index.json"
+              $packages = Get-ChildItem -Path "$(System.ArtifactsDirectory)\packages\*.nupkg"
+              
+              foreach ($package in $packages) {
+                  Write-Host "Pushing package: $($package.Name)"
+                  & dotnet nuget push $package.FullName --source $feedUrl --api-key AzureDevOps --skip-duplicate
+                  
+                  if ($LASTEXITCODE -eq 0) {
+                      Write-Host "Successfully pushed: $($package.Name)" -ForegroundColor Green
+                  }
+                  elseif ($LASTEXITCODE -eq 1) {
+                      # Check if it's a duplicate error
+                      Write-Host "Package $($package.Name) already exists, skipping..." -ForegroundColor Yellow
+                  }
+                  else {
+                      Write-Host "Failed to push $($package.Name) with exit code: $LASTEXITCODE" -ForegroundColor Red
+                      exit $LASTEXITCODE
+                  }
+              }
+            displayName: "Push packages to COA Azure DevOps feed"
+            env:
+              SYSTEM_ACCESSTOKEN: $(System.AccessToken)
