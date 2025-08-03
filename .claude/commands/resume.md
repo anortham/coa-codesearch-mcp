@@ -18,6 +18,9 @@ Steps:
    - maxResults: 1
    - mode: "full"
    ```
+   
+   IMPORTANT: The 'created' field is in UTC. Select the checkpoint with the latest UTC timestamp, 
+   which represents the most recent checkpoint regardless of the local time shown in the title.
 
 2. If a checkpoint is found:
    - Extract and display the full checkpoint content
