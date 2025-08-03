@@ -1075,18 +1075,46 @@ Not for: File name searches (use file_search), directory searches (use directory
             
             case "literal":
             case "code":
-                // Literal search - treats the entire query as a phrase for exact matching
-                // This helps find patterns like [Fact] or [HttpGet] in C# code
-                // We use PhraseQuery to avoid issues with special characters in QueryParser
-                var phraseQuery = new PhraseQuery();
-                var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                int position = 0;
-                foreach (var term in terms)
+                // Code search - optimized for finding code patterns like [Fact], [HttpGet], etc.
+                // For patterns with brackets or other special characters, we use QueryParser with phrase syntax
+                // This preserves the search intent while working within Lucene's limitations
+                Logger.LogInformation("Literal/Code search: processing query '{Query}'", queryText);
+                if (queryText.Contains('[') || queryText.Contains(']') || queryText.Contains('{') || queryText.Contains('}'))
                 {
-                    phraseQuery.Add(new Term("content", term.ToLowerInvariant()), position++);
+                    Logger.LogInformation("Literal/Code search: detected brackets in query '{Query}'", queryText);
+                    // Use QueryParser with phrase syntax for problematic patterns
+                    // This approach worked in the original implementation
+                    var codeParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
+                    codeParser.DefaultOperator = Operator.AND;
+                    try
+                    {
+                        // Wrap in quotes to make it a phrase query
+                        // This searches for the tokens that remain after analysis
+                        contentQuery = codeParser.Parse($"\"{queryText}\"");
+                        Logger.LogInformation("Code search: using phrase query for pattern with brackets: '{Query}' - Query type: {QueryType}", queryText, contentQuery.GetType().Name);
+                    }
+                    catch (ParseException ex)
+                    {
+                        Logger.LogWarning(ex, "Failed to parse code query as phrase: {Query}, falling back to term query", queryText);
+                        // Fall back to searching for the main term without brackets
+                        var cleanedQuery = queryText.Replace("[", "").Replace("]", "").Replace("{", "").Replace("}", "");
+                        contentQuery = new TermQuery(new Term("content", cleanedQuery.ToLowerInvariant()));
+                        Logger.LogInformation("Code search: fallback to term query for '{CleanedQuery}'", cleanedQuery);
+                    }
                 }
-                contentQuery = phraseQuery;
-                Logger.LogDebug("Literal/Code search: created phrase query for '{Query}'", queryText);
+                else
+                {
+                    // For queries without special characters, use PhraseQuery directly
+                    var phraseQuery = new PhraseQuery();
+                    var terms = queryText.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                    int position = 0;
+                    foreach (var term in terms)
+                    {
+                        phraseQuery.Add(new Term("content", term.ToLowerInvariant()), position++);
+                    }
+                    contentQuery = phraseQuery;
+                    Logger.LogInformation("Literal search: created phrase query for '{Query}' with {TermCount} terms", queryText, terms.Length);
+                }
                 break;
             
             default: // standard
@@ -1229,10 +1257,14 @@ Not for: File name searches (use file_search), directory searches (use directory
     {
         // Lucene special characters that need escaping
         // Note: We're excluding [ and ] as they cause issues even when escaped
-        // They are handled separately in the BuildQuery method
+        // They are handled separately in the BuildQuery method (in literal/code search)
         var escapedQuery = query;
         foreach (var c in LuceneSpecialChars)
         {
+            // Skip escaping brackets as noted in the comment above
+            if (c == '[' || c == ']')
+                continue;
+                
             escapedQuery = escapedQuery.Replace(c.ToString(), "\\" + c);
         }
         
