@@ -70,12 +70,12 @@ public class CheckpointService
     {
         try
         {
-            // Search for checkpoints and get the most recent one
+            // Search for all WorkSession memories and filter for checkpoints
             var searchRequest = new FlexibleMemorySearchRequest
             {
-                Query = "CHECKPOINT-*",
+                Query = "*", // Get all WorkSession memories
                 Types = new[] { "WorkSession" },
-                MaxResults = 10,
+                MaxResults = 50, // Get more to ensure we find checkpoints
                 OrderBy = "created",
                 OrderDescending = true
             };
@@ -84,7 +84,7 @@ public class CheckpointService
             
             // Find the most recent checkpoint by ID pattern
             var latestCheckpoint = searchResult.Memories
-                .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Contains("-"))
+                .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Count(c => c == '-') == 2)
                 .OrderByDescending(m => m.Id) // Time-based IDs sort naturally
                 .FirstOrDefault();
             
