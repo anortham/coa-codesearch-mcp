@@ -1109,7 +1109,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
     {
         var memory = new FlexibleMemoryEntry
         {
-            Id = doc.Get("id") ?? Guid.NewGuid().ToString(),
+            Id = doc.Get("id") ?? TimestampIdGenerator.GenerateId(),
             Type = doc.Get("type") ?? "Unknown",
             Content = doc.Get("content") ?? "",
             Created = new DateTime(long.Parse(doc.Get("created") ?? DateTime.UtcNow.Ticks.ToString())),
@@ -1709,7 +1709,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
                 // Ensure memory has required fields
                 if (string.IsNullOrEmpty(memory.Id))
                 {
-                    memory.Id = Guid.NewGuid().ToString();
+                    memory.Id = TimestampIdGenerator.GenerateId();
                 }
                 
                 if (memory.Created == default)
