@@ -9,77 +9,16 @@ namespace COA.CodeSearch.McpServer.Services;
 public class CheckpointService
 {
     private readonly ILogger<CheckpointService> _logger;
-    private readonly IPathResolutionService _pathResolution;
     private readonly IMemoryService _memoryService;
-    private readonly object _idLock = new();
     
     public CheckpointService(
         ILogger<CheckpointService> logger,
-        IPathResolutionService pathResolution,
         IMemoryService memoryService)
     {
         _logger = logger;
-        _pathResolution = pathResolution;
         _memoryService = memoryService;
     }
     
-    /// <summary>
-    /// Get the next sequential checkpoint ID
-    /// </summary>
-    public Task<int> GetNextCheckpointIdAsync()
-    {
-        lock (_idLock)
-        {
-            var checkpointIdPath = _pathResolution.GetCheckpointIdPath();
-            var directory = Path.GetDirectoryName(checkpointIdPath);
-            
-            // Ensure directory exists
-            if (!string.IsNullOrEmpty(directory) && !Directory.Exists(directory))
-            {
-                Directory.CreateDirectory(directory);
-            }
-            
-            if (File.Exists(checkpointIdPath))
-            {
-                var content = File.ReadAllText(checkpointIdPath);
-                if (int.TryParse(content, out var lastId))
-                {
-                    var nextId = lastId + 1;
-                    File.WriteAllText(checkpointIdPath, nextId.ToString());
-                    _logger.LogInformation("Generated checkpoint ID: {CheckpointId}", nextId);
-                    return Task.FromResult(nextId);
-                }
-            }
-            
-            // Initialize with ID 1
-            File.WriteAllText(checkpointIdPath, "1");
-            _logger.LogInformation("Initialized checkpoint system with ID: 1");
-            return Task.FromResult(1);
-        }
-    }
-    
-    /// <summary>
-    /// Get the current checkpoint ID without incrementing
-    /// </summary>
-    public async Task<int?> GetCurrentCheckpointIdAsync()
-    {
-        var checkpointIdPath = _pathResolution.GetCheckpointIdPath();
-        
-        if (!File.Exists(checkpointIdPath))
-        {
-            _logger.LogInformation("No checkpoint ID file found");
-            return null;
-        }
-        
-        var content = await File.ReadAllTextAsync(checkpointIdPath);
-        if (int.TryParse(content, out var currentId))
-        {
-            return currentId;
-        }
-        
-        _logger.LogWarning("Invalid checkpoint ID in file: {Content}", content);
-        return null;
-    }
     
     /// <summary>
     /// Store a checkpoint with the given content
@@ -88,16 +27,16 @@ public class CheckpointService
     {
         try
         {
-            var checkpointId = await GetNextCheckpointIdAsync();
-            var checkpointIdString = $"CHECKPOINT-{checkpointId:D5}";
+            var checkpointId = CheckpointIdGenerator.GenerateId();
+            var timestamp = CheckpointIdGenerator.ExtractTimestamp(checkpointId) ?? DateTime.UtcNow;
             
             var checkpoint = new FlexibleMemoryEntry
             {
-                Id = checkpointIdString,
-                Type = "Checkpoint",
-                Content = $"**{checkpointIdString}**\nCreated: {DateTime.UtcNow:O}\n\n{content}",
-                Created = DateTime.UtcNow,
-                Modified = DateTime.UtcNow,
+                Id = checkpointId,
+                Type = "WorkSession",
+                Content = $"**{checkpointId}**\nCreated: {timestamp:O}\n\n{content}",
+                Created = timestamp,
+                Modified = timestamp,
                 IsShared = false,
                 SessionId = sessionId
             };
@@ -108,8 +47,8 @@ public class CheckpointService
             return new StoreCheckpointResult
             {
                 Success = true,
-                CheckpointId = checkpointIdString,
-                SequentialId = checkpointId,
+                CheckpointId = checkpointId,
+                SequentialId = 0, // No longer using sequential IDs
                 Created = checkpoint.Created
             };
         }
@@ -131,33 +70,37 @@ public class CheckpointService
     {
         try
         {
-            var currentId = await GetCurrentCheckpointIdAsync();
-            if (!currentId.HasValue)
+            // Search for checkpoints and get the most recent one
+            var searchRequest = new FlexibleMemorySearchRequest
             {
-                return new GetCheckpointResult
-                {
-                    Success = false,
-                    Message = "No checkpoints found"
-                };
-            }
+                Query = "CHECKPOINT-*",
+                Types = new[] { "WorkSession" },
+                MaxResults = 10,
+                OrderBy = "created",
+                OrderDescending = true
+            };
             
-            var checkpointId = $"CHECKPOINT-{currentId.Value:D5}";
+            var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
             
-            // Get the checkpoint directly by ID
-            var checkpoint = await _memoryService.GetMemoryByIdAsync(checkpointId);
-            if (checkpoint != null)
+            // Find the most recent checkpoint by ID pattern
+            var latestCheckpoint = searchResult.Memories
+                .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Contains("-"))
+                .OrderByDescending(m => m.Id) // Time-based IDs sort naturally
+                .FirstOrDefault();
+            
+            if (latestCheckpoint != null)
             {
                 return new GetCheckpointResult
                 {
                     Success = true,
-                    Checkpoint = checkpoint
+                    Checkpoint = latestCheckpoint
                 };
             }
             
             return new GetCheckpointResult
             {
                 Success = false,
-                Message = $"Checkpoint {checkpointId} not found in memory system"
+                Message = "No checkpoints found"
             };
         }
         catch (Exception ex)

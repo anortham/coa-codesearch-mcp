@@ -6,66 +6,26 @@ using Xunit;
 
 namespace COA.CodeSearch.McpServer.Tests;
 
-public class CheckpointServiceTests : IDisposable
+public class CheckpointServiceTests
 {
     private readonly Mock<ILogger<CheckpointService>> _loggerMock;
-    private readonly Mock<IPathResolutionService> _pathResolutionMock;
     private readonly Mock<IMemoryService> _memoryServiceMock;
     private readonly CheckpointService _checkpointService;
-    private readonly string _testCheckpointIdPath;
 
     public CheckpointServiceTests()
     {
         _loggerMock = new Mock<ILogger<CheckpointService>>();
-        _pathResolutionMock = new Mock<IPathResolutionService>();
         _memoryServiceMock = new Mock<IMemoryService>();
-        
-        _testCheckpointIdPath = Path.Combine(Path.GetTempPath(), $"test_checkpoint_{Guid.NewGuid()}.id");
-        _pathResolutionMock.Setup(x => x.GetCheckpointIdPath()).Returns(_testCheckpointIdPath);
         
         _checkpointService = new CheckpointService(
             _loggerMock.Object,
-            _pathResolutionMock.Object,
             _memoryServiceMock.Object);
     }
 
     [Fact]
-    public async Task GetNextCheckpointIdAsync_FirstTime_ReturnsOne()
+    public async Task StoreCheckpointAsync_Success_ReturnsTimeBasedId()
     {
         // Arrange
-        if (File.Exists(_testCheckpointIdPath))
-            File.Delete(_testCheckpointIdPath);
-
-        // Act
-        var result = await _checkpointService.GetNextCheckpointIdAsync();
-
-        // Assert
-        Assert.Equal(1, result);
-        Assert.True(File.Exists(_testCheckpointIdPath));
-        Assert.Equal("1", File.ReadAllText(_testCheckpointIdPath));
-    }
-
-    [Fact]
-    public async Task GetNextCheckpointIdAsync_ExistingFile_IncrementsId()
-    {
-        // Arrange
-        File.WriteAllText(_testCheckpointIdPath, "5");
-
-        // Act
-        var result = await _checkpointService.GetNextCheckpointIdAsync();
-
-        // Assert
-        Assert.Equal(6, result);
-        Assert.Equal("6", File.ReadAllText(_testCheckpointIdPath));
-    }
-
-    [Fact]
-    public async Task StoreCheckpointAsync_Success_ReturnsCheckpointId()
-    {
-        // Arrange
-        if (File.Exists(_testCheckpointIdPath))
-            File.Delete(_testCheckpointIdPath);
-        
         _memoryServiceMock.Setup(x => x.StoreMemoryAsync(It.IsAny<FlexibleMemoryEntry>()))
             .ReturnsAsync(true);
 
@@ -74,12 +34,17 @@ public class CheckpointServiceTests : IDisposable
 
         // Assert
         Assert.True(result.Success);
-        Assert.Equal("CHECKPOINT-00001", result.CheckpointId);
-        Assert.Equal(1, result.SequentialId);
+        Assert.NotNull(result.CheckpointId);
+        Assert.StartsWith("CHECKPOINT-", result.CheckpointId);
+        
+        // Verify the ID format (CHECKPOINT-{timestamp}-{counter})
+        var parts = result.CheckpointId.Split('-');
+        Assert.Equal(3, parts.Length);
+        Assert.True(long.TryParse(parts[1], out _)); // Timestamp should be parseable
         
         _memoryServiceMock.Verify(x => x.StoreMemoryAsync(It.Is<FlexibleMemoryEntry>(
-            entry => entry.Id == "CHECKPOINT-00001" && 
-                     entry.Type == "Checkpoint" &&
+            entry => entry.Id.StartsWith("CHECKPOINT-") && 
+                     entry.Type == "WorkSession" &&
                      entry.Content.Contains("Test checkpoint content"))), Times.Once);
     }
 
@@ -87,8 +52,14 @@ public class CheckpointServiceTests : IDisposable
     public async Task GetLatestCheckpointAsync_NoCheckpoints_ReturnsNotFound()
     {
         // Arrange
-        if (File.Exists(_testCheckpointIdPath))
-            File.Delete(_testCheckpointIdPath);
+        var emptySearchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry>(),
+            TotalFound = 0
+        };
+        
+        _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ReturnsAsync(emptySearchResult);
 
         // Act
         var result = await _checkpointService.GetLatestCheckpointAsync();
@@ -99,21 +70,33 @@ public class CheckpointServiceTests : IDisposable
     }
 
     [Fact]
-    public async Task GetLatestCheckpointAsync_WithCheckpoint_ReturnsLatest()
+    public async Task GetLatestCheckpointAsync_WithCheckpoints_ReturnsLatest()
     {
         // Arrange
-        File.WriteAllText(_testCheckpointIdPath, "3");
-        
-        var expectedCheckpoint = new FlexibleMemoryEntry
+        var checkpoint1 = new FlexibleMemoryEntry
         {
-            Id = "CHECKPOINT-00003",
-            Type = "Checkpoint",
-            Content = "Test checkpoint",
-            Created = DateTime.UtcNow
+            Id = "CHECKPOINT-1754271000000-000001",
+            Type = "WorkSession",
+            Content = "First checkpoint",
+            Created = DateTime.UtcNow.AddMinutes(-10)
         };
         
-        _memoryServiceMock.Setup(x => x.GetMemoryByIdAsync("CHECKPOINT-00003"))
-            .ReturnsAsync(expectedCheckpoint);
+        var checkpoint2 = new FlexibleMemoryEntry
+        {
+            Id = "CHECKPOINT-1754271060000-000002", // 60 seconds later
+            Type = "WorkSession",
+            Content = "Second checkpoint",
+            Created = DateTime.UtcNow.AddMinutes(-5)
+        };
+        
+        var searchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry> { checkpoint1, checkpoint2 },
+            TotalFound = 2
+        };
+        
+        _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ReturnsAsync(searchResult);
 
         // Act
         var result = await _checkpointService.GetLatestCheckpointAsync();
@@ -121,46 +104,36 @@ public class CheckpointServiceTests : IDisposable
         // Assert
         Assert.True(result.Success);
         Assert.NotNull(result.Checkpoint);
-        Assert.Equal("CHECKPOINT-00003", result.Checkpoint.Id);
+        Assert.Equal(checkpoint2.Id, result.Checkpoint.Id); // Should return the latest
     }
 
     [Fact]
-    public async Task GetCurrentCheckpointIdAsync_NoFile_ReturnsNull()
+    public async Task GetLatestCheckpointAsync_SearchThrows_ReturnsError()
     {
         // Arrange
-        if (File.Exists(_testCheckpointIdPath))
-            File.Delete(_testCheckpointIdPath);
+        _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
+            .ThrowsAsync(new Exception("Search failed"));
 
         // Act
-        var result = await _checkpointService.GetCurrentCheckpointIdAsync();
+        var result = await _checkpointService.GetLatestCheckpointAsync();
 
         // Assert
-        Assert.Null(result);
+        Assert.False(result.Success);
+        Assert.Contains("Failed to get latest checkpoint", result.Message);
     }
 
     [Fact]
-    public async Task GetCurrentCheckpointIdAsync_WithFile_ReturnsCurrentId()
+    public async Task StoreCheckpointAsync_StoreMemoryFails_ReturnsError()
     {
         // Arrange
-        File.WriteAllText(_testCheckpointIdPath, "7");
+        _memoryServiceMock.Setup(x => x.StoreMemoryAsync(It.IsAny<FlexibleMemoryEntry>()))
+            .ThrowsAsync(new Exception("Store failed"));
 
         // Act
-        var result = await _checkpointService.GetCurrentCheckpointIdAsync();
+        var result = await _checkpointService.StoreCheckpointAsync("Test content", "session123");
 
         // Assert
-        Assert.Equal(7, result);
-    }
-
-    // Cleanup
-    public void Dispose()
-    {
-        if (File.Exists(_testCheckpointIdPath))
-        {
-            try
-            {
-                File.Delete(_testCheckpointIdPath);
-            }
-            catch { }
-        }
+        Assert.False(result.Success);
+        Assert.Contains("Failed to store checkpoint", result.Message);
     }
 }
