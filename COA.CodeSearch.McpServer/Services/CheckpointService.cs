@@ -1,4 +1,3 @@
-using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Models;
 using Microsoft.Extensions.Logging;
 
@@ -36,7 +35,7 @@ public class CheckpointService
             var checkpoint = new FlexibleMemoryEntry
             {
                 Id = checkpointId,
-                Type = MemoryTypeConstants.Checkpoint,
+                Type = MemoryTypes.Checkpoint,
                 Content = $"**{checkpointId}**\nCreated: {timestamp:O}\n\n{content}",
                 Created = timestamp,
                 Modified = timestamp,
@@ -76,8 +75,8 @@ public class CheckpointService
             // Search for checkpoints by type, which is much more reliable than content search
             var searchRequest = new FlexibleMemorySearchRequest
             {
-                Query = $"type:{MemoryTypeConstants.Checkpoint}", // Search by type field
-                Types = new[] { MemoryTypeConstants.Checkpoint },
+                Query = $"type:{MemoryTypes.Checkpoint}", // Search by type field
+                Types = new[] { MemoryTypes.Checkpoint },
                 MaxResults = 1, // We only need the latest one
                 OrderBy = "created", // Sort by creation date for reliability
                 OrderDescending = true, // Latest first
