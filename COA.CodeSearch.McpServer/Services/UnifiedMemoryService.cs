@@ -26,6 +26,7 @@ public class UnifiedMemoryService
     private readonly SemanticSearchTool? _semanticSearchTool;
     private readonly HybridSearchTool? _hybridSearchTool;
     private readonly IMemoryLifecycleService? _lifecycleService;
+    private readonly TimelineTool? _timelineTool;
 
     public UnifiedMemoryService(
         FlexibleMemoryService memoryService,
@@ -39,7 +40,8 @@ public class UnifiedMemoryService
         JsonMemoryBackupService? backupService = null,
         SemanticSearchTool? semanticSearchTool = null,
         HybridSearchTool? hybridSearchTool = null,
-        IMemoryLifecycleService? lifecycleService = null)
+        IMemoryLifecycleService? lifecycleService = null,
+        TimelineTool? timelineTool = null)
     {
         _memoryService = memoryService;
         _logger = logger;
@@ -53,6 +55,7 @@ public class UnifiedMemoryService
         _semanticSearchTool = semanticSearchTool;
         _hybridSearchTool = hybridSearchTool;
         _lifecycleService = lifecycleService;
+        _timelineTool = timelineTool;
     }
 
     /// <summary>
@@ -84,6 +87,7 @@ public class UnifiedMemoryService
                 MemoryIntent.Explore => await HandleExploreAsync(command, cancellationToken),
                 MemoryIntent.Suggest => await HandleSuggestAsync(command, cancellationToken),
                 MemoryIntent.Manage => await HandleManageAsync(command, cancellationToken),
+                MemoryIntent.Timeline => await HandleTimelineAsync(command, cancellationToken),
                 _ => new UnifiedMemoryResult
                 {
                     Success = false,
@@ -144,6 +148,13 @@ public class UnifiedMemoryService
             ContainsAny(content, "backup", "restore", "export", "import"))
         {
             return (MemoryIntent.Manage, 0.8f);
+        }
+
+        // Strong indicators for TIMELINE intent
+        if (ContainsAny(content, "timeline", "chronological", "history", "recent", "last few days") ||
+            ContainsAny(content, "what happened", "show me recent", "activities", "time order"))
+        {
+            return (MemoryIntent.Timeline, 0.8f);
         }
 
         // Strong indicators for FIND intent
@@ -869,6 +880,117 @@ public class UnifiedMemoryService
                 Success = false,
                 Action = "explore_error",
                 Message = $"Error exploring memory graph: {ex.Message}"
+            };
+        }
+    }
+
+    /// <summary>
+    /// Handle TIMELINE intent - show chronological timeline of memories
+    /// </summary>
+    private async Task<UnifiedMemoryResult> HandleTimelineAsync(
+        UnifiedMemoryCommand command,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            if (_timelineTool == null)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "timeline_unavailable",
+                    Message = "Timeline functionality is not available"
+                };
+            }
+
+            var content = command.Content?.ToLowerInvariant() ?? "";
+            
+            // Extract days from content
+            int days = 7; // default
+            var daysMatch = Regex.Match(content, @"(\d+)\s*days?");
+            if (daysMatch.Success && int.TryParse(daysMatch.Groups[1].Value, out var parsedDays))
+            {
+                days = Math.Min(parsedDays, 30); // Cap at 30 days
+            }
+            else if (ContainsAny(content, "today"))
+            {
+                days = 1;
+            }
+            else if (ContainsAny(content, "week"))
+            {
+                days = 7;
+            }
+            else if (ContainsAny(content, "month"))
+            {
+                days = 30;
+            }
+
+            // Extract memory types if specified
+            string[]? types = null;
+            if (ContainsAny(content, "technical debt", "debt"))
+                types = new[] { "TechnicalDebt" };
+            else if (ContainsAny(content, "architectural", "architecture", "decision"))
+                types = new[] { "ArchitecturalDecision" };
+            else if (ContainsAny(content, "checklist", "task"))
+                types = new[] { "Checklist" };
+
+            // Call the timeline tool
+            var result = await _timelineTool.GetTimelineAsync(
+                days: days,
+                types: types,
+                includeArchived: ContainsAny(content, "all", "archived", "include archived"),
+                includeExpired: ContainsAny(content, "expired", "all"),
+                maxPerGroup: 10
+            );
+
+            if (!result.Success)
+            {
+                return new UnifiedMemoryResult
+                {
+                    Success = false,
+                    Action = "timeline_error",
+                    Message = result.Timeline ?? "Failed to generate timeline"
+                };
+            }
+
+            return new UnifiedMemoryResult
+            {
+                Success = true,
+                Action = "timeline_generated",
+                Message = result.Timeline,
+                Metadata = new Dictionary<string, object>
+                {
+                    ["totalMemories"] = result.TotalMemories,
+                    ["days"] = days,
+                    ["groups"] = result.Groups.Count
+                },
+                NextSteps = new List<ActionSuggestion>
+                {
+                    new ActionSuggestion
+                    {
+                        Id = "view_specific",
+                        Description = "View specific memory types",
+                        Command = $"memory \"timeline last {days} days technical debt\"",
+                        Priority = "medium"
+                    },
+                    new ActionSuggestion
+                    {
+                        Id = "extend_range",
+                        Description = "View longer time period",
+                        Command = $"memory \"timeline last {days * 2} days\"",
+                        Priority = "low"
+                    }
+                }
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error generating timeline: {Content}", command.Content);
+            return new UnifiedMemoryResult
+            {
+                Success = false,
+                Action = "timeline_error",
+                Message = $"Error generating timeline: {ex.Message}"
             };
         }
     }

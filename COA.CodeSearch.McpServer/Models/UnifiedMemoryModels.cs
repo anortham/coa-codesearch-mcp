@@ -74,7 +74,13 @@ public enum MemoryIntent
     /// Manage memories (update, delete, archive)
     /// </summary>
     [Description("Manage existing memories (update, delete, archive)")]
-    Manage = 6
+    Manage = 6,
+
+    /// <summary>
+    /// View memories in chronological timeline format (maps to memory_timeline)
+    /// </summary>
+    [Description("View memories in chronological timeline format")]
+    Timeline = 7
 }
 
 /// <summary>
