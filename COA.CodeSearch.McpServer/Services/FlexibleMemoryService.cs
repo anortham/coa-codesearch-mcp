@@ -504,8 +504,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         var doc = new Document();
         
         // Core fields - DOCVALUES OPTIMIZATION APPLIED
-        // ID: Keep stored for retrieval, but no DocValues needed (not sorted/faceted)
+        // ID: Add DocValues for efficient sorting (needed for time-based checkpoint IDs)
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
+        doc.Add(new SortedDocValuesField("id", new BytesRef(memory.Id)));
         
         // Type: Add DocValues for efficient sorting and faceting (3-5x performance improvement)
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
@@ -595,8 +596,9 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         var doc = new Document();
         
         // Core fields - DOCVALUES OPTIMIZATION APPLIED
-        // ID: Keep stored for retrieval, but no DocValues needed (not sorted/faceted)
+        // ID: Add DocValues for efficient sorting (needed for time-based checkpoint IDs)
         doc.Add(new StringField("id", memory.Id, Field.Store.YES));
+        doc.Add(new SortedDocValuesField("id", new BytesRef(memory.Id)));
         
         // Type: Add DocValues for efficient sorting and faceting (3-5x performance improvement)
         doc.Add(new StringField("type", memory.Type, Field.Store.YES));
@@ -933,6 +935,11 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             case "type":
                 // Sort by type (string field)
                 sortField = new SortField("type", SortFieldType.STRING, orderDescending);
+                break;
+                
+            case "id":
+                // Sort by ID (string field) - useful for time-based sortable IDs
+                sortField = new SortField("id", SortFieldType.STRING, orderDescending);
                 break;
                 
             case "score":

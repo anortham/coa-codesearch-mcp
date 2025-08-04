@@ -70,22 +70,22 @@ public class CheckpointService
     {
         try
         {
-            // Search for all WorkSession memories and filter for checkpoints
+            // Since our checkpoint IDs are time-based and sortable (CHECKPOINT-{timestamp}-{counter}),
+            // we can use ID sorting to get the latest checkpoint efficiently
             var searchRequest = new FlexibleMemorySearchRequest
             {
-                Query = "*", // Get all WorkSession memories
+                Query = "CHECKPOINT-", // Search for checkpoint content
                 Types = new[] { "WorkSession" },
-                MaxResults = 50, // Get more to ensure we find checkpoints
-                OrderBy = "created",
-                OrderDescending = true
+                MaxResults = 1, // We only need the latest one
+                OrderBy = "id", // Sort by ID which is time-based and sortable
+                OrderDescending = true // Latest first (highest ID = most recent)
             };
             
             var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
             
-            // Find the most recent checkpoint by ID pattern
+            // Find the first valid checkpoint (they should already be sorted by ID desc)
             var latestCheckpoint = searchResult.Memories
                 .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Count(c => c == '-') == 2)
-                .OrderByDescending(m => m.Id) // Time-based IDs sort naturally
                 .FirstOrDefault();
             
             if (latestCheckpoint != null)
