@@ -33,7 +33,7 @@ public class CheckpointService
             var checkpoint = new FlexibleMemoryEntry
             {
                 Id = checkpointId,
-                Type = "WorkSession",
+                Type = "Checkpoint",
                 Content = $"**{checkpointId}**\nCreated: {timestamp:O}\n\n{content}",
                 Created = timestamp,
                 Modified = timestamp,
@@ -70,15 +70,14 @@ public class CheckpointService
     {
         try
         {
-            // Since our checkpoint IDs are time-based and sortable (CHECKPOINT-{timestamp}-{counter}),
-            // we can use ID sorting to get the latest checkpoint efficiently
+            // Search for checkpoints by type, which is much more reliable than content search
             var searchRequest = new FlexibleMemorySearchRequest
             {
-                Query = "CHECKPOINT-", // Search for checkpoint content
-                Types = new[] { "WorkSession" },
+                Query = "type:Checkpoint", // Search by type field
+                Types = new[] { "Checkpoint" },
                 MaxResults = 1, // We only need the latest one
-                OrderBy = "id", // Sort by ID which is time-based and sortable
-                OrderDescending = true, // Latest first (highest ID = most recent)
+                OrderBy = "created", // Sort by creation date for reliability
+                OrderDescending = true, // Latest first
                 IncludeArchived = false // Don't include archived memories
             };
             
@@ -92,10 +91,8 @@ public class CheckpointService
                     string.Join(", ", searchResult.Memories.Select(m => m.Id)));
             }
             
-            // Find the first valid checkpoint (they should already be sorted by ID desc)
-            var latestCheckpoint = searchResult.Memories?
-                .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Count(c => c == '-') == 2)
-                .FirstOrDefault();
+            // Get the first result (already sorted by created date desc)
+            var latestCheckpoint = searchResult.Memories?.FirstOrDefault();
             
             if (latestCheckpoint != null)
             {
