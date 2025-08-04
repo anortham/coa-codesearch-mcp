@@ -163,7 +163,7 @@ public class CheckpointServiceTests
         };
         
         _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.Is<FlexibleMemorySearchRequest>(
-            req => req.Query == "type:Checkpoint" && 
+            req => req.Query == "*" && 
                    req.Types != null && req.Types.Contains("Checkpoint"))))
             .ReturnsAsync(searchResult);
 
