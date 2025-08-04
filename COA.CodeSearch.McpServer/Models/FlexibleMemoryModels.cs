@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Text.Json;
 using System.Text.Json.Serialization;
+using COA.CodeSearch.McpServer.Services;
 
 namespace COA.CodeSearch.McpServer.Models;
 
@@ -11,8 +12,9 @@ public class FlexibleMemoryEntry
 {
     /// <summary>
     /// Unique identifier for the memory entry
+    /// Uses timestamp-based IDs for chronological sorting
     /// </summary>
-    public string Id { get; set; } = Guid.NewGuid().ToString();
+    public string Id { get; set; } = TimestampIdGenerator.GenerateId();
     
     /// <summary>
     /// Memory type - can be anything, not limited to predefined enums

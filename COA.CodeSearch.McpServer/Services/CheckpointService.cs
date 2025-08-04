@@ -27,8 +27,10 @@ public class CheckpointService
     {
         try
         {
-            var checkpointId = CheckpointIdGenerator.GenerateId();
-            var timestamp = CheckpointIdGenerator.ExtractTimestamp(checkpointId) ?? DateTime.UtcNow;
+            // Generate checkpoint ID with CHECKPOINT- prefix for clarity
+            var baseId = TimestampIdGenerator.GenerateId();
+            var checkpointId = $"CHECKPOINT-{baseId}";
+            var timestamp = TimestampIdGenerator.ExtractTimestamp(baseId) ?? DateTime.UtcNow;
             
             var checkpoint = new FlexibleMemoryEntry
             {

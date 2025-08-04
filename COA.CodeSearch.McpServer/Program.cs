@@ -147,6 +147,9 @@ var host = Host.CreateDefaultBuilder(args)
         services.AddSingleton<CheckpointService>();
         services.AddSingleton<CheckpointTools>();
         
+        // Memory update tool
+        services.AddSingleton<UpdateMemoryTool>();
+        
         // File watching service - must be registered after IFileChangeSubscriber implementations
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
