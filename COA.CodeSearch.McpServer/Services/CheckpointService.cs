@@ -72,10 +72,10 @@ public class CheckpointService
     {
         try
         {
-            // Search for checkpoints by type, which is much more reliable than content search
+            // Search for checkpoints by type filter
             var searchRequest = new FlexibleMemorySearchRequest
             {
-                Query = $"type:{MemoryTypes.Checkpoint}", // Search by type field
+                Query = "*", // Match all, filtering will be done by Types
                 Types = new[] { MemoryTypes.Checkpoint },
                 MaxResults = 1, // We only need the latest one
                 OrderBy = "created", // Sort by creation date for reliability
