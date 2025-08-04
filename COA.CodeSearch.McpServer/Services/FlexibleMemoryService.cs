@@ -1,4 +1,5 @@
 using System.Text.Json;
+using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Events;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
@@ -1840,25 +1841,13 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
             }
         }
         
-        // Validate memory types - includes all types from MemoryTypes class
-        var allowedMemoryTypes = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-        {
-            // Existing types (for backwards compatibility)
-            "ArchitecturalDecision", "CodePattern", "SecurityRule", "ProjectInsight",
-            "WorkSession", "ConversationSummary", "PersonalContext", "TemporaryNote",
-            
-            // New flexible types
-            "TechnicalDebt", "DeferredTask", "Question", "Assumption", "Experiment",
-            "Learning", "Blocker", "Idea", "CodeReview", "BugReport", "GitCommit",
-            "PerformanceIssue", "Refactoring", "Documentation", "Dependency",
-            "Configuration", "WorkingMemory", "Checklist", "ChecklistItem",
-            
-            // Additional types that were in use
-            "PerformanceOptimization", "BugFix", "FeatureIdea", "SecurityConcern",
-            "DocumentationTodo", "RefactoringNote", "TestingNote", "DeploymentNote",
-            "ConfigurationNote", "DependencyNote", "TeamNote", "PersonalNote",
-            "CustomType", "LocalInsight"
-        };
+        // Validate memory types using centralized constants
+        var allowedMemoryTypes = new HashSet<string>(MemoryTypeConstants.AllowedTypes, StringComparer.OrdinalIgnoreCase);
+        
+        // Add legacy types for backwards compatibility
+        allowedMemoryTypes.Add("ConversationSummary");
+        allowedMemoryTypes.Add("PersonalContext");
+        allowedMemoryTypes.Add("TemporaryNote");
         
         if (request.Types != null)
         {
