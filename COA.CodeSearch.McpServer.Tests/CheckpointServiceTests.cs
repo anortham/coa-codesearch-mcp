@@ -44,7 +44,7 @@ public class CheckpointServiceTests
         
         _memoryServiceMock.Verify(x => x.StoreMemoryAsync(It.Is<FlexibleMemoryEntry>(
             entry => entry.Id.StartsWith("CHECKPOINT-") && 
-                     entry.Type == "WorkSession" &&
+                     entry.Type == "Checkpoint" &&
                      entry.Content.Contains("Test checkpoint content"))), Times.Once);
     }
 
@@ -76,7 +76,7 @@ public class CheckpointServiceTests
         var checkpoint1 = new FlexibleMemoryEntry
         {
             Id = "CHECKPOINT-1754271000000-000001",
-            Type = "WorkSession",
+            Type = "Checkpoint",
             Content = "First checkpoint",
             Created = DateTime.UtcNow.AddMinutes(-10)
         };
@@ -84,7 +84,7 @@ public class CheckpointServiceTests
         var checkpoint2 = new FlexibleMemoryEntry
         {
             Id = "CHECKPOINT-1754271060000-000002", // 60 seconds later
-            Type = "WorkSession",
+            Type = "Checkpoint",
             Content = "Second checkpoint",
             Created = DateTime.UtcNow.AddMinutes(-5)
         };
@@ -98,10 +98,10 @@ public class CheckpointServiceTests
         _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
             .ReturnsAsync((FlexibleMemorySearchRequest req) =>
             {
-                // Simulate proper sorting by ID descending (latest first)
+                // Simulate proper sorting by created date descending (latest first)
                 var sorted = searchResult.Memories
-                    .Where(m => m.Id.StartsWith("CHECKPOINT-"))
-                    .OrderByDescending(m => m.Id)
+                    .Where(m => m.Type == "Checkpoint")
+                    .OrderByDescending(m => m.Created)
                     .Take(req.MaxResults)
                     .ToList();
                 
@@ -134,6 +134,47 @@ public class CheckpointServiceTests
         // Assert
         Assert.False(result.Success);
         Assert.Contains("Failed to get latest checkpoint", result.Message);
+    }
+
+    [Fact]
+    public async Task GetLatestCheckpointAsync_WithMixedIdTypes_ReturnsOnlyCheckpoints()
+    {
+        // Arrange
+        var guidMemory = new FlexibleMemoryEntry
+        {
+            Id = "f831bd01-92e1-459b-929a-8f427172bd4e", // UUID that sorts after "C"
+            Type = "WorkSession",
+            Content = "CHECKPOINT- This is not a real checkpoint but contains the word",
+            Created = DateTime.UtcNow.AddMinutes(-1) // Most recent
+        };
+        
+        var checkpoint = new FlexibleMemoryEntry
+        {
+            Id = "CHECKPOINT-1754271000000-000001",
+            Type = "Checkpoint",
+            Content = "Real checkpoint",
+            Created = DateTime.UtcNow.AddMinutes(-5)
+        };
+        
+        var searchResult = new FlexibleMemorySearchResult
+        {
+            Memories = new List<FlexibleMemoryEntry> { checkpoint }, // Only returns type:Checkpoint
+            TotalFound = 1
+        };
+        
+        _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.Is<FlexibleMemorySearchRequest>(
+            req => req.Query == "type:Checkpoint" && 
+                   req.Types != null && req.Types.Contains("Checkpoint"))))
+            .ReturnsAsync(searchResult);
+
+        // Act
+        var result = await _checkpointService.GetLatestCheckpointAsync();
+
+        // Assert
+        Assert.True(result.Success);
+        Assert.NotNull(result.Checkpoint);
+        Assert.Equal(checkpoint.Id, result.Checkpoint.Id);
+        Assert.Equal("Checkpoint", result.Checkpoint.Type);
     }
 
     [Fact]
