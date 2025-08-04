@@ -96,7 +96,21 @@ public class CheckpointServiceTests
         };
         
         _memoryServiceMock.Setup(x => x.SearchMemoriesAsync(It.IsAny<FlexibleMemorySearchRequest>()))
-            .ReturnsAsync(searchResult);
+            .ReturnsAsync((FlexibleMemorySearchRequest req) =>
+            {
+                // Simulate proper sorting by ID descending (latest first)
+                var sorted = searchResult.Memories
+                    .Where(m => m.Id.StartsWith("CHECKPOINT-"))
+                    .OrderByDescending(m => m.Id)
+                    .Take(req.MaxResults)
+                    .ToList();
+                
+                return new FlexibleMemorySearchResult
+                {
+                    Memories = sorted,
+                    TotalFound = sorted.Count
+                };
+            });
 
         // Act
         var result = await _checkpointService.GetLatestCheckpointAsync();
