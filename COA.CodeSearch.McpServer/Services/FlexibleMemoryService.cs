@@ -1,5 +1,4 @@
 using System.Text.Json;
-using COA.CodeSearch.McpServer.Constants;
 using COA.CodeSearch.McpServer.Events;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Scoring;
@@ -1842,12 +1841,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         }
         
         // Validate memory types using centralized constants
-        var allowedMemoryTypes = new HashSet<string>(MemoryTypeConstants.AllowedTypes, StringComparer.OrdinalIgnoreCase);
-        
-        // Add legacy types for backwards compatibility
-        allowedMemoryTypes.Add("ConversationSummary");
-        allowedMemoryTypes.Add("PersonalContext");
-        allowedMemoryTypes.Add("TemporaryNote");
+        var allowedMemoryTypes = new HashSet<string>(MemoryTypes.AllowedTypes, StringComparer.OrdinalIgnoreCase);
         
         if (request.Types != null)
         {
