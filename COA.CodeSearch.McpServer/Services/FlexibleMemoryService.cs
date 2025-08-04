@@ -1194,6 +1194,14 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         var query = memories.AsQueryable();
         
+        // Handle ID sorting when results are combined from multiple indexes
+        if (!string.IsNullOrEmpty(request.OrderBy) && request.OrderBy.ToLower() == "id")
+        {
+            return request.OrderDescending 
+                ? memories.OrderByDescending(m => m.Id).ToList()
+                : memories.OrderBy(m => m.Id).ToList();
+        }
+        
         // Apply boosting for scoring
         if (request.BoostRecent || request.BoostFrequent)
         {
@@ -1227,7 +1235,7 @@ public class FlexibleMemoryService : IMemoryService, IDisposable
         
         // For custom fields that Lucene couldn't sort, apply post-processing sort
         if (!string.IsNullOrEmpty(request.OrderBy) && 
-            !new[] { "created", "modified", "type", "score" }.Contains(request.OrderBy.ToLower()))
+            !new[] { "created", "modified", "type", "score", "id" }.Contains(request.OrderBy.ToLower()))
         {
             var fieldName = request.OrderBy;
             var memoriesList = memories;

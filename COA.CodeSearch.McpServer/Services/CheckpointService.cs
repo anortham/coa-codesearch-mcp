@@ -78,13 +78,22 @@ public class CheckpointService
                 Types = new[] { "WorkSession" },
                 MaxResults = 1, // We only need the latest one
                 OrderBy = "id", // Sort by ID which is time-based and sortable
-                OrderDescending = true // Latest first (highest ID = most recent)
+                OrderDescending = true, // Latest first (highest ID = most recent)
+                IncludeArchived = false // Don't include archived memories
             };
             
             var searchResult = await _memoryService.SearchMemoriesAsync(searchRequest);
             
+            _logger.LogInformation("Search returned {Count} memories for checkpoint query", searchResult.Memories?.Count ?? 0);
+            
+            if (searchResult.Memories != null && searchResult.Memories.Any())
+            {
+                _logger.LogInformation("Found memories: {Ids}", 
+                    string.Join(", ", searchResult.Memories.Select(m => m.Id)));
+            }
+            
             // Find the first valid checkpoint (they should already be sorted by ID desc)
-            var latestCheckpoint = searchResult.Memories
+            var latestCheckpoint = searchResult.Memories?
                 .Where(m => m.Id.StartsWith("CHECKPOINT-") && m.Id.Count(c => c == '-') == 2)
                 .FirstOrDefault();
             
