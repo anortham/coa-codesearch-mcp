@@ -108,7 +108,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\COA.Mcp.Protocol\COA.Mcp.Protocol.csproj" />
+    <!-- Using COA.Mcp.Protocol from COA feed -->
+    <PackageReference Include="COA.Mcp.Protocol" Version="1.3.176" />
     <ProjectReference Include="..\COA.CodeSearch.Contracts\COA.CodeSearch.Contracts.csproj" />
   </ItemGroup>
 
