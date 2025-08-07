@@ -1,60 +1,152 @@
-# COA Framework Migration Documentation
+# COA CodeSearch MCP - Framework Migration
 
-## 📚 Active Migration Documents
+## Overview
 
-These are the current, up-to-date documents for the COA MCP Framework migration:
+This folder contains the comprehensive migration plan for transitioning COA CodeSearch MCP from its custom MCP implementation to the COA MCP Framework v1.1.
 
-### 1. **[COA_FRAMEWORK_MIGRATION_PLAN.md](COA_FRAMEWORK_MIGRATION_PLAN.md)** 📋
-**Main Migration Plan** - Complete strategy and approach based on Framework v1.1.0 analysis
-- Executive summary and key findings
-- Migration phases and strategy
-- Quick start commands
+## Migration Documents
+
+### 1. [Migration Assessment](./COA_FRAMEWORK_MIGRATION_ASSESSMENT.md)
+**Purpose**: Evaluates the feasibility and benefits of migration
+- Current state analysis
+- Framework comparison
+- Risk assessment
+- Expected benefits
 - Success metrics
 
-### 2. **[COA_FRAMEWORK_COMPONENT_MAPPING.md](COA_FRAMEWORK_COMPONENT_MAPPING.md)** 🗺️
-**Technical Component Mapping** - Detailed guide for migrating each component
-- Exact code patterns (before/after)
-- Tool-by-tool migration map
-- Service registration changes
-- Custom implementation requirements
+**Key Finding**: Migration is strongly recommended with 30-40% code reduction expected.
 
-### 3. **[COA_FRAMEWORK_MIGRATION_TIMELINE.md](COA_FRAMEWORK_MIGRATION_TIMELINE.md)** ⏱️
-**Accelerated Timeline** - Day-by-day execution plan (7 days instead of 4 weeks)
-- Daily tasks and checkpoints
-- Parallel work streams
-- Success metrics by day
-- Risk mitigation schedule
+### 2. [Migration Plan](./COA_FRAMEWORK_MIGRATION_PLAN.md)
+**Purpose**: Detailed step-by-step migration strategy
+- 15-day phased approach
+- Tool-by-tool migration guide
+- Risk mitigation strategies
+- Rollback procedures
+- Communication plan
 
-## 🗄️ Archived Documents
+**Timeline**: 3 weeks (15 working days)
 
-Original documents (before Framework v1.1.0 analysis) have been moved to:
-`archive/framework_migration_original/`
+### 3. [Migration Checklist](./COA_FRAMEWORK_MIGRATION_CHECKLIST.md)
+**Purpose**: Actionable task tracking
+- Day-by-day task breakdown
+- Tool migration tracking
+- Verification checkpoints
+- Sign-off requirements
 
-- `COA_FRAMEWORK_MIGRATION_PLAN.md` (original 4-week plan)
-- `COA_FRAMEWORK_MIGRATION_CHECKLIST.md` (original checklist)
+**Use**: Print and check off items as completed
 
-## 🚀 Quick Start
+## Quick Start
 
-1. **Read the main plan**: Start with [COA_FRAMEWORK_MIGRATION_PLAN.md](COA_FRAMEWORK_MIGRATION_PLAN.md)
-2. **Review technical details**: Check [COA_FRAMEWORK_COMPONENT_MAPPING.md](COA_FRAMEWORK_COMPONENT_MAPPING.md) for specific patterns
-3. **Follow the timeline**: Use [COA_FRAMEWORK_MIGRATION_TIMELINE.md](COA_FRAMEWORK_MIGRATION_TIMELINE.md) for day-by-day execution
+1. **Review Phase**: Read the assessment to understand the scope
+2. **Planning Phase**: Review the detailed plan with your team
+3. **Execution Phase**: Use the checklist to track progress
+4. **Validation Phase**: Follow testing procedures in the plan
 
-## 📊 Status
+## Key Benefits of Migration
 
-- **Framework Version**: v1.1.0
-- **Migration Readiness**: 100%
-- **Timeline**: 7 days (accelerated from 4 weeks)
-- **Automation Available**: 70% can be automated
-- **Last Updated**: 2025-08-06
+| Benefit | Impact |
+|---------|--------|
+| **Code Reduction** | 30-40% less infrastructure code |
+| **Token Optimization** | Automatic response management |
+| **Response Caching** | Built-in performance optimization |
+| **Standardization** | Consistent patterns across all tools |
+| **Maintainability** | Framework handles MCP complexity |
+| **Future Features** | Automatic updates from framework |
 
-## 🎯 Key Findings
+## Migration Approach
 
-✅ Framework provides 100% of needed features  
-✅ Automated migration tools available  
-✅ No conflicts or breaking changes  
-✅ Better features than originally planned  
-✅ Working examples demonstrate patterns  
+```mermaid
+graph LR
+    A[Current State] --> B[Add Framework]
+    B --> C[Migrate Tools]
+    C --> D[Remove Old Code]
+    D --> E[Optimize]
+    E --> F[Migrated State]
+```
+
+### Phase Breakdown
+- **Phase 1** (Days 1-3): Foundation setup
+- **Phase 2** (Days 4-10): Tool migration
+- **Phase 3** (Days 11-13): Cleanup & optimization
+- **Phase 4** (Days 14-15): Testing & validation
+
+## Success Stories
+
+### CodeNav MCP Migration
+Successfully migrated with:
+- 50% infrastructure code reduction
+- 15% performance improvement
+- Enhanced error handling
+- Improved testability
+
+## Framework Version
+
+Currently targeting: **COA.Mcp.Framework v1.1.6**
+
+### NuGet Packages Required
+```xml
+<PackageReference Include="COA.Mcp.Framework" Version="1.1.*" />
+<PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.1.*" />
+<PackageReference Include="COA.Mcp.Framework.Testing" Version="1.1.*" />
+```
+
+## Tool Count
+
+**Total Tools to Migrate**: 50+
+
+### By Category
+- Search Tools: 12
+- Memory Tools: 15
+- System Tools: 8
+- Analysis Tools: 10
+- Utility Tools: 5+
+
+## Risk Summary
+
+| Risk | Level | Mitigation |
+|------|-------|------------|
+| Breaking Changes | Low | Side-by-side migration |
+| Custom Feature Loss | Medium | Framework is extensible |
+| Migration Effort | Medium | Phased approach |
+| Performance Impact | Low | Framework is optimized |
+
+## Contact & Support
+
+- **Framework Documentation**: See COA MCP Framework project
+- **Reference Implementation**: COA CodeNav MCP (already migrated)
+- **Migration Questions**: Refer to MIGRATION_EXAMPLE.md in framework
+
+## Decision Record
+
+**Date**: January 2025
+**Decision**: Proceed with migration
+**Rationale**: 
+- Significant code reduction (30-40%)
+- Proven success with CodeNav
+- Enhanced features and maintainability
+- Low risk with proper approach
+
+## Next Steps
+
+1. ✅ Assessment complete
+2. ✅ Plan created
+3. ✅ Checklist prepared
+4. ⏳ Team review
+5. ⏳ Begin migration
+
+## Files in This Directory
+
+- `COA_FRAMEWORK_MIGRATION_ASSESSMENT.md` - Detailed feasibility study
+- `COA_FRAMEWORK_MIGRATION_PLAN.md` - Step-by-step migration guide
+- `COA_FRAMEWORK_MIGRATION_CHECKLIST.md` - Task tracking checklist
+- `COA_FRAMEWORK_MIGRATION_README.md` - This file
+
+## Migration Status
+
+**Current Status**: 📋 Planning Complete, Ready for Execution
 
 ---
 
-*Use these documents as your primary reference for the migration. Original documents are archived for historical reference only.*
+*Last Updated: January 2025*
+*Framework Version: 1.1.6*
+*Estimated Completion: 3 weeks from start*
