@@ -1,330 +1,311 @@
-# COA MCP Framework Migration Plan - UPDATED
-## Based on Framework v1.1.0 Deep Analysis
+# COA CodeSearch MCP - Framework Migration Plan
 
-> **Last Updated**: 2025-08-06  
-> **Framework Version**: 1.1.0  
-> **Status**: ✅ READY FOR MIGRATION - Framework perfectly aligns with our needs
+## Overview
+This document provides a detailed, step-by-step plan for migrating COA CodeSearch MCP to use the COA MCP Framework, based on the successful migration of CodeNav MCP.
 
-## 🎉 Executive Summary
+## Pre-Migration Checklist
 
-**EXCELLENT NEWS**: The COA MCP Framework has been developed with the EXACT abstractions and patterns our migration plan anticipated. The framework appears to have been built using CodeSearch patterns as a reference, making our migration significantly easier than expected.
+- [ ] Review migration assessment with team
+- [ ] Create migration branch: `feature/framework-migration`
+- [ ] Backup current working state
+- [ ] Document current tool names and signatures
+- [ ] Set up test environment
+- [ ] Review CodeNav migration for reference
 
-### Key Advantages Discovered:
-1. **100% Feature Coverage** - Every planned abstraction exists in the framework
-2. **Automated Migration** - Roslyn-based tools can automate most conversions
-3. **Better Than Expected** - Additional features like HTTP transport, client library, testing framework
-4. **Working Examples** - SimpleMcpServer demonstrates exact patterns we need
-5. **No Breaking Changes** - Complete alignment with our original plan
+## Phase 1: Foundation Setup (Days 1-3)
 
-## 📊 Framework Analysis Results
+### Day 1: Project Setup
+1. **Add Framework NuGet Packages**
+   ```xml
+   <PackageReference Include="COA.Mcp.Framework" Version="1.1.*" />
+   <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.1.*" />
+   <PackageReference Include="COA.Mcp.Framework.Testing" Version="1.1.*" />
+   ```
 
-### What Framework Provides (v1.1.0)
+2. **Create Framework Configuration**
+   - Copy appsettings.json structure from CodeNav
+   - Add token optimization settings
+   - Configure resource storage options
 
-| Component | Framework Implementation | Our Original Plan | Status |
-|-----------|-------------------------|-------------------|---------|
-| **Tool Base Class** | `McpToolBase<TParams, TResult>` | Generic base class | ✅ EXACT MATCH |
-| **Response Format** | `AIOptimizedResponse` | AI-optimized format | ✅ EXACT MATCH |
-| **Token Management** | `TokenEstimator`, `ProgressiveReductionEngine` | Token optimization | ✅ EXACT MATCH |
-| **Response Building** | `BaseResponseBuilder<TData>` | Response builders | ✅ EXACT MATCH |
-| **Error Handling** | `ErrorInfo`, `RecoveryInfo` | Structured errors | ✅ EXACT MATCH |
-| **Validation** | Attribute-based validation | Parameter validation | ✅ EXACT MATCH |
-| **Tool Registration** | `McpToolRegistry`, auto-discovery | Tool discovery | ✅ EXACT MATCH |
-| **Insights/Actions** | `InsightGenerator`, `NextActionProvider` | AI insights | ✅ EXACT MATCH |
-| **Caching** | `ResponseCacheService` | Response caching | ✅ EXACT MATCH |
-| **Migration Tools** | `MigrationOrchestrator` | Manual migration | ✅ BETTER - AUTOMATED |
-| **Transport** | Stdio, HTTP, WebSocket | Stdio only | ✅ BETTER - MULTIPLE |
-| **Client Library** | `TypedMcpClient<T,R>` | Not planned | ✅ BONUS FEATURE |
-| **Testing** | Complete test framework | Basic tests | ✅ BETTER - COMPREHENSIVE |
+3. **Create Compatibility Layer**
+   - Keep existing tool interfaces temporarily
+   - Create adapter classes for gradual migration
 
-## 🔄 Updated Migration Strategy
+### Day 2: Server Migration
+1. **Replace McpServer with Framework Server**
+   ```csharp
+   // New Program.cs structure
+   var builder = new McpServerBuilder()
+       .WithServerInfo("COA CodeSearch MCP Server", "3.0.0")
+       .ConfigureLogging(...)
+       .ConfigureTokenOptimization(...);
+   ```
 
-### Phase 1: Automated Migration (NEW - Week 1)
+2. **Migrate Service Registration**
+   - Keep all existing service registrations
+   - Add framework service registrations
+   - Ensure compatibility between old and new
 
-**Use the Framework's Migration Tools:**
+3. **Test Basic Server Startup**
+   - Verify server starts correctly
+   - Check logging works
+   - Ensure STDIO communication functions
 
-```bash
-# Step 1: Analyze current codebase
-dotnet tool install -g COA.Mcp.Framework.CLI
-mcp-migrate analyze "C:\source\COA CodeSearch MCP"
+### Day 3: Tool Discovery Setup
+1. **Implement Tool Registration**
+   - Keep existing ToolRegistry temporarily
+   - Add framework's DiscoverTools
+   - Run both in parallel initially
 
-# Step 2: Preview migration changes
-mcp-migrate preview --project "COA.CodeSearch.McpServer.csproj"
+2. **Create Base Tool Adapter**
+   ```csharp
+   public abstract class FrameworkToolAdapter<TParams, TResult> : McpToolBase<TParams, TResult>
+   {
+       // Adapter logic to bridge old and new patterns
+   }
+   ```
 
-# Step 3: Apply automated migration
-mcp-migrate apply --project "COA.CodeSearch.McpServer.csproj" --backup
-```
+3. **Verification**
+   - List all tools through MCP
+   - Verify tool count matches
+   - Test tool discovery
 
-**What Gets Automated:**
-- Tool class inheritance changes
-- Attribute updates
-- Basic response format conversions
-- Parameter validation attributes
-- Service registration in Program.cs
+## Phase 2: Tool Migration (Days 4-10)
 
-### Phase 2: Custom Implementations (Week 1-2)
+### Day 4-5: Simple Tools Migration
+**Target Tools** (No dependencies, simple I/O):
+- [ ] GetVersionTool
+- [ ] SystemHealthCheckTool
+- [ ] IndexHealthCheckTool
+- [ ] SetLoggingTool
+- [ ] WorkflowDiscoveryTool
 
-#### 2.1 CodeSearch-Specific Response Builders
+**Migration Pattern**:
+1. Create new tool class inheriting from `McpToolBase<TParams, TResult>`
+2. Move business logic to `ExecuteInternalAsync`
+3. Add framework attributes
+4. Test side-by-side with old version
+5. Remove old version when verified
 
-```csharp
-// TextSearchResponseBuilder.cs
-public class TextSearchResponseBuilder : BaseResponseBuilder<List<SearchResult>>
-{
-    protected override async Task<object> BuildResponseAsync(
-        List<SearchResult> data, 
-        ResponseContext context)
-    {
-        // Our CodeAnalyzer-aware reduction
-        var reduced = ApplyCodeAwareReduction(data, context.TokenBudget);
-        
-        return new AIOptimizedResponse
-        {
-            Format = "ai-optimized",
-            Data = new AIResponseData
-            {
-                Results = reduced,
-                Count = reduced.Count,
-                ExtensionData = new Dictionary<string, object>
-                {
-                    ["totalMatches"] = data.Count,
-                    ["searchType"] = context.Metadata["searchType"]
-                }
-            },
-            Insights = GenerateCodeSearchInsights(reduced),
-            Actions = GenerateSearchRefinementActions(reduced),
-            Meta = CreateMetadata(context.StartTime, reduced.Count < data.Count)
-        };
-    }
-}
-```
+### Day 6-7: Search Tools Migration
+**Target Tools** (Core search functionality):
+- [ ] FastTextSearchToolV2
+- [ ] FastFileSearchToolV2
+- [ ] FastDirectorySearchTool
+- [ ] FastRecentFilesTool
+- [ ] FastSimilarFilesTool
+- [ ] FastFileSizeAnalysisTool
 
-#### 2.2 Memory System Integration
+**Special Considerations**:
+- Preserve Lucene integration exactly
+- Migrate response builders to use framework's `AIOptimizedResponse`
+- Implement token optimization features
+- Test search performance thoroughly
 
-```csharp
-// MemoryAwareResponseBuilder.cs
-public class MemoryAwareResponseBuilder : BaseResponseBuilder<MemorySearchResult>
-{
-    private readonly IFlexibleMemoryService _memoryService;
-    
-    protected override List<string> GenerateInsights(
-        MemorySearchResult data, 
-        string responseMode)
-    {
-        // Temporal scoring insights
-        var insights = new List<string>();
-        
-        if (data.HasRecentMemories)
-            insights.Add($"Found {data.RecentCount} memories from the last week");
-            
-        if (data.HasArchitecturalDecisions)
-            insights.Add($"{data.ArchitecturalCount} architectural decisions may impact this");
-            
-        return insights;
-    }
-}
-```
+### Day 8-9: Memory Tools Migration
+**Target Tools** (Memory system):
+- [ ] FlexibleMemoryTools
+- [ ] ClaudeMemoryTools
+- [ ] UnifiedMemoryTool
+- [ ] SemanticSearchTool
+- [ ] HybridSearchTool
+- [ ] MemoryQualityAssessmentTool
 
-### Phase 3: Tool Migration Priority (Week 2)
+**Special Considerations**:
+- Preserve memory service architecture
+- Enhance with framework's caching
+- Add resource storage for large memories
+- Maintain backward compatibility
 
-Based on framework capabilities, updated priority:
+### Day 10: Complex Tools Migration
+**Target Tools** (Complex dependencies):
+- [ ] IndexWorkspaceTool
+- [ ] BatchOperationsToolV2
+- [ ] SearchAssistantTool
+- [ ] PatternDetectorTool
+- [ ] MemoryGraphNavigatorTool
 
-#### High Priority - Automated Migration Possible
-1. **text_search** - Use `MigrationOrchestrator`, add custom `TextSearchResponseBuilder`
-2. **file_search** - Simple migration to `McpToolBase`
-3. **directory_search** - Simple migration to `McpToolBase`
-4. **recent_files** - Simple migration to `McpToolBase`
+## Phase 3: Infrastructure Cleanup (Days 11-13)
 
-#### Medium Priority - Partial Automation
-5. **unified_memory** - Automated base, custom natural language processing
-6. **search_memories** - Automated base, custom temporal scoring
-7. **batch_operations** - Custom aggregation logic needed
+### Day 11: Remove Redundant Code
+1. **Delete Replaced Components**
+   - [ ] Old McpServer.cs
+   - [ ] ToolRegistry (if fully migrated)
+   - [ ] AttributeBasedToolDiscovery
+   - [ ] ClaudeOptimizedToolBase
+   - [ ] Custom response builders
 
-#### Low Priority - Manual Migration
-8. **semantic_search** - Custom embedding logic
-9. **hybrid_search** - Custom merge strategies
-10. **memory_graph_navigator** - Complex visualization logic
+2. **Update Namespaces**
+   - Replace old namespaces with framework ones
+   - Update all using statements
+   - Fix any compilation issues
 
-## 📦 Exact Component Mapping
+### Day 12: Optimize Token Management
+1. **Configure Token Optimization**
+   ```csharp
+   .ConfigureTokenOptimization(options =>
+   {
+       options.DefaultTokenLimit = 10000;
+       options.Level = TokenOptimizationLevel.Balanced;
+       options.EnableAdaptiveLearning = true;
+       options.EnableResourceStorage = true;
+       options.EnableCaching = true;
+   })
+   ```
 
-### CodeSearch → Framework Mapping
+2. **Implement Caching Strategy**
+   - Configure cache for search results
+   - Set up memory result caching
+   - Add cache invalidation logic
 
-| CodeSearch Component | Framework Replacement | Migration Effort |
-|---------------------|----------------------|------------------|
-| `[McpServerToolType]` | Same - no change | None |
-| `[McpServerTool]` | Same - no change | None |
-| Custom `ExecuteAsync` | `ExecuteInternalAsync` override | Automated |
-| Manual validation | Attribute-based validation | Automated |
-| Custom response building | `BaseResponseBuilder<T>` | Extend base |
-| Token estimation | `TokenEstimator` static class | Direct use |
-| Progressive disclosure | `ProgressiveReductionEngine` | Direct use |
-| Custom insights | `InsightGenerator` + templates | Configure |
-| Next actions | `NextActionProvider` + templates | Configure |
-| Error handling | `ErrorInfo`, `RecoveryInfo` | Automated |
+### Day 13: Resource Management
+1. **Migrate Resource Providers**
+   - Update to use framework's IResourceProvider
+   - Implement resource storage for large results
+   - Test resource URIs work correctly
 
-## 🚀 Simplified Migration Steps
+2. **Update Prompt Registry**
+   - Migrate to framework's prompt system
+   - Ensure all prompts still function
 
-### Week 1: Automated Migration + Core Tools
+## Phase 4: Testing & Validation (Days 14-15)
 
-```bash
-# Monday: Setup and Analysis
-1. Install COA.Mcp.Framework.CLI tool
-2. Run migration analysis
-3. Review migration report
-4. Create feature branch
+### Day 14: Comprehensive Testing
+1. **Unit Tests**
+   - [ ] Update existing tests for new tool structure
+   - [ ] Add framework-specific tests
+   - [ ] Verify all tests pass
 
-# Tuesday: Automated Migration
-1. Run automated migration tool
-2. Fix compilation errors
-3. Run existing tests
-4. Commit automated changes
+2. **Integration Tests**
+   - [ ] Test all tools through MCP protocol
+   - [ ] Verify search functionality
+   - [ ] Test memory operations
+   - [ ] Validate resource access
 
-# Wednesday: Custom Response Builders
-1. Create TextSearchResponseBuilder
-2. Create MemorySearchResponseBuilder  
-3. Create FileSystemResponseBuilder
-4. Test response formats
+3. **Performance Tests**
+   - [ ] Measure response times
+   - [ ] Check memory usage
+   - [ ] Validate token optimization
+   - [ ] Test under load
 
-# Thursday: Critical Tools
-1. Migrate text_search tool
-2. Migrate search_memories tool
-3. Migrate unified_memory tool
-4. Integration testing
+### Day 15: Final Validation
+1. **End-to-End Testing**
+   - [ ] Test with Claude Code client
+   - [ ] Verify all workflows function
+   - [ ] Check error handling
+   - [ ] Validate logging
 
-# Friday: Remaining Tools
-1. Migrate file system tools
-2. Migrate batch_operations
-3. Full test suite run
-4. Performance benchmarking
-```
+2. **Documentation Updates**
+   - [ ] Update README
+   - [ ] Update CLAUDE.md
+   - [ ] Document any breaking changes
+   - [ ] Create migration notes
 
-### Week 2: Advanced Features + Testing
+## Post-Migration Tasks
 
-```bash
-# Monday: Memory Intelligence
-1. Migrate semantic_search
-2. Migrate hybrid_search
-3. Test memory operations
+### Week 3: Optimization & Enhancement
+1. **Performance Tuning**
+   - Profile application
+   - Optimize hot paths
+   - Fine-tune caching
 
-# Tuesday: Advanced Features
-1. Implement custom reduction strategies
-2. Configure insight templates
-3. Setup action providers
+2. **Feature Enhancement**
+   - Leverage new framework features
+   - Implement advanced token strategies
+   - Add new insights/actions
 
-# Wednesday: Client Integration
-1. Create TypedMcpClient tests
-2. Test with HTTP transport
-3. Verify WebSocket support
+3. **Code Cleanup**
+   - Remove any remaining legacy code
+   - Standardize patterns
+   - Update documentation
 
-# Thursday: Testing
-1. Run migration test suite
-2. Performance testing
-3. Load testing
-4. Fix any issues
+## Tool Migration Tracking
 
-# Friday: Documentation + Deployment
-1. Update documentation
-2. Create migration guide
-3. Prepare deployment
-4. Team handoff
-```
+| Tool | Status | Migrated By | Tested | Notes |
+|------|--------|-------------|--------|-------|
+| GetVersionTool | ⏳ Pending | - | - | Simple, start here |
+| SystemHealthCheckTool | ⏳ Pending | - | - | Good second tool |
+| FastTextSearchToolV2 | ⏳ Pending | - | - | Critical, test thoroughly |
+| FastFileSearchToolV2 | ⏳ Pending | - | - | Similar to text search |
+| FlexibleMemoryTools | ⏳ Pending | - | - | Complex, needs care |
+| IndexWorkspaceTool | ⏳ Pending | - | - | Important for functionality |
+| ... | ... | ... | ... | ... |
 
-## ⚡ Quick Start Commands
+## Risk Mitigation Strategies
 
-```bash
-# 1. Add Framework packages
-dotnet add package COA.Mcp.Framework --version 1.1.0
-dotnet add package COA.Mcp.Framework.TokenOptimization --version 1.1.0
+1. **Side-by-Side Migration**
+   - Keep old tools active during migration
+   - Test new tools thoroughly before removing old ones
+   - Ability to rollback if issues arise
 
-# 2. Run automated migration
-mcp-migrate apply --project "COA.CodeSearch.McpServer.csproj"
+2. **Incremental Approach**
+   - Migrate simplest tools first
+   - Learn patterns before complex tools
+   - Build confidence with each success
 
-# 3. Build and test
-dotnet build -c Debug
-dotnet test
+3. **Comprehensive Testing**
+   - Test each tool individually
+   - Run full integration tests
+   - Performance benchmarking
 
-# 4. Run with new framework
-dotnet run -- stdio
-```
+4. **Documentation**
+   - Document each change
+   - Keep migration log
+   - Note any issues and resolutions
 
-## 🎯 Success Metrics (Updated)
+## Success Criteria
 
-### Immediate Benefits (Week 1)
-- ✅ All tools using framework base classes
-- ✅ Automated validation working
-- ✅ Token optimization active
-- ✅ Tests passing
+- [ ] All 50+ tools successfully migrated
+- [ ] All tests passing (unit, integration, e2e)
+- [ ] Performance equal or better than current
+- [ ] Memory usage reduced by 20%+
+- [ ] Code reduction of 30%+ achieved
+- [ ] No breaking changes for end users
 
-### Full Migration (Week 2)
-- ✅ 50-70% token reduction achieved
-- ✅ All custom response builders implemented
-- ✅ Insights and actions generating
-- ✅ HTTP/WebSocket transport tested
-- ✅ Client library integration complete
+## Communication Plan
 
-## 📋 Risk Mitigation (Updated)
+1. **Daily Updates**
+   - Progress on tool migration
+   - Any blockers encountered
+   - Next day's plan
 
-### Reduced Risks Due to Framework Alignment
+2. **Weekly Review**
+   - Overall progress assessment
+   - Risk evaluation
+   - Timeline adjustments if needed
 
-| Original Risk | Mitigation | Current Status |
-|--------------|------------|----------------|
-| Package conflicts | Framework uses .NET 9.0 | ✅ No conflicts |
-| Breaking changes | Framework matches our patterns | ✅ No breaking changes |
-| Performance impact | Framework includes optimizations | ✅ Better performance |
-| Complex migration | Automated tools available | ✅ Mostly automated |
+3. **Stakeholder Updates**
+   - End of each phase
+   - Major milestones
+   - Final completion
 
-## 🔍 Testing Strategy (Enhanced)
+## Rollback Plan
 
-### Use Framework Testing Infrastructure
+If critical issues arise:
+1. **Immediate**: Switch back to pre-migration branch
+2. **Day 1**: Restore from backup
+3. **Week 1**: Document lessons learned
+4. **Week 2**: Revise approach and retry
 
-```csharp
-// Use provided test base classes
-public class TextSearchToolTests : ToolTestBase<TextSearchTool>
-{
-    [Test]
-    public async Task Search_WithFramework_ReturnsOptimizedResponse()
-    {
-        // Framework provides test helpers
-        var tool = CreateTool();
-        var context = CreateContext(tokenBudget: 1000);
-        
-        var result = await tool.ExecuteAsync(
-            new TextSearchParams { Query = "test" }, 
-            context);
-        
-        // Framework assertions
-        result.Should().BeAIOptimized();
-        result.Should().HaveTokensLessThan(1000);
-        result.Should().HaveInsights();
-    }
-}
-```
+## Estimated Timeline
 
-## 📚 Resources and Documentation
+- **Phase 1**: 3 days (Foundation)
+- **Phase 2**: 7 days (Tool Migration)
+- **Phase 3**: 3 days (Cleanup)
+- **Phase 4**: 2 days (Testing)
+- **Total**: 15 working days (3 weeks)
 
-### Framework Resources
-- **Source**: `C:\source\COA MCP Framework`
-- **Examples**: `examples\SimpleMcpServer` - Study this for patterns
-- **Docs**: `docs\technical\TOKEN_OPTIMIZATION_STRATEGIES.md`
-- **Migration**: `docs\technical\MIGRATION_EXAMPLE.md`
+## Next Steps
 
-### Our Migration Docs
-- **This Doc**: `docs\COA_FRAMEWORK_MIGRATION_UPDATED.md`
-- **Original Plan**: `docs\COA_FRAMEWORK_MIGRATION_PLAN.md`
-- **Checklist**: `docs\COA_FRAMEWORK_MIGRATION_CHECKLIST.md`
-
-## ✅ Final Assessment
-
-**Migration Readiness: 100%**
-
-The COA MCP Framework is perfectly positioned for our migration:
-
-1. **Zero Conflicts** - Framework aligns completely with our plan
-2. **Automated Tools** - Roslyn-based migration reduces manual work by 70%
-3. **Better Features** - HTTP transport, client library, testing framework
-4. **Proven Patterns** - Working examples demonstrate exact usage
-5. **Future Proof** - Framework continues to evolve with new features
-
-**Recommendation**: Begin migration immediately using the automated tools. The framework is more mature and feature-complete than anticipated, which will accelerate our timeline and improve the final result.
+1. Review this plan with the team
+2. Get approval to proceed
+3. Create migration branch
+4. Begin Phase 1 on approved start date
+5. Daily progress tracking using this document
 
 ---
 
-*Document prepared by thorough analysis of COA MCP Framework v1.1.0 and comparison with original migration plan.*
+**Document Version**: 1.0
+**Created**: January 2025
+**Last Updated**: January 2025
+**Status**: Ready for Review
