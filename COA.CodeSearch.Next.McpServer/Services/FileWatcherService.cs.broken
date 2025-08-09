@@ -1,0 +1,378 @@
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using System.Collections.Concurrent;
+
+namespace COA.CodeSearch.Next.McpServer.Services;
+
+public class FileWatcherService : BackgroundService
+{
+    private readonly ILogger<FileWatcherService> _logger;
+    private readonly IConfiguration _configuration;
+    private readonly FileIndexingService _fileIndexingService;
+    private readonly IPathResolutionService _pathResolution;
+    private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
+    private readonly ConcurrentDictionary<string, DateTime> _pendingUpdates = new();
+    private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
+    private readonly HashSet<string> _supportedExtensions;
+    private readonly HashSet<string> _excludedDirectories;
+    private readonly int _debounceMilliseconds;
+    private readonly int _batchSize;
+    private readonly bool _enabled;
+    
+    // Track pending deletes - files scheduled for deletion after a quiet period
+    private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
+    private readonly TimeSpan _deleteQuietPeriod = TimeSpan.FromSeconds(3); // Wait 3 seconds of no activity before deleting
+
+    public FileWatcherService(
+        ILogger<FileWatcherService> logger,
+        IConfiguration configuration,
+        FileIndexingService fileIndexingService,
+        IPathResolutionService pathResolution)
+    {
+        _logger = logger;
+        _configuration = configuration;
+        _fileIndexingService = fileIndexingService;
+        _pathResolution = pathResolution;
+
+        // Load configuration
+        _enabled = configuration.GetValue("FileWatcher:Enabled", true);
+        _debounceMilliseconds = configuration.GetValue("FileWatcher:DebounceMilliseconds", 500);
+        _batchSize = configuration.GetValue("FileWatcher:BatchSize", 50);
+
+        // Load supported extensions from FileIndexingService configuration
+        var extensions = configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>()
+            ?? new[] { ".cs", ".razor", ".cshtml", ".json", ".xml", ".md", ".txt", ".js", ".ts", ".jsx", ".tsx", ".css", ".scss", ".html", ".yml", ".yaml", ".csproj", ".sln" };
+        _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
+
+        // Load excluded directories
+        var excluded = configuration.GetSection("FileWatcher:ExcludePatterns").Get<string[]>()
+            ?? PathConstants.DefaultExcludedDirectories;
+        _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
+    }
+
+    public void StartWatching(string workspacePath)
+    {
+        if (!_enabled)
+        {
+            _logger.LogInformation("File watching is disabled in configuration");
+            return;
+        }
+
+        if (_watchers.ContainsKey(workspacePath))
+        {
+            _logger.LogDebug("Already watching workspace: {WorkspacePath}", workspacePath);
+            return;
+        }
+
+        try
+        {
+            var watcher = new FileSystemWatcher(workspacePath)
+            {
+                // Use all relevant notify filters for Windows compatibility
+                // LastWrite alone is not reliable on Windows - need DirectoryName and Attributes too
+                NotifyFilter = NotifyFilters.FileName 
+                             | NotifyFilters.LastWrite 
+                             | NotifyFilters.Size
+                             | NotifyFilters.DirectoryName
+                             | NotifyFilters.Attributes
+                             | NotifyFilters.CreationTime,
+                IncludeSubdirectories = true,
+                EnableRaisingEvents = true
+            };
+
+            // Set up event handlers
+            watcher.Changed += (sender, e) => OnFileChanged(workspacePath, e);
+            watcher.Created += (sender, e) => OnFileCreated(workspacePath, e);
+            watcher.Deleted += (sender, e) => OnFileDeleted(workspacePath, e);
+            watcher.Renamed += (sender, e) => OnFileRenamed(workspacePath, e);
+            watcher.Error += OnWatcherError;
+
+            _watchers[workspacePath] = watcher;
+            _logger.LogInformation("Started watching workspace: {WorkspacePath}", workspacePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start watching workspace: {WorkspacePath}", workspacePath);
+        }
+    }
+
+    public void StopWatching(string workspacePath)
+    {
+        if (_watchers.TryRemove(workspacePath, out var watcher))
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Dispose();
+            _logger.LogInformation("Stopped watching workspace: {WorkspacePath}", workspacePath);
+        }
+    }
+
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    {
+        if (!_enabled)
+        {
+            _logger.LogInformation("File watching is disabled - FileWatcherService will not process changes");
+            return Task.CompletedTask;
+        }
+
+        _logger.LogInformation("FileWatcherService ExecuteAsync started - file watching is enabled");
+
+        // Start the background processing task
+        _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("FileWatcherService started processing changes");
+
+        // Process changes in batches
+        while (!stoppingToken.IsCancellationRequested)
+        {
+            try
+            {
+                var batch = new List<FileChangeEvent>();
+                var timeout = TimeSpan.FromMilliseconds(_debounceMilliseconds);
+
+                // Collect a batch of changes
+                while (batch.Count < _batchSize)
+                {
+                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
+                    {
+                        // Check if this file has a pending update that's been debounced
+                        if (_pendingUpdates.TryGetValue(change.FilePath, out var lastUpdate))
+                        {
+                            if (DateTime.UtcNow - lastUpdate < TimeSpan.FromMilliseconds(_debounceMilliseconds))
+                            {
+                                // Skip this update, it's too soon
+                                continue;
+                            }
+                        }
+
+                        batch.Add(change);
+                        _pendingUpdates[change.FilePath] = DateTime.UtcNow;
+                    }
+                    else
+                    {
+                        // Timeout reached, process what we have
+                        break;
+                    }
+                }
+
+                if (batch.Count > 0)
+                {
+                    await ProcessBatchAsync(batch, stoppingToken);
+                }
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation is requested
+                break;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing file change batch");
+                await Task.Delay(1000, stoppingToken); // Brief delay before retrying
+            }
+        }
+    }
+
+    private async Task ProcessBatchAsync(List<FileChangeEvent> batch, CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("Processing batch of {Count} file changes", batch.Count);
+
+        // Group by workspace for efficient processing
+        var workspaceGroups = batch.GroupBy(e => e.WorkspacePath);
+
+        foreach (var group in workspaceGroups)
+        {
+            var workspacePath = group.Key;
+            var changes = group.ToList();
+
+            try
+            {
+                // Process changes for this workspace
+                foreach (var change in changes)
+                {
+                    switch (change.ChangeType)
+                    {
+                        case FileChangeType.Created:
+                        case FileChangeType.Modified:
+                            await _fileIndexingService.IndexFileAsync(workspacePath, change.FilePath, cancellationToken);
+                            break;
+
+                        case FileChangeType.Deleted:
+                            await _fileIndexingService.DeleteFileAsync(workspacePath, change.FilePath, cancellationToken);
+                            break;
+
+                        case FileChangeType.Renamed:
+                            // Handle rename as delete old + index new
+                            if (!string.IsNullOrEmpty(change.OldFilePath))
+                            {
+                                await _fileIndexingService.DeleteFileAsync(workspacePath, change.OldFilePath, cancellationToken);
+                            }
+                            await _fileIndexingService.IndexFileAsync(workspacePath, change.FilePath, cancellationToken);
+                            break;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing batch for workspace: {WorkspacePath}", workspacePath);
+            }
+        }
+    }
+
+    private void OnFileChanged(string workspacePath, FileSystemEventArgs e)
+    {
+        if (ShouldProcessFile(e.FullPath))
+        {
+            QueueChange(new FileChangeEvent
+            {
+                WorkspacePath = workspacePath,
+                FilePath = e.FullPath,
+                ChangeType = FileChangeType.Modified
+            });
+        }
+    }
+
+    private void OnFileCreated(string workspacePath, FileSystemEventArgs e)
+    {
+        if (ShouldProcessFile(e.FullPath))
+        {
+            QueueChange(new FileChangeEvent
+            {
+                WorkspacePath = workspacePath,
+                FilePath = e.FullPath,
+                ChangeType = FileChangeType.Created
+            });
+        }
+    }
+
+    private void OnFileDeleted(string workspacePath, FileSystemEventArgs e)
+    {
+        if (ShouldProcessFile(e.FullPath))
+        {
+            // Schedule for deletion after quiet period to avoid rapid delete/recreate cycles
+            var pendingDelete = new PendingDelete
+            {
+                FilePath = e.FullPath,
+                DeleteDetectedTime = DateTime.UtcNow,
+                LastActivityTime = DateTime.UtcNow,
+                Cancelled = false
+            };
+
+            _pendingDeletes[e.FullPath] = pendingDelete;
+
+            // Schedule actual deletion after quiet period
+            _ = Task.Run(async () =>
+            {
+                await Task.Delay(_deleteQuietPeriod);
+                
+                if (_pendingDeletes.TryRemove(e.FullPath, out var delete) && !delete.Cancelled)
+                {
+                    QueueChange(new FileChangeEvent
+                    {
+                        WorkspacePath = workspacePath,
+                        FilePath = e.FullPath,
+                        ChangeType = FileChangeType.Deleted
+                    });
+                }
+            });
+        }
+    }
+
+    private void OnFileRenamed(string workspacePath, RenamedEventArgs e)
+    {
+        if (ShouldProcessFile(e.FullPath))
+        {
+            // Cancel any pending delete for the new name (in case of rapid rename cycles)
+            if (_pendingDeletes.TryGetValue(e.FullPath, out var pendingDelete))
+            {
+                pendingDelete.Cancelled = true;
+            }
+
+            QueueChange(new FileChangeEvent
+            {
+                WorkspacePath = workspacePath,
+                FilePath = e.FullPath,
+                OldFilePath = e.OldFullPath,
+                ChangeType = FileChangeType.Renamed
+            });
+        }
+    }
+
+    private void OnWatcherError(object sender, ErrorEventArgs e)
+    {
+        _logger.LogError(e.GetException(), "FileSystemWatcher error occurred");
+    }
+
+    private bool ShouldProcessFile(string filePath)
+    {
+        try
+        {
+            var extension = Path.GetExtension(filePath);
+            if (!_supportedExtensions.Contains(extension))
+                return false;
+
+            // Check if the file is in an excluded directory
+            var directories = filePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return !directories.Any(dir => _excludedDirectories.Contains(dir));
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    private void QueueChange(FileChangeEvent changeEvent)
+    {
+        try
+        {
+            _changeQueue.Add(changeEvent);
+        }
+        catch (InvalidOperationException)
+        {
+            // Queue is disposed, service is shutting down
+        }
+    }
+
+    public override void Dispose()
+    {
+        // Stop all watchers
+        foreach (var watcher in _watchers.Values)
+        {
+            watcher.EnableRaisingEvents = false;
+            watcher.Dispose();
+        }
+
+        _changeQueue.Dispose();
+        base.Dispose();
+    }
+
+    private class FileChangeEvent
+    {
+        public string WorkspacePath { get; set; } = "";
+        public string FilePath { get; set; } = "";
+        public string? OldFilePath { get; set; } // For renames
+        public FileChangeType ChangeType { get; set; }
+        public DateTime Timestamp { get; set; } = DateTime.UtcNow;
+    }
+
+    private enum FileChangeType
+    {
+        Created,
+        Modified,
+        Deleted,
+        Renamed
+    }
+
+    private class PendingDelete
+    {
+        public string FilePath { get; set; } = "";
+        public DateTime DeleteDetectedTime { get; set; }
+        public DateTime LastActivityTime { get; set; }
+        public bool Cancelled { get; set; }
+    }
+}
