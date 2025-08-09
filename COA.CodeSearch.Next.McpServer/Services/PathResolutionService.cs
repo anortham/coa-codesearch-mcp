@@ -51,8 +51,12 @@ public class PathResolutionService : IPathResolutionService
         // Compute workspace hash
         var hash = ComputeWorkspaceHash(workspacePath);
         
-        // Return the index path (hash only for cleaner structure)
-        var indexPath = Path.Combine(indexRoot, hash);
+        // Create a descriptive directory name: "workspacename_hash"
+        // This makes debugging easier while hash ensures uniqueness
+        var workspaceName = GetSafeWorkspaceName(workspacePath);
+        var descriptiveName = $"{workspaceName}_{hash}";
+        
+        var indexPath = Path.Combine(indexRoot, descriptiveName);
         
         // DO NOT create directory here - only compute the path
         // Directory creation should happen only when actually creating an index
@@ -75,6 +79,37 @@ public class PathResolutionService : IPathResolutionService
         
         // Return truncated hash for directory name
         return hashString.Substring(0, PathConstants.WorkspaceHashLength);
+    }
+    
+    private string GetSafeWorkspaceName(string workspacePath)
+    {
+        // Get the last directory name from the path
+        var fullPath = Path.GetFullPath(workspacePath);
+        var workspaceName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        
+        // If empty (e.g., root drive), use "root"
+        if (string.IsNullOrWhiteSpace(workspaceName))
+        {
+            workspaceName = "root";
+        }
+        
+        // Sanitize the name for use in file system
+        var invalidChars = Path.GetInvalidFileNameChars();
+        foreach (var c in invalidChars)
+        {
+            workspaceName = workspaceName.Replace(c, '_');
+        }
+        
+        // Replace dots and spaces with underscores for cleaner names
+        workspaceName = workspaceName.Replace('.', '_').Replace(' ', '_');
+        
+        // Truncate if too long (leave room for hash and underscore)
+        if (workspaceName.Length > PathConstants.MaxSafeWorkspaceName)
+        {
+            workspaceName = workspaceName.Substring(0, PathConstants.MaxSafeWorkspaceName);
+        }
+        
+        return workspaceName.ToLowerInvariant();
     }
     
     public string GetLogsPath()
