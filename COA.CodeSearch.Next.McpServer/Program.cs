@@ -40,17 +40,16 @@ public class Program
         
         // Register indexing services
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
-        // TODO: Fix these services to use ILuceneIndexService interface properly
-        // services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
-        // services.AddSingleton<FileIndexingService>();
+        services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
+        services.AddSingleton<IFileIndexingService, FileIndexingService>();
         
         // Register support services
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         
-        // FileWatcher as background service - disabled until FileIndexingService is fixed
-        // services.AddSingleton<FileWatcherService>();
-        // services.AddHostedService<FileWatcherService>(provider => provider.GetRequiredService<FileWatcherService>());
+        // FileWatcher as background service
+        services.AddSingleton<FileWatcherService>();
+        services.AddHostedService<FileWatcherService>(provider => provider.GetRequiredService<FileWatcherService>());
         
         // Resource providers
         // services.AddSingleton<SearchResultResourceProvider>();
