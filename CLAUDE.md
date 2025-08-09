@@ -1,4 +1,8 @@
-# COA CodeSearch MCP Server - Claude AI Assistant Guide
+# COA CodeSearch.Next MCP Server - Claude AI Assistant Guide
+
+## 🚨 CRITICAL: This is CodeSearch.Next (v2.0)
+
+This is the **next-generation** CodeSearch built on COA MCP Framework 1.4.2. It's a complete rewrite with centralized architecture and clean separation from memory management (now handled by ProjectKnowledge).
 
 ## 🚨 CRITICAL WARNINGS - READ FIRST
 
@@ -6,7 +10,7 @@
 
 ```bash
 # DO NOT RUN THESE:
-❌ dotnet run --project COA.CodeSearch.McpServer -- stdio
+❌ dotnet run --project COA.CodeSearch.Next.McpServer -- stdio
 ❌ dotnet run -- stdio --test-mode
 ```
 
@@ -27,79 +31,134 @@
     3. NO EXCEPTIONS TO THIS RULE
 ```
 
-- **MCP Tools (`mcp__codesearch__*`)**: Execute on INSTALLED server, not your edits
+- **MCP Tools (`mcp__codesearch-next__*`)**: Execute on INSTALLED server, not your edits
 - **Testing Changes**: Must build → user reinstalls → new Claude session
-- **Example**: Editing `JsonMemoryBackupService.cs` won't affect `backup_memories` until restart
 - **⚠️ REMINDER**: If you edit tool code, IMMEDIATELY tell user to restart before testing
 
 ### 4. **Path Resolution**
 
 - **ALWAYS** use `IPathResolutionService` for ALL path computation
-- **NEVER** use `Path.Combine()` for building .codesearch paths manually
+- **NEVER** use `Path.Combine()` for building .coa paths manually
 - PathResolutionService computes paths; services create directories when needed
-- See [docs/PATH_RESOLUTION_CRITICAL.md](docs/PATH_RESOLUTION_CRITICAL.md)
 
 ### 5. **Editing Code**
 
-- **NEVER** make assumptions about what properties or methods are available on a type, go look it up and see.
-- **ALWAYS** make use of the codesearch tools, that's what they are for and the best way to test and improve on them is to dogfood them.
+- **NEVER** make assumptions about what properties or methods are available on a type, go look it up and see
+- **ALWAYS** verify interface methods before using them
+- **ALWAYS** check the COA MCP Framework interfaces and base classes
 
 ### 6. **Commit Changes**
 
 - **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
 - **NEVER** check in broken builds or failing tests! BUILD -> TEST -> COMMIT IN THAT ORDER
 
-## 🔍 Search System with CodeAnalyzer
+## 🏗️ Project Status
 
-This project uses a custom CodeAnalyzer that preserves programming language patterns, making searches more intuitive for code.
+### ✅ Working Components
+- **Core Services**: PathResolution, LuceneIndex, QueryCache, CircuitBreaker, MemoryPressure
+- **Working Tools**: HelloWorldTool, SystemInfoTool, IndexWorkspaceTool
+- **Build Status**: Project builds successfully
 
-### How CodeAnalyzer Changes Search
+### 🚧 In Progress
+- **Search Tools**: Need implementation using correct ILuceneIndexService interface
+- **File Services**: FileIndexingService, BatchIndexingService need refactoring
+- **Background Services**: FileWatcherService depends on FileIndexingService
 
-With CodeAnalyzer, many code patterns are preserved as single tokens:
-- `: ITool` - Interface implementations
-- `[Fact]` - Attributes
-- `->method()` - Pointer access
-- `Task<string>` - Generic types
-- `: IRepository<T>` - Generic interfaces
+## 📋 Development Guidelines
 
-### Text Search Examples
+### 1. **Framework Usage**
 
-```bash
-# Search for code patterns directly
-mcp__codesearch__text_search --query ": ITool" --searchType "literal"
-mcp__codesearch__text_search --query "[Fact]" --searchType "literal"
-mcp__codesearch__text_search --query "async Task" --searchType "code"
+This project uses COA MCP Framework 1.4.2. All tools must:
+- Inherit from `McpToolBase<TParams, TResult>`
+- Use `ToolResultBase` for results
+- Use `ToolCategory` enum from `COA.Mcp.Framework`
+- Follow the framework patterns (see HelloWorldTool for reference)
 
-# Regex patterns spanning multiple words need special handling
-mcp__codesearch__text_search --query "async.*Task" --searchType "regex"
+### 2. **Service Interfaces**
+
+**ALWAYS verify interface methods before using them:**
+
+```csharp
+// ILuceneIndexService provides these methods:
+- InitializeIndexAsync(workspacePath)
+- IndexDocumentAsync(workspacePath, document)
+- IndexDocumentsAsync(workspacePath, documents)
+- DeleteDocumentAsync(workspacePath, filePath)
+- SearchAsync(workspacePath, query, maxResults)
+- GetDocumentCountAsync(workspacePath)
+- ClearIndexAsync(workspacePath)
+- CommitAsync(workspacePath)
+- IndexExistsAsync(workspacePath)
+- GetHealthAsync(workspacePath)
+- GetStatisticsAsync(workspacePath)
+
+// It does NOT provide:
+- GetIndexWriterAsync() ❌
+- Direct IndexWriter access ❌
 ```
 
-### Memory Search Syntax
+### 3. **Tool Implementation Pattern**
 
-Memory search still uses standard Lucene syntax:
-
-```bash
-# Simple searches
-search_memories --query "Session Checkpoint"
-
-# Field searches
-search_memories --query "type:WorkSession"
-
-# Boolean queries
-search_memories --query "authentication AND login"
-
-# Wildcards
-search_memories --query "auth*"
+```csharp
+public class MyTool : McpToolBase<MyParameters, MyResult>
+{
+    private readonly ILogger<MyTool> _logger;
+    
+    public MyTool(ILogger<MyTool> logger) : base(logger)
+    {
+        _logger = logger;
+    }
+    
+    public override string Name => "my_tool";
+    public override string Description => "Description here";
+    public override ToolCategory Category => ToolCategory.Query;
+    
+    protected override async Task<MyResult> ExecuteInternalAsync(
+        MyParameters parameters,
+        CancellationToken cancellationToken)
+    {
+        // Use ValidateRequired, ValidateRange, etc. from base class
+        var param = ValidateRequired(parameters.SomeParam, nameof(parameters.SomeParam));
+        
+        // Return result with Success/Error properly set
+        return new MyResult
+        {
+            Success = true,
+            // Set other properties
+        };
+    }
+}
 ```
 
-### Important Notes
+## 🔍 Architecture Overview
 
-1. **Code search vs Memory search**: Code files use CodeAnalyzer, memory search uses standard analysis
-2. **Literal search**: Use for exact code patterns with punctuation
-3. **Code search**: Same as literal, optimized for code patterns
-4. **Regex search**: Patterns like `async.*Task` are converted to phrase queries with slop
+### Centralized Storage
+- All indexes in `~/.coa/codesearch/indexes/`
+- Workspace isolation via hash-based directories
+- Single service instance serves all workspaces
 
-## 📋 Quick Reference
+### Service Architecture
+```
+Core Services:
+├── IPathResolutionService     # Path management
+├── ILuceneIndexService         # Search operations
+├── IQueryCacheService          # Result caching
+├── ICircuitBreakerService     # Fault tolerance
+├── IMemoryPressureService     # Resource monitoring
+├── IIndexingMetricsService    # Performance metrics
+├── IFieldSelectorService      # Field optimization
+└── IErrorRecoveryService      # Error handling
+
+Tools (via COA MCP Framework):
+├── IndexWorkspaceTool         # Index management
+├── TextSearchTool             # Full-text search (TODO)
+├── FileSearchTool             # File name search (TODO)
+├── DirectorySearchTool        # Directory search (TODO)
+├── RecentFilesTool            # Recent files (TODO)
+└── SimilarFilesTool           # Similar files (TODO)
+```
+
+## 🚀 Quick Reference
 
 ### Essential Commands
 
@@ -107,248 +166,60 @@ search_memories --query "auth*"
 # Development workflow
 dotnet build -c Debug          # Build during development
 dotnet test                    # Run tests (always build first!)
-dotnet list package --outdated # Check for updates
 
-# Memory system startup
-mcp__codesearch__recall_context "what I'm working on"  # ALWAYS start with this
-
-# Search workflow
-mcp__codesearch__index_workspace --workspacePath "C:/project"  # Required first
-mcp__codesearch__text_search --query "TODO"                    # Then search (NEW: standardized 'query' parameter)
-
-# NEW: Workflow discovery
-mcp__codesearch__workflow_discovery --goal "search code"       # Learn tool dependencies
+# Tool naming convention (when they're implemented)
+mcp__codesearch-next__index_workspace    # Index a workspace
+mcp__codesearch-next__text_search        # Search text
+mcp__codesearch-next__file_search        # Search files
 ```
 
-### Tool Categories
+## 📚 Documentation
 
-| Purpose             | Text Search Tools                     | Memory Tools                                         | Utility Tools                           |
-| ------------------- | ------------------------------------- | ---------------------------------------------------- | --------------------------------------- |
-| Find Files          | `text_search`, `file_search`          | -                                                    | -                                       |
-| Analyze Files       | `recent_files`, `file_size_analysis`  | -                                                    | -                                       |
-| Discover Code       | `similar_files`, `directory_search`   | -                                                    | -                                       |
-| Index & Search      | `index_workspace`, `batch_operations` | -                                                    | -                                       |
-| Store Knowledge     | -                                     | `store_memory`                                       | -                                       |
-| Find Knowledge      | -                                     | `search_memories`, `recall_context`                  | `workflow_discovery`                    |
-| **Smart Search**    | -                                     | `unified_memory`, `semantic_search`, `hybrid_search` | -                                       |
-| **AI Intelligence** | -                                     | `memory_quality_assessment`, `load_context`          | -                                       |
-| Explore Memory      | -                                     | `memory_graph_navigator`                             | -                                       |
-| Manage Data         | -                                     | `backup_memories`, `restore_memories`                | `index_health_check`, `log_diagnostics` |
+- [Vision & Architecture](COA.CodeSearch.Next.McpServer/docs/CODESEARCH_NEXT_VISION.md)
+- [Implementation Checklist](COA.CodeSearch.Next.McpServer/docs/IMPLEMENTATION_CHECKLIST.md)
+- [Framework Migration Guide](docs/FRAMEWORK_MIGRATION_GUIDE.md)
+- [Integration with ProjectKnowledge](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md)
 
-### Memory System Essentials
+## ⚠️ Common Pitfalls
 
-```bash
-# Store discoveries
-mcp__codesearch__store_memory --type "TechnicalDebt" --content "Issue description"
+1. **Don't assume interface methods** - Always check what's actually available
+2. **Don't access IndexWriter directly** - Use ILuceneIndexService methods
+3. **Don't run locally** - MCP servers are managed by Claude Code
+4. **Don't mix concerns** - Search is here, memory is in ProjectKnowledge
+5. **Don't use Release mode during dev** - DLL gets locked by running session
 
-# Search memories
-mcp__codesearch__search_memories --query "authentication" --types ["ArchitecturalDecision"]
+## 🔗 Related Projects
 
-# Backup/restore
-mcp__codesearch__backup_memories    # Creates JSON backup
-mcp__codesearch__restore_memories   # Restores from JSON
-```
+- **COA MCP Framework**: The foundation this is built on (`C:\source\COA MCP Framework`)
+- **ProjectKnowledge MCP**: Handles memory and knowledge management
+- **Legacy CodeSearch**: Being replaced by this project
 
-### 🆕 Phase 3: Advanced Memory Intelligence
+## 💡 Implementation Tips
 
-```bash
-# Natural language memory operations - use for intuitive commands
-mcp__codesearch__unified_memory --command "remember that UserService has performance issues"
-mcp__codesearch__unified_memory --command "find all technical debt related to authentication"
-mcp__codesearch__unified_memory --command "create checklist for database migration"
-
-# Semantic search - find by concepts and meaning
-mcp__codesearch__semantic_search --query "security vulnerabilities in user login systems"
-
-# Hybrid search - best of both text and semantic
-mcp__codesearch__hybrid_search --query "authentication patterns"
-
-# Memory quality assessment and improvement
-mcp__codesearch__memory_quality_assessment --memoryId "memory_123"
-
-# Auto-load relevant context for current work
-mcp__codesearch__load_context --workingDirectory "C:/YourProject/Services"
-
-# Advanced temporal scoring for recency-weighted results
-mcp__codesearch__search_memories --query "recent decisions" --boostRecent true
-```
-
-[Full memory system guide →](docs/MEMORY_SYSTEM.md)
-
-## 🏗️ Project Overview
-
-High-performance MCP server in .NET 9.0 providing text search and intelligent memory management. Features:
-
-- Lucene-powered millisecond text search with custom CodeAnalyzer
-- **CodeAnalyzer**: Preserves code patterns like `: ITool`, `[Fact]`, generics
-- Intelligent memory system for architectural knowledge
-- **🆕 Phase 3 Complete**: Advanced Memory Intelligence with natural language commands, semantic search, and temporal scoring
-- File discovery and analysis tools
-- Project-wide content indexing
-- **NEW**: AI-optimized tool consistency with standardized parameters
-- **NEW**: Workflow discovery for proactive tool guidance
-- **NEW**: Enhanced error handling with actionable recovery
-
-## 🤖 AI UX Optimizations (Latest)
-
-This project implements comprehensive AI agent experience optimizations:
-
-### Parameter Standardization
-
-- **All search tools** now use `query` as the primary parameter
-- **Backward compatible** with legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`)
-- **Consistent interface** across `text_search`, `file_search`, `directory_search`
-
-### Response Format Consistency
-
-- **Unified envelope** with `format` field indicating response type
-- **Mixed format support** for both structured data and markdown display
-- **Predictable parsing** for AI agents
-
-### Workflow Discovery
-
-- **New tool**: `workflow_discovery` provides proactive guidance
-- **Tool chains**: Understand prerequisites and dependencies
-- **Use case mapping**: Find the right tools for your goals
-
-### Enhanced Error States
-
-- **Actionable guidance** instead of generic error messages
-- **Suggested next steps** when tools encounter empty states
-- **Recovery workflows** with specific commands to try
-
-See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for complete analysis.
-
-## 🔧 Development Guidelines
-
-### Adding a New Tool
-
-1. **Create tool class** in `Tools/` folder with attributes:
-
-```csharp
-[McpServerToolType]
-public class MyTool
-{
-    private readonly ILogger<MyTool> _logger;
-
-    [McpServerTool(Name = "my_tool")]
-    [Description("Detailed description of what the tool does")]
-    public async Task<object> ExecuteAsync(MyToolParams parameters)
-    {
-        if (parameters == null) throw new InvalidParametersException("Parameters are required");
-        
-        // Validate required parameters
-        var param1 = ValidateRequired(parameters.Param1, "param1");
-        
-        // Call existing implementation
-        return await ExecuteAsync(param1);
-    }
-
-    // Original implementation method
-    public async Task<MyResult> ExecuteAsync(string param1)
-    {
-        // Implementation
-    }
-}
-
-// Parameter class with Description attributes
-public class MyToolParams
-{
-    [Description("Description of parameter 1")]
-    public string? Param1 { get; set; }
-}
-```
-
-2. **Register in DI** (`Program.cs`):
-
-```csharp
-services.AddSingleton<MyTool>();
-```
-
-3. **No manual registration needed** - The attribute-based registration system automatically discovers and registers tools marked with `[McpServerToolType]`.
-
-### Key Services
-
-| Service                   | Purpose                                 |
-| ------------------------- | --------------------------------------- |
-| `LuceneIndexService`      | Fast text indexing and search           |
-| `FlexibleMemoryService`   | Memory storage with custom fields       |
-| `JsonMemoryBackupService` | JSON-based memory backup/restore        |
-| `PathResolutionService`   | Path computation and resolution service |
-| `FileIndexingService`     | File content extraction and indexing    |
-| `QueryCacheService`       | Query result caching for performance    |
-
-### Progressive Disclosure (V2 Tools)
-
-Tools auto-switch to summary mode at 5,000 tokens:
-
-- Provides insights, hotspots, and next actions
-- Supports detail requests for drilling down
-- Saves tokens while providing better analysis
-
-Example:
-
-```json
-{
-  "mode": "summary",
-  "autoModeSwitch": true,
-  "data": {
-    /* smart summary */
-  },
-  "insights": ["Key finding"],
-  "actions": [{ "cmd": "drill down command" }]
-}
-```
+- Check HelloWorldTool and SystemInfoTool for working examples
+- Use ILuceneIndexService.IndexDocumentsAsync() for batch indexing
+- All tools auto-register via framework's DiscoverTools()
+- Progressive disclosure happens automatically at 5k tokens
+- Centralized indexes mean no more lock conflicts between sessions
 
 ## 🐛 Troubleshooting
 
+### Build Errors
+- **"Type or namespace not found"**: Check COA.Mcp.Framework references
+- **"Method does not exist"**: Verify against actual interface, not assumptions
+- **"Access denied"**: Use Debug mode, Release DLL may be locked
+
 ### Common Issues
+- **Stuck write.lock files**: Exit Claude Code, delete `.coa/codesearch/indexes/*/write.lock`
+- **Changes not working**: User must restart Claude Code after rebuild
+- **Missing tools**: Check if tool is registered in Program.cs
 
-**Stuck write.lock files**
+## 🎯 Current Focus
 
-- Symptom: All searches fail
-- Fix: Exit Claude Code, manually delete `.codesearch/index/*/write.lock`
+The immediate priority is to:
+1. Fix FileIndexingService to use ILuceneIndexService properly
+2. Implement remaining search tools with correct interfaces
+3. Get FileWatcherService working again
+4. Test with Claude Code
 
-**Index corruption or locked files**
-
-- Symptom: "Index is locked" or search operations failing
-- Fix: Use `index_health_check` tool or exit Claude and delete stuck lock files
-
-**Build errors in Release mode**
-
-- Symptom: "Access denied" errors
-- Fix: Use Debug mode during development
-
-**Tests failing**
-
-- Symptom: Various test failures
-- Fix: Always build before testing
-
-### Debug Logging
-
-```bash
-mcp__codesearch__log_diagnostics --action status
-# View current log status and manage log files
-```
-
-## 📚 Additional Documentation
-
-- [Memory System Guide](docs/MEMORY_SYSTEM.md) - Detailed memory tools documentation
-- [Path Resolution Critical](docs/PATH_RESOLUTION_CRITICAL.md) - Path handling requirements
-- [Tool Reference](docs/TOOLS.md) - Complete tool documentation
-- [Architecture Decisions](docs/ARCHITECTURE.md) - Design decisions and patterns
-
-## 🚀 Performance Targets
-
-- Startup: < 500ms (simplified architecture)
-- Text search: < 10ms indexed
-- File search: < 50ms
-- Memory operations: < 100ms
-- Memory usage: < 200MB typical
-
-## 🔗 Integration Notes
-
-- This project uses Claude Code (NOT Claude Desktop)
-- MCP servers configured differently than Desktop
-- Server runs in STDIO mode
-- User manages installation/restart
+Remember: This is a clean slate rebuild on COA MCP Framework. Don't carry over assumptions from the old CodeSearch - verify everything!
