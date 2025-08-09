@@ -31,7 +31,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TextSearchResult
         _logger = logger;
     }
 
-    public override string Name => "text_search";
+    public override string Name => ToolNames.TextSearch;
     public override string Description => "Search for text content across all indexed files in a workspace. Supports full-text search with relevance scoring.";
     public override ToolCategory Category => ToolCategory.Query;
 
@@ -59,7 +59,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TextSearchResult
                 {
                     Success = false,
                     Error = CreateValidationErrorResult(
-                        "text_search",
+                        ToolNames.TextSearch,
                         nameof(parameters.WorkspacePath),
                         $"No index found for workspace: {workspacePath}. Run index_workspace first."
                     ),
@@ -85,7 +85,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TextSearchResult
                 {
                     Success = false,
                     Error = CreateValidationErrorResult(
-                        "text_search",
+                        ToolNames.TextSearch,
                         nameof(parameters.Query),
                         $"Invalid query syntax: {ex.Message}"
                     ),
@@ -142,7 +142,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TextSearchResult
             return new TextSearchResult
             {
                 Success = false,
-                Error = CreateErrorResult("text_search", ex.Message),
+                Error = CreateErrorResult(ToolNames.TextSearch, ex.Message),
                 Query = query,
                 WorkspacePath = workspacePath,
                 Matches = new List<TextSearchMatch>(),
@@ -278,7 +278,7 @@ public class TextSearchParameters
 /// </summary>
 public class TextSearchResult : ToolResultBase
 {
-    public override string Operation => "text_search";
+    public override string Operation => ToolNames.TextSearch;
     
     public string Query { get; set; } = string.Empty;
     public string WorkspacePath { get; set; } = string.Empty;

@@ -12,7 +12,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// </summary>
 public class SystemInfoTool : McpToolBase<SystemInfoParameters, SystemInfoResult>
 {
-    public override string Name => "get_system_info";
+    public override string Name => ToolNames.SystemInfo;
     public override string Description => "Gets system information including OS, runtime, and environment details";
     public override ToolCategory Category => ToolCategory.Utility;
 
@@ -83,7 +83,7 @@ public class SystemInfoParameters
 /// </summary>
 public class SystemInfoResult : ToolResultBase
 {
-    public override string Operation => "get_system_info";
+    public override string Operation => ToolNames.SystemInfo;
     
     public OperatingSystemInfo OperatingSystem { get; set; } = new();
     public RuntimeInfo Runtime { get; set; } = new();
