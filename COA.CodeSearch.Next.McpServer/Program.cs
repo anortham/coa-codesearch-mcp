@@ -26,7 +26,7 @@ public class Program
         
         // Register configuration models
         services.Configure<COA.CodeSearch.Next.McpServer.Models.MemoryLimitsConfiguration>(
-            configuration.GetSection("MemoryLimits"));
+            configuration.GetSection("CodeSearch:MemoryPressure"));
         
         // Register core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
