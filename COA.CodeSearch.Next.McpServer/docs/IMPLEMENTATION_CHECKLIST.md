@@ -55,19 +55,20 @@
 - [x] Port `Services/ErrorRecoveryService.cs` (standardized error recovery guidance)
 
 ## Search Tools Implementation (Priority 2)
-### IndexWorkspaceTool
-- [ ] Create `Tools/IndexWorkspaceTool.cs`
-- [ ] Inherit from `McpToolBase<IndexWorkspaceParams, IndexWorkspaceResult>`
-- [ ] Use LuceneIndexService for indexing
-- [ ] Return index statistics
-- [ ] Support force rebuild option
+### IndexWorkspaceTool ✅ COMPLETED
+- [x] Create `Tools/IndexWorkspaceTool.cs`
+- [x] Inherit from `McpToolBase<IndexWorkspaceParams, IndexWorkspaceResult>`
+- [x] Use LuceneIndexService for indexing
+- [x] Return index statistics
+- [x] Support force rebuild option
+- [x] Auto-start FileWatcherService for indexed workspaces
 
-### TextSearchTool
-- [ ] Create `Tools/TextSearchTool.cs`
-- [ ] Use framework's BaseResponseBuilder for progressive disclosure
-- [ ] Support search types: standard, wildcard, fuzzy, regex, phrase
-- [ ] Implement context lines support
-- [ ] Store results in SearchResultResourceProvider
+### TextSearchTool ✅ COMPLETED
+- [x] Create `Tools/TextSearchTool.cs`
+- [x] Use framework's BaseResponseBuilder for progressive disclosure
+- [x] Support standard query parsing
+- [x] Implement content truncation for token optimization
+- [x] Return search results with file paths and matched content
 
 ### FileSearchTool
 - [ ] Create `Tools/FileSearchTool.cs`

@@ -35,7 +35,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
         _logger = logger;
     }
 
-    public override string Name => "index_workspace";
+    public override string Name => ToolNames.IndexWorkspace;
     public override string Description => "Index a workspace directory to enable fast text search. Creates or updates the search index for all supported files in the specified directory.";
     public override ToolCategory Category => ToolCategory.Resources;
 
@@ -230,7 +230,7 @@ public class IndexWorkspaceParameters
 /// </summary>
 public class IndexWorkspaceResult : ToolResultBase
 {
-    public override string Operation => "index_workspace";
+    public override string Operation => ToolNames.IndexWorkspace;
 
     /// <summary>
     /// The workspace path that was indexed
