@@ -1,4 +1,7 @@
 using COA.Mcp.Framework.Server;
+using COA.Mcp.Framework.TokenOptimization;
+using COA.Mcp.Framework.TokenOptimization.Caching;
+using COA.Mcp.Framework.TokenOptimization.Storage;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -53,6 +56,15 @@ public class Program
         
         // Write lock management
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
+        
+        // Token Optimization services
+        services.AddSingleton<ITokenEstimator, DefaultTokenEstimator>();
+        // Note: IInsightGenerator and IActionGenerator may be internal to framework
+        // services.AddSingleton<IInsightGenerator, InsightGenerator>();
+        // services.AddSingleton<IActionGenerator, ActionGenerator>();
+        services.AddSingleton<IResponseCacheService, ResponseCacheService>();
+        services.AddSingleton<IResourceStorageService, ResourceStorageService>();
+        services.AddSingleton<ICacheKeyGenerator, DefaultCacheKeyGenerator>();
         
         // Resource providers
         // services.AddSingleton<SearchResultResourceProvider>();
@@ -160,7 +172,8 @@ public class Program
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>();
-            // builder.Services.AddScoped<FileSearchTool>();
+            builder.Services.AddScoped<TextSearchTool_V2>(); // Enhanced version with token optimization
+            builder.Services.AddScoped<FileSearchTool>();
             // builder.Services.AddScoped<DirectorySearchTool>();
             // builder.Services.AddScoped<RecentFilesTool>();
             // builder.Services.AddScoped<SimilarFilesTool>();
