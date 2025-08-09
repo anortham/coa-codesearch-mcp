@@ -16,15 +16,18 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly IFileIndexingService _fileIndexingService;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
     public IndexWorkspaceTool(
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
+        IFileIndexingService fileIndexingService,
         ILogger<IndexWorkspaceTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
+        _fileIndexingService = fileIndexingService;
         _logger = logger;
     }
 
@@ -84,31 +87,72 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
                 };
             }
 
-            // For now, we'll just return the initialization result
-            // The actual file indexing would be done by FileIndexingService
-            // which needs to be refactored to work with the interface
-            
-            var documentCount = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
-            
-            var result = new IndexWorkspaceResult
+            // Check if force rebuild is requested or if it's a new index
+            if (parameters.ForceRebuild == true || initResult.IsNewIndex)
             {
-                Success = true,
-                WorkspacePath = workspacePath,
-                WorkspaceHash = initResult.WorkspaceHash,
-                IndexPath = initResult.IndexPath,
-                IsNewIndex = initResult.IsNewIndex,
-                IndexedFileCount = documentCount,
-                TotalFileCount = documentCount, // Would need file counting logic
-                Duration = DateTime.UtcNow - startTime,
-                Message = initResult.IsNewIndex 
-                    ? $"Created new index with {documentCount} documents"
-                    : $"Index already exists with {documentCount} documents"
-            };
-
-            _logger.LogInformation("Workspace indexed: {WorkspacePath} -> {DocumentCount} documents in {Duration}ms",
-                workspacePath, documentCount, result.Duration.TotalMilliseconds);
-
-            return result;
+                _logger.LogInformation("Starting full index for workspace: {WorkspacePath}", workspacePath);
+                
+                // Clear existing index if force rebuild
+                if (parameters.ForceRebuild == true && !initResult.IsNewIndex)
+                {
+                    await _luceneIndexService.ClearIndexAsync(workspacePath, cancellationToken);
+                }
+                
+                // Index all files in the workspace
+                var indexResult = await _fileIndexingService.IndexWorkspaceAsync(workspacePath, cancellationToken);
+                
+                if (!indexResult.Success)
+                {
+                    return new IndexWorkspaceResult
+                    {
+                        Success = false,
+                        Error = CreateErrorResult(
+                            "index_workspace",
+                            indexResult.ErrorMessage ?? "Failed to index files"
+                        ),
+                        WorkspacePath = workspacePath,
+                        WorkspaceHash = initResult.WorkspaceHash,
+                        IndexedFileCount = indexResult.IndexedFileCount,
+                        TotalFileCount = 0,
+                        Duration = indexResult.Duration
+                    };
+                }
+                
+                var result = new IndexWorkspaceResult
+                {
+                    Success = true,
+                    WorkspacePath = workspacePath,
+                    WorkspaceHash = initResult.WorkspaceHash,
+                    IndexPath = initResult.IndexPath,
+                    IsNewIndex = initResult.IsNewIndex,
+                    IndexedFileCount = indexResult.IndexedFileCount,
+                    TotalFileCount = indexResult.IndexedFileCount,
+                    Duration = indexResult.Duration,
+                    Message = $"Indexed {indexResult.IndexedFileCount} files in {indexResult.Duration.TotalSeconds:F2} seconds"
+                };
+                
+                return result;
+            }
+            else
+            {
+                // Index already exists and no force rebuild requested
+                var documentCount = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
+                
+                var result = new IndexWorkspaceResult
+                {
+                    Success = true,
+                    WorkspacePath = workspacePath,
+                    WorkspaceHash = initResult.WorkspaceHash,
+                    IndexPath = initResult.IndexPath,
+                    IsNewIndex = false,
+                    IndexedFileCount = documentCount,
+                    TotalFileCount = documentCount,
+                    Duration = DateTime.UtcNow - startTime,
+                    Message = $"Index already exists with {documentCount} documents. Use ForceRebuild to rebuild."
+                };
+                
+                return result;
+            }
         }
         catch (Exception ex)
         {
