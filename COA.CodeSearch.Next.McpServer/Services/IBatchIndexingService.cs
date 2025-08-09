@@ -32,7 +32,7 @@ public class BatchIndexingStats
 {
     public int PendingDocuments { get; set; }
     public int TotalBatches { get; set; }
-    public int TotalDocuments { get; set; }
+    public long TotalDocuments { get; set; }
     public TimeSpan AverageBatchTime { get; set; }
     public DateTime LastCommit { get; set; }
 }

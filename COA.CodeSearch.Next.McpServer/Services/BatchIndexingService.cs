@@ -1,31 +1,33 @@
 using Lucene.Net.Documents;
-using Lucene.Net.Index;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using COA.CodeSearch.Next.McpServer.Services.Lucene;
 
 namespace COA.CodeSearch.Next.McpServer.Services;
 
 /// <summary>
 /// High-performance batch indexing service that accumulates documents and commits them in configurable batches
 /// Provides 10-100x performance improvement for bulk indexing operations
+/// Refactored to use ILuceneIndexService interface methods
 /// </summary>
 public class BatchIndexingService : IBatchIndexingService, IDisposable
 {
     private readonly ILogger<BatchIndexingService> _logger;
-    private readonly Lucene.ILuceneIndexService _luceneIndexService;
+    private readonly ILuceneIndexService _luceneIndexService;
     private readonly int _batchSize;
     private readonly TimeSpan _maxBatchAge;
     private readonly Timer _flushTimer;
     
     // Per-workspace batch tracking
     private readonly ConcurrentDictionary<string, WorkspaceBatch> _workspaceBatches = new();
+    private bool _disposed;
     
     public BatchIndexingService(
         ILogger<BatchIndexingService> logger,
         IConfiguration configuration,
-        Lucene.ILuceneIndexService luceneIndexService)
+        ILuceneIndexService luceneIndexService)
     {
         _logger = logger;
         _luceneIndexService = luceneIndexService;
@@ -47,7 +49,8 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
         
         lock (batch.Lock)
         {
-            batch.Documents.Add((document, documentId));
+            batch.Documents.Add(document);
+            batch.DocumentIds.Add(documentId);
             batch.LastModified = DateTime.UtcNow;
             
             // Check if we should flush this batch
@@ -102,7 +105,8 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
 
     private async Task FlushBatchInternalAsync(WorkspaceBatch batch, CancellationToken cancellationToken)
     {
-        List<(Document document, string id)> documentsToFlush;
+        List<Document> documentsToFlush;
+        List<string> documentIdsToDelete;
         
         // Extract documents under lock to minimize lock time
         lock (batch.Lock)
@@ -110,8 +114,10 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             if (batch.Documents.Count == 0)
                 return;
                 
-            documentsToFlush = new List<(Document, string)>(batch.Documents);
+            documentsToFlush = new List<Document>(batch.Documents);
+            documentIdsToDelete = new List<string>(batch.DocumentIds);
             batch.Documents.Clear();
+            batch.DocumentIds.Clear();
         }
         
         var stopwatch = Stopwatch.StartNew();
@@ -121,16 +127,28 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             _logger.LogDebug("Flushing batch of {Count} documents for workspace: {Workspace}", 
                 documentsToFlush.Count, batch.WorkspacePath);
             
-            var indexWriter = await _luceneIndexService.GetIndexWriterAsync(batch.WorkspacePath, cancellationToken).ConfigureAwait(false);
-            
-            // Batch update all documents
-            foreach (var (document, id) in documentsToFlush)
+            // First delete old versions of documents if they exist
+            // This simulates the UpdateDocument behavior
+            foreach (var docId in documentIdsToDelete)
             {
-                indexWriter.UpdateDocument(new Term("id", id), document);
+                try
+                {
+                    await _luceneIndexService.DeleteDocumentAsync(batch.WorkspacePath, docId, cancellationToken)
+                        .ConfigureAwait(false);
+                }
+                catch
+                {
+                    // Document might not exist, that's ok
+                }
             }
             
-            // Single commit for entire batch
-            await _luceneIndexService.CommitAsync(batch.WorkspacePath, cancellationToken).ConfigureAwait(false);
+            // Now batch index all new documents
+            await _luceneIndexService.IndexDocumentsAsync(batch.WorkspacePath, documentsToFlush, cancellationToken)
+                .ConfigureAwait(false);
+            
+            // Commit changes
+            await _luceneIndexService.CommitAsync(batch.WorkspacePath, cancellationToken)
+                .ConfigureAwait(false);
             
             // Update statistics
             lock (batch.Lock)
@@ -149,103 +167,74 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
             _logger.LogError(ex, "Error flushing batch of {Count} documents for workspace: {Workspace}", 
                 documentsToFlush.Count, batch.WorkspacePath);
             
-            // Put documents back into batch for retry
+            // Re-add documents to batch on failure
             lock (batch.Lock)
             {
-                batch.Documents.InsertRange(0, documentsToFlush);
+                batch.Documents.AddRange(documentsToFlush);
+                batch.DocumentIds.AddRange(documentIdsToDelete);
             }
             
             throw;
-        }
-        finally
-        {
-            stopwatch.Stop();
         }
     }
 
     private void FlushStaleBatches(object? state)
     {
-        var staleThreshold = DateTime.UtcNow - _maxBatchAge;
-        var staleBatches = new List<WorkspaceBatch>();
-        
-        foreach (var batch in _workspaceBatches.Values)
-        {
-            lock (batch.Lock)
+        var staleBatches = _workspaceBatches.Values
+            .Where(batch =>
             {
-                if (batch.Documents.Count > 0 && batch.LastModified < staleThreshold)
+                lock (batch.Lock)
                 {
-                    staleBatches.Add(batch);
+                    return batch.Documents.Count > 0 && 
+                           DateTime.UtcNow - batch.LastModified > _maxBatchAge;
                 }
-            }
-        }
-        
-        if (staleBatches.Count > 0)
-        {
-            _logger.LogDebug("Flushing {Count} stale batches", staleBatches.Count);
+            })
+            .ToList();
             
-            _ = Task.Run(async () =>
-            {
-                try
-                {
-                    var flushTasks = staleBatches.Select(batch => 
-                        FlushBatchInternalAsync(batch, CancellationToken.None));
-                    await Task.WhenAll(flushTasks).ConfigureAwait(false);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error flushing stale batches");
-                }
-            });
+        foreach (var batch in staleBatches)
+        {
+            _ = Task.Run(() => FlushBatchInternalAsync(batch, CancellationToken.None));
         }
     }
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+            
+        _disposed = true;
+        
+        // Stop the timer
+        _flushTimer?.Dispose();
+        
+        // Flush all pending batches
         try
         {
-            _flushTimer?.Dispose();
-            
-            // Flush all remaining batches synchronously
-            var flushTasks = _workspaceBatches.Values
-                .Select(batch => FlushBatchInternalAsync(batch, CancellationToken.None))
-                .ToArray();
-                
-            Task.WaitAll(flushTasks, TimeSpan.FromSeconds(30));
-            
-            var totalStats = _workspaceBatches.Values.Aggregate(
-                new { TotalDocs = 0, TotalBatches = 0 },
-                (acc, batch) => new { 
-                    TotalDocs = acc.TotalDocs + batch.TotalDocuments,
-                    TotalBatches = acc.TotalBatches + batch.TotalBatches
-                });
-                
-            _logger.LogInformation("BatchIndexingService disposed - Total: {TotalDocs} documents in {TotalBatches} batches", 
-                totalStats.TotalDocs, totalStats.TotalBatches);
+            CommitAllAsync(CancellationToken.None).GetAwaiter().GetResult();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error disposing BatchIndexingService");
+            _logger.LogError(ex, "Error flushing pending batches during disposal");
         }
     }
 
     /// <summary>
-    /// Per-workspace batch state
+    /// Tracks batch state per workspace
     /// </summary>
     private class WorkspaceBatch
     {
         public string WorkspacePath { get; }
-        public List<(Document document, string id)> Documents { get; } = new();
+        public object Lock { get; } = new object();
+        public List<Document> Documents { get; } = new();
+        public List<string> DocumentIds { get; } = new();
         public DateTime LastModified { get; set; } = DateTime.UtcNow;
-        public DateTime LastCommit { get; set; } = DateTime.UtcNow;
-        public object Lock { get; } = new();
-        
-        // Statistics
+        public DateTime LastCommit { get; set; }
         public int TotalBatches { get; set; }
-        public int TotalDocuments { get; set; }
+        public long TotalDocuments { get; set; }
         public long TotalBatchTimeMs { get; set; }
         
         private readonly ILogger _logger;
-
+        
         public WorkspaceBatch(string workspacePath, ILogger logger)
         {
             WorkspacePath = workspacePath;
@@ -253,3 +242,5 @@ public class BatchIndexingService : IBatchIndexingService, IDisposable
         }
     }
 }
+
+// BatchIndexingStats is defined in IBatchIndexingService.cs
