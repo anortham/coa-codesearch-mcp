@@ -12,7 +12,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// </summary>
 public class HelloWorldTool : McpToolBase<HelloWorldParameters, HelloWorldResult>
 {
-    public override string Name => "hello_world";
+    public override string Name => ToolNames.HelloWorld;
     public override string Description => "Simple greeting tool that demonstrates basic MCP tool structure";
     public override ToolCategory Category => ToolCategory.Utility;
 
@@ -59,7 +59,7 @@ public class HelloWorldParameters
 /// </summary>
 public class HelloWorldResult : ToolResultBase
 {
-    public override string Operation => "hello_world";
+    public override string Operation => ToolNames.HelloWorld;
     
     /// <summary>
     /// The greeting message
