@@ -229,10 +229,13 @@ public class FileIndexingService : IFileIndexingService
                 var extension = Path.GetExtension(file);
                 var directory = Path.GetDirectoryName(file);
                 
-                // Skip excluded directories
-                if (directory != null && _excludedDirectories.Any(excluded => 
-                    directory.Contains(excluded, StringComparison.OrdinalIgnoreCase)))
-                    return false;
+                // Skip excluded directories - check individual path segments, not full path
+                if (directory != null)
+                {
+                    var segments = directory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                    if (segments.Any(segment => _excludedDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase)))
+                        return false;
+                }
                 
                 // Check supported extensions
                 if (!_supportedExtensions.Contains(extension))
