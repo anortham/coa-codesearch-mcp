@@ -1,4 +1,5 @@
 using COA.Mcp.Framework.Server;
+using COA.Mcp.Framework.Registration;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -152,6 +153,16 @@ public class Program
 
             // Configure shared services
             ConfigureSharedServices(builder.Services, configuration);
+            
+            // Add MCP Framework with token optimization
+            builder.Services.AddMcpFramework(options =>
+            {
+                options.DiscoverToolsFromAssembly(typeof(Program).Assembly);
+                options.UseTokenOptimization(TokenOptimizationLevel.Aggressive);
+                options.UseAIOptimizedResponses = true;
+                options.EnableValidation = true;
+                options.DefaultTimeoutMs = 60000;
+            });
 
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
@@ -165,6 +176,9 @@ public class Program
             // Utility tools
             builder.Services.AddScoped<HelloWorldTool>();
             builder.Services.AddScoped<SystemInfoTool>();
+            
+            // Register resource providers
+            // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
 
             // Discover and register all tools from assembly
             builder.DiscoverTools(typeof(Program).Assembly);
