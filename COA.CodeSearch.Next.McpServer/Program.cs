@@ -24,6 +24,10 @@ public class Program
         // Register Memory Cache for query caching
         services.AddMemoryCache();
         
+        // Register configuration models
+        services.Configure<COA.CodeSearch.Next.McpServer.Models.MemoryLimitsConfiguration>(
+            configuration.GetSection("MemoryLimits"));
+        
         // Register core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
@@ -34,15 +38,19 @@ public class Program
         services.AddSingleton<COA.CodeSearch.Next.McpServer.Services.Lucene.ILuceneIndexService, 
                               COA.CodeSearch.Next.McpServer.Services.Lucene.LuceneIndexService>();
         
-        // TODO: Register other services
-        // services.AddSingleton<IFileIndexingService, FileIndexingService>();
-        // services.AddHostedService<FileWatcherService>();
-        // services.AddSingleton<CircuitBreakerService>();
-        // services.AddSingleton<MemoryPressureService>();
+        // Register indexing services
+        services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
+        // TODO: Fix these services to use ILuceneIndexService interface properly
+        // services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
+        // services.AddSingleton<FileIndexingService>();
         
-        // FileWatcher as background service
+        // Register support services
+        services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
+        services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
+        
+        // FileWatcher as background service - disabled until FileIndexingService is fixed
         // services.AddSingleton<FileWatcherService>();
-        // services.AddHostedService<FileWatcherService>();
+        // services.AddHostedService<FileWatcherService>(provider => provider.GetRequiredService<FileWatcherService>());
         
         // Resource providers
         // services.AddSingleton<SearchResultResourceProvider>();
@@ -53,15 +61,10 @@ public class Program
     /// </summary>
     private static void ConfigureSerilog(IConfiguration configuration)
     {
-        // Get logs directory from configuration or use default
-        var logsPath = configuration["CodeSearch:LogsPath"] ?? 
-                      Path.Combine(
-                          Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
-                          ".coa", "codesearch", "logs"
-                      );
-        
-        // Ensure directory exists
-        Directory.CreateDirectory(logsPath);
+        // Create a temporary path service to get the logs directory - exactly like ProjectKnowledge
+        var tempPathService = new PathResolutionService(configuration);
+        var logsPath = tempPathService.GetLogsPath();
+        tempPathService.EnsureDirectoryExists(logsPath);
         
         var logFile = Path.Combine(logsPath, "codesearch-.log");
 
@@ -108,23 +111,21 @@ public class Program
             ConfigureSharedServices(builder.Services, configuration);
 
             // Register tools in DI first (required for constructor dependencies)
-            // TODO: Register search tools
-            // builder.Services.AddScoped<IndexWorkspaceTool>();
+            // Search tools - commented out until properly implemented
+            builder.Services.AddScoped<IndexWorkspaceTool>();
             // builder.Services.AddScoped<TextSearchTool>();
             // builder.Services.AddScoped<FileSearchTool>();
             // builder.Services.AddScoped<DirectorySearchTool>();
             // builder.Services.AddScoped<RecentFilesTool>();
             // builder.Services.AddScoped<SimilarFilesTool>();
+            
+            // Utility tools
+            builder.Services.AddScoped<HelloWorldTool>();
+            builder.Services.AddScoped<SystemInfoTool>();
 
-            // Register example tools for now
-            builder.RegisterToolType<HelloWorldTool>();
-            builder.RegisterToolType<SystemInfoTool>();
+            // Discover and register all tools from assembly
+            builder.DiscoverTools(typeof(Program).Assembly);
 
-            // Register tools with the framework
-            // TODO: Register actual tools
-            // builder.RegisterToolType<IndexWorkspaceTool>();
-            // builder.RegisterToolType<TextSearchTool>();
-            // etc.
 
             // Register prompts if needed
             // builder.RegisterPromptType<CodeExplorerPrompt>();
