@@ -31,26 +31,28 @@
 - [x] Port `CodeLengthFilter` class
 - [x] Keep all code pattern preservation logic
 
-### File Indexing Service
-- [ ] Port `Services/FileIndexingService.cs`
-- [ ] Update to use new PathResolutionService
-- [ ] Keep supported extensions configuration
-- [ ] Maintain excluded directories list
-- [ ] Port batch indexing logic
+### File Indexing Service ✅ COMPLETED
+- [x] Port `Services/FileIndexingService.cs`
+- [x] Update to use new PathResolutionService
+- [x] Keep supported extensions configuration
+- [x] Maintain excluded directories list
+- [x] Port batch indexing logic
 
-### File Watcher Service
-- [ ] Port `Services/FileWatcherService.cs` as BackgroundService
-- [ ] Register as hosted service in DI
-- [ ] Keep debouncing logic
-- [ ] Maintain multi-workspace watching
-- [ ] Port file change event handling
+### File Watcher Service ✅ COMPLETED
+- [x] Port `Services/FileWatcherService.cs` as BackgroundService
+- [x] Register as hosted service in DI
+- [x] Keep debouncing logic
+- [x] Maintain multi-workspace watching
+- [x] Port file change event handling
 
 ### Support Services ✅ COMPLETED
 - [x] Port `Services/QueryCacheService.cs` (improved version)
 - [x] Port `Services/CircuitBreakerService.cs`
 - [x] Port `Services/MemoryPressureService.cs`
-- [ ] Port `Services/FieldSelectorService.cs`
-- [ ] Port `Services/ErrorRecoveryService.cs`
+- [x] Port `Services/IndexingMetricsService.cs` (comprehensive performance monitoring)
+- [x] Port `Services/BatchIndexingService.cs` (high-performance bulk indexing)
+- [x] Port `Services/FieldSelectorService.cs` (efficient field selection for performance)
+- [x] Port `Services/ErrorRecoveryService.cs` (standardized error recovery guidance)
 
 ## Search Tools Implementation (Priority 2)
 ### IndexWorkspaceTool

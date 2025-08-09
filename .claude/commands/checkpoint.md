@@ -1,39 +1,57 @@
 ---
-allowed-tools: ["mcp__codesearch__store_checkpoint"]
-description: "Create a checkpoint of current work session with sequential ID"
+allowed-tools: ["mcp__projectknowledge__save_checkpoint", "mcp__projectknowledge__find_knowledge", "mcp__projectknowledge__store_knowledge"]
+description: "Create a checkpoint of current work session with structured format"
 ---
 
-Create a checkpoint with the following information:
+Create a checkpoint with the following structured information:
 
 $ARGUMENTS
 
-Include in the checkpoint:
-- What was accomplished in this session
-- Current state/progress  
-- Next steps/todos (be specific)
-- Any blockers or problems encountered
-- Key files modified in this session
+## Checkpoint Format
 
-Format the content as:
-```
+The checkpoint content MUST follow this exact structure:
+
+```markdown
 ## Accomplished
-- [Specific task 1]
-- [Specific task 2]
+- [Specific completed task 1]
+- [Specific completed task 2]
+- [Be concrete about what was done]
 
 ## Current State
-[Where things stand right now]
+[Describe where things stand right now]
+[Include any partial progress or work in flight]
 
 ## Next Steps
-1. [Concrete next action]
+1. [Concrete next action to take]
 2. [Another specific task]
+3. [Clear actionable items]
+
+## Blockers (if any)
+- [Any issues encountered]
+- [Problems that need resolution]
 
 ## Files Modified
-- path/to/file1.cs (what changed)
-- path/to/file2.md (what changed)
+- path/to/file1.ext (what changed)
+- path/to/file2.ext (what changed)
 ```
 
-Steps:
-1. Use store_checkpoint with the formatted content
-2. The system will automatically assign a sequential checkpoint ID
-3. Show the checkpoint ID that was created
-4. Remind user: "Use /resume to continue from this checkpoint"
+## Steps:
+1. First, search for recent checkpoints to determine the session:
+   - Use find_knowledge with query "type:Checkpoint" and maxResults: 1
+   - If found, extract sessionId from metadata for continuity
+   - If not found, create new session: "{project}-{yyyy-MM-dd}"
+
+2. Create the checkpoint:
+   - Use save_checkpoint with the formatted content
+   - Include the sessionId for session continuity
+   - Include activeFiles array with modified file paths
+
+3. Display results clearly:
+   - Show: "✓ Checkpoint created: {ID}"
+   - Show: "Session: {sessionId} | Sequence: #{sequenceNumber}"
+   - Show: "Time: {timestamp}"
+
+4. If there are blockers mentioned:
+   - Also use store_knowledge with type "TechnicalDebt" to track them
+
+5. End with: "📌 Use /resume to continue from this checkpoint"
