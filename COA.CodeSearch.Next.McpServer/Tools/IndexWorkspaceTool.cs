@@ -5,6 +5,7 @@ using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
 using COA.CodeSearch.Next.McpServer.Services;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.Next.McpServer.Tools;
@@ -17,17 +18,20 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly IFileIndexingService _fileIndexingService;
+    private readonly FileWatcherService? _fileWatcherService;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
     public IndexWorkspaceTool(
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
         IFileIndexingService fileIndexingService,
+        IServiceProvider serviceProvider,
         ILogger<IndexWorkspaceTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
         _fileIndexingService = fileIndexingService;
+        _fileWatcherService = serviceProvider.GetService<FileWatcherService>();
         _logger = logger;
     }
 
@@ -131,6 +135,13 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
                     Message = $"Indexed {indexResult.IndexedFileCount} files in {indexResult.Duration.TotalSeconds:F2} seconds"
                 };
                 
+                // Start watching this workspace for changes
+                if (_fileWatcherService != null)
+                {
+                    _fileWatcherService.StartWatching(workspacePath);
+                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
+                }
+                
                 return result;
             }
             else
@@ -150,6 +161,13 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
                     Duration = DateTime.UtcNow - startTime,
                     Message = $"Index already exists with {documentCount} documents. Use ForceRebuild to rebuild."
                 };
+                
+                // Start watching this workspace for changes (if not already watching)
+                if (_fileWatcherService != null)
+                {
+                    _fileWatcherService.StartWatching(workspacePath);
+                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
+                }
                 
                 return result;
             }
