@@ -51,10 +51,51 @@ public class Program
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService<FileWatcherService>(provider => provider.GetRequiredService<FileWatcherService>());
         
+        // Write lock management
+        services.AddSingleton<IWriteLockManager, WriteLockManager>();
+        
         // Resource providers
         // services.AddSingleton<SearchResultResourceProvider>();
     }
 
+    /// <summary>
+    /// Run startup cleanup for write.lock files
+    /// </summary>
+    private static async Task RunStartupCleanupAsync(IConfiguration configuration)
+    {
+        // Create temporary services for cleanup
+        var services = new ServiceCollection();
+        services.AddSingleton(configuration);
+        services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddLogging(logging => logging.AddSerilog());
+        services.AddSingleton<IWriteLockManager, WriteLockManager>();
+        
+        var serviceProvider = services.BuildServiceProvider();
+        var lockManager = serviceProvider.GetRequiredService<IWriteLockManager>();
+        var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
+        
+        logger.LogInformation("Running startup write.lock cleanup");
+        
+        try
+        {
+            var result = await lockManager.SmartStartupCleanupAsync();
+            
+            if (result.StuckLocksFound > 0)
+            {
+                logger.LogWarning("Found {Count} stuck locks that may require manual intervention", 
+                    result.StuckLocksFound);
+            }
+            
+            logger.LogInformation(
+                "Startup cleanup complete - Test artifacts: {Test}, Workspace locks: {Workspace}, Stuck: {Stuck}",
+                result.TestArtifactsRemoved, result.WorkspaceLocksRemoved, result.StuckLocksFound);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to run startup cleanup - continuing anyway");
+        }
+    }
+    
     /// <summary>
     /// Configure Serilog with file logging only (no console to avoid breaking STDIO)
     /// </summary>
@@ -97,6 +138,9 @@ public class Program
 
         try
         {
+            // Run write.lock cleanup before starting
+            await RunStartupCleanupAsync(configuration);
+            
             // Use framework's builder
             var builder = new McpServerBuilder()
                 .WithServerInfo("CodeSearch", "2.0.0")
@@ -110,9 +154,9 @@ public class Program
             ConfigureSharedServices(builder.Services, configuration);
 
             // Register tools in DI first (required for constructor dependencies)
-            // Search tools - commented out until properly implemented
+            // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
-            // builder.Services.AddScoped<TextSearchTool>();
+            builder.Services.AddScoped<TextSearchTool>();
             // builder.Services.AddScoped<FileSearchTool>();
             // builder.Services.AddScoped<DirectorySearchTool>();
             // builder.Services.AddScoped<RecentFilesTool>();
