@@ -1,0 +1,54 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net9.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
+    
+    <!-- Global dotnet tool configuration -->
+    <PackAsTool>true</PackAsTool>
+    <ToolCommandName>codesearch-next</ToolCommandName>
+    <PackageId>COA.CodeSearch.Next</PackageId>
+    <Version>2.0.0</Version>
+    <Authors>COA Team</Authors>
+    <Description>High-performance file search MCP server with Lucene.NET backend</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- COA Framework packages -->
+    <PackageReference Include="COA.Mcp.Framework" Version="1.4.2" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.4.2" />
+    
+    <!-- Lucene.NET for search functionality -->
+    <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
+    <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
+    
+    <!-- Logging -->
+    <PackageReference Include="Serilog" Version="4.2.0" />
+    <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />
+    <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
+    
+    <!-- ASP.NET Core for HTTP mode -->
+    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
+    
+    <!-- Core dependencies -->
+    <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.8" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
+    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="appsettings.json">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>
