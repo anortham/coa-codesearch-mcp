@@ -178,14 +178,15 @@ public class Program
             builder.Services.AddScoped<ResponseBuilders.SearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.FileSearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.IndexResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.RecentFilesResponseBuilder>();
             
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
             builder.Services.AddScoped<FileSearchTool>();
+            builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             // builder.Services.AddScoped<DirectorySearchTool>();
-            // builder.Services.AddScoped<RecentFilesTool>();
             // builder.Services.AddScoped<SimilarFilesTool>();
             
             // Register resource providers
