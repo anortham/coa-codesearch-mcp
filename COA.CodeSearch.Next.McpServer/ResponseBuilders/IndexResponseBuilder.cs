@@ -13,7 +13,7 @@ namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
 /// <summary>
 /// Response builder for index operations with token-aware optimization.
 /// </summary>
-public class IndexResponseBuilder : BaseResponseBuilder<IndexResult>
+public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimizedResponse<Tools.IndexResult>>
 {
     private readonly IResourceStorageService? _storageService;
     
@@ -25,7 +25,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult>
         _storageService = storageService;
     }
     
-    public override async Task<object> BuildResponseAsync(IndexResult data, ResponseContext context)
+    public override async Task<AIOptimizedResponse<Tools.IndexResult>> BuildResponseAsync(IndexResult data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -78,29 +78,29 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult>
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
-        var response = new TokenOptimizedResult
+        var response = new AIOptimizedResponse<Tools.IndexResult>
         {
             Success = data.Success,
-            Data = new AIResponseData
+            Data = new AIResponseData<Tools.IndexResult>
             {
                 Summary = BuildSummary(data, reducedFiles.Count, context.ResponseMode),
-                Results = new
+                Results = new Tools.IndexResult
                 {
-                    WorkspacePath = data.WorkspacePath,
-                    FilesIndexed = data.FilesIndexed,
-                    FilesSkipped = data.FilesSkipped,
-                    TotalSizeBytes = data.TotalSizeBytes,
-                    IndexTimeMs = data.IndexTimeMs,
+                    WorkspacePath = data.WorkspacePath ?? "",
+                    WorkspaceHash = data.WorkspaceHash ?? "",
+                    IndexPath = data.IndexPath,
                     IsNewIndex = data.IsNewIndex,
-                    FileList = reducedFiles,
-                    Statistics = data.Statistics
+                    IndexedFileCount = data.FilesIndexed,
+                    TotalFileCount = data.FilesIndexed + data.FilesSkipped,
+                    Duration = TimeSpan.FromMilliseconds(data.IndexTimeMs)
                 },
                 Count = data.FilesIndexed,
                 ExtensionData = new Dictionary<string, object>
                 {
                     ["workspaceHash"] = data.WorkspaceHash ?? "",
                     ["indexPath"] = data.IndexPath ?? "",
-                    ["watcherEnabled"] = data.WatcherEnabled
+                    ["watcherEnabled"] = data.WatcherEnabled,
+                    ["statistics"] = data.Statistics
                 }
             },
             Insights = ReduceInsights(insights, insightsBudget),

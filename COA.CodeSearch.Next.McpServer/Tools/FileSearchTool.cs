@@ -24,7 +24,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// <summary>
 /// Tool for searching files by name pattern in indexed workspaces with token optimization
 /// </summary>
-public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedResult>
+public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedResponse<FileSearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
@@ -55,7 +55,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
     public override string Description => "Search for files by name pattern with token-optimized responses";
     public override ToolCategory Category => ToolCategory.Query;
 
-    protected override async Task<TokenOptimizedResult> ExecuteInternalAsync(
+    protected override async Task<AIOptimizedResponse<FileSearchResult>> ExecuteInternalAsync(
         FileSearchParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -76,7 +76,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
         // Check cache first (unless explicitly disabled)
         if (!parameters.NoCache)
         {
-            var cached = await _cacheService.GetAsync<TokenOptimizedResult>(cacheKey);
+            var cached = await _cacheService.GetAsync<AIOptimizedResponse<FileSearchResult>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogDebug("Returning cached file search results for pattern: {Pattern}", pattern);
@@ -197,30 +197,13 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
             };
             
             // Use response builder to create optimized response
-            var response = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
-            
-            // Convert to TokenOptimizedResult
-            var result = response as TokenOptimizedResult;
-            if (result == null)
-            {
-                // This shouldn't happen, but handle gracefully
-                _logger.LogWarning("Response builder returned unexpected type: {Type}", response?.GetType()?.FullName ?? "null");
-                result = new TokenOptimizedResult
-                {
-                    Success = true,
-                    Data = new AIResponseData
-                    {
-                        Summary = $"Found {files.Count} files matching '{pattern}'",
-                        Results = files.Take(maxResults),
-                        Count = files.Count
-                    }
-                };
-                result.SetOperation(Name);
-            }
+            var result = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
             
             // Add directories to extension data if requested
-            if (directories != null && result.Data.ExtensionData != null)
+            if (directories != null)
             {
+                if (result.Data.ExtensionData == null)
+                    result.Data.ExtensionData = new Dictionary<string, object>();
                 result.Data.ExtensionData["directories"] = directories;
             }
             
@@ -240,21 +223,27 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error searching for files with pattern: {Pattern}", pattern);
-            return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
+            var errorResult = new AIOptimizedResponse<FileSearchResult>
             {
-                Code = "FILE_SEARCH_ERROR",
-                Message = $"Error searching for files: {ex.Message}",
-                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                Success = false,
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
-                    Steps = new[]
+                    Code = "FILE_SEARCH_ERROR",
+                    Message = $"Error searching for files: {ex.Message}",
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
-                        "Verify the pattern syntax is valid",
-                        "Check if the workspace is properly indexed",
-                        "Try a simpler pattern",
-                        "Check logs for detailed error information"
+                        Steps = new[]
+                        {
+                            "Verify the pattern syntax is valid",
+                            "Check if the workspace is properly indexed",
+                            "Try a simpler pattern",
+                            "Check logs for detailed error information"
+                        }
                     }
                 }
-            });
+            };
+            errorResult.SetOperation(Name);
+            return errorResult;
         }
     }
     
@@ -266,9 +255,9 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
         return new Regex(regexPattern, RegexOptions.IgnoreCase);
     }
     
-    private TokenOptimizedResult CreateNoIndexError(string workspacePath)
+    private AIOptimizedResponse<FileSearchResult> CreateNoIndexError(string workspacePath)
     {
-        var result = new TokenOptimizedResult
+        var result = new AIOptimizedResponse<FileSearchResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo

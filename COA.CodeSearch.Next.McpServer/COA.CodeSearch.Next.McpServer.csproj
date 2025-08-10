@@ -19,8 +19,8 @@
 
   <ItemGroup>
     <!-- COA Framework packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="1.5.0" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.5.0" />
+    <PackageReference Include="COA.Mcp.Framework" Version="1.5.2" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.5.2" />
     
     <!-- Lucene.NET for search functionality -->
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
