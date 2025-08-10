@@ -187,10 +187,6 @@ public class Program
             // builder.Services.AddScoped<RecentFilesTool>();
             // builder.Services.AddScoped<SimilarFilesTool>();
             
-            // Utility tools
-            builder.Services.AddScoped<HelloWorldTool>();
-            builder.Services.AddScoped<SystemInfoTool>();
-            
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
 
