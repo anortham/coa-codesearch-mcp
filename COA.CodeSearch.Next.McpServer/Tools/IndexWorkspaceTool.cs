@@ -3,21 +3,32 @@ using System.ComponentModel.DataAnnotations;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
+using COA.Mcp.Framework.TokenOptimization;
+using COA.Mcp.Framework.TokenOptimization.Models;
+using COA.Mcp.Framework.TokenOptimization.Caching;
+using COA.Mcp.Framework.TokenOptimization.Storage;
+using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.Next.McpServer.Services;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.Next.McpServer.ResponseBuilders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.Next.McpServer.Tools;
 
 /// <summary>
-/// Tool for indexing a workspace directory for search operations
+/// Tool for indexing a workspace directory with token-optimized responses
 /// </summary>
-public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWorkspaceResult>
+public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOptimizedResult>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly IFileIndexingService _fileIndexingService;
+    private readonly IResponseCacheService _cacheService;
+    private readonly IResourceStorageService _storageService;
+    private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly IndexResponseBuilder _responseBuilder;
     private readonly FileWatcherService? _fileWatcherService;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
@@ -25,21 +36,28 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
         IFileIndexingService fileIndexingService,
+        IResponseCacheService cacheService,
+        IResourceStorageService storageService,
+        ICacheKeyGenerator keyGenerator,
         IServiceProvider serviceProvider,
         ILogger<IndexWorkspaceTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
         _fileIndexingService = fileIndexingService;
+        _cacheService = cacheService;
+        _storageService = storageService;
+        _keyGenerator = keyGenerator;
+        _responseBuilder = new IndexResponseBuilder(null, storageService);
         _fileWatcherService = serviceProvider.GetService<FileWatcherService>();
         _logger = logger;
     }
 
     public override string Name => ToolNames.IndexWorkspace;
-    public override string Description => "Index a workspace directory to enable fast text search. Creates or updates the search index for all supported files in the specified directory.";
+    public override string Description => "Index a workspace directory with token-optimized progress reporting";
     public override ToolCategory Category => ToolCategory.Resources;
 
-    protected override async Task<IndexWorkspaceResult> ExecuteInternalAsync(
+    protected override async Task<TokenOptimizedResult> ExecuteInternalAsync(
         IndexWorkspaceParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -51,21 +69,14 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
         
         if (!Directory.Exists(workspacePath))
         {
-            return new IndexWorkspaceResult
-            {
-                Success = false,
-                Error = CreateValidationErrorResult(
-                    "index_workspace",
-                    nameof(parameters.WorkspacePath),
-                    $"Directory does not exist: {workspacePath}"
-                ),
-                WorkspacePath = workspacePath,
-                WorkspaceHash = string.Empty,
-                IndexedFileCount = 0,
-                TotalFileCount = 0,
-                Duration = TimeSpan.Zero
-            };
+            return CreateDirectoryNotFoundError(workspacePath);
         }
+        
+        // Generate cache key
+        var cacheKey = _keyGenerator.GenerateKey(Name, parameters);
+        
+        // For index operations, we typically don't cache the result
+        // since it's a state-changing operation
 
         var startTime = DateTime.UtcNow;
         
@@ -76,19 +87,21 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
             
             if (!initResult.Success)
             {
-                return new IndexWorkspaceResult
+                return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
                 {
-                    Success = false,
-                    Error = CreateErrorResult(
-                        "index_workspace",
-                        initResult.ErrorMessage ?? "Failed to initialize index"
-                    ),
-                    WorkspacePath = workspacePath,
-                    WorkspaceHash = initResult.WorkspaceHash,
-                    IndexedFileCount = 0,
-                    TotalFileCount = 0,
-                    Duration = DateTime.UtcNow - startTime
-                };
+                    Code = "INIT_FAILED",
+                    Message = initResult.ErrorMessage ?? "Failed to initialize index",
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                    {
+                        Steps = new[]
+                        {
+                            "Check if another process is using the index",
+                            "Verify write permissions for the index directory",
+                            "Try with ForceRebuild option",
+                            "Delete any existing write.lock files"
+                        }
+                    }
+                });
             }
 
             // Check if force rebuild is requested or if it's a new index
@@ -107,39 +120,88 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
                 
                 if (!indexResult.Success)
                 {
-                    return new IndexWorkspaceResult
+                    return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
                     {
-                        Success = false,
-                        Error = CreateErrorResult(
-                            "index_workspace",
-                            indexResult.ErrorMessage ?? "Failed to index files"
-                        ),
-                        WorkspacePath = workspacePath,
-                        WorkspaceHash = initResult.WorkspaceHash,
-                        IndexedFileCount = indexResult.IndexedFileCount,
-                        TotalFileCount = 0,
-                        Duration = indexResult.Duration
-                    };
+                        Code = "INDEXING_FAILED",
+                        Message = indexResult.ErrorMessage ?? "Failed to index files",
+                        Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                        {
+                            Steps = new[]
+                            {
+                                "Check if files are accessible",
+                                "Verify file permissions",
+                                "Check available disk space",
+                                "Try indexing with different file extensions"
+                            }
+                        }
+                    });
                 }
                 
-                var result = new IndexWorkspaceResult
+                // Start watching this workspace for changes
+                bool watcherEnabled = false;
+                if (_fileWatcherService != null)
+                {
+                    _fileWatcherService.StartWatching(workspacePath);
+                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
+                    watcherEnabled = true;
+                }
+                
+                // Get statistics if available
+                var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
+                
+                // Create IndexResult for response builder
+                var indexResultData = new IndexResult
                 {
                     Success = true,
                     WorkspacePath = workspacePath,
                     WorkspaceHash = initResult.WorkspaceHash,
                     IndexPath = initResult.IndexPath,
                     IsNewIndex = initResult.IsNewIndex,
-                    IndexedFileCount = indexResult.IndexedFileCount,
-                    TotalFileCount = indexResult.IndexedFileCount,
-                    Duration = indexResult.Duration,
-                    Message = $"Indexed {indexResult.IndexedFileCount} files in {indexResult.Duration.TotalSeconds:F2} seconds"
+                    FilesIndexed = indexResult.IndexedFileCount,
+                    FilesSkipped = indexResult.SkippedFileCount,
+                    TotalSizeBytes = stats.IndexSizeBytes, // Use stats for size
+                    IndexTimeMs = (long)indexResult.Duration.TotalMilliseconds,
+                    WatcherEnabled = watcherEnabled,
+                    IndexedFiles = null, // We don't have detailed file list from IndexingResult
+                    Statistics = new ResponseBuilders.IndexStatistics
+                    {
+                        DocumentCount = stats.DocumentCount,
+                        DeletedDocumentCount = stats.DeletedDocumentCount,
+                        SegmentCount = stats.SegmentCount,
+                        IndexSizeBytes = stats.IndexSizeBytes,
+                        FileTypeDistribution = stats.FileTypeDistribution
+                    }
                 };
                 
-                // Start watching this workspace for changes
-                if (_fileWatcherService != null)
+                // Build response context
+                var context = new ResponseContext
                 {
-                    _fileWatcherService.StartWatching(workspacePath);
-                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
+                    ResponseMode = parameters.ResponseMode ?? "summary",
+                    TokenLimit = parameters.MaxTokens ?? 8000,
+                    StoreFullResults = true,
+                    ToolName = Name,
+                    CacheKey = cacheKey
+                };
+                
+                // Use response builder to create optimized response
+                var response = await _responseBuilder.BuildResponseAsync(indexResultData, context);
+                
+                // Convert to TokenOptimizedResult
+                var result = response as TokenOptimizedResult;
+                if (result == null)
+                {
+                    // This shouldn't happen, but handle gracefully
+                    result = new TokenOptimizedResult
+                    {
+                        Success = true,
+                        Data = new AIResponseData
+                        {
+                            Summary = $"Indexed {indexResult.IndexedFileCount} files in {indexResult.Duration.TotalSeconds:F2} seconds",
+                            Results = indexResultData,
+                            Count = indexResult.IndexedFileCount
+                        }
+                    };
+                    result.SetOperation(Name);
                 }
                 
                 return result;
@@ -148,49 +210,125 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, IndexWor
             {
                 // Index already exists and no force rebuild requested
                 var documentCount = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
+                var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
                 
-                var result = new IndexWorkspaceResult
+                // Start watching this workspace for changes (if not already watching)
+                bool watcherEnabled = false;
+                if (_fileWatcherService != null)
+                {
+                    _fileWatcherService.StartWatching(workspacePath);
+                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
+                    watcherEnabled = true;
+                }
+                
+                // Create IndexResult for existing index
+                var indexResultData = new IndexResult
                 {
                     Success = true,
                     WorkspacePath = workspacePath,
                     WorkspaceHash = initResult.WorkspaceHash,
                     IndexPath = initResult.IndexPath,
                     IsNewIndex = false,
-                    IndexedFileCount = documentCount,
-                    TotalFileCount = documentCount,
-                    Duration = DateTime.UtcNow - startTime,
-                    Message = $"Index already exists with {documentCount} documents. Use ForceRebuild to rebuild."
+                    FilesIndexed = documentCount,
+                    FilesSkipped = 0,
+                    TotalSizeBytes = stats.IndexSizeBytes,
+                    IndexTimeMs = (long)(DateTime.UtcNow - startTime).TotalMilliseconds,
+                    WatcherEnabled = watcherEnabled,
+                    IndexedFiles = null, // Don't list all files for existing index
+                    Statistics = new ResponseBuilders.IndexStatistics
+                    {
+                        DocumentCount = stats.DocumentCount,
+                        DeletedDocumentCount = stats.DeletedDocumentCount,
+                        SegmentCount = stats.SegmentCount,
+                        IndexSizeBytes = stats.IndexSizeBytes,
+                        FileTypeDistribution = stats.FileTypeDistribution
+                    }
                 };
                 
-                // Start watching this workspace for changes (if not already watching)
-                if (_fileWatcherService != null)
+                // Build response context
+                var context = new ResponseContext
                 {
-                    _fileWatcherService.StartWatching(workspacePath);
-                    _logger.LogInformation("Started file watcher for workspace: {WorkspacePath}", workspacePath);
-                }
+                    ResponseMode = parameters.ResponseMode ?? "summary",
+                    TokenLimit = parameters.MaxTokens ?? 8000,
+                    StoreFullResults = false, // No need to store for existing index
+                    ToolName = Name,
+                    CacheKey = cacheKey
+                };
                 
-                return result;
+                // Use response builder to create optimized response
+                var response = await _responseBuilder.BuildResponseAsync(indexResultData, context);
+                
+                return response as TokenOptimizedResult ?? new TokenOptimizedResult
+                {
+                    Success = true,
+                    Data = new AIResponseData
+                    {
+                        Summary = $"Index already exists with {documentCount} documents. Use ForceRebuild to rebuild.",
+                        Results = indexResultData,
+                        Count = documentCount
+                    }
+                };
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to index workspace: {WorkspacePath}", workspacePath);
             
-            return new IndexWorkspaceResult
+            return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
             {
-                Success = false,
-                Error = CreateErrorResult(
-                    "index_workspace",
-                    ex.Message,
-                    "Check logs for details and ensure the workspace path is accessible"
-                ),
-                WorkspacePath = workspacePath,
-                WorkspaceHash = _pathResolutionService.ComputeWorkspaceHash(workspacePath),
-                IndexedFileCount = 0,
-                TotalFileCount = 0,
-                Duration = DateTime.UtcNow - startTime
-            };
+                Code = "INDEX_ERROR",
+                Message = $"Failed to index workspace: {ex.Message}",
+                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                {
+                    Steps = new[]
+                    {
+                        "Check logs for detailed error information",
+                        "Ensure the workspace path is accessible",
+                        "Verify you have write permissions for the index location",
+                        "Try with a smaller workspace first"
+                    }
+                }
+            });
         }
+    }
+    
+    private TokenOptimizedResult CreateDirectoryNotFoundError(string workspacePath)
+    {
+        var result = new TokenOptimizedResult
+        {
+            Success = false,
+            Error = new COA.Mcp.Framework.Models.ErrorInfo
+            {
+                Code = "DIRECTORY_NOT_FOUND",
+                Message = $"Directory does not exist: {workspacePath}",
+                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                {
+                    Steps = new[]
+                    {
+                        "Verify the workspace path is correct",
+                        "Check if the directory was moved or deleted",
+                        "Create the directory if it should exist",
+                        "Use an absolute path instead of relative"
+                    }
+                }
+            },
+            Insights = new List<string>
+            {
+                "The specified directory must exist before indexing",
+                "Use an absolute path for best results"
+            },
+            Actions = new List<AIAction>
+            {
+                new AIAction
+                {
+                    Action = "verify_path",
+                    Description = "Check if the path exists and is accessible",
+                    Priority = 100
+                }
+            }
+        };
+        result.SetOperation(Name);
+        return result;
     }
 }
 
@@ -223,6 +361,19 @@ public class IndexWorkspaceParameters
     /// </summary>
     [Description("File extensions to exclude from indexing")]
     public string[]? ExcludeExtensions { get; set; }
+    
+    /// <summary>
+    /// Response mode: 'summary' or 'full' (default: summary)
+    /// </summary>
+    [Description("Response mode: 'summary' or 'full' (default: summary)")]
+    public string? ResponseMode { get; set; }
+    
+    /// <summary>
+    /// Maximum tokens for response (default: 8000)
+    /// </summary>
+    [Description("Maximum tokens for response (default: 8000)")]
+    [Range(100, 100000)]
+    public int? MaxTokens { get; set; }
 }
 
 /// <summary>
