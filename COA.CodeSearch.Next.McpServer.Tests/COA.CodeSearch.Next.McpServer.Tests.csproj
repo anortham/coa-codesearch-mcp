@@ -22,7 +22,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\COA.CodeSearch.Next.McpServer.csproj" />
+    <ProjectReference Include="..\COA.CodeSearch.Next.McpServer\COA.CodeSearch.Next.McpServer.csproj" />
   </ItemGroup>
 
 </Project>

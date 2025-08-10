@@ -64,7 +64,7 @@ public class Program
         // services.AddSingleton<IActionGenerator, ActionGenerator>();
         services.AddSingleton<IResponseCacheService, ResponseCacheService>();
         services.AddSingleton<IResourceStorageService, ResourceStorageService>();
-        services.AddSingleton<ICacheKeyGenerator, DefaultCacheKeyGenerator>();
+        services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
         
         // Resource providers
         // services.AddSingleton<SearchResultResourceProvider>();
@@ -172,7 +172,7 @@ public class Program
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>();
-            builder.Services.AddScoped<TextSearchTool_V2>(); // Enhanced version with token optimization
+            builder.Services.AddScoped<TextSearchToolOptimized>(); // Fully optimized with all framework features
             builder.Services.AddScoped<FileSearchTool>();
             // builder.Services.AddScoped<DirectorySearchTool>();
             // builder.Services.AddScoped<RecentFilesTool>();
