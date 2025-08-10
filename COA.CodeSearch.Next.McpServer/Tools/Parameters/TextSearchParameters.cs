@@ -1,0 +1,50 @@
+using System.ComponentModel;
+using System.ComponentModel.DataAnnotations;
+
+namespace COA.CodeSearch.Next.McpServer.Tools;
+
+/// <summary>
+/// Parameters for the text search tool
+/// </summary>
+public class TextSearchParameters
+{
+    /// <summary>
+    /// The search query string
+    /// </summary>
+    [Required]
+    [Description("The search query string")]
+    public string Query { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Path to the workspace directory to search
+    /// </summary>
+    [Required]
+    [Description("Path to the workspace directory to search")]
+    public string WorkspacePath { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Maximum number of results to return (default: 50, max: 500)
+    /// </summary>
+    [Description("Maximum number of results to return (default: 50, max: 500)")]
+    [Range(1, 500)]
+    public int MaxResults { get; set; } = 50;
+
+    /// <summary>
+    /// Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)
+    /// </summary>
+    [Description("Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)")]
+    public string ResponseMode { get; set; } = "adaptive";
+
+    /// <summary>
+    /// Maximum tokens for response (default: 8000)
+    /// </summary>
+    [Description("Maximum tokens for response (default: 8000)")]
+    [Range(100, 100000)]
+    public int MaxTokens { get; set; } = 8000;
+
+    /// <summary>
+    /// Disable caching for this request
+    /// </summary>
+    [Description("Disable caching for this request")]
+    public bool NoCache { get; set; } = false;
+}

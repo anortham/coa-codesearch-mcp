@@ -46,7 +46,7 @@ public class TokenOptimizedResult : ToolResultBase
     /// Gets or sets the suggested next actions.
     /// </summary>
     [JsonPropertyName("actions")]
-    public new List<AIAction> Actions { get; set; } = new();
+    public new List<COA.Mcp.Framework.Models.AIAction> Actions { get; set; } = new();
     
     /// <summary>
     /// Gets or sets the response metadata.
