@@ -3,9 +3,11 @@ using FluentAssertions;
 using Moq;
 using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
+using COA.CodeSearch.Next.McpServer.Models;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
+using Lucene.Net.Search;
 using System.Threading.Tasks;
 using System.Threading;
 using System;
@@ -23,7 +25,6 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         {
             _tool = new TextSearchTool(
                 LuceneIndexServiceMock.Object,
-                PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
@@ -54,7 +55,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -94,7 +95,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -105,7 +106,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Verify that Lucene search was not called
             LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
         
@@ -119,7 +120,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
@@ -137,7 +138,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -149,7 +150,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Verify search was performed
             LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
                 Times.Once);
         }
         
@@ -163,7 +164,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     TestWorkspacePath,
-                    "test query",
+                    It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
@@ -177,7 +178,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -200,12 +201,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var resourceUri = new Uri("resource://test/12345");
+            var resourceUri = new ResourceUri("mcp-resource://test/12345");
             ResourceStorageServiceMock
                 .Setup(x => x.StoreAsync(
                     It.IsAny<object>(),
@@ -221,7 +222,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -244,7 +245,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
@@ -258,7 +259,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -281,7 +282,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Search failed"));
@@ -294,7 +295,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue(); // Tool execution succeeded
@@ -319,12 +320,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeFalse();
             result.Exception.Should().NotBeNull();
-            result.Exception.Should().BeOfType<ArgumentNullException>();
+            result.Exception.Should().BeOfType<COA.Mcp.Framework.Exceptions.ToolExecutionException>();
         }
         
         [Test]
@@ -337,7 +338,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
                     It.Is<int>(max => max == 500), // Verify max limit
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
@@ -351,7 +352,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -360,7 +361,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
                     500,
                     It.IsAny<CancellationToken>()),
                 Times.Once);
@@ -376,7 +377,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
-                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
@@ -390,7 +391,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();

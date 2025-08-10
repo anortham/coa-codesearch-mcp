@@ -2,6 +2,7 @@ using COA.Mcp.Framework.Testing.Base;
 using COA.CodeSearch.Next.McpServer.Services;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Models;
+using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization;
@@ -12,6 +13,7 @@ using Moq;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
+using System.Linq;
 
 namespace COA.CodeSearch.Next.McpServer.Tests.Base
 {
@@ -101,11 +103,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Base
                 
             PathResolutionServiceMock
                 .Setup(x => x.EnsureDirectoryExists(It.IsAny<string>()))
-                .Returns<string>(path =>
-                {
-                    Directory.CreateDirectory(path);
-                    return path;
-                });
+                .Callback<string>(path => Directory.CreateDirectory(path));
             
             // Cache key generator defaults
             CacheKeyGeneratorMock
@@ -114,20 +112,19 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Base
             
             // Memory pressure defaults
             MemoryPressureServiceMock
-                .Setup(x => x.IsMemoryPressureHigh())
+                .Setup(x => x.GetCurrentPressureLevel())
+                .Returns(MemoryPressureLevel.Normal);
+            MemoryPressureServiceMock
+                .Setup(x => x.ShouldThrottleOperation(It.IsAny<string>()))
                 .Returns(false);
             
             // Circuit breaker defaults
             CircuitBreakerServiceMock
-                .Setup(x => x.IsOpen(It.IsAny<string>()))
-                .Returns(false);
-                
-            CircuitBreakerServiceMock
-                .Setup(x => x.CallAsync(
+                .Setup(x => x.ExecuteAsync(
                     It.IsAny<string>(),
-                    It.IsAny<Func<Task<object>>>(),
+                    It.IsAny<Func<Task>>(),
                     It.IsAny<CancellationToken>()))
-                .Returns<string, Func<Task<object>>, CancellationToken>(
+                .Returns<string, Func<Task>, CancellationToken>(
                     async (key, func, ct) => await func());
         }
         
@@ -146,7 +143,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Base
                 
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new Services.Lucene.IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = false,
