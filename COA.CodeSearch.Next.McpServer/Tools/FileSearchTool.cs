@@ -113,6 +113,9 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
             var regex = useRegex ? new Regex(pattern, RegexOptions.IgnoreCase) : null;
             var globPattern = useRegex ? null : ConvertGlobToRegex(pattern);
             
+            _logger.LogDebug("Filtering {Count} search hits with pattern: {Pattern} (regex: {UseRegex})", 
+                searchResult.Hits.Count, pattern, useRegex);
+            
             foreach (var hit in searchResult.Hits)
             {
                 var filePath = hit.FilePath;
@@ -124,6 +127,9 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
                     bool matches = useRegex 
                         ? regex!.IsMatch(fileName)
                         : globPattern!.IsMatch(fileName);
+                    
+                    _logger.LogDebug("File {FileName} matches pattern {Pattern}: {Matches}", 
+                        fileName, pattern, matches);
                     
                     if (matches)
                     {
@@ -137,6 +143,8 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
                     }
                 }
             }
+            
+            _logger.LogDebug("Filtered to {Count} files matching pattern", files.Count);
             
             // Apply extension filter if provided
             if (!string.IsNullOrEmpty(parameters.ExtensionFilter))
@@ -196,6 +204,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedRe
             if (result == null)
             {
                 // This shouldn't happen, but handle gracefully
+                _logger.LogWarning("Response builder returned unexpected type: {Type}", response?.GetType()?.FullName ?? "null");
                 result = new TokenOptimizedResult
                 {
                     Success = true,

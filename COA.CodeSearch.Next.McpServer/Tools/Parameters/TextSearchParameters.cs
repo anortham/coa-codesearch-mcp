@@ -22,12 +22,11 @@ public class TextSearchParameters
     [Description("Path to the workspace directory to search")]
     public string WorkspacePath { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Maximum number of results to return (default: 50, max: 500)
-    /// </summary>
-    [Description("Maximum number of results to return (default: 50, max: 500)")]
-    [Range(1, 500)]
-    public int MaxResults { get; set; } = 50;
+    // MaxResults removed - controlled internally based on ResponseMode to prevent token blowouts
+    // ResponseMode determines the number of results:
+    // - "summary": 20 results (optimized for quick overview)
+    // - "full": 100 results (comprehensive but still token-safe)
+    // - "adaptive": 50 results (balanced approach)
 
     /// <summary>
     /// Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)
