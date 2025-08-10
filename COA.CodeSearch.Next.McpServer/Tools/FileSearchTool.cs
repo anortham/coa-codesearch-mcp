@@ -4,9 +4,16 @@ using System.Text.RegularExpressions;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
+using COA.Mcp.Framework.TokenOptimization;
+using COA.Mcp.Framework.TokenOptimization.Models;
+using COA.Mcp.Framework.TokenOptimization.Caching;
+using COA.Mcp.Framework.TokenOptimization.Storage;
+using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.Next.McpServer.Services;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Services.Analysis;
+using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.Next.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
@@ -15,29 +22,40 @@ using Lucene.Net.Util;
 namespace COA.CodeSearch.Next.McpServer.Tools;
 
 /// <summary>
-/// Tool for searching files by name pattern in indexed workspaces
+/// Tool for searching files by name pattern in indexed workspaces with token optimization
 /// </summary>
-public class FileSearchTool : McpToolBase<FileSearchParameters, FileSearchResult>
+public class FileSearchTool : McpToolBase<FileSearchParameters, TokenOptimizedResult>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly IResponseCacheService _cacheService;
+    private readonly IResourceStorageService _storageService;
+    private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly FileSearchResponseBuilder _responseBuilder;
     private readonly ILogger<FileSearchTool> _logger;
 
     public FileSearchTool(
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
+        IResponseCacheService cacheService,
+        IResourceStorageService storageService,
+        ICacheKeyGenerator keyGenerator,
         ILogger<FileSearchTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
+        _cacheService = cacheService;
+        _storageService = storageService;
+        _keyGenerator = keyGenerator;
+        _responseBuilder = new FileSearchResponseBuilder(null, storageService);
         _logger = logger;
     }
 
     public override string Name => ToolNames.FileSearch;
-    public override string Description => "Search for files by name pattern in indexed workspaces";
+    public override string Description => "Search for files by name pattern with token-optimized responses";
     public override ToolCategory Category => ToolCategory.Query;
 
-    protected override async Task<FileSearchResult> ExecuteInternalAsync(
+    protected override async Task<TokenOptimizedResult> ExecuteInternalAsync(
         FileSearchParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -52,22 +70,30 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, FileSearchResult
         var maxResults = parameters.MaxResults ?? 100;
         maxResults = ValidateRange(maxResults, 1, 500, nameof(parameters.MaxResults));
         
+        // Generate cache key
+        var cacheKey = _keyGenerator.GenerateKey(Name, parameters);
+        
+        // Check cache first (unless explicitly disabled)
+        if (!parameters.NoCache)
+        {
+            var cached = await _cacheService.GetAsync<TokenOptimizedResult>(cacheKey);
+            if (cached != null)
+            {
+                _logger.LogDebug("Returning cached file search results for pattern: {Pattern}", pattern);
+                cached.Meta ??= new AIResponseMeta();
+                if (cached.Meta.ExtensionData == null)
+                    cached.Meta.ExtensionData = new Dictionary<string, object>();
+                cached.Meta.ExtensionData["cacheHit"] = true;
+                return cached;
+            }
+        }
+        
         try
         {
             // Check if index exists
             if (!await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken))
             {
-                return new FileSearchResult
-                {
-                    Success = false,
-                    Error = CreateValidationErrorResult(
-                        ToolNames.FileSearch,
-                        nameof(parameters.WorkspacePath),
-                        $"No index found for workspace: {workspacePath}. Run index_workspace first."
-                    ),
-                    Files = new List<FileSearchMatch>(),
-                    TotalMatches = 0
-                };
+                return CreateNoIndexError(workspacePath);
             }
             
             // Create a MatchAllDocsQuery to get all indexed files
@@ -137,28 +163,89 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, FileSearchResult
                     .ToList();
             }
             
-            return new FileSearchResult
+            // Create FileSearchResult for response builder
+            var fileSearchResult = new ResponseBuilders.FileSearchResult
             {
-                Success = true,
-                Files = files.Take(maxResults).ToList(),
-                Directories = directories,
-                TotalMatches = files.Count
+                Files = files.Select(f => new ResponseBuilders.FileInfo
+                {
+                    Path = f.FilePath,
+                    Size = 0, // We don't have size from index currently
+                    LastModified = null, // We don't have this from index currently
+                    IsDirectory = false
+                }).ToList(),
+                TotalFiles = files.Count,
+                Pattern = pattern,
+                SearchPath = workspacePath
             };
+            
+            // Build response context
+            var context = new ResponseContext
+            {
+                ResponseMode = parameters.ResponseMode ?? "adaptive",
+                TokenLimit = parameters.MaxTokens ?? 8000,
+                StoreFullResults = true,
+                ToolName = Name,
+                CacheKey = cacheKey
+            };
+            
+            // Use response builder to create optimized response
+            var response = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
+            
+            // Convert to TokenOptimizedResult
+            var result = response as TokenOptimizedResult;
+            if (result == null)
+            {
+                // This shouldn't happen, but handle gracefully
+                result = new TokenOptimizedResult
+                {
+                    Success = true,
+                    Data = new AIResponseData
+                    {
+                        Summary = $"Found {files.Count} files matching '{pattern}'",
+                        Results = files.Take(maxResults),
+                        Count = files.Count
+                    }
+                };
+                result.SetOperation(Name);
+            }
+            
+            // Add directories to extension data if requested
+            if (directories != null && result.Data.ExtensionData != null)
+            {
+                result.Data.ExtensionData["directories"] = directories;
+            }
+            
+            // Cache the successful response
+            if (!parameters.NoCache && result.Success)
+            {
+                await _cacheService.SetAsync(cacheKey, result, new CacheEntryOptions
+                {
+                    AbsoluteExpiration = TimeSpan.FromMinutes(15),
+                    Priority = files.Count > 100 ? CachePriority.High : CachePriority.Normal
+                });
+                _logger.LogDebug("Cached file search results for pattern: {Pattern}", pattern);
+            }
+            
+            return result;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Error searching for files");
-            return new FileSearchResult
+            _logger.LogError(ex, "Error searching for files with pattern: {Pattern}", pattern);
+            return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
             {
-                Success = false,
-                Error = new ErrorInfo
+                Code = "FILE_SEARCH_ERROR",
+                Message = $"Error searching for files: {ex.Message}",
+                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                 {
-                    Code = "EXECUTION_ERROR",
-                    Message = $"Error searching for files: {ex.Message}"
-                },
-                Files = new List<FileSearchMatch>(),
-                TotalMatches = 0
-            };
+                    Steps = new[]
+                    {
+                        "Verify the pattern syntax is valid",
+                        "Check if the workspace is properly indexed",
+                        "Try a simpler pattern",
+                        "Check logs for detailed error information"
+                    }
+                }
+            });
         }
     }
     
@@ -168,6 +255,44 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, FileSearchResult
             .Replace("\\*", ".*")
             .Replace("\\?", ".") + "$";
         return new Regex(regexPattern, RegexOptions.IgnoreCase);
+    }
+    
+    private TokenOptimizedResult CreateNoIndexError(string workspacePath)
+    {
+        var result = new TokenOptimizedResult
+        {
+            Success = false,
+            Error = new COA.Mcp.Framework.Models.ErrorInfo
+            {
+                Code = "NO_INDEX",
+                Message = $"No index found for workspace: {workspacePath}",
+                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                {
+                    Steps = new[]
+                    {
+                        $"Run {ToolNames.IndexWorkspace} tool to create the index",
+                        "Verify the workspace path is correct",
+                        "Check if you have read permissions for the workspace"
+                    }
+                }
+            },
+            Insights = new List<string>
+            {
+                "The workspace needs to be indexed before searching",
+                "Indexing creates a searchable database of file contents"
+            },
+            Actions = new List<AIAction>
+            {
+                new AIAction
+                {
+                    Action = ToolNames.IndexWorkspace,
+                    Description = "Create search index for this workspace",
+                    Priority = 100
+                }
+            }
+        };
+        result.SetOperation(Name);
+        return result;
     }
 }
 
@@ -213,6 +338,25 @@ public class FileSearchParameters
     /// </summary>
     [Description("Comma-separated list of file extensions to filter (e.g., '.cs,.js')")]
     public string? ExtensionFilter { get; set; }
+    
+    /// <summary>
+    /// Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)
+    /// </summary>
+    [Description("Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)")]
+    public string? ResponseMode { get; set; }
+    
+    /// <summary>
+    /// Maximum tokens for response (default: 8000)
+    /// </summary>
+    [Description("Maximum tokens for response (default: 8000)")]
+    [Range(100, 100000)]
+    public int? MaxTokens { get; set; }
+    
+    /// <summary>
+    /// Disable caching for this request
+    /// </summary>
+    [Description("Disable caching for this request")]
+    public bool NoCache { get; set; } = false;
 }
 
 /// <summary>
