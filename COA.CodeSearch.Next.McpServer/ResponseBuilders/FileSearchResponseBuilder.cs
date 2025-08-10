@@ -13,7 +13,7 @@ namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
 /// <summary>
 /// Response builder for file search operations with token-aware optimization.
 /// </summary>
-public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult>
+public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult, AIOptimizedResponse<Tools.FileSearchResult>>
 {
     private readonly IResourceStorageService? _storageService;
     
@@ -25,7 +25,7 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult>
         _storageService = storageService;
     }
     
-    public override async Task<object> BuildResponseAsync(FileSearchResult data, ResponseContext context)
+    public override async Task<AIOptimizedResponse<Tools.FileSearchResult>> BuildResponseAsync(FileSearchResult data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -76,13 +76,23 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult>
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
-        var response = new TokenOptimizedResult
+        var response = new AIOptimizedResponse<Tools.FileSearchResult>
         {
             Success = true,
-            Data = new AIResponseData
+            Data = new AIResponseData<Tools.FileSearchResult>
             {
                 Summary = BuildSummary(data, reducedFiles.Count, context.ResponseMode),
-                Results = reducedFiles,
+                Results = new Tools.FileSearchResult
+                {
+                    Files = reducedFiles.Select(f => new Tools.FileSearchMatch
+                    {
+                        FilePath = f.Path,
+                        FileName = Path.GetFileName(f.Path),
+                        Directory = Path.GetDirectoryName(f.Path) ?? "",
+                        Extension = Path.GetExtension(f.Path)
+                    }).ToList(),
+                    TotalMatches = data.TotalFiles
+                },
                 Count = data.TotalFiles,
                 ExtensionData = new Dictionary<string, object>
                 {

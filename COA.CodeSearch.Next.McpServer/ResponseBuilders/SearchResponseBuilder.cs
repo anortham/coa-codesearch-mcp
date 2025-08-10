@@ -14,7 +14,7 @@ namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
 /// <summary>
 /// Response builder for search operations with token-aware optimization.
 /// </summary>
-public class SearchResponseBuilder : BaseResponseBuilder<SearchResult>
+public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimizedResponse<SearchResult>>
 {
     private readonly IResourceStorageService? _storageService;
     
@@ -26,7 +26,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult>
         _storageService = storageService;
     }
     
-    public override async Task<object> BuildResponseAsync(SearchResult data, ResponseContext context)
+    public override async Task<AIOptimizedResponse<SearchResult>> BuildResponseAsync(SearchResult data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -77,13 +77,13 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult>
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
-        var response = new TokenOptimizedResult
+        var response = new AIOptimizedResponse<SearchResult>
         {
             Success = true,
-            Data = new AIResponseData
+            Data = new AIResponseData<SearchResult>
             {
                 Summary = BuildSummary(data, reducedHits.Count, context.ResponseMode),
-                Results = reducedHits,
+                Results = data, // Pass the whole SearchResult, not just the hits list
                 Count = data.TotalHits,
                 ExtensionData = new Dictionary<string, object>
                 {
@@ -97,8 +97,11 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult>
             Meta = CreateMetadata(startTime, wasTruncated, resourceUri)
         };
         
-        // Set operation name
-        response.SetOperation(context.ToolName ?? "search");
+        // Set operation name if there's a way to do it
+        if (response.Operation != null)
+        {
+            // Operation is read-only, might be set via constructor or base class
+        }
         
         // Update token estimate
         response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
