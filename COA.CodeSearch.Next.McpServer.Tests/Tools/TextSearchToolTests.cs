@@ -206,7 +206,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var resourceUri = new ResourceUri("mcp-resource://test/12345");
+            var resourceUri = new ResourceUri("mcp-resource://memory/search-results/12345");
             ResourceStorageServiceMock
                 .Setup(x => x.StoreAsync(
                     It.IsAny<object>(),
@@ -329,7 +329,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         }
         
         [Test]
-        public async Task ExecuteAsync_Should_Respect_MaxResults_Limit()
+        public async Task ExecuteAsync_Should_Use_ResponseMode_Based_MaxResults()
         {
             // Arrange
             SetupExistingIndex();
@@ -339,7 +339,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 .Setup(x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    It.Is<int>(max => max == 500), // Verify max limit
+                    It.IsAny<int>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -347,7 +347,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 Query = "test query",
                 WorkspacePath = TestWorkspacePath,
-                MaxResults = 1000 // Above the 500 limit
+                ResponseMode = "full" // Should use 100 max results
             };
             
             // Act
@@ -357,12 +357,51 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Assert
             result.Success.Should().BeTrue();
             
-            // Verify search was called with max limit of 500
+            // Verify search was called with 100 (full mode limit)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    500,
+                    100, // Full mode should use 100
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+        
+        [Test]
+        public async Task ExecuteAsync_Should_Use_Summary_Mode_MaxResults()
+        {
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = CreateTestSearchResult(50);
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new TextSearchParameters
+            {
+                Query = "test query",
+                WorkspacePath = TestWorkspacePath,
+                ResponseMode = "summary" // Should use 20 max results
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            
+            // Verify search was called with 20 (summary mode limit)
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    20, // Summary mode should use 20
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -397,6 +436,15 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
+            
+            // Verify search was called with 50 (adaptive mode default)
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    50, // Adaptive mode should use 50
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
             
             // Verify response has appropriate content for adaptive mode
             result.Result.Data.Should().NotBeNull();

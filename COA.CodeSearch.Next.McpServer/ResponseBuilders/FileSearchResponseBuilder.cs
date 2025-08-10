@@ -83,7 +83,7 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult>
             {
                 Summary = BuildSummary(data, reducedFiles.Count, context.ResponseMode),
                 Results = reducedFiles,
-                Count = reducedFiles.Count,
+                Count = data.TotalFiles,
                 ExtensionData = new Dictionary<string, object>
                 {
                     ["totalFiles"] = data.TotalFiles,

@@ -96,9 +96,18 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
                 return CreateQueryParseError(query);
             }
 
-            // Determine max results based on response mode
-            var responseMode = parameters.ResponseMode?.ToLowerInvariant() ?? "summary";
-            var maxResults = responseMode == "full" ? 500 : 100;
+            // Determine max results based on response mode to protect token limits
+            // We intentionally don't let users control this directly to prevent token blowouts
+            var responseMode = parameters.ResponseMode?.ToLowerInvariant() ?? "adaptive";
+            var maxResults = responseMode switch
+            {
+                "full" => 100,     // Even in full mode, cap at 100 for safety
+                "summary" => 20,   // Summary mode gets fewer results
+                _ => 50            // Adaptive/default: moderate amount
+            };
+            
+            _logger.LogDebug("Text search using ResponseMode-based MaxResults: {MaxResults} (mode: {ResponseMode}), Query: {Query}", 
+                maxResults, responseMode, query);
 
             // Perform search
             var searchResult = await _luceneIndexService.SearchAsync(
