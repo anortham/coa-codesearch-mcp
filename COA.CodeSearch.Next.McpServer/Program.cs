@@ -174,11 +174,14 @@ public class Program
             // TODO: Figure out how to use token optimization with McpServerBuilder
             // Currently AddMcpFramework conflicts with McpServerBuilder's registry
 
+            // Register response builders
+            builder.Services.AddScoped<ResponseBuilders.SearchResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.FileSearchResponseBuilder>();
+            
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
-            builder.Services.AddScoped<TextSearchTool>();
-            builder.Services.AddScoped<TextSearchToolOptimized>(); // Fully optimized with all framework features
+            builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
             builder.Services.AddScoped<FileSearchTool>();
             // builder.Services.AddScoped<DirectorySearchTool>();
             // builder.Services.AddScoped<RecentFilesTool>();

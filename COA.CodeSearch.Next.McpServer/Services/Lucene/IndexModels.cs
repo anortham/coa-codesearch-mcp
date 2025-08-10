@@ -25,6 +25,7 @@ public class SearchResult
     public List<SearchHit> Hits { get; set; } = new();
     public TimeSpan SearchTime { get; set; }
     public string? Query { get; set; }
+    public long ProcessingTimeMs => (long)SearchTime.TotalMilliseconds;
 }
 
 /// <summary>
@@ -37,6 +38,8 @@ public class SearchHit
     public string? Content { get; set; }
     public Dictionary<string, string> Fields { get; set; } = new();
     public List<string>? HighlightedFragments { get; set; }
+    public string? Snippet => HighlightedFragments?.FirstOrDefault() ?? Content?.Substring(0, Math.Min(Content.Length, 200));
+    public DateTime? LastModified { get; set; }
 }
 
 /// <summary>
