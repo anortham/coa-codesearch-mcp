@@ -5,11 +5,12 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// </summary>
 public static class ToolNames
 {
-    public const string HelloWorld = "hello_world";
-    public const string SystemInfo = "get_system_info";
+    // Core search operations
     public const string IndexWorkspace = "index_workspace";
     public const string TextSearch = "text_search";
     public const string FileSearch = "file_search";
+    
+    // Future tools
     public const string DirectorySearch = "directory_search";
     public const string RecentFiles = "recent_files";
     public const string SimilarFiles = "similar_files";
