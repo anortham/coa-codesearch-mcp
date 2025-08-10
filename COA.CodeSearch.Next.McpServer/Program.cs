@@ -188,10 +188,10 @@ public class Program
             // Discover and register all tools from assembly
             builder.DiscoverTools(typeof(Program).Assembly);
 
-
-            // Register prompts if needed
-            // builder.RegisterPromptType<CodeExplorerPrompt>();
-            // builder.RegisterPromptType<BugFinderPrompt>();
+            // Register prompts for interactive workflows
+            builder.RegisterPrompt(new Prompts.CodeExplorerPrompt());
+            builder.RegisterPrompt(new Prompts.BugHunterPrompt());
+            builder.RegisterPrompt(new Prompts.RefactoringAssistantPrompt());
 
             // Check if running as HTTP service
             if (isServiceMode)
