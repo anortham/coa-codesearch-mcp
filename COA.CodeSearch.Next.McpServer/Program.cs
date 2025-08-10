@@ -62,6 +62,12 @@ public class Program
         // Note: IInsightGenerator and IActionGenerator may be internal to framework
         // services.AddSingleton<IInsightGenerator, InsightGenerator>();
         // services.AddSingleton<IActionGenerator, ActionGenerator>();
+        
+        // Configure cache eviction policy - LRU with 100MB limit
+        services.AddSingleton<ICacheEvictionPolicy>(sp => 
+            new LruEvictionPolicy(maxMemoryBytes: 100_000_000, targetMemoryUsageRatio: 0.8));
+        
+        // Register caching services with eviction policy
         services.AddSingleton<IResponseCacheService, ResponseCacheService>();
         services.AddSingleton<IResourceStorageService, ResourceStorageService>();
         services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
