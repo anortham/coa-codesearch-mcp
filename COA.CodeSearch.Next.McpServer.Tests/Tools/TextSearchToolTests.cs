@@ -172,8 +172,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             var parameters = new TextSearchParameters
             {
                 Query = "test query",
-                WorkspacePath = TestWorkspacePath,
-                MaxResults = 50
+                WorkspacePath = TestWorkspacePath
             };
             
             // Act
