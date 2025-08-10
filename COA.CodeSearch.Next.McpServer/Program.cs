@@ -177,6 +177,7 @@ public class Program
             // Register response builders
             builder.Services.AddScoped<ResponseBuilders.SearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.FileSearchResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.IndexResponseBuilder>();
             
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
