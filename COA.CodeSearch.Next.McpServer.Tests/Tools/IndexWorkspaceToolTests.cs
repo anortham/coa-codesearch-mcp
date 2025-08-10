@@ -3,7 +3,10 @@ using FluentAssertions;
 using Moq;
 using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Services;
+using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
+using COA.CodeSearch.Next.McpServer.Models;
+using IndexingResult = COA.CodeSearch.Next.McpServer.Services.IndexingResult;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using System.Threading.Tasks;
 using System.Threading;
@@ -64,7 +67,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -81,7 +84,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = true,
@@ -91,7 +94,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             FileIndexingServiceMock
                 .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.IndexingResult
+                .ReturnsAsync(new IndexingResult
                 {
                     Success = true,
                     IndexedFileCount = 50,
@@ -117,7 +120,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -141,7 +144,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = false, // Existing index
@@ -172,7 +175,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -198,7 +201,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = false, // Existing index
@@ -208,7 +211,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             FileIndexingServiceMock
                 .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.IndexingResult
+                .ReturnsAsync(new IndexingResult
                 {
                     Success = true,
                     IndexedFileCount = 75,
@@ -235,7 +238,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -260,7 +263,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = true,
@@ -270,7 +273,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             FileIndexingServiceMock
                 .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.IndexingResult
+                .ReturnsAsync(new IndexingResult
                 {
                     Success = true,
                     IndexedFileCount = 50,
@@ -312,7 +315,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -331,7 +334,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = false,
                     ErrorMessage = "Failed to acquire write lock"
@@ -344,7 +347,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -363,7 +366,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = true,
@@ -373,7 +376,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             FileIndexingServiceMock
                 .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.IndexingResult
+                .ReturnsAsync(new IndexingResult
                 {
                     Success = false,
                     ErrorMessage = "Insufficient disk space"
@@ -386,7 +389,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -414,7 +417,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
@@ -437,7 +440,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeFalse();
@@ -451,7 +454,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.InitializationResult
+                .ReturnsAsync(new IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = true,
@@ -461,7 +464,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             FileIndexingServiceMock
                 .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Models.IndexingResult
+                .ReturnsAsync(new IndexingResult
                 {
                     Success = true,
                     IndexedFileCount = 50,
@@ -495,7 +498,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Act
             var result = await ExecuteToolAsync<TokenOptimizedResult>(
-                () => _tool.ExecuteAsync(parameters, CancellationToken.None));
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
