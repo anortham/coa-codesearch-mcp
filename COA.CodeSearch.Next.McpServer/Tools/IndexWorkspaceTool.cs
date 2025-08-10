@@ -20,7 +20,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// <summary>
 /// Tool for indexing a workspace directory with token-optimized responses
 /// </summary>
-public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOptimizedResult>
+public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimizedResponse<IndexResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
@@ -57,7 +57,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOpt
     public override string Description => "Index a workspace directory with token-optimized progress reporting";
     public override ToolCategory Category => ToolCategory.Resources;
 
-    protected override async Task<TokenOptimizedResult> ExecuteInternalAsync(
+    protected override async Task<AIOptimizedResponse<IndexResult>> ExecuteInternalAsync(
         IndexWorkspaceParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -87,21 +87,27 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOpt
             
             if (!initResult.Success)
             {
-                return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
+                var errorResult = new AIOptimizedResponse<IndexResult>
                 {
-                    Code = "INIT_FAILED",
-                    Message = initResult.ErrorMessage ?? "Failed to initialize index",
-                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                    Success = false,
+                    Error = new COA.Mcp.Framework.Models.ErrorInfo
                     {
-                        Steps = new[]
+                        Code = "INIT_FAILED",
+                        Message = initResult.ErrorMessage ?? "Failed to initialize index",
+                        Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                         {
-                            "Check if another process is using the index",
-                            "Verify write permissions for the index directory",
-                            "Try with ForceRebuild option",
-                            "Delete any existing write.lock files"
+                            Steps = new[]
+                            {
+                                "Check if another process is using the index",
+                                "Verify write permissions for the index directory",
+                                "Try with ForceRebuild option",
+                                "Delete any existing write.lock files"
+                            }
                         }
                     }
-                });
+                };
+                errorResult.SetOperation(Name);
+                return errorResult;
             }
 
             // Check if force rebuild is requested or if it's a new index
@@ -120,21 +126,27 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOpt
                 
                 if (!indexResult.Success)
                 {
-                    return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
+                    var indexErrorResult = new AIOptimizedResponse<IndexResult>
                     {
-                        Code = "INDEXING_FAILED",
-                        Message = indexResult.ErrorMessage ?? "Failed to index files",
-                        Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                        Success = false,
+                        Error = new COA.Mcp.Framework.Models.ErrorInfo
                         {
-                            Steps = new[]
+                            Code = "INDEXING_FAILED",
+                            Message = indexResult.ErrorMessage ?? "Failed to index files",
+                            Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                             {
-                                "Check if files are accessible",
-                                "Verify file permissions",
-                                "Check available disk space",
-                                "Try indexing with different file extensions"
+                                Steps = new[]
+                                {
+                                    "Check if files are accessible",
+                                    "Verify file permissions",
+                                    "Check available disk space",
+                                    "Try indexing with different file extensions"
+                                }
                             }
                         }
-                    });
+                    };
+                    indexErrorResult.SetOperation(Name);
+                    return indexErrorResult;
                 }
                 
                 // Start watching this workspace for changes
@@ -184,25 +196,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOpt
                 };
                 
                 // Use response builder to create optimized response
-                var response = await _responseBuilder.BuildResponseAsync(indexResultData, context);
-                
-                // Convert to TokenOptimizedResult
-                var result = response as TokenOptimizedResult;
-                if (result == null)
-                {
-                    // This shouldn't happen, but handle gracefully
-                    result = new TokenOptimizedResult
-                    {
-                        Success = true,
-                        Data = new AIResponseData
-                        {
-                            Summary = $"Indexed {indexResult.IndexedFileCount} files in {indexResult.Duration.TotalSeconds:F2} seconds",
-                            Results = indexResultData,
-                            Count = indexResult.IndexedFileCount
-                        }
-                    };
-                    result.SetOperation(Name);
-                }
+                var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
                 return result;
             }
@@ -256,45 +250,42 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, TokenOpt
                 };
                 
                 // Use response builder to create optimized response
-                var response = await _responseBuilder.BuildResponseAsync(indexResultData, context);
+                var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
-                return response as TokenOptimizedResult ?? new TokenOptimizedResult
-                {
-                    Success = true,
-                    Data = new AIResponseData
-                    {
-                        Summary = $"Index already exists with {documentCount} documents. Use ForceRebuild to rebuild.",
-                        Results = indexResultData,
-                        Count = documentCount
-                    }
-                };
+                return result;
             }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to index workspace: {WorkspacePath}", workspacePath);
             
-            return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
+            var exceptionErrorResult = new AIOptimizedResponse<IndexResult>
             {
-                Code = "INDEX_ERROR",
-                Message = $"Failed to index workspace: {ex.Message}",
-                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                Success = false,
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
-                    Steps = new[]
+                    Code = "INDEX_ERROR",
+                    Message = $"Failed to index workspace: {ex.Message}",
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
-                        "Check logs for detailed error information",
-                        "Ensure the workspace path is accessible",
-                        "Verify you have write permissions for the index location",
-                        "Try with a smaller workspace first"
+                        Steps = new[]
+                        {
+                            "Check logs for detailed error information",
+                            "Ensure the workspace path is accessible",
+                            "Verify you have write permissions for the index location",
+                            "Try with a smaller workspace first"
+                        }
                     }
                 }
-            });
+            };
+            exceptionErrorResult.SetOperation(Name);
+            return exceptionErrorResult;
         }
     }
     
-    private TokenOptimizedResult CreateDirectoryNotFoundError(string workspacePath)
+    private AIOptimizedResponse<IndexResult> CreateDirectoryNotFoundError(string workspacePath)
     {
-        var result = new TokenOptimizedResult
+        var result = new AIOptimizedResponse<IndexResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo

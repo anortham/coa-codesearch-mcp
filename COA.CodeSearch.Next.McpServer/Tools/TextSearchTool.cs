@@ -22,7 +22,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// <summary>
 /// Text search tool using the BaseResponseBuilder pattern for consistent response building
 /// </summary>
-public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedResult>
+public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedResponse<SearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -52,7 +52,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
     public override string Description => "Search for text content using BaseResponseBuilder pattern for consistent responses";
     public override ToolCategory Category => ToolCategory.Query;
 
-    protected override async Task<TokenOptimizedResult> ExecuteInternalAsync(
+    protected override async Task<AIOptimizedResponse<SearchResult>> ExecuteInternalAsync(
         TextSearchParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -69,7 +69,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
         // Check cache first (unless explicitly disabled)
         if (!parameters.NoCache)
         {
-            var cached = await _cacheService.GetAsync<TokenOptimizedResult>(cacheKey);
+            var cached = await _cacheService.GetAsync<AIOptimizedResponse<SearchResult>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogDebug("Returning cached search results for query: {Query}", query);
@@ -130,25 +130,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
             };
 
             // Use response builder to create optimized response
-            var response = await _responseBuilder.BuildResponseAsync(searchResult, context);
-            
-            // Convert to TokenOptimizedResult
-            var result = response as TokenOptimizedResult;
-            if (result == null)
-            {
-                // This shouldn't happen, but handle gracefully
-                result = new TokenOptimizedResult
-                {
-                    Success = true,
-                    Data = new AIResponseData
-                    {
-                        Summary = $"Found {searchResult.TotalHits} results",
-                        Results = searchResult.Hits,
-                        Count = searchResult.Hits.Count
-                    }
-                };
-                result.SetOperation(Name);
-            }
+            var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
 
             // Cache the successful response
             if (!parameters.NoCache && result.Success)
@@ -166,21 +148,25 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error performing text search for query: {Query}", query);
-            return TokenOptimizedResult.CreateError(Name, new COA.Mcp.Framework.Models.ErrorInfo
+            return new AIOptimizedResponse<SearchResult>
             {
-                Code = "SEARCH_ERROR",
-                Message = $"Error performing search: {ex.Message}",
-                Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                Success = false,
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
-                    Steps = new[]
+                    Code = "SEARCH_ERROR",
+                    Message = $"Error performing search: {ex.Message}",
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
-                        "Verify the query syntax is valid",
-                        "Check if the workspace is properly indexed",
-                        "Try a simpler query",
-                        "Check logs for detailed error information"
+                        Steps = new[]
+                        {
+                            "Verify the query syntax is valid",
+                            "Check if the workspace is properly indexed",
+                            "Try a simpler query",
+                            "Check logs for detailed error information"
+                        }
                     }
                 }
-            });
+            };
         }
     }
 
@@ -200,9 +186,9 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
         }
     }
 
-    private TokenOptimizedResult CreateNoIndexError(string workspacePath)
+    private AIOptimizedResponse<SearchResult> CreateNoIndexError(string workspacePath)
     {
-        var result = new TokenOptimizedResult
+        var result = new AIOptimizedResponse<SearchResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -234,13 +220,12 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
                 }
             }
         };
-        result.SetOperation(Name);
         return result;
     }
 
-    private TokenOptimizedResult CreateQueryParseError(string query)
+    private AIOptimizedResponse<SearchResult> CreateQueryParseError(string query)
     {
-        var result = new TokenOptimizedResult
+        var result = new AIOptimizedResponse<SearchResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -279,7 +264,6 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, TokenOptimizedRe
                 }
             }
         };
-        result.SetOperation(Name);
         return result;
     }
 }
