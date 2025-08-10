@@ -4,7 +4,6 @@ using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Caching;
-using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
