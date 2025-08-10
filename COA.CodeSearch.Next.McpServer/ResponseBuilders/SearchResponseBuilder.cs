@@ -84,7 +84,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult>
             {
                 Summary = BuildSummary(data, reducedHits.Count, context.ResponseMode),
                 Results = reducedHits,
-                Count = reducedHits.Count,
+                Count = data.TotalHits,
                 ExtensionData = new Dictionary<string, object>
                 {
                     ["totalHits"] = data.TotalHits,
