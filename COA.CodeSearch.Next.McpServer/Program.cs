@@ -248,6 +248,17 @@ public class Program
             {
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
+                
+                // Start the FileWatcher background service manually in STDIO mode
+                // (HostedServices don't auto-start without the full .NET host)
+                var fileWatcherService = services.GetService<FileWatcherService>();
+                if (fileWatcherService != null)
+                {
+                    Log.Information("Starting FileWatcher background service");
+                    var cts = new CancellationTokenSource();
+                    _ = Task.Run(async () => await fileWatcherService.StartAsync(cts.Token));
+                }
+                
                 await builder.RunAsync();
             }
         }
