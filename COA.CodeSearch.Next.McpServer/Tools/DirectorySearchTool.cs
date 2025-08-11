@@ -125,82 +125,11 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 }
             }
             
-            // Search directories - start from subdirectories of the root
+            // Search directories using simple recursive approach
             await Task.Run(() =>
             {
-                // Don't match the root directory itself, only search its children
-                var rootDir = new DirectoryInfo(workspacePath);
-                if (includeSubdirs)
-                {
-                    // Sort directories to ensure consistent processing order
-                    var subDirs = rootDir.GetDirectories().OrderBy(d => d.Name).ToList();
-                    foreach (var subDir in subDirs)
-                    {
-                        if (cancellationToken.IsCancellationRequested)
-                            break;
-                        
-                        // Skip excluded directories
-                        if (ExcludedDirectories.Contains(subDir.Name))
-                            continue;
-                        
-                        // Skip hidden directories if not included
-                        if (!includeHidden && subDir.Name.StartsWith("."))
-                            continue;
-                        
-                        // Only check count limit after processing, not before
-                        SearchDirectories(workspacePath, subDir.FullName, pattern, regex, useRegex,
-                            includeHidden, includeSubdirs, directories, maxResults, 1, cancellationToken);
-                        
-                        if (directories.Count >= maxResults)
-                            break;
-                    }
-                }
-                else
-                {
-                    // For top-level only search, check immediate subdirectories
-                    foreach (var subDir in rootDir.GetDirectories())
-                    {
-                        if (cancellationToken.IsCancellationRequested || directories.Count >= maxResults)
-                            break;
-                        
-                        var dirName = subDir.Name;
-                        bool matches = false;
-                        
-                        if (useRegex && regex != null)
-                        {
-                            matches = regex.IsMatch(dirName);
-                        }
-                        else
-                        {
-                            matches = MatchGlobPattern(dirName, pattern);
-                        }
-                        
-                        if (matches && !ExcludedDirectories.Contains(dirName) && (includeHidden || !dirName.StartsWith(".")))
-                        {
-                            var match = new DirectoryMatch
-                            {
-                                Path = subDir.FullName,
-                                Name = dirName,
-                                ParentPath = workspacePath,
-                                RelativePath = dirName,
-                                Depth = 1,
-                                IsHidden = dirName.StartsWith(".")
-                            };
-                            
-                            try
-                            {
-                                match.FileCount = subDir.GetFiles().Length;
-                                match.SubdirectoryCount = subDir.GetDirectories().Length;
-                            }
-                            catch
-                            {
-                                // Ignore access errors
-                            }
-                            
-                            directories.Add(match);
-                        }
-                    }
-                }
+                SearchDirectoriesRecursive(workspacePath, workspacePath, pattern, regex, useRegex,
+                    includeHidden, includeSubdirs, directories, maxResults, 0, cancellationToken);
             }, cancellationToken);
             
             // Sort by depth then by name
@@ -267,7 +196,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         }
     }
     
-    private void SearchDirectories(
+    private void SearchDirectoriesRecursive(
         string rootPath,
         string currentPath,
         string pattern,
@@ -287,73 +216,68 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         {
             var dirInfo = new DirectoryInfo(currentPath);
             
-            // Always check if current directory matches pattern (not just root)
-            var dirName = dirInfo.Name;
-            bool matches = false;
+            // Get all subdirectories first
+            var subDirs = dirInfo.GetDirectories().OrderBy(d => d.Name).ToList();
             
-            if (useRegex && regex != null)
+            // Check each subdirectory
+            foreach (var subDir in subDirs)
             {
-                matches = regex.IsMatch(dirName);
-            }
-            else
-            {
-                // Glob pattern matching
-                matches = MatchGlobPattern(dirName, pattern);
-            }
-            
-            if (matches)
-            {
+                if (cancellationToken.IsCancellationRequested || results.Count >= maxResults)
+                    break;
+                
+                var dirName = subDir.Name;
+                
                 // Skip excluded directories
-                if (!ExcludedDirectories.Contains(dirName))
+                if (ExcludedDirectories.Contains(dirName))
+                    continue;
+                
+                // Skip hidden directories if not included
+                if (!includeHidden && dirName.StartsWith("."))
+                    continue;
+                
+                // Check if this directory matches the pattern
+                bool matches = false;
+                if (useRegex && regex != null)
                 {
-                    // Skip hidden directories if not included
-                    if (includeHidden || !dirName.StartsWith("."))
-                    {
-                        var relativePath = Path.GetRelativePath(rootPath, currentPath);
-                        
-                        var match = new DirectoryMatch
-                        {
-                            Path = currentPath,
-                            Name = dirName,
-                            ParentPath = dirInfo.Parent?.FullName ?? "",
-                            RelativePath = relativePath == "." ? "" : relativePath,
-                            Depth = depth,
-                            IsHidden = dirName.StartsWith(".")
-                        };
-                        
-                        // Count direct children
-                        try
-                        {
-                            match.FileCount = dirInfo.GetFiles().Length;
-                            match.SubdirectoryCount = dirInfo.GetDirectories().Length;
-                        }
-                        catch
-                        {
-                            // Ignore access errors for file/dir counts
-                        }
-                        
-                        results.Add(match);
-                    }
+                    matches = regex.IsMatch(dirName);
                 }
-            }
-            
-            // Search subdirectories if enabled
-            if (includeSubdirs && results.Count < maxResults)
-            {
-                foreach (var subDir in dirInfo.GetDirectories())
+                else
                 {
-                    if (cancellationToken.IsCancellationRequested || results.Count >= maxResults)
-                        break;
+                    matches = MatchGlobPattern(dirName, pattern);
+                }
+                
+                if (matches)
+                {
+                    var relativePath = Path.GetRelativePath(rootPath, subDir.FullName);
                     
-                    // Skip excluded directories
-                    if (ExcludedDirectories.Contains(subDir.Name))
-                        continue;
+                    var match = new DirectoryMatch
+                    {
+                        Path = subDir.FullName,
+                        Name = dirName,
+                        ParentPath = currentPath,
+                        RelativePath = relativePath,
+                        Depth = depth + 1,
+                        IsHidden = dirName.StartsWith(".")
+                    };
                     
-                    // Skip hidden directories if not included
-                    if (!includeHidden && subDir.Name.StartsWith("."))
-                        continue;
+                    // Count direct children
+                    try
+                    {
+                        match.FileCount = subDir.GetFiles().Length;
+                        match.SubdirectoryCount = subDir.GetDirectories().Length;
+                    }
+                    catch
+                    {
+                        // Ignore access errors
+                    }
                     
-                    SearchDirectories(rootPath, subDir.FullName, pattern, regex, useRegex,
+                    results.Add(match);
+                }
+                
+                // Recurse into subdirectory if enabled
+                if (includeSubdirs)
+                {
+                    SearchDirectoriesRecursive(rootPath, subDir.FullName, pattern, regex, useRegex,
                         includeHidden, includeSubdirs, results, maxResults, depth + 1, cancellationToken);
                 }
             }
