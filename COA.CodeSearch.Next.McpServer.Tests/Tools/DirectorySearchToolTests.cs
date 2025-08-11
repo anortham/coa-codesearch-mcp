@@ -71,6 +71,30 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         }
         
         [Test]
+        public void TestGlobPatternMatching()
+        {
+            // Test the glob pattern matching logic
+            var pattern = "*";
+            var regexPattern = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+                .Replace("\\*", ".*")
+                .Replace("\\?", ".") + "$";
+            
+            Console.WriteLine($"Pattern: {pattern}");
+            Console.WriteLine($"Regex: {regexPattern}");
+            
+            var testNames = new[] { "src", "components", "tests", "unit" };
+            foreach (var name in testNames)
+            {
+                var matches = System.Text.RegularExpressions.Regex.IsMatch(name, regexPattern, System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                Console.WriteLine($"  {name}: {matches}");
+            }
+            
+            // All should match
+            Assert.That(System.Text.RegularExpressions.Regex.IsMatch("src", regexPattern), Is.True);
+            Assert.That(System.Text.RegularExpressions.Regex.IsMatch("components", regexPattern), Is.True);
+        }
+        
+        [Test]
         public void TestPathProcessing()
         {
             // Simple test to understand the path processing logic
@@ -110,9 +134,39 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 3,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/components/App.tsx", Score = 1.0f },
-                    new() { FilePath = "/workspace/src/services/Api.ts", Score = 0.9f },
-                    new() { FilePath = "/workspace/tests/unit/App.test.tsx", Score = 0.8f }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/components/App.tsx", 
+                        Score = 1.0f,
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src/components",
+                            ["relativeDirectory"] = "src/components",
+                            ["directoryName"] = "components"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/services/Api.ts", 
+                        Score = 0.9f,
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src/services",
+                            ["relativeDirectory"] = "src/services",
+                            ["directoryName"] = "services"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/tests/unit/App.test.tsx", 
+                        Score = 0.8f,
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/tests/unit",
+                            ["relativeDirectory"] = "tests/unit",
+                            ["directoryName"] = "unit"
+                        }
+                    }
                 }
             };
             
@@ -131,7 +185,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 WorkspacePath = "/workspace",
                 Pattern = "*",
-                IncludeSubdirectories = true
+                IncludeSubdirectories = true,
+                MaxTokens = 25000
             };
             
             // Act
@@ -149,9 +204,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Should have extracted unique directories
             var dirNames = searchResultData.Directories.Select(d => d.Name).ToList();
             
-            // Debug by failing with the actual content
-            Assert.Fail($"Found directories: {string.Join(", ", dirNames)}. Full directories: {string.Join(" | ", searchResultData.Directories.Select(d => $"{d.Name}@{d.Path}"))}");
-            
+            // Now the test should work with the directory fields properly set
             dirNames.Should().Contain("src");
             dirNames.Should().Contain("tests");
             dirNames.Should().Contain("components");
@@ -169,11 +222,56 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 5,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/index.ts" },
-                    new() { FilePath = "/workspace/tests/test.spec.ts" },
-                    new() { FilePath = "/workspace/docs/readme.md" },
-                    new() { FilePath = "/workspace/bin/output.dll" },
-                    new() { FilePath = "/workspace/node_modules/package/index.js" }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/index.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/tests/test.spec.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/tests",
+                            ["relativeDirectory"] = "tests",
+                            ["directoryName"] = "tests"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/docs/readme.md",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/docs",
+                            ["relativeDirectory"] = "docs",
+                            ["directoryName"] = "docs"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/bin/output.dll",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/bin",
+                            ["relativeDirectory"] = "bin",
+                            ["directoryName"] = "bin"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/node_modules/package/index.js",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/node_modules/package",
+                            ["relativeDirectory"] = "node_modules/package",
+                            ["directoryName"] = "package"
+                        }
+                    }
                 }
             };
             
@@ -220,10 +318,46 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 4,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/app.ts" },
-                    new() { FilePath = "/workspace/bin/debug/app.dll" },
-                    new() { FilePath = "/workspace/obj/temp.obj" },
-                    new() { FilePath = "/workspace/node_modules/lib/index.js" }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/app.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/bin/debug/app.dll",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/bin/debug",
+                            ["relativeDirectory"] = "bin/debug",
+                            ["directoryName"] = "debug"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/obj/temp.obj",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/obj",
+                            ["relativeDirectory"] = "obj",
+                            ["directoryName"] = "obj"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/node_modules/lib/index.js",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/node_modules/lib",
+                            ["relativeDirectory"] = "node_modules/lib",
+                            ["directoryName"] = "lib"
+                        }
+                    }
                 }
             };
             
@@ -269,9 +403,36 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 3,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/index.ts" },
-                    new() { FilePath = "/workspace/tests/test.ts" },
-                    new() { FilePath = "/workspace/docs/readme.md" }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/index.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/tests/test.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/tests",
+                            ["relativeDirectory"] = "tests",
+                            ["directoryName"] = "tests"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/docs/readme.md",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/docs",
+                            ["relativeDirectory"] = "docs",
+                            ["directoryName"] = "docs"
+                        }
+                    }
                 }
             };
             
@@ -290,7 +451,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 WorkspacePath = "/workspace",
                 Pattern = "^(src|tests)$",
-                UseRegex = true
+                UseRegex = true,
+                MaxTokens = 25000
             };
             
             // Act
@@ -365,8 +527,26 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 2,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/components/deep/nested/file.ts" },
-                    new() { FilePath = "/workspace/tests/file.ts" }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/components/deep/nested/file.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src/components/deep/nested",
+                            ["relativeDirectory"] = "src/components/deep/nested",
+                            ["directoryName"] = "nested"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/tests/file.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/tests",
+                            ["relativeDirectory"] = "tests",
+                            ["directoryName"] = "tests"
+                        }
+                    }
                 }
             };
             
@@ -384,7 +564,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             var parameters = new DirectorySearchParameters
             {
                 WorkspacePath = "/workspace",
-                Pattern = "*"
+                Pattern = "*",
+                MaxTokens = 25000
             };
             
             // Act
@@ -420,10 +601,46 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TotalHits = 4,
                 Hits = new List<SearchHit>
                 {
-                    new() { FilePath = "/workspace/src/file1.ts" },
-                    new() { FilePath = "/workspace/src/file2.ts" },
-                    new() { FilePath = "/workspace/src/file3.ts" },
-                    new() { FilePath = "/workspace/tests/test.ts" }
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/file1.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/file2.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/src/file3.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/src",
+                            ["relativeDirectory"] = "src",
+                            ["directoryName"] = "src"
+                        }
+                    },
+                    new() 
+                    { 
+                        FilePath = "/workspace/tests/test.ts",
+                        Fields = new Dictionary<string, string>
+                        {
+                            ["directory"] = "/workspace/tests",
+                            ["relativeDirectory"] = "tests",
+                            ["directoryName"] = "tests"
+                        }
+                    }
                 }
             };
             
@@ -441,7 +658,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             var parameters = new DirectorySearchParameters
             {
                 WorkspacePath = "/workspace",
-                Pattern = "*"
+                Pattern = "*",
+                MaxTokens = 25000
             };
             
             // Act

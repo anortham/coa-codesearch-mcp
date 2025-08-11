@@ -125,89 +125,131 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 10000, // Get many results to extract all directories
                 cancellationToken);
             
-            // First, extract ALL unique directories from search results
+            // Extract unique directories from search results
             var allDirectories = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
+            
+            _logger.LogDebug("Processing {Count} search hits", searchResult.Hits.Count);
             
             foreach (var hit in searchResult.Hits)
             {
-                // Get file path from hit
-                var filePath = hit.FilePath ?? 
-                              hit.Fields?.GetValueOrDefault("path", "") ?? 
-                              hit.Fields?.GetValueOrDefault("relativePath", "") ?? "";
-                              
-                if (string.IsNullOrEmpty(filePath))
+                // Try to get directory info from indexed fields first (more reliable)
+                var directory = hit.Fields?.GetValueOrDefault("directory", "");
+                var relativeDirectory = hit.Fields?.GetValueOrDefault("relativeDirectory", "");
+                var directoryName = hit.Fields?.GetValueOrDefault("directoryName", "");
+                
+                _logger.LogDebug("Processing hit: directory={Directory}, relative={Relative}, name={Name}", 
+                    directory, relativeDirectory, directoryName);
+                
+                // If we don't have directory fields, extract from file path
+                if (string.IsNullOrEmpty(directory))
+                {
+                    var filePath = hit.FilePath ?? 
+                                  hit.Fields?.GetValueOrDefault("path", "") ?? 
+                                  hit.Fields?.GetValueOrDefault("relativePath", "") ?? "";
+                                  
+                    if (!string.IsNullOrEmpty(filePath))
+                    {
+                        directory = Path.GetDirectoryName(filePath) ?? "";
+                        directoryName = Path.GetFileName(directory) ?? "";
+                        relativeDirectory = string.IsNullOrEmpty(workspacePath) ? 
+                            directory : Path.GetRelativePath(workspacePath, directory);
+                    }
+                }
+                
+                if (string.IsNullOrEmpty(directory))
                     continue;
                 
-                // Normalize path separators to forward slashes
-                var normalizedPath = filePath.Replace('\\', '/').TrimStart('/');
+                // Use the relativeDirectory field if available, otherwise compute it
+                var normalizedDir = "";
+                if (!string.IsNullOrEmpty(relativeDirectory))
+                {
+                    // Use the relative directory field directly
+                    normalizedDir = relativeDirectory.Replace('\\', '/');
+                }
+                else
+                {
+                    // Strip workspace prefix from directory if present
+                    var normalizedWorkspace = workspacePath.Replace('\\', '/').TrimEnd('/');
+                    normalizedDir = directory.Replace('\\', '/');
+                    
+                    // Remove workspace prefix to get relative path
+                    if (normalizedDir.StartsWith(normalizedWorkspace + "/", StringComparison.OrdinalIgnoreCase))
+                    {
+                        normalizedDir = normalizedDir.Substring(normalizedWorkspace.Length + 1);
+                    }
+                    else if (normalizedDir.Equals(normalizedWorkspace, StringComparison.OrdinalIgnoreCase))
+                    {
+                        normalizedDir = "";
+                    }
+                }
                 
-                // Split into path segments
-                var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                // Now process the relative directory path
+                var segments = normalizedDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
                 
-                // Skip if no segments or only filename
-                if (segments.Length <= 1)
-                    continue;
+                _logger.LogDebug("Processing segments: [{Segments}] from normalized dir: {Dir}", 
+                    string.Join(", ", segments), normalizedDir);
                 
-                // Process each directory level (excluding the filename at the end)
+                // Build up each directory level
                 var currentPath = "";
-                for (int i = 0; i < segments.Length - 1; i++)
+                for (int i = 0; i < segments.Length; i++)
                 {
                     var segment = segments[i];
                     currentPath = currentPath == "" ? segment : currentPath + "/" + segment;
-                    var fullPath = "/" + currentPath;
                     
                     // Check if this directory should be excluded
                     if (ExcludedDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase))
+                    {
+                        _logger.LogDebug("Excluding directory segment: {Segment}", segment);
                         continue;
+                    }
                     
                     // Skip hidden directories if not included
                     if (!includeHidden && segment.StartsWith("."))
+                    {
+                        _logger.LogDebug("Skipping hidden directory: {Segment}", segment);
                         continue;
+                    }
                     
                     // Add or update directory entry
-                    if (!allDirectories.ContainsKey(fullPath))
+                    if (!allDirectories.ContainsKey(currentPath))
                     {
-                        var parentPath = i > 0 ? "/" + string.Join("/", segments.Take(i)) : "";
+                        var parentPath = i > 0 ? string.Join("/", segments.Take(i)) : "";
                         
-                        // Calculate relative path from workspace
-                        var relativePath = currentPath;
-                        if (!string.IsNullOrEmpty(workspacePath))
+                        allDirectories[currentPath] = new DirectoryMatch
                         {
-                            var normalizedWorkspace = workspacePath.Replace('\\', '/').TrimEnd('/').TrimStart('/');
-                            if (currentPath.StartsWith(normalizedWorkspace + "/", StringComparison.OrdinalIgnoreCase))
-                            {
-                                relativePath = currentPath.Substring(normalizedWorkspace.Length + 1);
-                            }
-                            else if (currentPath.Equals(normalizedWorkspace, StringComparison.OrdinalIgnoreCase))
-                            {
-                                relativePath = "";
-                            }
-                        }
-                        
-                        allDirectories[fullPath] = new DirectoryMatch
-                        {
-                            Path = fullPath,
+                            Path = currentPath,
                             Name = segment,
                             ParentPath = parentPath,
-                            RelativePath = relativePath,
+                            RelativePath = currentPath,
                             Depth = i + 1,
                             IsHidden = segment.StartsWith("."),
                             FileCount = 1,
                             SubdirectoryCount = 0
                         };
+                        
+                        _logger.LogDebug("Added directory: {Path} (name={Name}, depth={Depth})", 
+                            currentPath, segment, i + 1);
                     }
                     else
                     {
-                        allDirectories[fullPath].FileCount++;
+                        allDirectories[currentPath].FileCount++;
+                        _logger.LogDebug("Updated file count for {Path}: {Count}", 
+                            currentPath, allDirectories[currentPath].FileCount);
                     }
                 }
             }
             
+            _logger.LogDebug("Built {Count} unique directories before filtering", allDirectories.Count);
+            
             // Now filter directories by pattern
             var directoryMap = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
+            _logger.LogDebug("Filtering {Count} directories with pattern {Pattern}", allDirectories.Count, pattern);
+            
             foreach (var kvp in allDirectories)
             {
                 var dir = kvp.Value;
+                _logger.LogDebug("Checking directory: Key={Key}, Name={Name}, Path={Path}", 
+                    kvp.Key, dir.Name, dir.Path);
                 
                 // Check if directory name matches pattern
                 bool matches = false;
@@ -229,19 +271,27 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                     matches = MatchGlobPattern(dir.Name, pattern);
                 }
                 
+                _logger.LogDebug("Pattern match result for {Name}: {Matches}", dir.Name, matches);
+                
                 if (matches)
                 {
                     directoryMap[kvp.Key] = dir;
+                    _logger.LogDebug("Added {Name} to directoryMap", dir.Name);
                 }
             }
+            
+            _logger.LogDebug("After filtering: directoryMap has {Count} entries", directoryMap.Count);
             
             // Calculate subdirectory counts (from all directories, not just matching ones)
             foreach (var dir in directoryMap.Values)
             {
                 var subdirCount = allDirectories.Values
-                    .Count(d => d.ParentPath.Equals(dir.Path, StringComparison.OrdinalIgnoreCase));
+                    .Count(d => !string.IsNullOrEmpty(d.ParentPath) && 
+                               d.ParentPath.Equals(dir.Path, StringComparison.OrdinalIgnoreCase));
                 dir.SubdirectoryCount = subdirCount;
             }
+            
+            _logger.LogDebug("After filtering: {Count} directories match pattern", directoryMap.Count);
             
             // Sort and limit results
             var directories = directoryMap.Values
@@ -249,6 +299,9 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 .ThenBy(d => d.Name)
                 .Take(maxResults)
                 .ToList();
+            
+            _logger.LogDebug("After sorting and limiting (maxResults={MaxResults}): {Count} directories", 
+                maxResults, directories.Count);
             
             stopwatch.Stop();
             
