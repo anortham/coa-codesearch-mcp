@@ -273,6 +273,11 @@ public class FileIndexingService : IFileIndexingService
                 return null;
             }
 
+            // Get directory information
+            var directoryPath = Path.GetDirectoryName(filePath) ?? "";
+            var relativeDirectoryPath = Path.GetRelativePath(workspacePath, directoryPath);
+            var directoryName = Path.GetFileName(directoryPath) ?? "";
+            
             // Create Lucene document
             var document = new Document
             {
@@ -282,7 +287,12 @@ public class FileIndexingService : IFileIndexingService
                 new StringField("extension", fileInfo.Extension.ToLowerInvariant(), Field.Store.YES),
                 new Int64Field("size", fileInfo.Length, Field.Store.YES),
                 new Int64Field("modified", fileInfo.LastWriteTimeUtc.Ticks, Field.Store.YES),
-                new TextField("filename", fileInfo.Name, Field.Store.YES)
+                new TextField("filename", fileInfo.Name, Field.Store.YES),
+                
+                // Directory fields for directory search
+                new StringField("directory", directoryPath, Field.Store.YES),
+                new StringField("relativeDirectory", relativeDirectoryPath, Field.Store.YES),
+                new StringField("directoryName", directoryName, Field.Store.YES)
             };
 
             // Add searchable path components
