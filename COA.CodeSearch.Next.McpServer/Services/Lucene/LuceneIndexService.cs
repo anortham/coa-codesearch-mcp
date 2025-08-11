@@ -260,20 +260,29 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             foreach (var scoreDoc in topDocs.ScoreDocs)
             {
                 var doc = searcher.Doc(scoreDoc.Doc);
+                
+                // Get content but truncate to prevent token explosion
+                var fullContent = doc.Get("content");
+                var truncatedContent = fullContent?.Length > 500 
+                    ? fullContent.Substring(0, 500) + "..." 
+                    : fullContent;
+                
                 var hit = new SearchHit
                 {
                     FilePath = doc.Get("path") ?? string.Empty,
                     Score = scoreDoc.Score,
-                    Content = doc.Get("content"),
+                    Content = truncatedContent,
                     Fields = new Dictionary<string, string>()
                 };
                 
-                // Add all fields
+                // Add all fields (except large content fields)
                 foreach (var field in doc.Fields)
                 {
                     if (field.Name != "path" && field.Name != "content")
                     {
-                        hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
+                        var value = field.GetStringValue() ?? string.Empty;
+                        // Also truncate any large field values
+                        hit.Fields[field.Name] = value.Length > 200 ? value.Substring(0, 200) + "..." : value;
                     }
                 }
                 
