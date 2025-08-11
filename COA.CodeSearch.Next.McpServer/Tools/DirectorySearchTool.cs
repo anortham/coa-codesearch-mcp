@@ -125,11 +125,82 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 }
             }
             
-            // Search directories
+            // Search directories - start from subdirectories of the root
             await Task.Run(() =>
             {
-                SearchDirectories(workspacePath, workspacePath, pattern, regex, useRegex, 
-                    includeHidden, includeSubdirs, directories, maxResults, 0, cancellationToken);
+                // Don't match the root directory itself, only search its children
+                var rootDir = new DirectoryInfo(workspacePath);
+                if (includeSubdirs)
+                {
+                    // Sort directories to ensure consistent processing order
+                    var subDirs = rootDir.GetDirectories().OrderBy(d => d.Name).ToList();
+                    foreach (var subDir in subDirs)
+                    {
+                        if (cancellationToken.IsCancellationRequested)
+                            break;
+                        
+                        // Skip excluded directories
+                        if (ExcludedDirectories.Contains(subDir.Name))
+                            continue;
+                        
+                        // Skip hidden directories if not included
+                        if (!includeHidden && subDir.Name.StartsWith("."))
+                            continue;
+                        
+                        // Only check count limit after processing, not before
+                        SearchDirectories(workspacePath, subDir.FullName, pattern, regex, useRegex,
+                            includeHidden, includeSubdirs, directories, maxResults, 1, cancellationToken);
+                        
+                        if (directories.Count >= maxResults)
+                            break;
+                    }
+                }
+                else
+                {
+                    // For top-level only search, check immediate subdirectories
+                    foreach (var subDir in rootDir.GetDirectories())
+                    {
+                        if (cancellationToken.IsCancellationRequested || directories.Count >= maxResults)
+                            break;
+                        
+                        var dirName = subDir.Name;
+                        bool matches = false;
+                        
+                        if (useRegex && regex != null)
+                        {
+                            matches = regex.IsMatch(dirName);
+                        }
+                        else
+                        {
+                            matches = MatchGlobPattern(dirName, pattern);
+                        }
+                        
+                        if (matches && !ExcludedDirectories.Contains(dirName) && (includeHidden || !dirName.StartsWith(".")))
+                        {
+                            var match = new DirectoryMatch
+                            {
+                                Path = subDir.FullName,
+                                Name = dirName,
+                                ParentPath = workspacePath,
+                                RelativePath = dirName,
+                                Depth = 1,
+                                IsHidden = dirName.StartsWith(".")
+                            };
+                            
+                            try
+                            {
+                                match.FileCount = subDir.GetFiles().Length;
+                                match.SubdirectoryCount = subDir.GetDirectories().Length;
+                            }
+                            catch
+                            {
+                                // Ignore access errors
+                            }
+                            
+                            directories.Add(match);
+                        }
+                    }
+                }
             }, cancellationToken);
             
             // Sort by depth then by name
@@ -137,6 +208,13 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 .OrderBy(d => d.Depth)
                 .ThenBy(d => d.Name)
                 .ToList();
+            
+            stopwatch.Stop();
+            
+            // Ensure we report at least 1ms for very fast operations
+            var elapsedMs = stopwatch.ElapsedMilliseconds;
+            if (elapsedMs == 0 && stopwatch.ElapsedTicks > 0)
+                elapsedMs = 1;
             
             var result = new DirectorySearchResult
             {
@@ -146,7 +224,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 Pattern = pattern,
                 WorkspacePath = workspacePath,
                 IncludedSubdirectories = includeSubdirs,
-                SearchTimeMs = stopwatch.ElapsedMilliseconds
+                SearchTimeMs = elapsedMs
             };
             
             _logger.LogInformation("Directory search completed: {Count} matches for pattern '{Pattern}' in {Time}ms",
@@ -209,7 +287,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         {
             var dirInfo = new DirectoryInfo(currentPath);
             
-            // Check if directory matches pattern
+            // Always check if current directory matches pattern (not just root)
             var dirName = dirInfo.Name;
             bool matches = false;
             
