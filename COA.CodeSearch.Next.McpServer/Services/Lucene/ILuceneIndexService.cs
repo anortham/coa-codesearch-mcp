@@ -62,4 +62,14 @@ public interface ILuceneIndexService
     /// Get statistics for an index
     /// </summary>
     Task<IndexStatistics> GetStatisticsAsync(string workspacePath, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Repair a corrupted index
+    /// </summary>
+    Task<IndexRepairResult> RepairIndexAsync(string workspacePath, IndexRepairOptions? options = null, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Optimize an index for better performance
+    /// </summary>
+    Task<bool> OptimizeIndexAsync(string workspacePath, int maxSegments = 1, CancellationToken cancellationToken = default);
 }

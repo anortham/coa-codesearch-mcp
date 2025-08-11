@@ -2,6 +2,7 @@ using COA.CodeSearch.Next.McpServer.Services.Analysis;
 using Lucene.Net.Analysis;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
+using Lucene.Net.Index.Extensions;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
 using Lucene.Net.Util;
@@ -100,13 +101,33 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 // Create context
                 var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
                 
-                // Initialize writer
+                // Initialize writer with configuration
+                var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
+                var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
+                var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
+                
                 var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
                 {
                     OpenMode = OpenMode.CREATE_OR_APPEND,
-                    RAMBufferSizeMB = 16.0,
-                    MaxBufferedDocs = 1000
+                    RAMBufferSizeMB = ramBuffer,
+                    MaxBufferedDocs = maxBufferedDocs
                 };
+                
+                // Configure merge policy
+                var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
+                if (mergePolicyType == "TieredMergePolicy")
+                {
+                    var mergePolicy = new TieredMergePolicy
+                    {
+                        MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
+                        SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
+                        MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                    };
+                    config.MergePolicy = mergePolicy;
+                }
+                
+                // Configure merge scheduler
+                config.MaxThreadStates = maxThreadStates;
                 
                 context.Writer = new IndexWriter(directory, config);
                 
@@ -519,6 +540,162 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error disposing index context for {Hash}", context.WorkspaceHash);
+        }
+    }
+    
+    public async Task<IndexRepairResult> RepairIndexAsync(string workspacePath, IndexRepairOptions? options = null, CancellationToken cancellationToken = default)
+    {
+        options ??= new IndexRepairOptions();
+        var result = new IndexRepairResult { StartTime = DateTime.UtcNow };
+        
+        try
+        {
+            var indexPath = _pathResolution.GetIndexPath(workspacePath);
+            if (!System.IO.Directory.Exists(indexPath))
+            {
+                result.Success = false;
+                result.Message = "Index does not exist";
+                result.EndTime = DateTime.UtcNow;
+                return result;
+            }
+            
+            // Create backup if requested
+            if (options.CreateBackup)
+            {
+                var backupPath = options.BackupPath ?? $"{indexPath}.backup_{DateTime.UtcNow:yyyyMMddHHmmss}";
+                try
+                {
+                    DirectoryCopy(indexPath, backupPath, true);
+                    result.BackupPath = backupPath;
+                    _logger.LogInformation("Created backup at {BackupPath}", backupPath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to create backup");
+                }
+            }
+            
+            // Close existing writer if any
+            var workspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath);
+            if (_indexes.TryGetValue(workspaceHash, out var context))
+            {
+                await DisposeContextAsync(context);
+                _indexes.TryRemove(workspaceHash, out _);
+            }
+            
+            // Use CheckIndex to repair
+            using var directory = FSDirectory.Open(indexPath);
+            var checkIndex = new CheckIndex(directory);
+            
+            var status = checkIndex.DoCheckIndex();
+            if (!status.Clean && options.RemoveBadSegments)
+            {
+                _logger.LogWarning("Index is corrupted, attempting repair");
+                checkIndex.FixIndex(status);
+                result.RemovedSegments = status.TotLoseDocCount > 0 ? 1 : 0;
+                result.LostDocuments = (int)status.TotLoseDocCount;
+            }
+            
+            // Validate after repair if requested
+            if (options.ValidateAfterRepair)
+            {
+                var validationStatus = checkIndex.DoCheckIndex();
+                result.Success = validationStatus.Clean;
+                result.Message = validationStatus.Clean ? "Index repaired successfully" : "Index still has issues after repair";
+            }
+            else
+            {
+                result.Success = true;
+                result.Message = "Repair completed";
+            }
+            
+            result.EndTime = DateTime.UtcNow;
+            _logger.LogInformation("Index repair completed in {Duration}ms - Success: {Success}", 
+                result.Duration.TotalMilliseconds, result.Success);
+            
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to repair index for {WorkspacePath}", workspacePath);
+            result.Success = false;
+            result.Message = ex.Message;
+            result.Exception = ex;
+            result.EndTime = DateTime.UtcNow;
+            return result;
+        }
+    }
+    
+    public async Task<bool> OptimizeIndexAsync(string workspacePath, int maxSegments = 1, CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            var workspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath);
+            
+            // Ensure index is initialized
+            if (!_indexes.TryGetValue(workspaceHash, out var context))
+            {
+                var initResult = await InitializeIndexAsync(workspacePath, cancellationToken);
+                if (!initResult.Success)
+                {
+                    return false;
+                }
+                context = _indexes[workspaceHash];
+            }
+            
+            await context.Lock.WaitAsync(cancellationToken);
+            try
+            {
+                if (context.Writer != null)
+                {
+                    // Force merge to optimize
+                    context.Writer.ForceMerge(maxSegments, doWait: true);
+                    context.Writer.Commit();
+                    
+                    _logger.LogInformation("Optimized index for {WorkspacePath} to {MaxSegments} segments", 
+                        workspacePath, maxSegments);
+                    return true;
+                }
+                return false;
+            }
+            finally
+            {
+                context.Lock.Release();
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to optimize index for {WorkspacePath}", workspacePath);
+            return false;
+        }
+    }
+    
+    private static void DirectoryCopy(string sourceDirName, string destDirName, bool copySubDirs)
+    {
+        var dir = new DirectoryInfo(sourceDirName);
+        if (!dir.Exists)
+        {
+            throw new DirectoryNotFoundException($"Source directory does not exist: {sourceDirName}");
+        }
+
+        var dirs = dir.GetDirectories();
+        
+        System.IO.Directory.CreateDirectory(destDirName);
+        
+        var files = dir.GetFiles();
+        foreach (var file in files)
+        {
+            var tempPath = Path.Combine(destDirName, file.Name);
+            file.CopyTo(tempPath, false);
+        }
+
+        if (copySubDirs)
+        {
+            foreach (var subdir in dirs)
+            {
+                var tempPath = Path.Combine(destDirName, subdir.Name);
+                DirectoryCopy(subdir.FullName, tempPath, copySubDirs);
+            }
         }
     }
     
