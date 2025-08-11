@@ -261,29 +261,28 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             {
                 var doc = searcher.Doc(scoreDoc.Doc);
                 
-                // Get content but truncate to prevent token explosion
-                var fullContent = doc.Get("content");
-                var truncatedContent = fullContent?.Length > 500 
-                    ? fullContent.Substring(0, 500) + "..." 
-                    : fullContent;
-                
                 var hit = new SearchHit
                 {
                     FilePath = doc.Get("path") ?? string.Empty,
                     Score = scoreDoc.Score,
-                    Content = truncatedContent,
+                    // Content removed - will be loaded on-demand if needed
                     Fields = new Dictionary<string, string>()
                 };
                 
-                // Add all fields (except large content fields)
+                // Add all stored fields except path (already set above)
                 foreach (var field in doc.Fields)
                 {
-                    if (field.Name != "path" && field.Name != "content")
+                    if (field.Name != "path")
                     {
-                        var value = field.GetStringValue() ?? string.Empty;
-                        // Also truncate any large field values
-                        hit.Fields[field.Name] = value.Length > 200 ? value.Substring(0, 200) + "..." : value;
+                        hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
                     }
+                }
+                
+                // Parse modified date if available
+                if (hit.Fields.TryGetValue("modified", out var modifiedTicks) && 
+                    long.TryParse(modifiedTicks, out var ticks))
+                {
+                    hit.LastModified = new DateTime(ticks, DateTimeKind.Utc);
                 }
                 
                 hits.Add(hit);
