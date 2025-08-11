@@ -13,10 +13,10 @@ using COA.CodeSearch.Next.McpServer.Services;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Services.Analysis;
 using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
-using Microsoft.Extensions.Logging;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
+using COA.CodeSearch.Next.McpServer.ResponseBuilders;
+using Microsoft.Extensions.Logging;
 using Lucene.Net.Util;
 
 namespace COA.CodeSearch.Next.McpServer.Tools;
@@ -96,14 +96,39 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 return CreateNoIndexError(workspacePath);
             }
             
-            // Create a MatchAllDocsQuery to get all indexed files
-            // We'll filter by pattern in memory since filename patterns are complex
-            var query = new MatchAllDocsQuery();
+            // Create a query for the filename field
+            // For simple patterns, we can use a wildcard query
+            Query query;
+            if (pattern.Contains("*") || pattern.Contains("?"))
+            {
+                // Convert glob pattern to Lucene wildcard pattern
+                var lucenePattern = pattern.Replace(".", "\\."); // Escape dots
+                query = new WildcardQuery(new Term("filename", lucenePattern.ToLowerInvariant()));
+                _logger.LogDebug("Using WildcardQuery for pattern: {Pattern} -> {LucenePattern}", pattern, lucenePattern);
+            }
+            else
+            {
+                // Exact filename match
+                query = new TermQuery(new Term("filename", pattern.ToLowerInvariant()));
+                _logger.LogDebug("Using TermQuery for exact match: {Pattern}", pattern);
+            }
+            
+            // For regex patterns or match-all patterns, use MatchAllDocsQuery and filter later
+            if (parameters.UseRegex == true)
+            {
+                query = new MatchAllDocsQuery();
+                _logger.LogDebug("Using MatchAllDocsQuery for regex pattern: {Pattern}", pattern);
+            }
+            else if (pattern == "*")
+            {
+                query = new MatchAllDocsQuery();
+                _logger.LogDebug("Using MatchAllDocsQuery for match-all pattern");
+            }
             
             var searchResult = await _luceneIndexService.SearchAsync(
                 workspacePath,
                 query,
-                maxResults * 2,  // Get extra to account for filtering
+                maxResults * 10,  // Get more results since we might filter
                 cancellationToken
             );
             
