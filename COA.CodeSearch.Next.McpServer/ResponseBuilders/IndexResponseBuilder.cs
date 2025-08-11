@@ -100,7 +100,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
                     ["workspaceHash"] = data.WorkspaceHash ?? "",
                     ["indexPath"] = data.IndexPath ?? "",
                     ["watcherEnabled"] = data.WatcherEnabled,
-                    ["statistics"] = data.Statistics
+                    ["statistics"] = data.Statistics!
                 }
             },
             Insights = ReduceInsights(insights, insightsBudget),
@@ -111,7 +111,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
         // Operation name is handled automatically by the framework
         
         // Update token estimate
-        response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
+        response.Meta.TokenInfo!.Estimated = TokenEstimator.EstimateObject(response);
         
         _logger?.LogInformation("Built index response: {Files} files indexed, {Insights} insights, {Actions} actions, {Tokens} tokens",
             data.FilesIndexed, response.Insights.Count, response.Actions.Count, response.Meta.TokenInfo.Estimated);

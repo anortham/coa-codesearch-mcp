@@ -87,7 +87,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         
         try
         {
-            return await _circuitBreaker.ExecuteAsync($"init-index-{workspaceHash}", async () =>
+            return await _circuitBreaker.ExecuteAsync($"init-index-{workspaceHash}", () =>
             {
                 var indexPath = _pathResolution.GetIndexPath(workspacePath);
                 var isNewIndex = !System.IO.Directory.Exists(indexPath) || !System.IO.Directory.GetFiles(indexPath).Any();
@@ -122,14 +122,14 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 _logger.LogInformation("Initialized index for workspace {Hash} - New: {IsNew}, Docs: {DocCount}", 
                     workspaceHash, isNewIndex, docCount);
                 
-                return new IndexInitResult
+                return Task.FromResult(new IndexInitResult
                 {
                     Success = true,
                     WorkspaceHash = workspaceHash,
                     IndexPath = indexPath,
                     IsNewIndex = isNewIndex,
                     ExistingDocumentCount = docCount
-                };
+                });
             }, cancellationToken);
         }
         catch (Exception ex)

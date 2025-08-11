@@ -45,25 +45,25 @@ public class QueryCacheService : IQueryCacheService, IDisposable
             _cacheEnabled, _defaultExpiration, _maxCacheSizeBytes / (1024 * 1024));
     }
 
-    public async Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
+    public Task<T?> GetAsync<T>(string key, CancellationToken cancellationToken = default) where T : class
     {
         Interlocked.Increment(ref _totalRequests);
         
         if (!_cacheEnabled)
         {
             Interlocked.Increment(ref _cacheMisses);
-            return null;
+            return Task.FromResult<T?>(null);
         }
 
         if (_cache.TryGetValue(key, out T? value))
         {
             Interlocked.Increment(ref _cacheHits);
             _logger.LogDebug("Cache hit for key: {Key}", key);
-            return value;
+            return Task.FromResult<T?>(value);
         }
 
         Interlocked.Increment(ref _cacheMisses);
-        return null;
+        return Task.FromResult<T?>(null);
     }
 
     public Task SetAsync<T>(string key, T value, CancellationToken cancellationToken = default) where T : class
