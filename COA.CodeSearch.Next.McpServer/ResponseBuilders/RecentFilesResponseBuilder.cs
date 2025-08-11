@@ -96,8 +96,8 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
                     ["timeFrameRequested"] = data.TimeFrameRequested,
                     ["cutoffTime"] = data.CutoffTime.ToString("O"),
                     ["searchPath"] = data.SearchPath ?? "",
-                    ["oldestFile"] = data.Files.Any() ? data.Files.Min(f => f.LastModified).ToString("O") : "",
-                    ["newestFile"] = data.Files.Any() ? data.Files.Max(f => f.LastModified).ToString("O") : ""
+                    ["oldestFile"] = data.Files.Any() ? data.Files.Min(f => f.LastModified)?.ToString("O") ?? "" : "",
+                    ["newestFile"] = data.Files.Any() ? data.Files.Max(f => f.LastModified)?.ToString("O") ?? "" : ""
                 }
             },
             Insights = ReduceInsights(insights, insightsBudget),
@@ -105,8 +105,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             Meta = CreateMetadata(startTime, wasTruncated, resourceUri)
         };
         
-        // Set operation name
-        response.SetOperation(context.ToolName ?? "recent_files");
+        // Operation name is handled automatically by the framework
         
         // Update token estimate
         response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
@@ -135,7 +134,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
         if (data.Files.Count > 0)
         {
             var extensions = data.Files
-                .Select(f => Path.GetExtension(f.FilePath))
+                .Select(f => Path.GetExtension(f.Path))
                 .Where(ext => !string.IsNullOrEmpty(ext))
                 .GroupBy(ext => ext)
                 .OrderByDescending(g => g.Count())
@@ -166,14 +165,14 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             }
             
             // Size insights
-            if (data.Files.Any(f => f.SizeBytes > 0))
+            if (data.Files.Any(f => f.Size > 0))
             {
-                var totalSize = data.Files.Sum(f => f.SizeBytes);
+                var totalSize = data.Files.Sum(f => f.Size);
                 var avgSize = totalSize / data.Files.Count;
                 
                 insights.Add($"Total size: {FormatFileSize(totalSize)}, Average: {FormatFileSize(avgSize)}");
                 
-                var largeFiles = data.Files.Where(f => f.SizeBytes > 1_000_000).Count();
+                var largeFiles = data.Files.Where(f => f.Size > 1_000_000).Count();
                 if (largeFiles > 0)
                 {
                     insights.Add($"{largeFiles} large file(s) (>1MB) recently modified");
@@ -182,7 +181,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             
             // Directory concentration
             var directories = data.Files
-                .Select(f => Path.GetDirectoryName(f.FilePath) ?? "")
+                .Select(f => Path.GetDirectoryName(f.Path) ?? "")
                 .GroupBy(dir => dir)
                 .OrderByDescending(g => g.Count())
                 .ToList();
@@ -202,12 +201,14 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
         if (responseMode == "full" && data.Files.Count > 0)
         {
             var mostRecent = data.Files.OrderByDescending(f => f.LastModified).First();
-            var timeAgoRecent = DateTime.UtcNow - mostRecent.LastModified;
+            var timeAgoRecent = mostRecent.LastModified.HasValue 
+                ? DateTime.UtcNow - mostRecent.LastModified.Value
+                : TimeSpan.Zero;
             
-            insights.Add($"Most recent: {Path.GetFileName(mostRecent.FilePath)} ({FormatTimeSpan(timeAgoRecent)} ago)");
+            insights.Add($"Most recent: {Path.GetFileName(mostRecent.Path)} ({FormatTimeSpan(timeAgoRecent)} ago)");
             
             // Detect potential work sessions
-            var recentBurst = data.Files.Count(f => (DateTime.UtcNow - f.LastModified).TotalMinutes < 60);
+            var recentBurst = data.Files.Count(f => f.LastModified.HasValue && (DateTime.UtcNow - f.LastModified.Value).TotalMinutes < 60);
             if (recentBurst > 3)
             {
                 insights.Add($"{recentBurst} files modified in the last hour - active development session");
@@ -246,7 +247,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
                 actions.Add(new AIAction
                 {
                     Action = "examine_file",
-                    Description = $"Examine most recent: {Path.GetFileName(mostRecent.FilePath)}",
+                    Description = $"Examine most recent: {Path.GetFileName(mostRecent.Path)}",
                     Priority = 100
                 });
             }
@@ -261,7 +262,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             
             // Filter by file type
             var extensions = data.Files
-                .Select(f => Path.GetExtension(f.FilePath))
+                .Select(f => Path.GetExtension(f.Path))
                 .Where(ext => !string.IsNullOrEmpty(ext))
                 .Distinct()
                 .Take(3)
@@ -290,7 +291,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             
             // Directory focus
             var directories = data.Files
-                .Select(f => Path.GetDirectoryName(f.FilePath) ?? "")
+                .Select(f => Path.GetDirectoryName(f.Path) ?? "")
                 .GroupBy(dir => dir)
                 .OrderByDescending(g => g.Count())
                 .Take(2)
@@ -311,7 +312,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
         return actions;
     }
     
-    private List<Tools.RecentFileInfo> ReduceRecentFiles(List<FileInfo> files, int tokenBudget, string responseMode)
+    private List<Tools.RecentFileInfo> ReduceRecentFiles(List<RecentFileInfo> files, int tokenBudget, string responseMode)
     {
         if (files.Count == 0)
             return new List<Tools.RecentFileInfo>();
@@ -332,7 +333,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
         return files.Take(maxFiles).Select(ConvertToRecentFileInfo).ToList();
     }
     
-    private Tools.RecentFileInfo ConvertToRecentFileInfo(FileInfo file)
+    private Tools.RecentFileInfo ConvertToRecentFileInfo(RecentFileInfo file)
     {
         return new Tools.RecentFileInfo
         {
@@ -367,7 +368,9 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
         if (data.Files.Any())
         {
             var mostRecent = data.Files.OrderByDescending(f => f.LastModified).First();
-            var timeAgo = DateTime.UtcNow - mostRecent.LastModified;
+            var timeAgo = mostRecent.LastModified.HasValue 
+                ? DateTime.UtcNow - mostRecent.LastModified.Value 
+                : TimeSpan.Zero;
             summary += $" - most recent: {FormatTimeSpan(timeAgo)} ago";
         }
         
@@ -415,7 +418,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
 /// </summary>
 public class RecentFilesResult
 {
-    public List<FileInfo> Files { get; set; } = new();
+    public List<RecentFileInfo> Files { get; set; } = new();
     public string TimeFrameRequested { get; set; } = string.Empty;
     public DateTime CutoffTime { get; set; }
     public int TotalFiles { get; set; }
@@ -425,7 +428,7 @@ public class RecentFilesResult
 /// <summary>
 /// File information for recent files results.
 /// </summary>
-public class FileInfo
+public class RecentFileInfo
 {
     public string Path { get; set; } = string.Empty;
     public long Size { get; set; }
