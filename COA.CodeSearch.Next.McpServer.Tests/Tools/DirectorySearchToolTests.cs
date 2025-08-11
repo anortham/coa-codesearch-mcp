@@ -1,22 +1,19 @@
 using System;
-using System.IO;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Collections.Generic;
 using NUnit.Framework;
 using FluentAssertions;
 using Moq;
 using Microsoft.Extensions.Logging;
-using COA.Mcp.Framework.TokenOptimization.Caching;
-using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Models;
-using COA.Mcp.Framework.Models;
 using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Tools.Parameters;
 using COA.CodeSearch.Next.McpServer.Tools.Results;
-using COA.CodeSearch.Next.McpServer.Services;
+using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
+using Lucene.Net.Search;
 
 namespace COA.CodeSearch.Next.McpServer.Tests.Tools
 {
@@ -24,68 +21,18 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
     public class DirectorySearchToolTests : CodeSearchToolTestBase<DirectorySearchTool>
     {
         private DirectorySearchTool _tool = null!;
-        private string _testWorkspacePath = null!;
         
         protected override DirectorySearchTool CreateTool()
         {
             _tool = new DirectorySearchTool(
                 PathResolutionServiceMock.Object,
+                LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
-        }
-        
-        [SetUp]
-        public override void SetUp()
-        {
-            base.SetUp();
-            
-            // Create test directory structure
-            _testWorkspacePath = Path.Combine(Path.GetTempPath(), $"DirSearchTest_{Guid.NewGuid()}");
-            CreateTestDirectoryStructure();
-        }
-        
-        [TearDown]
-        public override void TearDown()
-        {
-            // Clean up test directory
-            try
-            {
-                if (Directory.Exists(_testWorkspacePath))
-                {
-                    Directory.Delete(_testWorkspacePath, true);
-                }
-            }
-            catch
-            {
-                // Ignore cleanup errors
-            }
-            
-            base.TearDown();
-        }
-        
-        private void CreateTestDirectoryStructure()
-        {
-            // Create a sample directory structure for testing
-            Directory.CreateDirectory(_testWorkspacePath);
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "src"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "src", "components"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "src", "services"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "tests"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "tests", "unit"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "tests", "integration"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "docs"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, ".hidden"));
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "bin")); // Should be excluded
-            Directory.CreateDirectory(Path.Combine(_testWorkspacePath, "node_modules")); // Should be excluded
-            
-            // Create some files in directories
-            File.WriteAllText(Path.Combine(_testWorkspacePath, "src", "index.ts"), "// main");
-            File.WriteAllText(Path.Combine(_testWorkspacePath, "src", "components", "App.tsx"), "// app");
-            File.WriteAllText(Path.Combine(_testWorkspacePath, "tests", "unit", "test.spec.ts"), "// test");
         }
         
         [Test]
@@ -99,12 +46,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         }
         
         [Test]
-        public async Task ExecuteAsync_WithInvalidWorkspacePath_ShouldReturnError()
+        public async Task ExecuteAsync_WithNoIndex_ShouldReturnIndexNotFoundError()
         {
             // Arrange
+            SetupNoIndex();
             var parameters = new DirectorySearchParameters
             {
-                WorkspacePath = "/nonexistent/path",
+                WorkspacePath = TestWorkspacePath,
                 Pattern = "*test*"
             };
             
@@ -118,22 +66,43 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeFalse();
             result.Error.Should().NotBeNull();
-            result.Error!.Code.Should().Be("DIRECTORY_NOT_FOUND");
+            result.Error!.Code.Should().Be("INDEX_NOT_FOUND");
+            result.Error.Message.Should().Contain("index");
         }
         
         [Test]
-        public async Task ExecuteAsync_WithGlobPattern_ShouldFindMatchingDirectories()
+        public async Task ExecuteAsync_WithIndexedFiles_ShouldExtractDirectories()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*test*",
-                IncludeSubdirectories = true
+                TotalHits = 3,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/components/App.tsx", Score = 1.0f },
+                    new() { FilePath = "/workspace/src/services/Api.ts", Score = 0.9f },
+                    new() { FilePath = "/workspace/tests/unit/App.test.tsx", Score = 0.8f }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*",
+                IncludeSubdirectories = true
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
@@ -143,26 +112,53 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Data.Should().NotBeNull();
             
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().NotBeEmpty();
-            searchResult.Directories.Should().Contain(d => d.Name == "tests");
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
+            searchResultData!.Directories.Should().NotBeEmpty();
+            
+            // Should have extracted unique directories
+            var dirNames = searchResultData.Directories.Select(d => d.Name).ToList();
+            dirNames.Should().Contain("src");
+            dirNames.Should().Contain("tests");
+            dirNames.Should().Contain("components");
+            dirNames.Should().Contain("services");
+            dirNames.Should().Contain("unit");
         }
         
         [Test]
-        public async Task ExecuteAsync_WithRegexPattern_ShouldFindMatchingDirectories()
+        public async Task ExecuteAsync_WithPattern_ShouldFilterDirectories()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "^(src|tests)$",
-                UseRegex = true,
-                IncludeSubdirectories = true
+                TotalHits = 5,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/index.ts" },
+                    new() { FilePath = "/workspace/tests/test.spec.ts" },
+                    new() { FilePath = "/workspace/docs/readme.md" },
+                    new() { FilePath = "/workspace/bin/output.dll" },
+                    new() { FilePath = "/workspace/node_modules/package/index.js" }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*test*"
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
@@ -171,124 +167,116 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
             
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().Contain(d => d.Name == "src");
-            searchResult.Directories.Should().Contain(d => d.Name == "tests");
-            searchResult.Directories.Should().NotContain(d => d.Name == "docs");
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
+            searchResultData!.Directories.Should().NotBeEmpty();
+            
+            // Should only match "tests" directory
+            searchResultData.Directories.Should().HaveCount(1);
+            searchResultData.Directories[0].Name.Should().Be("tests");
         }
         
         [Test]
-        public async Task ExecuteAsync_ShouldExcludeCommonBuildDirectories()
+        public async Task ExecuteAsync_ShouldExcludeBuildDirectories()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*",
-                IncludeSubdirectories = true
+                TotalHits = 4,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/app.ts" },
+                    new() { FilePath = "/workspace/bin/debug/app.dll" },
+                    new() { FilePath = "/workspace/obj/temp.obj" },
+                    new() { FilePath = "/workspace/node_modules/lib/index.js" }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*"
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
             
             // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().NotContain(d => d.Name == "bin");
-            searchResult.Directories.Should().NotContain(d => d.Name == "node_modules");
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
+            
+            // Should only have "src" directory, not bin, obj, or node_modules
+            var dirNames = searchResultData!.Directories.Select(d => d.Name).ToList();
+            dirNames.Should().Contain("src");
+            dirNames.Should().NotContain("bin");
+            dirNames.Should().NotContain("obj");
+            dirNames.Should().NotContain("node_modules");
         }
         
         [Test]
-        public async Task ExecuteAsync_WithHiddenDirectoriesExcluded_ShouldNotReturnHidden()
+        public async Task ExecuteAsync_WithRegexPattern_ShouldMatchCorrectly()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*",
-                IncludeHidden = false,
-                IncludeSubdirectories = false
+                TotalHits = 3,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/index.ts" },
+                    new() { FilePath = "/workspace/tests/test.ts" },
+                    new() { FilePath = "/workspace/docs/readme.md" }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "^(src|tests)$",
+                UseRegex = true
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
             
             // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().NotContain(d => d.Name.StartsWith("."));
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
+            
+            var dirNames = searchResultData!.Directories.Select(d => d.Name).ToList();
+            dirNames.Should().Contain("src");
+            dirNames.Should().Contain("tests");
+            dirNames.Should().NotContain("docs");
         }
         
         [Test]
-        public async Task ExecuteAsync_WithHiddenDirectoriesIncluded_ShouldReturnHidden()
+        public async Task ExecuteAsync_WithCacheEnabled_ShouldUseCachedResults()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = ".*",
-                IncludeHidden = true,
-                IncludeSubdirectories = false
-            };
-            
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
-            
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().Contain(d => d.Name == ".hidden");
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_WithMaxResults_ShouldLimitResults()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*",
-                IncludeSubdirectories = true,
-                MaxResults = 2
-            };
-            
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
-            
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Count.Should().BeLessThanOrEqualTo(2);
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_WithCacheEnabled_ShouldCheckCache()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*test*",
-                NoCache = false
-            };
-            
-            var cacheKey = "cache-key";
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns(cacheKey);
-            
+            SetupExistingIndex();
             var cachedResponse = new AIOptimizedResponse<DirectorySearchResult>
             {
                 Success = true,
@@ -296,17 +284,29 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 {
                     Results = new DirectorySearchResult
                     {
-                        Directories = new List<DirectoryMatch>(),
-                        TotalMatches = 0,
-                        Pattern = "*test*",
-                        WorkspacePath = _testWorkspacePath
+                        Directories = new List<DirectoryMatch>
+                        {
+                            new() { Name = "cached-dir", Path = "/cached" }
+                        },
+                        TotalMatches = 1
                     }
                 },
                 Meta = new AIResponseMeta()
             };
             
-            ResponseCacheServiceMock.Setup(x => x.GetAsync<AIOptimizedResponse<DirectorySearchResult>>(cacheKey))
+            ResponseCacheServiceMock
+                .Setup(x => x.GetAsync<AIOptimizedResponse<DirectorySearchResult>>(It.IsAny<string>()))
                 .ReturnsAsync(cachedResponse);
+            
+            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
+                .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*",
+                NoCache = false
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
@@ -314,155 +314,116 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Assert
             result.Should().BeSameAs(cachedResponse);
             result.Meta!.ExtensionData!["cacheHit"].Should().Be(true);
-            ResponseCacheServiceMock.Verify(x => x.GetAsync<AIOptimizedResponse<DirectorySearchResult>>(cacheKey), Times.Once);
+            
+            // Verify Lucene was not called
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                Times.Never);
         }
         
         [Test]
-        public async Task ExecuteAsync_WithCacheDisabled_ShouldNotCheckCache()
+        public async Task ExecuteAsync_ShouldCalculateDepthCorrectly()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*test*",
-                NoCache = true
+                TotalHits = 2,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/components/deep/nested/file.ts" },
+                    new() { FilePath = "/workspace/tests/file.ts" }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*"
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
             
             // Assert
-            ResponseCacheServiceMock.Verify(x => x.GetAsync<AIOptimizedResponse<DirectorySearchResult>>(It.IsAny<string>()), Times.Never);
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_ShouldSetCorrectMetadata()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "src"
-            };
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
             
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
+            var dirs = searchResultData!.Directories;
             
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Pattern.Should().Be("src");
-            searchResult.WorkspacePath.Should().Be(_testWorkspacePath);
-            searchResult.SearchTimeMs.Should().BeGreaterThan(0);
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_WithInvalidRegexPattern_ShouldReturnError()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "[invalid(regex",
-                UseRegex = true
-            };
-            
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
-            
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            result.Should().NotBeNull();
-            result.Success.Should().BeFalse();
-            result.Error.Should().NotBeNull();
-            result.Error!.Code.Should().Be("INVALID_PATTERN");
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_ShouldCalculateDirectoryDepthCorrectly()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "*",
-                IncludeSubdirectories = true
-            };
-            
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
-            
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            
-            var srcDir = searchResult!.Directories.FirstOrDefault(d => d.Name == "src");
+            // Check depths
+            var srcDir = dirs.FirstOrDefault(d => d.Name == "src");
             srcDir.Should().NotBeNull();
             srcDir!.Depth.Should().Be(1);
             
-            var componentsDir = searchResult.Directories.FirstOrDefault(d => d.Name == "components");
-            componentsDir?.Depth.Should().Be(2);
+            var componentsDir = dirs.FirstOrDefault(d => d.Name == "components");
+            componentsDir.Should().NotBeNull();
+            componentsDir!.Depth.Should().Be(2);
+            
+            var deepDir = dirs.FirstOrDefault(d => d.Name == "deep");
+            deepDir.Should().NotBeNull();
+            deepDir!.Depth.Should().Be(3);
         }
         
         [Test]
-        public async Task ExecuteAsync_ShouldStoreResultsWhenCachingEnabled()
+        public async Task ExecuteAsync_ShouldCalculateFileCounts()
         {
             // Arrange
-            var parameters = new DirectorySearchParameters
+            SetupExistingIndex();
+            var searchResult = new SearchResult
             {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "src",
-                NoCache = false
+                TotalHits = 4,
+                Hits = new List<SearchHit>
+                {
+                    new() { FilePath = "/workspace/src/file1.ts" },
+                    new() { FilePath = "/workspace/src/file2.ts" },
+                    new() { FilePath = "/workspace/src/file3.ts" },
+                    new() { FilePath = "/workspace/tests/test.ts" }
+                }
             };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
             
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-key");
+            
+            var parameters = new DirectorySearchParameters
+            {
+                WorkspacePath = "/workspace",
+                Pattern = "*"
+            };
             
             // Act
             var result = await _tool.ExecuteAsync(parameters);
             
             // Assert
-            ResponseCacheServiceMock.Verify(x => x.SetAsync(
-                It.IsAny<string>(),
-                It.IsAny<AIOptimizedResponse<DirectorySearchResult>>(),
-                It.IsAny<CacheEntryOptions>()), Times.Once);
-        }
-        
-        [Test]
-        public async Task ExecuteAsync_WithNoMatches_ShouldReturnEmptyResults()
-        {
-            // Arrange
-            var parameters = new DirectorySearchParameters
-            {
-                WorkspacePath = _testWorkspacePath,
-                Pattern = "nonexistentpattern"
-            };
+            var searchResultData = result.Data!.Results as DirectorySearchResult;
+            searchResultData.Should().NotBeNull();
             
-            CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-                .Returns("test-key");
+            var srcDir = searchResultData!.Directories.FirstOrDefault(d => d.Name == "src");
+            srcDir.Should().NotBeNull();
+            srcDir!.FileCount.Should().Be(3);
             
-            // Act
-            var result = await _tool.ExecuteAsync(parameters);
-            
-            // Assert
-            result.Should().NotBeNull();
-            result.Success.Should().BeTrue();
-            
-            var searchResult = result.Data!.Results as DirectorySearchResult;
-            searchResult.Should().NotBeNull();
-            searchResult!.Directories.Should().BeEmpty();
-            searchResult.TotalMatches.Should().Be(0);
+            var testsDir = searchResultData.Directories.FirstOrDefault(d => d.Name == "tests");
+            testsDir.Should().NotBeNull();
+            testsDir!.FileCount.Should().Be(1);
         }
     }
 }

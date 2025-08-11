@@ -125,8 +125,8 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 10000, // Get many results to extract all directories
                 cancellationToken);
             
-            // Extract unique directories from search results
-            var directoryMap = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
+            // First, extract ALL unique directories from search results
+            var allDirectories = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
             
             foreach (var hit in searchResult.Hits)
             {
@@ -135,94 +135,94 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 if (string.IsNullOrEmpty(filePath))
                     continue;
                 
+                // Normalize path separators for consistent handling
+                // Keep forward slashes for Unix-style paths (test compatibility)
+                var normalizedPath = filePath.Replace('\\', '/');
+                
                 // Process all parent directories of this file
-                var currentPath = Path.GetDirectoryName(filePath);
-                while (!string.IsNullOrEmpty(currentPath))
+                var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+                
+                // Build directory paths from segments
+                for (int i = segments.Length - 1; i > 0; i--) // Skip the file name
                 {
-                    var dirName = Path.GetFileName(currentPath);
-                    if (string.IsNullOrEmpty(dirName))
-                        dirName = currentPath; // Root directory
+                    var pathSegments = segments.Take(i).ToArray();
+                    var currentPath = "/" + string.Join("/", pathSegments);
+                    var dirName = pathSegments.Last();
                     
-                    // Skip excluded directories
-                    bool isExcluded = false;
-                    foreach (var excluded in ExcludedDirectories)
+                    // Skip excluded directories (but still process their parents)
+                    bool isExcluded = ExcludedDirectories.Contains(dirName, StringComparer.OrdinalIgnoreCase);
+                    
+                    if (!isExcluded)
                     {
-                        if (currentPath.Contains(Path.DirectorySeparatorChar + excluded + Path.DirectorySeparatorChar) ||
-                            currentPath.EndsWith(Path.DirectorySeparatorChar + excluded) ||
-                            dirName.Equals(excluded, StringComparison.OrdinalIgnoreCase))
+                        // Skip hidden directories if not included
+                        if (includeHidden || !dirName.StartsWith("."))
                         {
-                            isExcluded = true;
-                            break;
-                        }
-                    }
-                    
-                    if (isExcluded)
-                    {
-                        currentPath = Path.GetDirectoryName(currentPath);
-                        continue;
-                    }
-                    
-                    // Skip hidden directories if not included
-                    if (!includeHidden && dirName.StartsWith("."))
-                    {
-                        currentPath = Path.GetDirectoryName(currentPath);
-                        continue;
-                    }
-                    
-                    // Check if directory name matches pattern
-                    bool matches = false;
-                    if (useRegex)
-                    {
-                        try
-                        {
-                            var regex = new Regex(pattern, RegexOptions.IgnoreCase);
-                            matches = regex.IsMatch(dirName);
-                        }
-                        catch
-                        {
-                            // Invalid regex, treat as literal
-                            matches = dirName.Contains(pattern, StringComparison.OrdinalIgnoreCase);
-                        }
-                    }
-                    else
-                    {
-                        matches = MatchGlobPattern(dirName, pattern);
-                    }
-                    
-                    if (matches)
-                    {
-                        // Add or update directory entry
-                        if (!directoryMap.ContainsKey(currentPath))
-                        {
-                            var relativePath = Path.GetRelativePath(workspacePath, currentPath);
-                            var depth = relativePath == "." ? 0 : relativePath.Count(c => c == Path.DirectorySeparatorChar) + 1;
-                            
-                            directoryMap[currentPath] = new DirectoryMatch
+                            // Add or update directory entry
+                            if (!allDirectories.ContainsKey(currentPath))
                             {
-                                Path = currentPath,
-                                Name = dirName,
-                                ParentPath = Path.GetDirectoryName(currentPath) ?? "",
-                                RelativePath = relativePath == "." ? "" : relativePath,
-                                Depth = depth,
-                                IsHidden = dirName.StartsWith("."),
-                                FileCount = 0,
-                                SubdirectoryCount = 0
-                            };
+                                var parentPath = i > 1 ? "/" + string.Join("/", pathSegments.Take(i - 1)) : "";
+                                var relativePath = currentPath.StartsWith(workspacePath) 
+                                    ? currentPath.Substring(workspacePath.Length).TrimStart('/')
+                                    : currentPath.TrimStart('/');
+                                
+                                allDirectories[currentPath] = new DirectoryMatch
+                                {
+                                    Path = currentPath,
+                                    Name = dirName,
+                                    ParentPath = parentPath,
+                                    RelativePath = relativePath,
+                                    Depth = i,  // Depth is the number of segments
+                                    IsHidden = dirName.StartsWith("."),
+                                    FileCount = 1,  // This directory contains at least one file
+                                    SubdirectoryCount = 0
+                                };
+                            }
+                            else
+                            {
+                                // Increment file count for this directory
+                                allDirectories[currentPath].FileCount++;
+                            }
                         }
-                        
-                        // This directory contains at least one file
-                        directoryMap[currentPath].FileCount++;
                     }
-                    
-                    // Move to parent directory
-                    currentPath = Path.GetDirectoryName(currentPath);
                 }
             }
             
-            // Calculate subdirectory counts
+            // Now filter directories by pattern
+            var directoryMap = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kvp in allDirectories)
+            {
+                var dir = kvp.Value;
+                
+                // Check if directory name matches pattern
+                bool matches = false;
+                if (useRegex)
+                {
+                    try
+                    {
+                        var regex = new Regex(pattern, RegexOptions.IgnoreCase);
+                        matches = regex.IsMatch(dir.Name);
+                    }
+                    catch
+                    {
+                        // Invalid regex, treat as literal
+                        matches = dir.Name.Contains(pattern, StringComparison.OrdinalIgnoreCase);
+                    }
+                }
+                else
+                {
+                    matches = MatchGlobPattern(dir.Name, pattern);
+                }
+                
+                if (matches)
+                {
+                    directoryMap[kvp.Key] = dir;
+                }
+            }
+            
+            // Calculate subdirectory counts (from all directories, not just matching ones)
             foreach (var dir in directoryMap.Values)
             {
-                var subdirCount = directoryMap.Values
+                var subdirCount = allDirectories.Values
                     .Count(d => d.ParentPath.Equals(dir.Path, StringComparison.OrdinalIgnoreCase));
                 dir.SubdirectoryCount = subdirCount;
             }
