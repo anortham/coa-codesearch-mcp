@@ -233,12 +233,29 @@ public class FileWatcherService : BackgroundService
                 var batch = new List<FileChangeEvent>();
                 var timeout = _debounceInterval;
 
-                // Collect batch - using the correct TryTake overload with milliseconds
+                // Collect batch - using TryTake with timeout
                 while (batch.Count < _batchSize)
                 {
-                    // Use TryTake with just timeout, not cancellation token
-                    // The cancellation is checked in the outer loop
-                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds))
+                    FileChangeEvent? change = null;
+                    bool gotItem = false;
+                    
+                    try
+                    {
+                        // Try to take with timeout - this will wait up to timeout for an item
+                        gotItem = _changeQueue.TryTake(out change, (int)timeout.TotalMilliseconds);
+                    }
+                    catch (ObjectDisposedException)
+                    {
+                        // Queue was disposed, exit gracefully
+                        return;
+                    }
+                    catch (InvalidOperationException)
+                    {
+                        // Collection was marked as complete, exit gracefully
+                        break;
+                    }
+                    
+                    if (gotItem && change != null)
                     {
                         batch.Add(change);
                         // Reduce wait time for subsequent items in batch  
