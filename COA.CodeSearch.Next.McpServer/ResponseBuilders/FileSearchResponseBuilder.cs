@@ -109,7 +109,7 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult, A
         // Operation name is handled automatically by the framework
         
         // Update token estimate
-        response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
+        response.Meta.TokenInfo!.Estimated = TokenEstimator.EstimateObject(response);
         
         _logger?.LogInformation("Built file search response: {Files} of {Total} files, {Insights} insights, {Actions} actions, {Tokens} tokens",
             reducedFiles.Count, data.TotalFiles, response.Insights.Count, response.Actions.Count, response.Meta.TokenInfo.Estimated);
