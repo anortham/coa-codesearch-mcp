@@ -77,13 +77,13 @@ internal class IndexContext : IDisposable
                 _reader = writer.GetReader(applyAllDeletes: true);
                 _searcher = new IndexSearcher(_reader);
                 _lastReaderUpdate = now;
-                _lastCommitGeneration = writer.CommitData?.Generation ?? 0;
+                _lastCommitGeneration = writer.MaxDoc;
                 shouldRefresh = false;
             }
             else
             {
                 // Check if we should refresh based on age or commits
-                var currentGeneration = writer.CommitData?.Generation ?? 0;
+                var currentGeneration = writer.MaxDoc;
                 var isStale = _enableAutoRefresh && 
                              (now - _lastReaderUpdate > _maxReaderAge || 
                               currentGeneration > _lastCommitGeneration);
@@ -107,7 +107,7 @@ internal class IndexContext : IDisposable
                     _reader = newReader;
                     _searcher = new IndexSearcher(_reader);
                     _lastReaderUpdate = now;
-                    _lastCommitGeneration = writer.CommitData?.Generation ?? 0;
+                    _lastCommitGeneration = writer.MaxDoc;
                 }
             }
             
@@ -149,7 +149,7 @@ internal class IndexContext : IDisposable
                     _reader = newReader;
                     _searcher = new IndexSearcher(_reader);
                     _lastReaderUpdate = DateTime.UtcNow;
-                    _lastCommitGeneration = _writer.CommitData?.Generation ?? 0;
+                    _lastCommitGeneration = _writer?.MaxDoc ?? 0;
                 }
             }
         }
@@ -207,5 +207,4 @@ public class ReaderStats
     public DateTime LastUpdate { get; set; }
     public long Generation { get; set; }
     public TimeSpan Age { get; set; }
-}
 }
