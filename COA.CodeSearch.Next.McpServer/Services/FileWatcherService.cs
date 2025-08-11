@@ -29,6 +29,11 @@ public class FileWatcherService : BackgroundService
     // Supported extensions
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
+    
+    // Self-starting background task
+    private bool _backgroundTaskStarted = false;
+    private readonly object _startLock = new object();
+    private Task? _executeTask;
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
@@ -63,6 +68,10 @@ public class FileWatcherService : BackgroundService
 
     public void StartWatching(string workspacePath)
     {
+        // CRITICAL FIX: Ensure ExecuteAsync is running when first workspace is watched
+        // This solves the dual ServiceProvider issue - the background task runs on the same instance
+        EnsureBackgroundTaskStarted();
+        
         if (_watchers.ContainsKey(workspacePath))
         {
             _logger.LogDebug("Already watching workspace: {Workspace}", workspacePath);
@@ -507,6 +516,26 @@ public class FileWatcherService : BackgroundService
         }
     }
 
+    private void EnsureBackgroundTaskStarted()
+    {
+        if (_backgroundTaskStarted) return;
+        
+        lock (_startLock)
+        {
+            if (_backgroundTaskStarted) return;
+            
+            _logger.LogInformation("Self-starting FileWatcher background task from StartWatching");
+            
+            // Start ExecuteAsync if it's not already running
+            // This ensures we use the same instance that receives events
+            var cts = new CancellationTokenSource();
+            _executeTask = ExecuteAsync(cts.Token);
+            _backgroundTaskStarted = true;
+            
+            _logger.LogInformation("FileWatcher background task self-started successfully");
+        }
+    }
+    
     public override void Dispose()
     {
         // Stop all watchers
