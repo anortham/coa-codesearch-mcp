@@ -394,7 +394,8 @@ public class FileIndexingService : IFileIndexingService
                 new StringField("extension", fileInfo.Extension.ToLowerInvariant(), Field.Store.YES),
                 new Int64Field("size", fileInfo.Length, Field.Store.YES),
                 new Int64Field("modified", fileInfo.LastWriteTimeUtc.Ticks, Field.Store.YES),
-                new TextField("filename", fileInfo.Name, Field.Store.YES),
+                new StringField("filename", fileInfo.Name, Field.Store.YES),
+                new StringField("filename_lower", fileInfo.Name.ToLowerInvariant(), Field.Store.NO), // For case-insensitive wildcard search
                 
                 // Directory fields for directory search
                 new StringField("directory", directoryPath, Field.Store.YES),
