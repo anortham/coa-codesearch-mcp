@@ -20,6 +20,8 @@ public class FileWatcherService : BackgroundService
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
+    private bool _backgroundTaskStarted = false;
+    private readonly object _startLock = new object();
     
     // Timing configuration
     private readonly TimeSpan _debounceInterval;
@@ -62,8 +64,24 @@ public class FileWatcherService : BackgroundService
             _debounceInterval.TotalMilliseconds, _deleteQuietPeriod.TotalSeconds, _atomicWriteWindow.TotalMilliseconds);
     }
 
+    private void EnsureBackgroundTaskStarted()
+    {
+        lock (_startLock)
+        {
+            if (!_backgroundTaskStarted)
+            {
+                _backgroundTaskStarted = true;
+                _logger.LogInformation("Starting FileWatcher background processing task");
+                _ = Task.Run(async () => await ProcessFileChangesAsync(CancellationToken.None));
+            }
+        }
+    }
+    
     public void StartWatching(string workspacePath)
     {
+        // Ensure the background processing task is started
+        EnsureBackgroundTaskStarted();
+        
         if (_watchers.ContainsKey(workspacePath))
         {
             _logger.LogDebug("Already watching workspace: {Workspace}", workspacePath);
@@ -212,9 +230,19 @@ public class FileWatcherService : BackgroundService
         return _supportedExtensions.Contains(extension);
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("FileWatcher service started");
+        _logger.LogInformation("FileWatcher service ExecuteAsync started");
+
+        // Start the background processing task
+        _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
+        
+        return Task.CompletedTask;
+    }
+
+    private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
+    {
+        _logger.LogInformation("FileWatcher started processing changes");
 
         // Process changes in batches
         while (!stoppingToken.IsCancellationRequested)
@@ -249,7 +277,7 @@ public class FileWatcherService : BackgroundService
             }
         }
 
-        _logger.LogInformation("FileWatcher service stopped");
+        _logger.LogInformation("FileWatcher stopped processing changes");
     }
 
     private async Task ProcessBatchAsync(List<FileChangeEvent> batch, CancellationToken cancellationToken)
