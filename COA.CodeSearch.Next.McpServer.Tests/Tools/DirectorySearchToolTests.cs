@@ -71,6 +71,36 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         }
         
         [Test]
+        public void TestPathProcessing()
+        {
+            // Simple test to understand the path processing logic
+            var filePath = "/workspace/src/components/App.tsx";
+            var normalizedPath = filePath.Replace('\\', '/').TrimStart('/');
+            var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
+            
+            Console.WriteLine($"Original: {filePath}");
+            Console.WriteLine($"Normalized: {normalizedPath}");
+            Console.WriteLine($"Segments: {string.Join(", ", segments)}");
+            Console.WriteLine($"Segment count: {segments.Length}");
+            
+            var directories = new List<string>();
+            var currentPath = "";
+            for (int i = 0; i < segments.Length - 1; i++)
+            {
+                var segment = segments[i];
+                currentPath = currentPath == "" ? segment : currentPath + "/" + segment;
+                var fullPath = "/" + currentPath;
+                directories.Add($"{segment}@{fullPath}");
+                Console.WriteLine($"  i={i}: segment={segment}, currentPath={currentPath}, fullPath={fullPath}");
+            }
+            
+            Console.WriteLine($"Directories found: {string.Join(", ", directories)}");
+            
+            // This should produce: workspace, src, components
+            Assert.That(directories.Count, Is.EqualTo(3));
+        }
+        
+        [Test]
         public async Task ExecuteAsync_WithIndexedFiles_ShouldExtractDirectories()
         {
             // Arrange
@@ -118,6 +148,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Should have extracted unique directories
             var dirNames = searchResultData.Directories.Select(d => d.Name).ToList();
+            
+            // Debug by failing with the actual content
+            Assert.Fail($"Found directories: {string.Join(", ", dirNames)}. Full directories: {string.Join(" | ", searchResultData.Directories.Select(d => $"{d.Name}@{d.Path}"))}");
+            
             dirNames.Should().Contain("src");
             dirNames.Should().Contain("tests");
             dirNames.Should().Contain("components");
