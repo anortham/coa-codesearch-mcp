@@ -131,58 +131,74 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
             foreach (var hit in searchResult.Hits)
             {
                 // Get file path from hit
-                var filePath = hit.FilePath ?? hit.Fields.GetValueOrDefault("path", "");
+                var filePath = hit.FilePath ?? 
+                              hit.Fields?.GetValueOrDefault("path", "") ?? 
+                              hit.Fields?.GetValueOrDefault("relativePath", "") ?? "";
+                              
                 if (string.IsNullOrEmpty(filePath))
                     continue;
                 
-                // Normalize path separators for consistent handling
-                // Keep forward slashes for Unix-style paths (test compatibility)
-                var normalizedPath = filePath.Replace('\\', '/');
+                // Normalize path separators to forward slashes
+                var normalizedPath = filePath.Replace('\\', '/').TrimStart('/');
                 
-                // Process all parent directories of this file
+                // Split into path segments
                 var segments = normalizedPath.Split('/', StringSplitOptions.RemoveEmptyEntries);
                 
-                // Build directory paths from segments
-                for (int i = segments.Length - 1; i > 0; i--) // Skip the file name
+                // Skip if no segments or only filename
+                if (segments.Length <= 1)
+                    continue;
+                
+                // Process each directory level (excluding the filename at the end)
+                var currentPath = "";
+                for (int i = 0; i < segments.Length - 1; i++)
                 {
-                    var pathSegments = segments.Take(i).ToArray();
-                    var currentPath = "/" + string.Join("/", pathSegments);
-                    var dirName = pathSegments.Last();
+                    var segment = segments[i];
+                    currentPath = currentPath == "" ? segment : currentPath + "/" + segment;
+                    var fullPath = "/" + currentPath;
                     
-                    // Skip excluded directories (but still process their parents)
-                    bool isExcluded = ExcludedDirectories.Contains(dirName, StringComparer.OrdinalIgnoreCase);
+                    // Check if this directory should be excluded
+                    if (ExcludedDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase))
+                        continue;
                     
-                    if (!isExcluded)
+                    // Skip hidden directories if not included
+                    if (!includeHidden && segment.StartsWith("."))
+                        continue;
+                    
+                    // Add or update directory entry
+                    if (!allDirectories.ContainsKey(fullPath))
                     {
-                        // Skip hidden directories if not included
-                        if (includeHidden || !dirName.StartsWith("."))
+                        var parentPath = i > 0 ? "/" + string.Join("/", segments.Take(i)) : "";
+                        
+                        // Calculate relative path from workspace
+                        var relativePath = currentPath;
+                        if (!string.IsNullOrEmpty(workspacePath))
                         {
-                            // Add or update directory entry
-                            if (!allDirectories.ContainsKey(currentPath))
+                            var normalizedWorkspace = workspacePath.Replace('\\', '/').TrimEnd('/').TrimStart('/');
+                            if (currentPath.StartsWith(normalizedWorkspace + "/", StringComparison.OrdinalIgnoreCase))
                             {
-                                var parentPath = i > 1 ? "/" + string.Join("/", pathSegments.Take(i - 1)) : "";
-                                var relativePath = currentPath.StartsWith(workspacePath) 
-                                    ? currentPath.Substring(workspacePath.Length).TrimStart('/')
-                                    : currentPath.TrimStart('/');
-                                
-                                allDirectories[currentPath] = new DirectoryMatch
-                                {
-                                    Path = currentPath,
-                                    Name = dirName,
-                                    ParentPath = parentPath,
-                                    RelativePath = relativePath,
-                                    Depth = i,  // Depth is the number of segments
-                                    IsHidden = dirName.StartsWith("."),
-                                    FileCount = 1,  // This directory contains at least one file
-                                    SubdirectoryCount = 0
-                                };
+                                relativePath = currentPath.Substring(normalizedWorkspace.Length + 1);
                             }
-                            else
+                            else if (currentPath.Equals(normalizedWorkspace, StringComparison.OrdinalIgnoreCase))
                             {
-                                // Increment file count for this directory
-                                allDirectories[currentPath].FileCount++;
+                                relativePath = "";
                             }
                         }
+                        
+                        allDirectories[fullPath] = new DirectoryMatch
+                        {
+                            Path = fullPath,
+                            Name = segment,
+                            ParentPath = parentPath,
+                            RelativePath = relativePath,
+                            Depth = i + 1,
+                            IsHidden = segment.StartsWith("."),
+                            FileCount = 1,
+                            SubdirectoryCount = 0
+                        };
+                    }
+                    else
+                    {
+                        allDirectories[fullPath].FileCount++;
                     }
                 }
             }
