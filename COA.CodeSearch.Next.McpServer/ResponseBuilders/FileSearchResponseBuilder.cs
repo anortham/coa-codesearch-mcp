@@ -106,8 +106,7 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult, A
             Meta = CreateMetadata(startTime, wasTruncated, resourceUri)
         };
         
-        // Set operation name
-        response.SetOperation(context.ToolName ?? "file_search");
+        // Operation name is handled automatically by the framework
         
         // Update token estimate
         response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);

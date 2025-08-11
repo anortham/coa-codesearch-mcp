@@ -164,7 +164,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
             // Create RecentFilesResult for response builder
             var recentFilesResult = new ResponseBuilders.RecentFilesResult
             {
-                Files = recentFiles.Select(f => new ResponseBuilders.FileInfo
+                Files = recentFiles.Select(f => new ResponseBuilders.RecentFileInfo
                 {
                     Path = f.FilePath,
                     Size = f.SizeBytes,
