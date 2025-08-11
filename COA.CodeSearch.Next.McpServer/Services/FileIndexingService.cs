@@ -111,6 +111,9 @@ public class FileIndexingService : IFileIndexingService
     {
         var startTime = DateTime.UtcNow;
         
+        _logger.LogDebug("Starting directory indexing for {DirectoryPath} in workspace {WorkspacePath}", 
+            directoryPath, workspacePath);
+        
         // Check for memory pressure
         if (_memoryPressureService.ShouldThrottleOperation("directory_indexing"))
         {
@@ -119,17 +122,22 @@ public class FileIndexingService : IFileIndexingService
         }
 
         var indexedCount = 0;
+        var skippedCount = 0;
         var documents = new List<Document>();
         var batchSize = _configuration.GetValue("Lucene:BatchSize", 100);
 
         try
         {
-            var files = GetFilesToIndex(directoryPath);
+            var files = GetFilesToIndex(directoryPath).ToList(); // Materialize to get count
+            _logger.LogDebug("Found {FileCount} files to index in {DirectoryPath}", files.Count, directoryPath);
             
             foreach (var filePath in files)
             {
                 if (cancellationToken.IsCancellationRequested)
+                {
+                    _logger.LogDebug("Indexing cancelled by request");
                     break;
+                }
 
                 try
                 {
@@ -137,25 +145,34 @@ public class FileIndexingService : IFileIndexingService
                     if (document != null)
                     {
                         documents.Add(document);
+                        _logger.LogTrace("Added document for file {FilePath}", filePath);
                         
                         // Batch index documents
                         if (documents.Count >= batchSize)
                         {
+                            _logger.LogDebug("Indexing batch of {BatchSize} documents", documents.Count);
                             await _luceneIndexService.IndexDocumentsAsync(workspacePath, documents, cancellationToken);
                             indexedCount += documents.Count;
                             documents.Clear();
                         }
                     }
+                    else
+                    {
+                        skippedCount++;
+                        _logger.LogTrace("Skipped file {FilePath} (document creation returned null)", filePath);
+                    }
                 }
                 catch (Exception ex)
                 {
                     _logger.LogWarning(ex, "Failed to index file {FilePath}", filePath);
+                    skippedCount++;
                 }
             }
             
             // Index remaining documents
             if (documents.Count > 0)
             {
+                _logger.LogDebug("Indexing final batch of {BatchSize} documents", documents.Count);
                 await _luceneIndexService.IndexDocumentsAsync(workspacePath, documents, cancellationToken);
                 indexedCount += documents.Count;
             }
@@ -163,6 +180,10 @@ public class FileIndexingService : IFileIndexingService
             // Record metrics
             var duration = DateTime.UtcNow - startTime;
             _metricsService.RecordFileIndexed(directoryPath, 0, duration, true);
+            
+            _logger.LogInformation("Directory indexing complete for {DirectoryPath}: {IndexedCount} indexed, {SkippedCount} skipped in {Duration}ms",
+                directoryPath, indexedCount, skippedCount, duration.TotalMilliseconds);
+            
             return indexedCount;
         }
         catch (Exception ex)
@@ -212,45 +233,131 @@ public class FileIndexingService : IFileIndexingService
     private IEnumerable<string> GetFilesToIndex(string directoryPath)
     {
         if (!Directory.Exists(directoryPath))
-            return Enumerable.Empty<string>();
-
-        var options = new EnumerationOptions
         {
-            RecurseSubdirectories = true,
-            IgnoreInaccessible = true,
-            AttributesToSkip = FileAttributes.System | FileAttributes.Hidden
-        };
+            _logger.LogWarning("Directory does not exist: {DirectoryPath}", directoryPath);
+            yield break;
+        }
 
-        return Directory.EnumerateFiles(directoryPath, "*", options)
-            .Where(file => 
+        _logger.LogDebug("Starting file enumeration for {DirectoryPath}", directoryPath);
+        var directoriesToProcess = new Stack<string>();
+        directoriesToProcess.Push(directoryPath);
+        var totalFilesFound = 0;
+        var totalDirsProcessed = 0;
+        
+        while (directoriesToProcess.Count > 0)
+        {
+            var currentDir = directoriesToProcess.Pop();
+            totalDirsProcessed++;
+            
+            if (!Directory.Exists(currentDir))
             {
-                // Check if file should be indexed
-                var fileName = Path.GetFileName(file);
-                var extension = Path.GetExtension(file);
-                var directory = Path.GetDirectoryName(file);
+                _logger.LogDebug("Directory no longer exists: {Directory}", currentDir);
+                continue;
+            }
                 
-                // Skip excluded directories - check individual path segments, not full path
-                if (directory != null)
+            var dirName = Path.GetFileName(currentDir);
+            // Skip excluded directories by name (not full path)
+            if (!string.IsNullOrEmpty(dirName) && _excludedDirectories.Contains(dirName))
+            {
+                _logger.LogDebug("Skipping excluded directory: {Directory}", currentDir);
+                continue;
+            }
+            
+            _logger.LogTrace("Processing directory: {Directory}", currentDir);
+            
+            // Enumerate files in current directory
+            IEnumerable<string> files;
+            try
+            {
+                files = Directory.EnumerateFiles(currentDir, "*", SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _logger.LogDebug("Access denied to directory: {Directory}", currentDir);
+                continue;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error enumerating files in directory: {Directory}", currentDir);
+                continue;
+            }
+            
+            var fileList = files.ToList();
+            _logger.LogTrace("Found {FileCount} files in {Directory}", fileList.Count, currentDir);
+            
+            // Process files in current directory
+            foreach (var file in fileList)
+            {
+                bool shouldInclude = false;
+                try
                 {
-                    var segments = directory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-                    if (segments.Any(segment => _excludedDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase)))
-                        return false;
+                    var extension = Path.GetExtension(file);
+                    
+                    // Check supported extensions
+                    if (!_supportedExtensions.Contains(extension))
+                        continue;
+                    
+                    // Check file size
+                    var fileInfo = new FileInfo(file);
+                    if (fileInfo.Length > MAX_FILE_SIZE)
+                    {
+                        _logger.LogDebug("Skipping large file {File} ({Size} bytes)", file, fileInfo.Length);
+                        continue;
+                    }
+                    
+                    // Skip hidden/system files
+                    if ((fileInfo.Attributes & (FileAttributes.Hidden | FileAttributes.System)) != 0)
+                        continue;
+                    
+                    shouldInclude = true;
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error checking file: {File}", file);
                 }
                 
-                // Check supported extensions
-                if (!_supportedExtensions.Contains(extension))
-                    return false;
-                
-                // Check file size
-                var fileInfo = new FileInfo(file);
-                if (fileInfo.Length > MAX_FILE_SIZE)
+                if (shouldInclude)
                 {
-                    _logger.LogDebug("Skipping large file {File} ({Size} bytes)", file, fileInfo.Length);
-                    return false;
+                    totalFilesFound++;
+                    yield return file;
                 }
-                
-                return true;
-            });
+            }
+            
+            // Add subdirectories to process
+            IEnumerable<string> subdirectories;
+            try
+            {
+                subdirectories = Directory.EnumerateDirectories(currentDir, "*", SearchOption.TopDirectoryOnly);
+            }
+            catch (UnauthorizedAccessException)
+            {
+                _logger.LogDebug("Access denied to subdirectories of: {Directory}", currentDir);
+                continue;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error enumerating subdirectories in: {Directory}", currentDir);
+                continue;
+            }
+            
+            var subDirList = subdirectories.ToList();
+            _logger.LogTrace("Found {SubDirCount} subdirectories in {Directory}", subDirList.Count, currentDir);
+            
+            foreach (var subDir in subDirList)
+            {
+                var subDirName = Path.GetFileName(subDir);
+                // Only add non-excluded subdirectories for processing
+                if (!_excludedDirectories.Contains(subDirName))
+                {
+                    _logger.LogTrace("Adding subdirectory to process: {SubDir}", subDir);
+                    directoriesToProcess.Push(subDir);
+                }
+                else
+                {
+                    _logger.LogTrace("Skipping excluded subdirectory: {SubDir}", subDir);
+                }
+            }
+        }
     }
 
     private async Task<Document?> CreateDocumentFromFileAsync(string filePath, string workspacePath, CancellationToken cancellationToken)
