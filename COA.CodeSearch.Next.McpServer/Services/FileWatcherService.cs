@@ -231,15 +231,22 @@ public class FileWatcherService : BackgroundService
             try
             {
                 var batch = new List<FileChangeEvent>();
-                var waitTime = _debounceInterval;
+                var timeout = _debounceInterval;
 
-                // Collect batch
-                while (batch.Count < _batchSize && 
-                       _changeQueue.TryTake(out var change, waitTime))
+                // Collect batch - using the correct TryTake overload with milliseconds and cancellation token
+                while (batch.Count < _batchSize)
                 {
-                    batch.Add(change);
-                    // Reduce wait time for subsequent items in batch
-                    waitTime = TimeSpan.FromMilliseconds(10);
+                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
+                    {
+                        batch.Add(change);
+                        // Reduce wait time for subsequent items in batch  
+                        timeout = TimeSpan.FromMilliseconds(10);
+                    }
+                    else
+                    {
+                        // Timeout reached, process what we have
+                        break;
+                    }
                 }
 
                 if (batch.Count > 0)
