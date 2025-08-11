@@ -35,11 +35,16 @@ public class SearchHit
 {
     public string FilePath { get; set; } = string.Empty;
     public float Score { get; set; }
-    public string? Content { get; set; }
+    // Content removed - loaded on-demand when context is needed
     public Dictionary<string, string> Fields { get; set; } = new();
     public List<string>? HighlightedFragments { get; set; }
-    public string? Snippet => HighlightedFragments?.FirstOrDefault() ?? Content?.Substring(0, Math.Min(Content.Length, 200));
+    public string? Snippet => HighlightedFragments?.FirstOrDefault();
     public DateTime? LastModified { get; set; }
+    
+    // Helper properties for common fields
+    public string? FileName => Fields.GetValueOrDefault("filename");
+    public string? RelativePath => Fields.GetValueOrDefault("relativePath");
+    public string? Extension => Fields.GetValueOrDefault("extension");
 }
 
 /// <summary>
