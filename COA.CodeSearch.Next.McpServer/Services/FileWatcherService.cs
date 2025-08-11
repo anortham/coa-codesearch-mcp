@@ -1,3 +1,4 @@
+using COA.CodeSearch.Next.McpServer.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -6,7 +7,8 @@ using System.Collections.Concurrent;
 namespace COA.CodeSearch.Next.McpServer.Services;
 
 /// <summary>
-/// Background service that watches for file changes and automatically updates indexes
+/// Background service that watches for file changes and automatically updates indexes.
+/// Includes sophisticated handling for atomic writes and delete coalescing learned from production use.
 /// </summary>
 public class FileWatcherService : BackgroundService
 {
@@ -15,9 +17,19 @@ public class FileWatcherService : BackgroundService
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IPathResolutionService _pathResolution;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
-    private readonly ConcurrentDictionary<string, DateTime> _pendingChanges = new();
+    private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
+    private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
+    private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
+    
+    // Timing configuration
     private readonly TimeSpan _debounceInterval;
-    private Timer? _processTimer;
+    private readonly TimeSpan _deleteQuietPeriod;
+    private readonly TimeSpan _atomicWriteWindow;
+    private readonly int _batchSize;
+    
+    // Supported extensions
+    private readonly HashSet<string> _supportedExtensions;
+    private readonly HashSet<string> _excludedDirectories;
 
     public FileWatcherService(
         ILogger<FileWatcherService> logger,
@@ -30,8 +42,24 @@ public class FileWatcherService : BackgroundService
         _fileIndexingService = fileIndexingService;
         _pathResolution = pathResolution;
         
-        // Configure debounce interval to batch rapid file changes
-        _debounceInterval = TimeSpan.FromSeconds(configuration.GetValue("FileWatcher:DebounceSeconds", 2));
+        // Configure timing based on lessons learned
+        _debounceInterval = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:DebounceMilliseconds", 500));
+        _deleteQuietPeriod = TimeSpan.FromSeconds(configuration.GetValue("CodeSearch:FileWatcher:DeleteQuietPeriodSeconds", 5));
+        _atomicWriteWindow = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:AtomicWriteWindowMs", 100));
+        _batchSize = configuration.GetValue("CodeSearch:FileWatcher:BatchSize", 50);
+        
+        // Load supported extensions
+        var extensions = configuration.GetSection("CodeSearch:Lucene:SupportedExtensions").Get<string[]>() 
+            ?? new[] { ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs" };
+        _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
+        
+        // Load excluded directories
+        var excluded = configuration.GetSection("CodeSearch:Lucene:ExcludedDirectories").Get<string[]>()
+            ?? new[] { "node_modules", ".git", "bin", "obj", "dist", "build", ".vs", ".vscode" };
+        _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
+        
+        _logger.LogInformation("FileWatcher configured - Debounce: {Debounce}ms, Delete quiet: {DeleteQuiet}s, Atomic window: {AtomicWindow}ms",
+            _debounceInterval.TotalMilliseconds, _deleteQuietPeriod.TotalSeconds, _atomicWriteWindow.TotalMilliseconds);
     }
 
     public void StartWatching(string workspacePath)
@@ -46,24 +74,20 @@ public class FileWatcherService : BackgroundService
         {
             var watcher = new FileSystemWatcher(workspacePath)
             {
-                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size,
+                NotifyFilter = NotifyFilters.FileName | NotifyFilters.LastWrite | NotifyFilters.Size | NotifyFilters.DirectoryName,
                 IncludeSubdirectories = true,
-                EnableRaisingEvents = true
+                EnableRaisingEvents = true,
+                InternalBufferSize = 64 * 1024 // Increase buffer to prevent event loss
             };
 
-            // Configure filters based on supported extensions
-            var extensions = _configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>();
-            if (extensions != null && extensions.Length > 0)
-            {
-                // FileSystemWatcher only supports one filter at a time
-                // We'll filter in the event handlers instead
-                watcher.Filter = "*.*";
-            }
+            // We'll filter in event handlers for more control
+            watcher.Filter = "*.*";
 
-            watcher.Changed += (sender, e) => OnFileChanged(workspacePath, e);
-            watcher.Created += (sender, e) => OnFileChanged(workspacePath, e);
-            watcher.Deleted += (sender, e) => OnFileDeleted(workspacePath, e);
-            watcher.Renamed += (sender, e) => OnFileRenamed(workspacePath, e);
+            // Attach event handlers
+            watcher.Changed += (sender, e) => HandleFileEvent(workspacePath, e.FullPath, FileChangeType.Modified);
+            watcher.Created += (sender, e) => HandleFileEvent(workspacePath, e.FullPath, FileChangeType.Created);
+            watcher.Deleted += (sender, e) => HandleFileEvent(workspacePath, e.FullPath, FileChangeType.Deleted);
+            watcher.Renamed += (sender, e) => HandleRename(workspacePath, e);
             watcher.Error += OnWatcherError;
 
             if (_watchers.TryAdd(workspacePath, watcher))
@@ -87,127 +111,332 @@ public class FileWatcherService : BackgroundService
         }
     }
 
-    protected override Task ExecuteAsync(CancellationToken stoppingToken)
+    private void HandleFileEvent(string workspacePath, string filePath, FileChangeType changeType)
     {
-        // Start the timer to process pending changes
-        _processTimer = new Timer(
-            ProcessPendingChanges,
-            null,
-            _debounceInterval,
-            _debounceInterval);
-
-        // Watch configured workspaces
-        var workspaces = _configuration.GetSection("FileWatcher:AutoWatchWorkspaces").Get<string[]>();
-        if (workspaces != null)
+        // Filter out unsupported files
+        if (!IsFileSupported(filePath))
         {
-            foreach (var workspace in workspaces)
+            return;
+        }
+
+        var changeEvent = new FileChangeEvent
+        {
+            FilePath = filePath,
+            WorkspacePath = workspacePath,
+            ChangeType = changeType,
+            Timestamp = DateTime.UtcNow
+        };
+
+        // Handle deletes specially
+        if (changeType == FileChangeType.Deleted)
+        {
+            HandleDeleteEvent(changeEvent);
+        }
+        else
+        {
+            // For creates/modifies, cancel any pending delete for this file
+            if (_pendingDeletes.TryGetValue(filePath, out var pendingDelete))
             {
-                StartWatching(workspace);
+                pendingDelete.Cancelled = true;
+                _logger.LogDebug("Cancelled pending delete for {FilePath} due to {ChangeType}", filePath, changeType);
+            }
+
+            // Add to queue
+            _changeQueue.TryAdd(changeEvent);
+        }
+    }
+
+    private void HandleDeleteEvent(FileChangeEvent deleteEvent)
+    {
+        // Track pending delete
+        _pendingDeletes.AddOrUpdate(deleteEvent.FilePath,
+            new PendingDelete 
+            { 
+                FilePath = deleteEvent.FilePath,
+                FirstSeenTime = DateTime.UtcNow,
+                LastActivityTime = DateTime.UtcNow
+            },
+            (key, existing) =>
+            {
+                existing.LastActivityTime = DateTime.UtcNow;
+                return existing;
+            });
+
+        // Add to queue for later processing
+        _changeQueue.TryAdd(deleteEvent);
+        
+        _logger.LogDebug("Queued delete for {FilePath} - will verify after quiet period", deleteEvent.FilePath);
+    }
+
+    private void HandleRename(string workspacePath, RenamedEventArgs e)
+    {
+        // Treat rename as delete + create
+        HandleFileEvent(workspacePath, e.OldFullPath, FileChangeType.Deleted);
+        HandleFileEvent(workspacePath, e.FullPath, FileChangeType.Created);
+    }
+
+    private bool IsFileSupported(string filePath)
+    {
+        // Check if file is in excluded directory
+        var directory = Path.GetDirectoryName(filePath);
+        if (directory != null)
+        {
+            var segments = directory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (segments.Any(segment => _excludedDirectories.Contains(segment)))
+            {
+                return false;
             }
         }
 
-        return Task.CompletedTask;
+        // Check extension
+        var extension = Path.GetExtension(filePath);
+        return _supportedExtensions.Contains(extension);
     }
 
-    public override Task StopAsync(CancellationToken cancellationToken)
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _processTimer?.Dispose();
-        
-        // Stop all watchers
-        foreach (var workspace in _watchers.Keys.ToList())
+        _logger.LogInformation("FileWatcher service started");
+
+        // Process changes in batches
+        while (!stoppingToken.IsCancellationRequested)
         {
-            StopWatching(workspace);
+            try
+            {
+                var batch = new List<FileChangeEvent>();
+                var waitTime = _debounceInterval;
+
+                // Collect batch
+                while (batch.Count < _batchSize && 
+                       _changeQueue.TryTake(out var change, waitTime))
+                {
+                    batch.Add(change);
+                    // Reduce wait time for subsequent items in batch
+                    waitTime = TimeSpan.FromMilliseconds(10);
+                }
+
+                if (batch.Count > 0)
+                {
+                    await ProcessBatchAsync(batch, stoppingToken);
+                }
+
+                // Check for expired pending deletes
+                await ProcessPendingDeletesAsync(stoppingToken);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Error processing file changes");
+                await Task.Delay(1000, stoppingToken); // Brief delay before retry
+            }
         }
 
-        return base.StopAsync(cancellationToken);
+        _logger.LogInformation("FileWatcher service stopped");
     }
 
-    private void OnFileChanged(string workspacePath, FileSystemEventArgs e)
+    private async Task ProcessBatchAsync(List<FileChangeEvent> batch, CancellationToken cancellationToken)
     {
-        // Debounce rapid changes to the same file
-        var key = $"{workspacePath}|{e.FullPath}|change";
-        _pendingChanges.AddOrUpdate(key, DateTime.UtcNow, (k, v) => DateTime.UtcNow);
-        
-        _logger.LogTrace("File changed: {FilePath}", e.FullPath);
+        if (batch.Count == 0) return;
+
+        _logger.LogDebug("Processing batch of {Count} file changes", batch.Count);
+
+        // Group by workspace
+        var workspaceGroups = batch.GroupBy(c => c.WorkspacePath);
+
+        foreach (var group in workspaceGroups)
+        {
+            var workspacePath = group.Key;
+            
+            // Apply atomic write coalescing
+            var coalescedEvents = CoalesceAtomicWrites(group.ToList());
+            
+            // Separate deletes from other operations
+            var deletes = coalescedEvents.Where(c => c.ChangeType == FileChangeType.Deleted).ToList();
+            var updates = coalescedEvents.Where(c => c.ChangeType != FileChangeType.Deleted).ToList();
+
+            // Process updates first
+            foreach (var update in updates)
+            {
+                try
+                {
+                    // Cancel any pending delete for this file
+                    if (_pendingDeletes.TryGetValue(update.FilePath, out var pendingDelete))
+                    {
+                        pendingDelete.Cancelled = true;
+                    }
+
+                    await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
+                    _logger.LogInformation("Updated in index: {FilePath} ({ChangeType})", 
+                        update.FilePath, update.ChangeType);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to update file in index: {FilePath}", update.FilePath);
+                }
+            }
+
+            // Process deletes (will be verified in ProcessPendingDeletesAsync)
+            foreach (var delete in deletes)
+            {
+                _logger.LogDebug("Delete queued for verification: {FilePath}", delete.FilePath);
+            }
+        }
     }
 
-    private void OnFileDeleted(string workspacePath, FileSystemEventArgs e)
+    private async Task ProcessPendingDeletesAsync(CancellationToken cancellationToken)
     {
-        var key = $"{workspacePath}|{e.FullPath}|delete";
-        _pendingChanges.AddOrUpdate(key, DateTime.UtcNow, (k, v) => DateTime.UtcNow);
-        
-        _logger.LogTrace("File deleted: {FilePath}", e.FullPath);
+        var now = DateTime.UtcNow;
+        var toProcess = new List<PendingDelete>();
+
+        foreach (var kvp in _pendingDeletes)
+        {
+            var pending = kvp.Value;
+            
+            // Skip if cancelled
+            if (pending.Cancelled)
+            {
+                _pendingDeletes.TryRemove(kvp.Key, out _);
+                continue;
+            }
+
+            // Check if quiet period has passed
+            var timeSinceLastActivity = now - pending.LastActivityTime;
+            if (timeSinceLastActivity >= _deleteQuietPeriod)
+            {
+                toProcess.Add(pending);
+            }
+        }
+
+        foreach (var pending in toProcess)
+        {
+            // Double-check file existence before deleting from index
+            if (File.Exists(pending.FilePath))
+            {
+                _logger.LogWarning("File still exists after delete event: {FilePath} - treating as modification", 
+                    pending.FilePath);
+                _pendingDeletes.TryRemove(pending.FilePath, out _);
+                
+                // Get workspace for this file
+                var workspace = _watchers.Keys.FirstOrDefault(w => pending.FilePath.StartsWith(w));
+                if (workspace != null)
+                {
+                    try
+                    {
+                        await _fileIndexingService.IndexFileAsync(workspace, pending.FilePath, cancellationToken);
+                        _logger.LogInformation("Reindexed file that still exists: {FilePath}", pending.FilePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to reindex file: {FilePath}", pending.FilePath);
+                    }
+                }
+            }
+            else
+            {
+                // File really is deleted - remove from index
+                _pendingDeletes.TryRemove(pending.FilePath, out _);
+                
+                var workspace = _watchers.Keys.FirstOrDefault(w => pending.FilePath.StartsWith(w));
+                if (workspace != null)
+                {
+                    try
+                    {
+                        await _fileIndexingService.RemoveFileAsync(workspace, pending.FilePath, cancellationToken);
+                        _logger.LogInformation("Deleted from index: {FilePath} (verified after {Seconds:F1}s quiet period)", 
+                            pending.FilePath, (now - pending.FirstSeenTime).TotalSeconds);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to delete file from index: {FilePath}", pending.FilePath);
+                    }
+                }
+            }
+        }
     }
 
-    private void OnFileRenamed(string workspacePath, RenamedEventArgs e)
+    /// <summary>
+    /// Coalesce atomic write operations (delete+create within small window) into modifications.
+    /// Many editors (VS Code, Claude Code, etc.) use atomic writes for saving files.
+    /// </summary>
+    private List<FileChangeEvent> CoalesceAtomicWrites(List<FileChangeEvent> events)
     {
-        // Treat rename as delete old + create new
-        var deleteKey = $"{workspacePath}|{e.OldFullPath}|delete";
-        var createKey = $"{workspacePath}|{e.FullPath}|change";
-        
-        _pendingChanges.AddOrUpdate(deleteKey, DateTime.UtcNow, (k, v) => DateTime.UtcNow);
-        _pendingChanges.AddOrUpdate(createKey, DateTime.UtcNow, (k, v) => DateTime.UtcNow);
-        
-        _logger.LogTrace("File renamed: {OldPath} -> {NewPath}", e.OldFullPath, e.FullPath);
+        var result = new List<FileChangeEvent>();
+        var eventsByFile = events.GroupBy(e => e.FilePath).ToList();
+
+        foreach (var fileGroup in eventsByFile)
+        {
+            var fileEvents = fileGroup.OrderBy(e => e.Timestamp).ToList();
+            
+            if (fileEvents.Count == 1)
+            {
+                // Single event - pass through
+                result.Add(fileEvents[0]);
+            }
+            else
+            {
+                // Multiple events for same file - check for atomic write pattern
+                var hasDelete = fileEvents.Any(e => e.ChangeType == FileChangeType.Deleted);
+                var hasCreate = fileEvents.Any(e => e.ChangeType == FileChangeType.Created);
+                
+                if (hasDelete && hasCreate)
+                {
+                    // Check if delete and create happened within atomic write window
+                    var deleteTime = fileEvents.First(e => e.ChangeType == FileChangeType.Deleted).Timestamp;
+                    var createTime = fileEvents.First(e => e.ChangeType == FileChangeType.Created).Timestamp;
+                    
+                    if (Math.Abs((createTime - deleteTime).TotalMilliseconds) <= _atomicWriteWindow.TotalMilliseconds)
+                    {
+                        // Atomic write detected - treat as modification
+                        _logger.LogDebug("Atomic write detected for {FilePath} - treating as modification", fileGroup.Key);
+                        result.Add(new FileChangeEvent
+                        {
+                            FilePath = fileGroup.Key,
+                            WorkspacePath = fileEvents[0].WorkspacePath,
+                            ChangeType = FileChangeType.Modified,
+                            Timestamp = createTime
+                        });
+                    }
+                    else
+                    {
+                        // Not atomic - keep original events
+                        result.AddRange(fileEvents);
+                    }
+                }
+                else
+                {
+                    // Multiple modifications or other patterns - take the last one
+                    result.Add(fileEvents.Last());
+                }
+            }
+        }
+
+        return result;
     }
 
     private void OnWatcherError(object sender, ErrorEventArgs e)
     {
         _logger.LogError(e.GetException(), "FileSystemWatcher error");
+        
+        // Try to recover by recreating the watcher
+        if (sender is FileSystemWatcher watcher)
+        {
+            var workspace = _watchers.FirstOrDefault(x => x.Value == watcher).Key;
+            if (workspace != null)
+            {
+                _logger.LogInformation("Attempting to recover watcher for {Workspace}", workspace);
+                StopWatching(workspace);
+                Task.Delay(1000).ContinueWith(_ => StartWatching(workspace));
+            }
+        }
     }
 
-    private async void ProcessPendingChanges(object? state)
+    public override void Dispose()
     {
-        var now = DateTime.UtcNow;
-        var changesToProcess = new List<KeyValuePair<string, DateTime>>();
-
-        // Find changes that have been pending long enough
-        foreach (var change in _pendingChanges)
+        // Stop all watchers
+        foreach (var workspace in _watchers.Keys.ToList())
         {
-            if (now - change.Value > _debounceInterval)
-            {
-                changesToProcess.Add(change);
-            }
+            StopWatching(workspace);
         }
-
-        if (changesToProcess.Count == 0)
-            return;
-
-        // Process changes
-        foreach (var change in changesToProcess)
-        {
-            // Remove from pending
-            _pendingChanges.TryRemove(change.Key, out _);
-
-            // Parse the change key
-            var parts = change.Key.Split('|');
-            if (parts.Length != 3)
-                continue;
-
-            var workspacePath = parts[0];
-            var filePath = parts[1];
-            var changeType = parts[2];
-
-            try
-            {
-                if (changeType == "delete")
-                {
-                    await _fileIndexingService.RemoveFileAsync(workspacePath, filePath);
-                    _logger.LogDebug("Removed file from index: {FilePath}", filePath);
-                }
-                else if (changeType == "change")
-                {
-                    if (File.Exists(filePath))
-                    {
-                        await _fileIndexingService.IndexFileAsync(workspacePath, filePath);
-                        _logger.LogDebug("Updated file in index: {FilePath}", filePath);
-                    }
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Failed to process file change: {FilePath}", filePath);
-            }
-        }
+        
+        _changeQueue?.Dispose();
+        base.Dispose();
     }
 }

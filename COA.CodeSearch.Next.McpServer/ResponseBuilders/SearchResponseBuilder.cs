@@ -308,17 +308,29 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         
         if (responseMode == "full")
         {
-            tokens += TokenEstimator.EstimateString(hit.Content ?? "");
+            // In full mode, include snippet and fields
             tokens += TokenEstimator.EstimateString(hit.Snippet ?? "");
+            tokens += EstimateFieldTokens(hit.Fields);
             tokens += 20; // Metadata overhead
         }
         else
         {
             // Summary mode - just snippet
-            tokens += TokenEstimator.EstimateString(hit.Snippet ?? hit.Content?.Substring(0, 200) ?? "");
+            tokens += TokenEstimator.EstimateString(hit.Snippet ?? "");
             tokens += 10; // Reduced metadata
         }
         
+        return tokens;
+    }
+    
+    private int EstimateFieldTokens(Dictionary<string, string> fields)
+    {
+        var tokens = 0;
+        foreach (var field in fields)
+        {
+            tokens += TokenEstimator.EstimateString(field.Key);
+            tokens += TokenEstimator.EstimateString(field.Value);
+        }
         return tokens;
     }
     

@@ -283,7 +283,7 @@ public class FileIndexingService : IFileIndexingService
             {
                 new StringField("path", filePath, Field.Store.YES),
                 new StringField("relativePath", Path.GetRelativePath(workspacePath, filePath), Field.Store.YES),
-                new TextField("content", content, Field.Store.YES),
+                new TextField("content", content, Field.Store.NO), // Don't store, only index for searching
                 new StringField("extension", fileInfo.Extension.ToLowerInvariant(), Field.Store.YES),
                 new Int64Field("size", fileInfo.Length, Field.Store.YES),
                 new Int64Field("modified", fileInfo.LastWriteTimeUtc.Ticks, Field.Store.YES),
