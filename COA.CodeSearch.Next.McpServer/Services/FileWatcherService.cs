@@ -233,10 +233,12 @@ public class FileWatcherService : BackgroundService
                 var batch = new List<FileChangeEvent>();
                 var timeout = _debounceInterval;
 
-                // Collect batch - using the correct TryTake overload with milliseconds and cancellation token
+                // Collect batch - using the correct TryTake overload with milliseconds
                 while (batch.Count < _batchSize)
                 {
-                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
+                    // Use TryTake with just timeout, not cancellation token
+                    // The cancellation is checked in the outer loop
+                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds))
                     {
                         batch.Add(change);
                         // Reduce wait time for subsequent items in batch  
@@ -257,6 +259,11 @@ public class FileWatcherService : BackgroundService
 
                 // Check for expired pending deletes
                 await ProcessPendingDeletesAsync(stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected when cancellation is requested
+                break;
             }
             catch (Exception ex)
             {
