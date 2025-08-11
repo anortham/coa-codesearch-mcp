@@ -180,6 +180,7 @@ public class Program
             builder.Services.AddScoped<ResponseBuilders.IndexResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.RecentFilesResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.DirectorySearchResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.SimilarFilesResponseBuilder>();
             
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
@@ -188,7 +189,7 @@ public class Program
             builder.Services.AddScoped<FileSearchTool>();
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
-            // builder.Services.AddScoped<SimilarFilesTool>();
+            builder.Services.AddScoped<SimilarFilesTool>(); // New! Find similar files using MoreLikeThis
             
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
