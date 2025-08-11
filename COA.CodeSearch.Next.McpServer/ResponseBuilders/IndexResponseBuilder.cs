@@ -13,7 +13,7 @@ namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
 /// <summary>
 /// Response builder for index operations with token-aware optimization.
 /// </summary>
-public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimizedResponse<Tools.IndexResult>>
+public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimizedResponse<Tools.IndexWorkspaceResult>>
 {
     private readonly IResourceStorageService? _storageService;
     
@@ -25,7 +25,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
         _storageService = storageService;
     }
     
-    public override async Task<AIOptimizedResponse<Tools.IndexResult>> BuildResponseAsync(IndexResult data, ResponseContext context)
+    public override async Task<AIOptimizedResponse<Tools.IndexWorkspaceResult>> BuildResponseAsync(IndexResult data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -78,13 +78,13 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
-        var response = new AIOptimizedResponse<Tools.IndexResult>
+        var response = new AIOptimizedResponse<Tools.IndexWorkspaceResult>
         {
             Success = data.Success,
-            Data = new AIResponseData<Tools.IndexResult>
+            Data = new AIResponseData<Tools.IndexWorkspaceResult>
             {
                 Summary = BuildSummary(data, reducedFiles.Count, context.ResponseMode),
-                Results = new Tools.IndexResult
+                Results = new Tools.IndexWorkspaceResult
                 {
                     WorkspacePath = data.WorkspacePath ?? "",
                     WorkspaceHash = data.WorkspaceHash ?? "",
