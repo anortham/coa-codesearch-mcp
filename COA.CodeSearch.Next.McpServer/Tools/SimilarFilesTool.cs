@@ -210,12 +210,16 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                 var searcher = new IndexSearcher(reader);
                 
                 // Find the document for the given file
-                var pathQuery = new TermQuery(new Term("path", relativePath));
+                // We need to search by full path since that's what we store
+                var searchPath = Path.IsPathRooted(relativePath) 
+                    ? relativePath 
+                    : Path.GetFullPath(Path.Combine(workspacePath, relativePath));
+                var pathQuery = new TermQuery(new Term("path", searchPath));
                 var topDocs = searcher.Search(pathQuery, 1);
                 
                 if (topDocs.TotalHits == 0)
                 {
-                    _logger.LogWarning("File not found in index: {Path}", relativePath);
+                    _logger.LogWarning("File not found in index: {Path}", searchPath);
                     return Task.FromResult(similarFiles);
                 }
                 
@@ -234,7 +238,7 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                 };
                 
                 // Set fields to analyze (Note: FieldNames is a property in Lucene.Net 4.8)
-                mlt.FieldNames = new[] { "content", "fileName" };
+                mlt.FieldNames = new[] { "content" };
                 
                 // Create query from the document
                 var query = mlt.Like(docId);
