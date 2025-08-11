@@ -251,7 +251,8 @@ public class Program
                 
                 // Start the FileWatcher background service manually in STDIO mode
                 // (HostedServices don't auto-start without the full .NET host)
-                var fileWatcherService = services.GetService<FileWatcherService>();
+                var serviceProvider = builder.Services.BuildServiceProvider();
+                var fileWatcherService = serviceProvider.GetService<FileWatcherService>();
                 if (fileWatcherService != null)
                 {
                     Log.Information("Starting FileWatcher background service");
