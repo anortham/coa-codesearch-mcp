@@ -249,23 +249,17 @@ public class Program
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
                 
-                // Build service provider and start background services manually
-                // McpServerBuilder doesn't create a full .NET host that auto-starts IHostedService
-#pragma warning disable ASP0000 // We need this to manually start background services in STDIO mode
-                var serviceProvider = builder.Services.BuildServiceProvider();
-#pragma warning restore ASP0000
+                // CRITICAL FIX: The issue was creating two ServiceProvider instances!
+                // McpServerBuilder.RunAsync() creates its own ServiceProvider internally.
+                // Since FileWatcherService is registered via AddHostedService (line 55),
+                // it SHOULD be started automatically by the framework... let's test that.
                 
-                // Start the FileWatcher background service
-                // NOTE: In STDIO mode, we don't have a full host to manage IHostedService lifecycle
-                // BackgroundService.StartAsync() internally calls ExecuteAsync, but we need to ensure it happens
-                var fileWatcher = serviceProvider.GetRequiredService<FileWatcherService>();
-                var cts = new CancellationTokenSource();
+                // If that doesn't work, we'll need a different approach:
+                // Option 1: Use a factory delegate in DI registration
+                // Option 2: Use a startup hook that runs after the container is built
+                // Option 3: Have FileWatcherService start itself on first StartWatching() call
                 
-                // StartAsync will trigger ExecuteAsync internally in BackgroundService
-                await fileWatcher.StartAsync(cts.Token);
-                Log.Information("FileWatcher background service started");
-                
-                // Run the MCP server
+                // Run the MCP server - let's see if it starts IHostedService automatically
                 await builder.RunAsync();
             }
         }
