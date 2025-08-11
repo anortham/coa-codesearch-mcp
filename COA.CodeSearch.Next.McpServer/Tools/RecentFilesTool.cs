@@ -253,21 +253,32 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         timeFrame = timeFrame.Trim().ToLowerInvariant();
         
         // Extract number and unit
-        var unitChar = timeFrame.LastOrDefault();
-        var numberPart = timeFrame.Substring(0, timeFrame.Length - 1);
+        string numberPart;
+        string unit;
+        
+        if (timeFrame.EndsWith("min"))
+        {
+            numberPart = timeFrame.Substring(0, timeFrame.Length - 3);
+            unit = "min";
+        }
+        else
+        {
+            numberPart = timeFrame.Substring(0, timeFrame.Length - 1);
+            unit = timeFrame.Substring(timeFrame.Length - 1);
+        }
         
         if (!int.TryParse(numberPart, out var number) || number <= 0)
         {
-            throw new ArgumentException($"Invalid time frame format: '{timeFrame}'. Expected format like '1h', '2d', '1w'");
+            throw new ArgumentException($"Invalid time frame format: '{timeFrame}'. Expected format like '1h', '2d', '1w', '30min'");
         }
         
-        return unitChar switch
+        return unit switch
         {
-            'h' => TimeSpan.FromHours(number),
-            'd' => TimeSpan.FromDays(number),
-            'w' => TimeSpan.FromDays(number * 7),
-            'm' when timeFrame.EndsWith("min") => TimeSpan.FromMinutes(number),
-            _ => throw new ArgumentException($"Unsupported time unit: '{unitChar}'. Supported: h (hours), d (days), w (weeks), min (minutes)")
+            "h" => TimeSpan.FromHours(number),
+            "d" => TimeSpan.FromDays(number),
+            "w" => TimeSpan.FromDays(number * 7),
+            "min" => TimeSpan.FromMinutes(number),
+            _ => throw new ArgumentException($"Unsupported time unit: '{unit}'. Supported: h (hours), d (days), w (weeks), min (minutes)")
         };
     }
     

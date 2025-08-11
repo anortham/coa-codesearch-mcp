@@ -66,15 +66,15 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeFalse();
-            result.Result.Error.Should().NotBeNull();
-            result.Result.Error!.Code.Should().Be("DIRECTORY_NOT_FOUND");
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data.Results!.Success.Should().BeFalse();
+            result.Result.Data.Results.Error.Should().NotBeNull();
+            result.Result.Data.Results.Error!.Code.Should().Be("DIRECTORY_NOT_FOUND");
             result.Result.Actions.Should().NotBeNullOrEmpty();
         }
         
@@ -119,13 +119,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
             result.Result.Data.Summary.Should().Contain("Created new index");
             result.Result.Data.Summary.Should().Contain("50 files");
@@ -174,13 +174,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Success.Should().BeTrue();
             // IndexResponseBuilder says "Updated index" even when no update happened
             // This is a known limitation - it doesn't distinguish between actual update and no-op
             result.Result.Data.Summary.Should().Contain("Updated index");
@@ -239,13 +239,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Success.Should().BeTrue();
             result.Result.Data.Summary.Should().Contain("75 files");
             
             // Verify index was cleared
@@ -315,13 +315,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Success.Should().BeTrue();
             
             // File watcher won't be started since FileWatcherService is null
             // But the indexing should still succeed
@@ -345,18 +345,18 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeFalse();
-            result.Result.Error.Should().NotBeNull();
-            result.Result.Error!.Code.Should().Be("INIT_FAILED");
-            result.Result.Error.Message.Should().Contain("Failed to acquire write lock");
-            result.Result.Error.Recovery.Should().NotBeNull();
-            result.Result.Error.Recovery!.Steps.Should().Contain(s => s.Contains("write.lock"));
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data.Results!.Success.Should().BeFalse();
+            result.Result.Data.Results.Error.Should().NotBeNull();
+            result.Result.Data.Results.Error!.Code.Should().Be("INIT_FAILED");
+            result.Result.Data.Results.Error.Message.Should().Contain("Failed to acquire write lock");
+            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
+            result.Result.Data.Results.Error.Recovery!.Steps.Should().Contain(s => s.Contains("write.lock"));
         }
         
         [Test]
@@ -387,18 +387,18 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeFalse();
-            result.Result.Error.Should().NotBeNull();
-            result.Result.Error!.Code.Should().Be("INDEXING_FAILED");
-            result.Result.Error.Message.Should().Contain("Insufficient disk space");
-            result.Result.Error.Recovery.Should().NotBeNull();
-            result.Result.Error.Recovery!.Steps.Should().Contain(s => s.Contains("disk space"));
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data.Results!.Success.Should().BeFalse();
+            result.Result.Data.Results.Error.Should().NotBeNull();
+            result.Result.Data.Results.Error!.Code.Should().Be("INDEXING_FAILED");
+            result.Result.Data.Results.Error.Message.Should().Contain("Insufficient disk space");
+            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
+            result.Result.Data.Results.Error.Recovery!.Steps.Should().Contain(s => s.Contains("disk space"));
         }
         
         [Test]
@@ -415,17 +415,17 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeFalse();
-            result.Result.Error.Should().NotBeNull();
-            result.Result.Error!.Code.Should().Be("INDEX_ERROR");
-            result.Result.Error.Message.Should().Contain("Unexpected error");
-            result.Result.Error.Recovery.Should().NotBeNull();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data.Results!.Success.Should().BeFalse();
+            result.Result.Data.Results.Error.Should().NotBeNull();
+            result.Result.Data.Results.Error!.Code.Should().Be("INDEX_ERROR");
+            result.Result.Data.Results.Error.Message.Should().Contain("Unexpected error");
+            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
         }
         
         [Test]
@@ -438,7 +438,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -496,13 +496,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Success.Should().BeTrue();
             
             // Check for statistics-related insights
             result.Result.Insights.Should().Contain(i => i.Contains("Top file types"));
