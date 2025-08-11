@@ -20,9 +20,6 @@ public class FileWatcherService : BackgroundService
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
-    private bool _backgroundTaskStarted = false;
-    private readonly object _startLock = new object();
-    
     // Timing configuration
     private readonly TimeSpan _debounceInterval;
     private readonly TimeSpan _deleteQuietPeriod;
@@ -64,24 +61,8 @@ public class FileWatcherService : BackgroundService
             _debounceInterval.TotalMilliseconds, _deleteQuietPeriod.TotalSeconds, _atomicWriteWindow.TotalMilliseconds);
     }
 
-    private void EnsureBackgroundTaskStarted()
-    {
-        lock (_startLock)
-        {
-            if (!_backgroundTaskStarted)
-            {
-                _backgroundTaskStarted = true;
-                _logger.LogInformation("Starting FileWatcher background processing task");
-                _ = Task.Run(async () => await ProcessFileChangesAsync(CancellationToken.None));
-            }
-        }
-    }
-    
     public void StartWatching(string workspacePath)
     {
-        // Ensure the background processing task is started
-        EnsureBackgroundTaskStarted();
-        
         if (_watchers.ContainsKey(workspacePath))
         {
             _logger.LogDebug("Already watching workspace: {Workspace}", workspacePath);
