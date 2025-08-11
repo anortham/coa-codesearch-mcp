@@ -250,8 +250,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 throw new InvalidOperationException($"No writer available for workspace {workspacePath}");
             }
             
-            var reader = context.GetReader(context.Writer);
-            var searcher = new IndexSearcher(reader);
+            var searcher = context.GetSearcher(context.Writer);
             
             // Perform search
             var topDocs = searcher.Search(query, maxResults);
@@ -355,7 +354,18 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             }
             
             context.Writer.Commit();
-            _logger.LogDebug("Committed changes to index for workspace {Path}", workspacePath);
+            
+            // CRITICAL: Invalidate the cached reader after commit to ensure NRT visibility
+            context.InvalidateReader();
+            
+            // Optional: Force refresh immediately if we expect searches soon
+            // This trades memory for latency by eagerly creating the new reader
+            if (_configuration.GetValue("CodeSearch:Lucene:EagerReaderRefresh", false))
+            {
+                context.ForceReaderRefresh();
+            }
+            
+            _logger.LogDebug("Committed changes to index for workspace {Path}, reader invalidated", workspacePath);
         }
         finally
         {
@@ -446,6 +456,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         try
         {
             var dirInfo = new DirectoryInfo(indexPath);
+            var readerStats = context.GetReaderStats();
             
             return new IndexStatistics
             {
@@ -456,7 +467,41 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 IndexSizeBytes = dirInfo.Exists ? dirInfo.GetFiles("*", SearchOption.AllDirectories).Sum(f => f.Length) : 0,
                 SegmentCount = 1, // Default for simplicity
                 CreatedAt = dirInfo.CreationTimeUtc,
-                LastModified = dirInfo.LastWriteTimeUtc
+                LastModified = dirInfo.LastWriteTimeUtc,
+                ReaderAge = readerStats.Age,
+                LastReaderUpdate = readerStats.LastUpdate
+            };
+        }
+        finally
+        {
+            context.Lock.Release();
+        }
+    }
+    
+    /// <summary>
+    /// Get detailed reader diagnostics for troubleshooting NRT issues
+    /// </summary>
+    public async Task<ReaderDiagnostics> GetReaderDiagnosticsAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var context = await GetOrCreateContextAsync(workspacePath, cancellationToken);
+        
+        await context.Lock.WaitAsync(TimeSpan.FromSeconds(LOCK_TIMEOUT_SECONDS), cancellationToken);
+        try
+        {
+            var readerStats = context.GetReaderStats();
+            var writerGeneration = context.Writer?.CommitData?.Generation ?? 0;
+            
+            return new ReaderDiagnostics
+            {
+                WorkspacePath = workspacePath,
+                WorkspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath),
+                HasReader = readerStats.HasReader,
+                ReaderAge = readerStats.Age,
+                LastReaderUpdate = readerStats.LastUpdate,
+                ReaderGeneration = readerStats.Generation,
+                WriterGeneration = writerGeneration,
+                IsReaderStale = readerStats.Generation < writerGeneration,
+                RecommendRefresh = readerStats.Age > TimeSpan.FromSeconds(30) || readerStats.Generation < writerGeneration
             };
         }
         finally
