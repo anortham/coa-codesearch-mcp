@@ -242,7 +242,6 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                     }
                 }
             };
-            errorResult.SetOperation(Name);
             return errorResult;
         }
     }
@@ -289,7 +288,6 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 }
             }
         };
-        result.SetOperation(Name);
         return result;
     }
 }

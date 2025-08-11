@@ -4,6 +4,7 @@ using Moq;
 using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
 using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -54,7 +55,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -72,18 +73,19 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
-            var cachedResult = new TokenOptimizedResult
+            var cachedResult = new AIOptimizedResponse<SearchResult>
             {
                 Success = true,
-                Data = new AIResponseData
+                Data = new AIResponseData<SearchResult>
                 {
                     Summary = "Cached results",
-                    Count = 5
+                    Count = 5,
+                    Results = new SearchResult { TotalHits = 5 }
                 }
             };
             
             ResponseCacheServiceMock
-                .Setup(x => x.GetAsync<TokenOptimizedResult>(It.IsAny<string>()))
+                .Setup(x => x.GetAsync<AIOptimizedResponse<SearchResult>>(It.IsAny<string>()))
                 .ReturnsAsync(cachedResult);
             
             var parameters = new TextSearchParameters
@@ -94,7 +96,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -126,8 +128,15 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 .ReturnsAsync(searchResult);
             
             ResponseCacheServiceMock
-                .Setup(x => x.GetAsync<TokenOptimizedResult>(It.IsAny<string>()))
-                .ReturnsAsync(new TokenOptimizedResult { Success = true }); // Cached result exists
+                .Setup(x => x.GetAsync<AIOptimizedResponse<SearchResult>>(It.IsAny<string>()))
+                .ReturnsAsync(new AIOptimizedResponse<SearchResult> 
+                { 
+                    Success = true,
+                    Data = new AIResponseData<SearchResult>
+                    {
+                        Results = new SearchResult { TotalHits = 0 }
+                    }
+                }); // Cached result exists
             
             var parameters = new TextSearchParameters
             {
@@ -137,7 +146,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -145,7 +154,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Verify cache was not checked
             ResponseCacheServiceMock.Verify(
-                x => x.GetAsync<TokenOptimizedResult>(It.IsAny<string>()),
+                x => x.GetAsync<SearchResult>(It.IsAny<string>()),
                 Times.Never);
             
             // Verify search was performed
@@ -176,7 +185,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -220,7 +229,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -257,7 +266,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -267,7 +276,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             ResponseCacheServiceMock.Verify(
                 x => x.SetAsync(
                     It.IsAny<string>(),
-                    It.IsAny<TokenOptimizedResult>(),
+                    It.IsAny<AIOptimizedResponse<SearchResult>>(),
                     It.IsAny<CacheEntryOptions>()),
                 Times.Once);
         }
@@ -293,7 +302,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -318,7 +327,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -350,7 +359,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -389,7 +398,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -428,7 +437,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert

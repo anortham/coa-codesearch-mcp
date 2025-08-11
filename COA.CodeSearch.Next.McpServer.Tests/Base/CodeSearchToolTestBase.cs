@@ -13,6 +13,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
+using Lucene.Net.Search;
 
 namespace COA.CodeSearch.Next.McpServer.Tests.Base
 {
@@ -125,6 +126,26 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Base
                     It.IsAny<CancellationToken>()))
                 .Returns<string, Func<Task>, CancellationToken>(
                     async (key, func, ct) => await func());
+        }
+        
+        /// <summary>
+        /// Helper method to setup index exists mock behavior.
+        /// </summary>
+        protected void SetupIndexExists(string workspacePath, bool exists = true)
+        {
+            LuceneIndexServiceMock
+                .Setup(x => x.IndexExistsAsync(workspacePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(exists);
+        }
+        
+        /// <summary>
+        /// Helper method to setup search results mock behavior.
+        /// </summary>
+        protected void SetupSearchResults(string workspacePath, SearchResult result)
+        {
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(workspacePath, It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(result);
         }
         
         /// <summary>
