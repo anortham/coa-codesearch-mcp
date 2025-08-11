@@ -256,8 +256,13 @@ public class Program
 #pragma warning restore ASP0000
                 
                 // Start the FileWatcher background service
+                // NOTE: In STDIO mode, we don't have a full host to manage IHostedService lifecycle
+                // BackgroundService.StartAsync() internally calls ExecuteAsync, but we need to ensure it happens
                 var fileWatcher = serviceProvider.GetRequiredService<FileWatcherService>();
-                await fileWatcher.StartAsync(CancellationToken.None);
+                var cts = new CancellationTokenSource();
+                
+                // StartAsync will trigger ExecuteAsync internally in BackgroundService
+                await fileWatcher.StartAsync(cts.Token);
                 Log.Information("FileWatcher background service started");
                 
                 // Run the MCP server
