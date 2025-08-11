@@ -199,11 +199,19 @@ public class FileIndexingService : IFileIndexingService
     {
         try
         {
+            _logger.LogDebug("IndexFileAsync called - Workspace: {WorkspacePath}, File: {FilePath}", 
+                workspacePath, filePath);
+                
             var document = await CreateDocumentFromFileAsync(filePath, workspacePath, cancellationToken);
             if (document != null)
             {
                 await _luceneIndexService.IndexDocumentAsync(workspacePath, document, cancellationToken);
                 await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+                
+                // Verify the commit worked by checking document count
+                var count = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
+                _logger.LogInformation("After indexing {FilePath}, document count is: {Count}", filePath, count);
+                
                 return true;
             }
             return false;
