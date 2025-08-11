@@ -50,9 +50,9 @@ public class Program
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         
-        // FileWatcher as background service
+        // FileWatcher as background service - register properly for auto-start
         services.AddSingleton<FileWatcherService>();
-        services.AddHostedService<FileWatcherService>(provider => provider.GetRequiredService<FileWatcherService>());
+        services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
         
         // Write lock management
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
@@ -249,17 +249,18 @@ public class Program
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
                 
-                // Start the FileWatcher background service manually in STDIO mode
-                // (HostedServices don't auto-start without the full .NET host)
+                // Build service provider and start background services manually
+                // McpServerBuilder doesn't create a full .NET host that auto-starts IHostedService
+#pragma warning disable ASP0000 // We need this to manually start background services in STDIO mode
                 var serviceProvider = builder.Services.BuildServiceProvider();
-                var fileWatcherService = serviceProvider.GetService<FileWatcherService>();
-                if (fileWatcherService != null)
-                {
-                    Log.Information("Starting FileWatcher background service");
-                    var cts = new CancellationTokenSource();
-                    _ = Task.Run(async () => await fileWatcherService.StartAsync(cts.Token));
-                }
+#pragma warning restore ASP0000
                 
+                // Start the FileWatcher background service
+                var fileWatcher = serviceProvider.GetRequiredService<FileWatcherService>();
+                await fileWatcher.StartAsync(CancellationToken.None);
+                Log.Information("FileWatcher background service started");
+                
+                // Run the MCP server
                 await builder.RunAsync();
             }
         }
