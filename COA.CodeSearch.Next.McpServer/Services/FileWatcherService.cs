@@ -100,6 +100,7 @@ public class FileWatcherService : BackgroundService
         }
     }
 
+    
     public void StopWatching(string workspacePath)
     {
         if (_watchers.TryRemove(workspacePath, out var watcher))
@@ -112,7 +113,7 @@ public class FileWatcherService : BackgroundService
 
     private void HandleFileEvent(string workspacePath, string filePath, FileChangeType changeType)
     {
-        // Filter out unsupported files BEFORE logging to reduce noise
+        // Filter out unsupported files
         if (!IsFileSupported(filePath))
         {
             return;
@@ -211,14 +212,36 @@ public class FileWatcherService : BackgroundService
         return _supportedExtensions.Contains(extension);
     }
 
+    
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FileWatcher service ExecuteAsync started");
 
         // Start the background processing task
-        _ = Task.Run(async () => await ProcessFileChangesAsync(stoppingToken), stoppingToken);
-        
-        return Task.CompletedTask;
+        // IMPORTANT: We must return the actual task, not Task.CompletedTask
+        // Otherwise BackgroundService thinks the work is done immediately
+        return Task.Run(async () => 
+        {
+            _logger.LogInformation("FileWatcher Task.Run started");
+            try
+            {
+                await ProcessFileChangesAsync(stoppingToken);
+            }
+            catch (OperationCanceledException)
+            {
+                // Expected during shutdown
+                _logger.LogInformation("FileWatcher processing cancelled");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Fatal error in FileWatcher processing loop");
+                throw; // Re-throw to let BackgroundService handle it
+            }
+            finally
+            {
+                _logger.LogInformation("FileWatcher Task.Run completed");
+            }
+        }, stoppingToken);
     }
 
     private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
