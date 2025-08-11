@@ -113,14 +113,13 @@ public class FileWatcherService : BackgroundService
 
     private void HandleFileEvent(string workspacePath, string filePath, FileChangeType changeType)
     {
-        _logger.LogDebug("FileWatcher event: {ChangeType} for {FilePath}", changeType, filePath);
-        
-        // Filter out unsupported files
+        // Filter out unsupported files BEFORE logging to reduce noise
         if (!IsFileSupported(filePath))
         {
-            _logger.LogTrace("File not supported, ignoring: {FilePath}", filePath);
             return;
         }
+        
+        _logger.LogDebug("FileWatcher event: {ChangeType} for {FilePath}", changeType, filePath);
 
         var changeEvent = new FileChangeEvent
         {
@@ -191,15 +190,25 @@ public class FileWatcherService : BackgroundService
         var directory = Path.GetDirectoryName(filePath);
         if (directory != null)
         {
+            // Split path into segments and check each one
             var segments = directory.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
-            if (segments.Any(segment => _excludedDirectories.Contains(segment)))
+            foreach (var segment in segments)
             {
-                return false;
+                // Check if this segment is an excluded directory (case-insensitive)
+                if (_excludedDirectories.Contains(segment))
+                {
+                    return false;
+                }
             }
         }
 
         // Check extension
         var extension = Path.GetExtension(filePath);
+        if (string.IsNullOrEmpty(extension))
+        {
+            return false; // Skip files without extensions
+        }
+        
         return _supportedExtensions.Contains(extension);
     }
 
