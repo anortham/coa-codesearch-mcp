@@ -145,7 +145,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                             Directory = Path.GetDirectoryName(hit.FilePath) ?? "",
                             Extension = Path.GetExtension(hit.FilePath),
                             LastModified = hit.LastModified.Value,
-                            SizeBytes = hit.FileSize,
+                            SizeBytes = hit.Fields.TryGetValue("size", out var sizeStr) && long.TryParse(sizeStr, out var size) ? size : 0,
                             ModifiedAgo = DateTime.UtcNow - hit.LastModified.Value
                         });
                     }
@@ -225,7 +225,6 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                     }
                 }
             };
-            errorResult.SetOperation(Name);
             return errorResult;
         }
     }
@@ -306,7 +305,6 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                 }
             }
         };
-        result.SetOperation(Name);
         return result;
     }
 }

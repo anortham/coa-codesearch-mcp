@@ -20,7 +20,7 @@ namespace COA.CodeSearch.Next.McpServer.Tools;
 /// <summary>
 /// Tool for indexing a workspace directory with token-optimized responses
 /// </summary>
-public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimizedResponse<IndexResult>>
+public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimizedResponse<IndexWorkspaceResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
@@ -57,7 +57,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     public override string Description => "Index a workspace directory with token-optimized progress reporting";
     public override ToolCategory Category => ToolCategory.Resources;
 
-    protected override async Task<AIOptimizedResponse<IndexResult>> ExecuteInternalAsync(
+    protected override async Task<AIOptimizedResponse<IndexWorkspaceResult>> ExecuteInternalAsync(
         IndexWorkspaceParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -87,7 +87,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
             
             if (!initResult.Success)
             {
-                var errorResult = new AIOptimizedResponse<IndexResult>
+                var errorResult = new AIOptimizedResponse<IndexWorkspaceResult>
                 {
                     Success = false,
                     Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -106,7 +106,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                         }
                     }
                 };
-                errorResult.SetOperation(Name);
                 return errorResult;
             }
 
@@ -126,7 +125,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 
                 if (!indexResult.Success)
                 {
-                    var indexErrorResult = new AIOptimizedResponse<IndexResult>
+                    var indexErrorResult = new AIOptimizedResponse<IndexWorkspaceResult>
                     {
                         Success = false,
                         Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -145,7 +144,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                             }
                         }
                     };
-                    indexErrorResult.SetOperation(Name);
                     return indexErrorResult;
                 }
                 
@@ -259,7 +257,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
         {
             _logger.LogError(ex, "Failed to index workspace: {WorkspacePath}", workspacePath);
             
-            var exceptionErrorResult = new AIOptimizedResponse<IndexResult>
+            var exceptionErrorResult = new AIOptimizedResponse<IndexWorkspaceResult>
             {
                 Success = false,
                 Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -278,14 +276,13 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                     }
                 }
             };
-            exceptionErrorResult.SetOperation(Name);
             return exceptionErrorResult;
         }
     }
     
-    private AIOptimizedResponse<IndexResult> CreateDirectoryNotFoundError(string workspacePath)
+    private AIOptimizedResponse<IndexWorkspaceResult> CreateDirectoryNotFoundError(string workspacePath)
     {
-        var result = new AIOptimizedResponse<IndexResult>
+        var result = new AIOptimizedResponse<IndexWorkspaceResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -318,7 +315,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 }
             }
         };
-        result.SetOperation(Name);
         return result;
     }
 }

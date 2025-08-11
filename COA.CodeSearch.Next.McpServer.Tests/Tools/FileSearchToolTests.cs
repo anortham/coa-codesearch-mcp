@@ -54,7 +54,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -101,7 +101,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -153,7 +153,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -200,7 +200,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -245,7 +245,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -284,7 +284,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -324,7 +324,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -334,7 +334,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             ResponseCacheServiceMock.Verify(
                 x => x.SetAsync(
                     It.IsAny<string>(),
-                    It.IsAny<TokenOptimizedResult>(),
+                    It.IsAny<AIOptimizedResponse<FileSearchResult>>(),
                     It.IsAny<CacheEntryOptions>()),
                 Times.Once);
         }
@@ -362,7 +362,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -370,14 +370,14 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Verify cache was not checked
             ResponseCacheServiceMock.Verify(
-                x => x.GetAsync<TokenOptimizedResult>(It.IsAny<string>()),
+                x => x.GetAsync<FileSearchResult>(It.IsAny<string>()),
                 Times.Never);
             
             // Verify result was not cached
             ResponseCacheServiceMock.Verify(
                 x => x.SetAsync(
                     It.IsAny<string>(),
-                    It.IsAny<TokenOptimizedResult>(),
+                    It.IsAny<FileSearchResult>(),
                     It.IsAny<CacheEntryOptions>()),
                 Times.Never);
         }
@@ -403,7 +403,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -427,7 +427,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<TokenOptimizedResult>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert

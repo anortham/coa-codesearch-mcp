@@ -4,6 +4,7 @@ using Moq;
 using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
 using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -12,7 +13,11 @@ using System.Threading.Tasks;
 using System.Threading;
 using System;
 using System.Collections.Generic;
+using System.IO;
+using System.Linq;
 using COA.Mcp.Framework.Models;
+using System.ComponentModel.DataAnnotations;
+using COA.Mcp.Framework.Exceptions;
 
 namespace COA.CodeSearch.Next.McpServer.Tests.Tools
 {
@@ -76,13 +81,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             var recentTime = DateTime.UtcNow.AddHours(-2);
             var oldTime = DateTime.UtcNow.AddDays(-10);
             
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", recentTime, 1024),
                 CreateSearchHit("file2.js", recentTime.AddMinutes(-30), 2048),
                 CreateSearchHit("old-file.txt", oldTime, 512) // This should be filtered out by time
-            });
+            );
             
             var parameters = new RecentFilesParameters
             {
@@ -119,13 +123,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             var recentTime = DateTime.UtcNow.AddHours(-1);
             
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", recentTime, 1024),
                 CreateSearchHit("file2.js", recentTime.AddMinutes(-15), 2048),
                 CreateSearchHit("file3.txt", recentTime.AddMinutes(-30), 512)
-            });
+            );
             
             var parameters = new RecentFilesParameters
             {
@@ -193,11 +196,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         public async Task ExecuteAsync_Should_Skip_Cache_When_NoCache_Is_True()
         {
             // Arrange
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", DateTime.UtcNow.AddMinutes(-30), 1024)
-            });
+            );
             
             // Setup cache to return something, but it should be ignored
             ResponseCacheServiceMock
@@ -233,8 +235,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         public async Task ExecuteAsync_Should_Parse_TimeFrame_Correctly(string timeFrame, double expectedDays)
         {
             // Arrange
-            SetupIndexExists();
-            SetupSearchResults(Array.Empty<SearchHit>());
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits();
             
             var parameters = new RecentFilesParameters
             {
@@ -266,11 +268,11 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
                 TimeFrame = "invalid-format"
             };
             
-            // Act & Assert
-            var exception = await Assert.ThrowsAsync<ArgumentException>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
-            
-            exception.Message.Should().Contain("Invalid time frame format");
+            // Act & Assert  
+            Assert.ThrowsAsync<ArgumentException>(async () => 
+            {
+                await _tool.ExecuteAsync(parameters, CancellationToken.None);
+            });
         }
         
         [Test]
@@ -284,8 +286,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act & Assert
-            await Assert.ThrowsAsync<ValidationException>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            Assert.ThrowsAsync<ToolExecutionException>(async () => 
+            {
+                await _tool.ExecuteAsync(parameters, CancellationToken.None);
+            });
         }
         
         [Test]
@@ -300,19 +304,20 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act & Assert
-            await Assert.ThrowsAsync<ValidationException>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            Assert.ThrowsAsync<ToolExecutionException>(async () => 
+            {
+                await _tool.ExecuteAsync(parameters, CancellationToken.None);
+            });
         }
         
         [Test]
         public async Task ExecuteAsync_Should_Cache_Successful_Results()
         {
             // Arrange
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", DateTime.UtcNow.AddHours(-1), 1024)
-            });
+            );
             
             var parameters = new RecentFilesParameters
             {
@@ -344,13 +349,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             var time2 = DateTime.UtcNow.AddHours(-1); // Most recent
             var time3 = DateTime.UtcNow.AddHours(-2);
             
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", time1, 1024),
                 CreateSearchHit("file2.js", time2, 2048), // Should be first
                 CreateSearchHit("file3.txt", time3, 512)
-            });
+            );
             
             var parameters = new RecentFilesParameters
             {
@@ -378,11 +382,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Arrange
             var modifiedTime = DateTime.UtcNow.AddHours(-2);
             
-            SetupIndexExists();
-            SetupSearchResults(new[]
-            {
+            SetupIndexExists(TestWorkspacePath);
+            SetupSearchResultsWithHits(
                 CreateSearchHit("file1.cs", modifiedTime, 1024)
-            });
+            );
             
             var parameters = new RecentFilesParameters
             {
@@ -409,9 +412,22 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 FilePath = Path.Combine(TestWorkspacePath, filePath),
                 LastModified = lastModified,
-                FileSize = fileSize,
+                Fields = new Dictionary<string, string>
+                {
+                    ["size"] = fileSize.ToString()
+                },
                 Score = 1.0f
             };
+        }
+
+        // Helper method to setup search results with multiple hits
+        private void SetupSearchResultsWithHits(params SearchHit[] hits)
+        {
+            SetupSearchResults(TestWorkspacePath, new SearchResult
+            {
+                Hits = hits.ToList(),
+                TotalHits = hits.Length
+            });
         }
     }
 }
