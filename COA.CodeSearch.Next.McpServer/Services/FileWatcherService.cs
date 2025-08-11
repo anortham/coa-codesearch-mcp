@@ -113,9 +113,12 @@ public class FileWatcherService : BackgroundService
 
     private void HandleFileEvent(string workspacePath, string filePath, FileChangeType changeType)
     {
+        _logger.LogDebug("FileWatcher event: {ChangeType} for {FilePath}", changeType, filePath);
+        
         // Filter out unsupported files
         if (!IsFileSupported(filePath))
         {
+            _logger.LogTrace("File not supported, ignoring: {FilePath}", filePath);
             return;
         }
 
@@ -142,7 +145,14 @@ public class FileWatcherService : BackgroundService
             }
 
             // Add to queue
-            _changeQueue.TryAdd(changeEvent);
+            if (_changeQueue.TryAdd(changeEvent))
+            {
+                _logger.LogInformation("Queued {ChangeType} event for: {FilePath}", changeType, filePath);
+            }
+            else
+            {
+                _logger.LogWarning("Failed to queue {ChangeType} event for: {FilePath}", changeType, filePath);
+            }
         }
     }
 
@@ -216,6 +226,7 @@ public class FileWatcherService : BackgroundService
 
                 if (batch.Count > 0)
                 {
+                    _logger.LogInformation("Processing batch of {Count} file changes", batch.Count);
                     await ProcessBatchAsync(batch, stoppingToken);
                 }
 
@@ -263,9 +274,17 @@ public class FileWatcherService : BackgroundService
                         pendingDelete.Cancelled = true;
                     }
 
-                    await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
-                    _logger.LogInformation("Updated in index: {FilePath} ({ChangeType})", 
-                        update.FilePath, update.ChangeType);
+                    var indexed = await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
+                    if (indexed)
+                    {
+                        _logger.LogInformation("Successfully updated in index: {FilePath} ({ChangeType})", 
+                            update.FilePath, update.ChangeType);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Failed to index file: {FilePath} ({ChangeType})", 
+                            update.FilePath, update.ChangeType);
+                    }
                 }
                 catch (Exception ex)
                 {
