@@ -225,40 +225,21 @@ public class FileWatcherService : BackgroundService
     {
         _logger.LogInformation("FileWatcher started processing changes");
 
-        // Process changes in batches
+        // Process changes in batches - EXACTLY like the old code
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 var batch = new List<FileChangeEvent>();
-                var timeout = _debounceInterval;
+                var timeout = TimeSpan.FromMilliseconds(_debounceInterval.TotalMilliseconds);
 
-                // Collect batch - using TryTake with timeout
+                // Collect a batch of changes - EXACTLY like old code
                 while (batch.Count < _batchSize)
                 {
-                    FileChangeEvent? change = null;
-                    bool gotItem = false;
-                    
-                    try
-                    {
-                        // Try to take with timeout - this will wait up to timeout for an item
-                        gotItem = _changeQueue.TryTake(out change, (int)timeout.TotalMilliseconds);
-                    }
-                    catch (ObjectDisposedException)
-                    {
-                        // Queue was disposed, exit gracefully
-                        return;
-                    }
-                    catch (InvalidOperationException)
-                    {
-                        // Collection was marked as complete, exit gracefully
-                        break;
-                    }
-                    
-                    if (gotItem && change != null)
+                    if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
                     {
                         batch.Add(change);
-                        // Reduce wait time for subsequent items in batch  
+                        // Reduce timeout for subsequent items in batch
                         timeout = TimeSpan.FromMilliseconds(10);
                     }
                     else
