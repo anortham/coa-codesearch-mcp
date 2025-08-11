@@ -247,6 +247,8 @@ public class FileWatcherService : BackgroundService
     private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
     {
         _logger.LogInformation("FileWatcher started processing changes");
+        _logger.LogInformation("Debounce interval: {Debounce}ms, Batch size: {BatchSize}", 
+            _debounceInterval.TotalMilliseconds, _batchSize);
 
         // Process changes in batches - EXACTLY like the old code
         while (!stoppingToken.IsCancellationRequested)
@@ -255,6 +257,8 @@ public class FileWatcherService : BackgroundService
             {
                 var batch = new List<FileChangeEvent>();
                 var timeout = TimeSpan.FromMilliseconds(_debounceInterval.TotalMilliseconds);
+                
+                _logger.LogDebug("Waiting for file changes (timeout: {Timeout}ms)...", timeout.TotalMilliseconds);
 
                 // Collect a batch of changes - EXACTLY like old code
                 while (batch.Count < _batchSize)
@@ -262,12 +266,15 @@ public class FileWatcherService : BackgroundService
                     if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
                     {
                         batch.Add(change);
+                        _logger.LogDebug("Collected change {Count}/{BatchSize}: {FilePath}", 
+                            batch.Count, _batchSize, change.FilePath);
                         // Reduce timeout for subsequent items in batch
                         timeout = TimeSpan.FromMilliseconds(10);
                     }
                     else
                     {
                         // Timeout reached, process what we have
+                        _logger.LogDebug("Timeout reached after collecting {Count} changes", batch.Count);
                         break;
                     }
                 }
