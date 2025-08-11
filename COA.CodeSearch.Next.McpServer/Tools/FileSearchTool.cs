@@ -96,21 +96,20 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 return CreateNoIndexError(workspacePath);
             }
             
-            // Create a query for the filename field
+            // Create a query for the filename_lower field (case-insensitive matching)
             // For simple patterns, we can use a wildcard query
             Query query;
             if (pattern.Contains("*") || pattern.Contains("?"))
             {
-                // Convert glob pattern to Lucene wildcard pattern
-                var lucenePattern = pattern.Replace(".", "\\."); // Escape dots
-                query = new WildcardQuery(new Term("filename", lucenePattern.ToLowerInvariant()));
-                _logger.LogDebug("Using WildcardQuery for pattern: {Pattern} -> {LucenePattern}", pattern, lucenePattern);
+                // Use filename_lower field for case-insensitive wildcard search
+                query = new WildcardQuery(new Term("filename_lower", pattern.ToLowerInvariant()));
+                _logger.LogDebug("Using WildcardQuery for pattern: {Pattern} on filename_lower field", pattern);
             }
             else
             {
-                // Exact filename match
-                query = new TermQuery(new Term("filename", pattern.ToLowerInvariant()));
-                _logger.LogDebug("Using TermQuery for exact match: {Pattern}", pattern);
+                // Exact filename match using filename_lower for case-insensitive
+                query = new TermQuery(new Term("filename_lower", pattern.ToLowerInvariant()));
+                _logger.LogDebug("Using TermQuery for exact match: {Pattern} on filename_lower field", pattern);
             }
             
             // For regex patterns or match-all patterns, use MatchAllDocsQuery and filter later
