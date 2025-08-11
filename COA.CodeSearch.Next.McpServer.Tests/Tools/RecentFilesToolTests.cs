@@ -228,10 +228,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         }
         
         [Test]
-        [TestCase("1h", 1)]
+        [TestCase("1h", 0.04167)] // 1 hour = 1/24 days
         [TestCase("2d", 2)]
         [TestCase("1w", 7)]
-        [TestCase("30min", 0.5)]
+        [TestCase("30min", 0.02083)] // 30 minutes = 30/1440 days
         public async Task ExecuteAsync_Should_Parse_TimeFrame_Correctly(string timeFrame, double expectedDays)
         {
             // Arrange
@@ -250,11 +250,11 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data!.Results.TimeFrameRequested.Should().Be(timeFrame);
+            result.Data!.Results!.TimeFrameRequested.Should().Be(timeFrame);
             
             // Verify the cutoff time is approximately correct (within 1 minute tolerance)
             var expectedCutoff = DateTime.UtcNow.AddDays(-expectedDays);
-            var actualCutoff = result.Data.Results.CutoffTime;
+            var actualCutoff = result.Data.Results!.CutoffTime;
             Math.Abs((expectedCutoff - actualCutoff).TotalMinutes).Should().BeLessThan(1);
         }
         
@@ -269,10 +269,8 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             };
             
             // Act & Assert  
-            Assert.ThrowsAsync<ArgumentException>(async () => 
-            {
-                await _tool.ExecuteAsync(parameters, CancellationToken.None);
-            });
+            Assert.ThrowsAsync<COA.Mcp.Framework.Exceptions.ToolExecutionException>(async () => 
+                await _tool.ExecuteAsync(parameters, CancellationToken.None));
         }
         
         [Test]

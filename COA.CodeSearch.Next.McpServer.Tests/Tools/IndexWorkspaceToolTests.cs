@@ -71,10 +71,10 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
-            result.Result.Data.Results!.Success.Should().BeFalse();
-            result.Result.Data.Results.Error.Should().NotBeNull();
-            result.Result.Data.Results.Error!.Code.Should().Be("DIRECTORY_NOT_FOUND");
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeFalse();
+            result.Result.Error.Should().NotBeNull();
+            result.Result.Error!.Code.Should().Be("DIRECTORY_NOT_FOUND");
             result.Result.Actions.Should().NotBeNullOrEmpty();
         }
         
@@ -350,13 +350,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
-            result.Result.Data.Results!.Success.Should().BeFalse();
-            result.Result.Data.Results.Error.Should().NotBeNull();
-            result.Result.Data.Results.Error!.Code.Should().Be("INIT_FAILED");
-            result.Result.Data.Results.Error.Message.Should().Contain("Failed to acquire write lock");
-            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
-            result.Result.Data.Results.Error.Recovery!.Steps.Should().Contain(s => s.Contains("write.lock"));
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeFalse();
+            result.Result.Error.Should().NotBeNull();
+            result.Result.Error!.Code.Should().Be("INIT_FAILED");
+            result.Result.Error.Message.Should().Contain("Failed to acquire write lock");
+            result.Result.Error.Recovery.Should().NotBeNull();
+            result.Result.Error.Recovery!.Steps.Should().Contain(s => s.Contains("write.lock"));
         }
         
         [Test]
@@ -392,13 +392,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
-            result.Result.Data.Results!.Success.Should().BeFalse();
-            result.Result.Data.Results.Error.Should().NotBeNull();
-            result.Result.Data.Results.Error!.Code.Should().Be("INDEXING_FAILED");
-            result.Result.Data.Results.Error.Message.Should().Contain("Insufficient disk space");
-            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
-            result.Result.Data.Results.Error.Recovery!.Steps.Should().Contain(s => s.Contains("disk space"));
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeFalse();
+            result.Result.Error.Should().NotBeNull();
+            result.Result.Error!.Code.Should().Be("INDEXING_FAILED");
+            result.Result.Error.Message.Should().Contain("Insufficient disk space");
+            result.Result.Error.Recovery.Should().NotBeNull();
+            result.Result.Error.Recovery!.Steps.Should().Contain(s => s.Contains("disk space"));
         }
         
         [Test]
@@ -420,12 +420,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
-            result.Result.Data.Results!.Success.Should().BeFalse();
-            result.Result.Data.Results.Error.Should().NotBeNull();
-            result.Result.Data.Results.Error!.Code.Should().Be("INDEX_ERROR");
-            result.Result.Data.Results.Error.Message.Should().Contain("Unexpected error");
-            result.Result.Data.Results.Error.Recovery.Should().NotBeNull();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeFalse();
+            result.Result.Error.Should().NotBeNull();
+            result.Result.Error!.Code.Should().Be("INDEX_ERROR");
+            result.Result.Error.Message.Should().Contain("Unexpected error");
+            result.Result.Error.Recovery.Should().NotBeNull();
         }
         
         [Test]
