@@ -149,10 +149,11 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
             
             // Recent activity patterns
             var now = DateTime.UtcNow;
-            var today = data.Files.Count(f => (now - f.LastModified).TotalDays < 1);
+            var today = data.Files.Count(f => f.LastModified.HasValue && (now - f.LastModified.Value).TotalDays < 1);
             var yesterday = data.Files.Count(f => 
             {
-                var days = (now - f.LastModified).TotalDays;
+                if (!f.LastModified.HasValue) return false;
+                var days = (now - f.LastModified.Value).TotalDays;
                 return days >= 1 && days < 2;
             });
             

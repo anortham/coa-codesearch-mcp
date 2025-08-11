@@ -13,7 +13,7 @@ namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
 /// <summary>
 /// Response builder for index operations with token-aware optimization.
 /// </summary>
-public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimizedResponse<Tools.IndexWorkspaceResult>>
+public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimizedResponse<IndexWorkspaceResult>>
 {
     private readonly IResourceStorageService? _storageService;
     
@@ -25,7 +25,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
         _storageService = storageService;
     }
     
-    public override async Task<AIOptimizedResponse<Tools.IndexWorkspaceResult>> BuildResponseAsync(IndexResult data, ResponseContext context)
+    public override async Task<AIOptimizedResponse<IndexWorkspaceResult>> BuildResponseAsync(IndexResult data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -78,13 +78,13 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
-        var response = new AIOptimizedResponse<Tools.IndexWorkspaceResult>
+        var response = new AIOptimizedResponse<IndexWorkspaceResult>
         {
             Success = data.Success,
-            Data = new AIResponseData<Tools.IndexWorkspaceResult>
+            Data = new AIResponseData<IndexWorkspaceResult>
             {
                 Summary = BuildSummary(data, reducedFiles.Count, context.ResponseMode),
-                Results = new Tools.IndexWorkspaceResult
+                Results = new IndexWorkspaceResult
                 {
                     WorkspacePath = data.WorkspacePath ?? "",
                     WorkspaceHash = data.WorkspaceHash ?? "",
@@ -108,8 +108,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
             Meta = CreateMetadata(startTime, wasTruncated, resourceUri)
         };
         
-        // Set operation name
-        response.SetOperation(context.ToolName ?? "index_workspace");
+        // Operation name is handled automatically by the framework
         
         // Update token estimate
         response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
