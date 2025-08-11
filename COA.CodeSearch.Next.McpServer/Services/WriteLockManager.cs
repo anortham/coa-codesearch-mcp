@@ -87,7 +87,7 @@ public class WriteLockManager : IWriteLockManager
     /// <summary>
     /// TIER 1: Clean up test artifacts (very safe)
     /// </summary>
-    private async Task<int> CleanupTestArtifactsAsync(TimeSpan minAge)
+    private Task<int> CleanupTestArtifactsAsync(TimeSpan minAge)
     {
         var cleanupCount = 0;
         _logger.LogDebug("TIER 1: Cleaning test artifacts older than {MinAge}", minAge);
@@ -95,7 +95,7 @@ public class WriteLockManager : IWriteLockManager
         var indexRoot = _pathResolution.GetIndexRootPath();
         if (!Directory.Exists(indexRoot))
         {
-            return 0;
+            return Task.FromResult(0);
         }
         
         // Find test artifact locks
@@ -139,7 +139,7 @@ public class WriteLockManager : IWriteLockManager
             _logger.LogInformation("TIER 1: Cleaned {Count} test artifact locks", cleanupCount);
         }
         
-        return cleanupCount;
+        return Task.FromResult(cleanupCount);
     }
 
     /// <summary>
@@ -315,7 +315,7 @@ public class WriteLockManager : IWriteLockManager
     /// <summary>
     /// Get diagnostic information about a lock file
     /// </summary>
-    private async Task<LockDiagnostics> GetLockDiagnosticsAsync(string lockPath)
+    private Task<LockDiagnostics> GetLockDiagnosticsAsync(string lockPath)
     {
         var diagnostics = new LockDiagnostics();
         
@@ -342,7 +342,7 @@ public class WriteLockManager : IWriteLockManager
             _logger.LogDebug("Could not get diagnostics for {Path}: {Error}", lockPath, ex.Message);
         }
         
-        return diagnostics;
+        return Task.FromResult(diagnostics);
     }
 
     /// <summary>

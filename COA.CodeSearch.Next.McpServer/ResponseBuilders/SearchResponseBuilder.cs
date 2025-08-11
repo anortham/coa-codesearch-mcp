@@ -104,7 +104,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         }
         
         // Update token estimate
-        response.Meta.TokenInfo.Estimated = TokenEstimator.EstimateObject(response);
+        response.Meta.TokenInfo!.Estimated = TokenEstimator.EstimateObject(response);
         
         _logger?.LogInformation("Built search response: {Hits} of {Total} hits, {Insights} insights, {Actions} actions, {Tokens} tokens",
             reducedHits.Count, data.TotalHits, response.Insights.Count, response.Actions.Count, response.Meta.TokenInfo.Estimated);
