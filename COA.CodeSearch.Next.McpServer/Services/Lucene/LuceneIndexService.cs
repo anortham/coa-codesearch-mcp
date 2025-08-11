@@ -489,7 +489,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         try
         {
             var readerStats = context.GetReaderStats();
-            var writerGeneration = context.Writer?.CommitData?.Generation ?? 0;
+            var writerGeneration = context.Writer?.MaxDoc ?? 0;
             
             return new ReaderDiagnostics
             {
