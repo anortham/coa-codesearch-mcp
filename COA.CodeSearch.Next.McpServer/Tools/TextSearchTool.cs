@@ -13,8 +13,11 @@ using COA.CodeSearch.Next.McpServer.Services.Lucene;
 using COA.CodeSearch.Next.McpServer.Services.Analysis;
 using COA.CodeSearch.Next.McpServer.Models;
 using COA.CodeSearch.Next.McpServer.ResponseBuilders;
+using COA.CodeSearch.Next.McpServer.Scoring;
 using Microsoft.Extensions.Logging;
+using Lucene.Net.Analysis.Standard;
 using Lucene.Net.QueryParsers.Classic;
+using Lucene.Net.Search;
 using Lucene.Net.Util;
 
 namespace COA.CodeSearch.Next.McpServer.Tools;
@@ -29,6 +32,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SearchResponseBuilder _responseBuilder;
+    private readonly QueryPreprocessor _queryPreprocessor;
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
@@ -36,12 +40,14 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        QueryPreprocessor queryPreprocessor,
         ILogger<TextSearchTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _queryPreprocessor = queryPreprocessor;
         _logger = logger;
         
         // Create response builder with dependencies
@@ -89,12 +95,33 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
                 return CreateNoIndexError(workspacePath);
             }
 
-            // Parse query
-            var luceneQuery = ParseQuery(query);
-            if (luceneQuery == null)
+            // Validate and preprocess query
+            var searchType = parameters.SearchType ?? "standard";
+            if (!_queryPreprocessor.IsValidQuery(query, searchType, out var errorMessage))
             {
-                return CreateQueryParseError(query);
+                return CreateQueryParseError(query, errorMessage);
             }
+
+            // Build query with proper preprocessing
+            var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+            var luceneQuery = _queryPreprocessor.BuildQuery(query, searchType, parameters.CaseSensitive, analyzer);
+            
+            // Apply scoring factors for better relevance
+            var scoringContext = new ScoringContext
+            {
+                QueryText = query,
+                SearchType = searchType,
+                WorkspacePath = workspacePath
+            };
+            
+            var multiFactorQuery = new MultiFactorScoreQuery(luceneQuery, scoringContext, _logger);
+            
+            // Add scoring factors - these dramatically improve search relevance
+            multiFactorQuery.AddScoringFactor(new PathRelevanceFactor(_logger)); // Deboosting test files
+            multiFactorQuery.AddScoringFactor(new FilenameRelevanceFactor());    // Boosting filename matches
+            multiFactorQuery.AddScoringFactor(new FileTypeRelevanceFactor());    // Prioritize code files
+            multiFactorQuery.AddScoringFactor(new RecencyBoostFactor());         // Boost recently modified
+            multiFactorQuery.AddScoringFactor(new ExactMatchBoostFactor(parameters.CaseSensitive)); // Exact phrase matches
 
             // Determine max results based on response mode to protect token limits
             // We intentionally don't let users control this directly to prevent token blowouts
@@ -106,13 +133,13 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
                 _ => 50            // Adaptive/default: moderate amount
             };
             
-            _logger.LogDebug("Text search using ResponseMode-based MaxResults: {MaxResults} (mode: {ResponseMode}), Query: {Query}", 
-                maxResults, responseMode, query);
+            _logger.LogDebug("Text search using ResponseMode-based MaxResults: {MaxResults} (mode: {ResponseMode}), Query: {Query}, Type: {SearchType}", 
+                maxResults, responseMode, query, searchType);
 
-            // Perform search
+            // Perform search with scoring
             var searchResult = await _luceneIndexService.SearchAsync(
                 workspacePath, 
-                luceneQuery, 
+                multiFactorQuery,  // Use the multi-factor query instead of plain query
                 maxResults, 
                 cancellationToken);
             
@@ -223,7 +250,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         return result;
     }
 
-    private AIOptimizedResponse<SearchResult> CreateQueryParseError(string query)
+    private AIOptimizedResponse<SearchResult> CreateQueryParseError(string query, string? customMessage = null)
     {
         var result = new AIOptimizedResponse<SearchResult>
         {
@@ -231,15 +258,15 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             Error = new COA.Mcp.Framework.Models.ErrorInfo
             {
                 Code = "INVALID_QUERY",
-                Message = $"Could not parse search query: {query}",
+                Message = customMessage ?? $"Could not parse search query: {query}",
                 Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                 {
                     Steps = new[]
                     {
-                        "Check for unmatched quotes or parentheses",
-                        "Escape special characters with backslash",
-                        "Use simpler query syntax",
-                        "Refer to Lucene query syntax documentation"
+                        "Use a more specific search pattern (3+ characters)",
+                        "For operators, use: =>, ??, ?., ::, ->, +=, -=, ==, !=, >=, <=, &&, ||, <<, >>",
+                        "Try different search types: literal, code, wildcard, fuzzy, phrase, regex",
+                        "Check for unmatched quotes or parentheses"
                     }
                 }
             },
