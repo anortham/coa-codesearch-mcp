@@ -1,4 +1,4 @@
-# CodeSearch.Next Testing Checklist
+# CodeSearch Testing Checklist
 
 ## Pre-Test Setup
 - [ ] Build Release mode: `dotnet build -c Release`
@@ -229,7 +229,7 @@ Parameters:
 ```
 mcp__codesearch-next__similar_files
 Parameters:
-- filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.Next.McpServer\Services\Lucene\LuceneIndexService.cs"
+- filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.McpServer\Services\Lucene\LuceneIndexService.cs"
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - maxResults: 10
 - minScore: 0.1
@@ -247,7 +247,7 @@ Parameters:
 ```
 mcp__codesearch-next__similar_files
 Parameters:
-- filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.Next.McpServer\Tools\TextSearchTool.cs"
+- filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.McpServer\Tools\TextSearchTool.cs"
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - maxResults: 5
 - minScore: 0.2

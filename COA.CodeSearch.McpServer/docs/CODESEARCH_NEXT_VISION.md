@@ -1,8 +1,8 @@
-# CodeSearch.Next: Vision and Architecture
+# CodeSearch: Vision and Architecture
 
-## Why CodeSearch.Next?
+## Why CodeSearch?
 
-CodeSearch.Next represents a fundamental reimagining of the COA CodeSearch MCP as a **centralized, high-performance search hub** that serves multiple workspaces while integrating seamlessly with the broader COA ecosystem.
+CodeSearch represents a fundamental reimagining of the COA CodeSearch MCP as a **centralized, high-performance search hub** that serves multiple workspaces while integrating seamlessly with the broader COA ecosystem.
 
 ### Problems with the Original CodeSearch
 
@@ -13,9 +13,9 @@ CodeSearch.Next represents a fundamental reimagining of the COA CodeSearch MCP a
 5. **Mixed Responsibilities**: Search functionality mixed with memory management created complexity
 6. **Framework Limitations**: Built on custom MCP implementation without modern framework benefits
 
-### The CodeSearch.Next Solution
+### The CodeSearch Solution
 
-**CodeSearch.Next is a centralized search service that manages all workspace indexes from a single location (`~/.coa/codesearch`) and integrates with ProjectKnowledge for cross-project intelligence.**
+**CodeSearch is a centralized search service that manages all workspace indexes from a single location (`~/.coa/codesearch`) and integrates with ProjectKnowledge for cross-project intelligence.**
 
 ## Architectural Revolution
 
@@ -38,7 +38,7 @@ graph TB
     end
     
     subgraph "NEW: Centralized Hub Architecture"
-        CL4[Claude Code Session 1] --> CSN[CodeSearch.Next Hub]
+        CL4[Claude Code Session 1] --> CSN[CodeSearch Hub]
         CL5[Claude Code Session 2] --> CSN
         CL6[Claude Code Session 3] --> CSN
         
@@ -57,7 +57,7 @@ graph TB
 #### 1. **Centralized Storage Architecture**
 - **Location**: All indexes stored in `~/.coa/codesearch/indexes/`
 - **Workspace Isolation**: Hash-based directory names prevent path collisions
-- **Single Service**: One CodeSearch.Next instance serves all workspaces
+- **Single Service**: One CodeSearch instance serves all workspaces
 - **Cross-Workspace Search**: Ability to search across multiple projects simultaneously
 
 #### 2. **Modern Framework Integration**
@@ -69,7 +69,7 @@ graph TB
 #### 3. **Clean Service Architecture**
 
 ```
-CodeSearch.Next Services
+CodeSearch Services
 ├── Core Services (5 focused services instead of 1 monolith)
 │   ├── PathResolutionService      # Centralized path management
 │   ├── LuceneIndexService         # Split into 4 manageable files
@@ -89,20 +89,20 @@ CodeSearch.Next Services
 ```
 
 #### 4. **Separation of Concerns**
-- **CodeSearch.Next**: Pure search functionality (text, files, directories, code analysis)
+- **CodeSearch**: Pure search functionality (text, files, directories, code analysis)
 - **ProjectKnowledge**: Knowledge management (memories, insights, decisions, checklists)
 - **Clear Boundaries**: Each service excels at its core responsibility
 
 ## Integration with ProjectKnowledge
 
-CodeSearch.Next works seamlessly with ProjectKnowledge to provide a complete development intelligence platform.
+CodeSearch works seamlessly with ProjectKnowledge to provide a complete development intelligence platform.
 
 ### Knowledge Flow Pattern
 
 ```mermaid
 sequenceDiagram
     participant User
-    participant CS as CodeSearch.Next
+    participant CS as CodeSearch
     participant PK as ProjectKnowledge
     
     User->>CS: Search for authentication code
@@ -122,7 +122,7 @@ sequenceDiagram
 
 ### Storing Development Knowledge
 
-When working with CodeSearch.Next, capture important findings in ProjectKnowledge:
+When working with CodeSearch, capture important findings in ProjectKnowledge:
 
 ```bash
 # After finding issues during code search
@@ -174,8 +174,8 @@ When working with CodeSearch.Next, capture important findings in ProjectKnowledg
 
 ### Global Tool Installation
 ```bash
-# Install CodeSearch.Next as global dotnet tool
-dotnet tool install -g COA.CodeSearch.Next
+# Install CodeSearch as global dotnet tool
+dotnet tool install -g COA.CodeSearch
 
 # Run in service mode (HTTP federation)
 codesearch-next --mode http --service
@@ -226,7 +226,7 @@ codesearch-next  # Default mode
 
 ## Future Vision
 
-CodeSearch.Next positions us for advanced capabilities:
+CodeSearch positions us for advanced capabilities:
 
 - **AI-Powered Insights**: Integration with code analysis AI for semantic search
 - **Team Collaboration**: Shared search patterns and common queries via ProjectKnowledge
@@ -236,4 +236,4 @@ CodeSearch.Next positions us for advanced capabilities:
 
 ---
 
-**CodeSearch.Next is not just a technical upgrade—it's a transformation toward a unified, intelligent development experience that scales with your team and adapts to your workflow.**
+**CodeSearch is not just a technical upgrade—it's a transformation toward a unified, intelligent development experience that scales with your team and adapts to your workflow.**

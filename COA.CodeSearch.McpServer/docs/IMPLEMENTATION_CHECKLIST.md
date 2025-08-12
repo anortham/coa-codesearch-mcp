@@ -1,4 +1,4 @@
-# CodeSearch.Next Implementation Checklist
+# CodeSearch Implementation Checklist
 
 ## Foundation ✅ COMPLETED
 - [x] Create project from COA MCP Framework template
@@ -182,7 +182,7 @@
 
 ## Final Steps
 ### Rename to Production
-- [ ] Change namespace from CodeSearch.Next to CodeSearch
+- [ ] Change namespace from CodeSearch to CodeSearch
 - [ ] Update package name to COA.CodeSearch
 - [ ] Update tool command to `codesearch`
 - [ ] Archive old CodeSearch project

@@ -1,4 +1,4 @@
-# COA.CodeSearch.Next.McpServer
+# COA.CodeSearch.McpServer
 
 A Model Context Protocol (MCP) server built with the COA MCP Framework.
 
