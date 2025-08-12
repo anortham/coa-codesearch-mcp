@@ -46,4 +46,16 @@ public class TextSearchParameters
     /// </summary>
     [Description("Disable caching for this request")]
     public bool NoCache { get; set; } = false;
+
+    /// <summary>
+    /// Search type: 'standard', 'literal', 'code', 'wildcard', 'fuzzy', 'phrase', 'regex' (default: standard)
+    /// </summary>
+    [Description("Search type: 'standard', 'literal', 'code', 'wildcard', 'fuzzy', 'phrase', 'regex' (default: standard)")]
+    public string SearchType { get; set; } = "standard";
+
+    /// <summary>
+    /// Case sensitive search
+    /// </summary>
+    [Description("Case sensitive search")]
+    public bool CaseSensitive { get; set; } = false;
 }
