@@ -1,7 +1,9 @@
-# Azure Pipelines CI/CD for COA CodeSearch MCP Server
-# Builds, tests, and publishes dotnet tool to Azure Artifacts
+# Azure Pipelines for COA CodeSearch MCP
+# Supports both CI builds (automatic) and Release builds (manual)
+# CI: Builds and publishes to Azure DevOps feed only
+# Release: Manual trigger with option to publish to NuGet.org
 
-name: 'COA CodeSearch MCP Server - $(Build.SourceBranchName) - $(Date:yyyyMMdd)$(Rev:.r)'
+name: 'COA CodeSearch MCP - v$(majorVersion).$(minorVersion).$(patchVersion)'
 
 trigger:
   branches:
@@ -24,34 +26,40 @@ pr:
       - main
       - develop
 
+# Parameters for manual runs
+parameters:
+  - name: publishToNuGet
+    displayName: 'Publish to NuGet.org?'
+    type: boolean
+    default: false
+  - name: createGitTag
+    displayName: 'Create Git tag for release?'
+    type: boolean
+    default: true
+
 pool:
   name: "Default" # Using local Windows agent pool
 
 variables:
   buildConfiguration: "Release"
   dotnetSdkVersion: "9.x"
-  # Base version for McpServer
-  majorVersion: 1
-  minorVersion: 3
+  # Base version for CodeSearch MCP - v2.0.0
+  majorVersion: 2
+  minorVersion: 0
   # Auto-incrementing patch version - increments on every build
   # The counter is keyed by major.minor version, so it resets when those change
   patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
   versionPrefix: "$(majorVersion).$(minorVersion).$(patchVersion)"
   versionSuffix: ""
-  # Protocol package version - update manually when protocol changes
-  protocolMajorVersion: 1
-  protocolMinorVersion: 0
-  protocolPatchVersion: 1
-  protocolVersion: "$(protocolMajorVersion).$(protocolMinorVersion).$(protocolPatchVersion)"
   # Windows-specific settings
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
   NUGET_PACKAGES: $(Pipeline.Workspace)\.nuget\packages
-  # Release flag based on tags
-  ${{ if startsWith(variables['Build.SourceBranch'], 'refs/tags/v') }}:
-    isRelease: true
-  ${{ else }}:
-    isRelease: false
+  # Manual run parameters (only available for manual runs)
+  shouldPublishToNuGet: ${{ parameters.publishToNuGet }}
+  shouldCreateTag: ${{ parameters.createGitTag }}
+  # Determine if this is a release build
+  isRelease: ${{ eq(variables['Build.Reason'], 'Manual') }}
 
 stages:
   - stage: Build
@@ -174,12 +182,6 @@ stages:
               version: $(dotnetSdkVersion)
               includePreviewVersions: false
 
-          - task: NodeTool@0
-            displayName: "Install Node.js"
-            inputs:
-              versionSpec: '18.x'
-
-
           - task: DotNetCoreCLI@2
             displayName: "Restore packages"
             inputs:
@@ -220,18 +222,7 @@ stages:
               summaryFileLocation: '$(Agent.TempDirectory)\**\coverage.cobertura.xml'
 
           - task: DotNetCoreCLI@2
-            displayName: "Pack COA.Mcp.Protocol"
-            inputs:
-              command: "pack"
-              packagesToPack: "COA.Mcp.Protocol/COA.Mcp.Protocol.csproj"
-              configuration: $(buildConfiguration)
-              packDirectory: "$(Build.ArtifactStagingDirectory)/packages"
-              nobuild: true
-              versioningScheme: "off"
-              arguments: "-p:VersionPrefix=$(protocolVersion) --no-restore"
-
-          - task: DotNetCoreCLI@2
-            displayName: "Pack COA.CodeSearch.McpServer"
+            displayName: "Pack COA.CodeSearch"
             inputs:
               command: "pack"
               packagesToPack: "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj"
@@ -257,12 +248,12 @@ stages:
               ArtifactName: "packages"
               publishLocation: "Container"
 
-  - stage: Publish
+  - stage: PublishInternal
     displayName: "Publish to Azure DevOps"
     dependsOn: Build
     condition: and(succeeded(), ne(variables['Build.Reason'], 'PullRequest'))
     jobs:
-      - job: PublishPackages
+      - job: PublishToAzureDevOps
         displayName: "Publish to COA Feed"
         steps:
           - task: DownloadBuildArtifacts@1
@@ -281,3 +272,71 @@ stages:
               nuGetFeedType: 'internal'
               publishVstsFeed: 'COA'
               allowPackageConflicts: true
+
+  - stage: PublishNuGetOrg
+    displayName: "Publish to NuGet.org"
+    dependsOn: PublishInternal
+    condition: and(succeeded(), eq(variables['shouldPublishToNuGet'], 'true'), eq(variables['isRelease'], 'true'))
+    jobs:
+      - job: PublishToNuGetOrg
+        displayName: "Publish to NuGet.org"
+        steps:
+          - task: DownloadBuildArtifacts@1
+            displayName: "Download artifacts"
+            inputs:
+              buildType: "current"
+              downloadType: "single"
+              artifactName: "packages"
+              downloadPath: "$(System.ArtifactsDirectory)"
+
+          - powershell: |
+              Write-Host "Packages to publish to NuGet.org:"
+              Write-Host "================================="
+              Get-ChildItem -Path "$(System.ArtifactsDirectory)\packages" -Filter "*.nupkg" | ForEach-Object {
+                  Write-Host $_.Name
+              }
+              Write-Host "================================="
+            displayName: "List packages to publish"
+
+          - task: NuGetCommand@2
+            displayName: "Push COA.CodeSearch to NuGet.org"
+            inputs:
+              command: 'push'
+              packagesToPush: '$(System.ArtifactsDirectory)/packages/COA.CodeSearch.*.nupkg'
+              nuGetFeedType: 'external'
+              publishFeedCredentials: 'NuGetOrg-ServiceConnection'
+              verbosityPush: 'Detailed'
+
+          - powershell: |
+              Write-Host "Successfully published COA.CodeSearch to NuGet.org!"
+              Write-Host "Package should appear at https://www.nuget.org/packages/COA.CodeSearch shortly"
+            displayName: "Publish success message"
+
+  - stage: CreateGitTag
+    displayName: "Create Git Tag"
+    dependsOn: PublishNuGetOrg
+    condition: and(succeeded(), eq(variables['shouldCreateTag'], 'true'), eq(variables['isRelease'], 'true'))
+    jobs:
+      - job: CreateTag
+        displayName: "Create Git Tag"
+        steps:
+          - checkout: self
+            persistCredentials: true
+            clean: true
+
+          - powershell: |
+              $version = "$(versionPrefix)"
+              if ("$(versionSuffix)") {
+                  $version = "$(versionPrefix)-$(versionSuffix)"
+              }
+              
+              $tagName = "v$version"
+              Write-Host "Creating tag: $tagName"
+              
+              git config user.name "Azure DevOps Build"
+              git config user.email "build@coateam.dev"
+              git tag -a $tagName -m "Release $version"
+              git push origin $tagName
+              
+              Write-Host "Successfully created and pushed tag: $tagName"
+            displayName: "Create and push git tag"

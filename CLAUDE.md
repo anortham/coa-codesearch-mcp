@@ -2,7 +2,7 @@
 
 ## 🚨 CRITICAL: This is CodeSearch v2.0
 
-Built on COA MCP Framework 1.5.4. Clean search-only architecture - memory management is handled by ProjectKnowledge MCP.
+Built on COA MCP Framework 1.7.0. Clean search-only architecture - memory management is handled by ProjectKnowledge MCP.
 
 ## 🚨 CRITICAL WARNINGS
 
@@ -36,7 +36,7 @@ Built on COA MCP Framework 1.5.4. Clean search-only architecture - memory manage
 ## ⚙️ Development Guidelines
 
 ### Framework Usage
-Built on COA MCP Framework 1.5.4:
+Built on COA MCP Framework 1.7.0:
 ```csharp
 public class MyTool : McpToolBase<TParams, TResult>
 {
