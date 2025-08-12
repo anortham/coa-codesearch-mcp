@@ -98,28 +98,50 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         try
         {
             // Check if index exists
-            if (!await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken))
+            var indexExists = await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken);
+            _logger.LogInformation("Index exists for {Workspace}: {Exists}", workspacePath, indexExists);
+            
+            if (!indexExists)
             {
                 return CreateNoIndexError(workspacePath);
             }
             
-            // Create query for recent files using modification date range
-            var query = CreateRecentFilesQuery(cutoffTime);
+            // For now, get all files and filter in memory
+            // TODO: Fix NumericRangeQuery once we understand the indexing issue
+            var query = new MatchAllDocsQuery();
             
-            var searchResult = await _luceneIndexService.SearchAsync(
-                workspacePath,
-                query,
-                maxResults * 2,  // Get extra to account for filtering
-                cancellationToken
-            );
+            SearchResult searchResult;
+            try
+            {
+                searchResult = await _luceneIndexService.SearchAsync(
+                    workspacePath,
+                    query,
+                    500,  // Get many files for filtering
+                    cancellationToken
+                );
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Failed to execute search query");
+                throw;
+            }
             
             // Process results and create recent file entries
             var recentFiles = new List<RecentFileInfo>();
             
-            _logger.LogDebug("Processing {Count} search hits for recent files", searchResult.Hits.Count);
+            _logger.LogInformation("Search returned {TotalHits} total hits, processing {Count} hits. Query: {Query}, Cutoff: {Cutoff} ({CutoffDate})", 
+                searchResult.TotalHits, searchResult.Hits.Count, query.ToString(), cutoffTime.Ticks, cutoffTime);
+            
+            if (searchResult.Hits.Count == 0 && searchResult.TotalHits > 0)
+            {
+                _logger.LogWarning("Search returned {TotalHits} total hits but Hits collection is empty!", searchResult.TotalHits);
+            }
             
             foreach (var hit in searchResult.Hits)
             {
+                _logger.LogDebug("Hit: FilePath={FilePath}, LastModified={LastMod}, HasLastMod={HasLastMod}", 
+                    hit.FilePath, hit.LastModified, hit.LastModified.HasValue);
+                    
                 if (!string.IsNullOrEmpty(hit.FilePath) && hit.LastModified.HasValue)
                 {
                     // Double-check the time filter (Lucene queries can be approximate)
@@ -231,14 +253,14 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
     
     private Query CreateRecentFilesQuery(DateTime cutoffTime)
     {
-        // Convert to Lucene date format (yyyyMMddHHmmss)
-        var cutoffString = cutoffTime.ToString("yyyyMMddHHmmss");
+        // Convert to ticks (same format as stored in index)
+        var cutoffTicks = cutoffTime.Ticks;
         
-        // Create range query for modification date
-        var rangeQuery = TermRangeQuery.NewStringRange(
-            "LastModified", 
-            cutoffString, 
-            null, // No upper bound (up to now)
+        // Create numeric range query for modification date (stored as Int64 ticks)
+        var rangeQuery = NumericRangeQuery.NewInt64Range(
+            "modified",  // Field name matches what's stored in index
+            cutoffTicks, 
+            long.MaxValue, // Up to now
             true, 
             true);
         
