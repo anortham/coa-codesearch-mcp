@@ -1,13 +1,13 @@
 using NUnit.Framework;
 using FluentAssertions;
 using Moq;
-using COA.CodeSearch.Next.McpServer.Tools;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Tests.Base;
-using COA.CodeSearch.Next.McpServer.Models;
-using IndexingResult = COA.CodeSearch.Next.McpServer.Services.IndexingResult;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.Tools;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Tests.Base;
+using COA.CodeSearch.McpServer.Models;
+using IndexingResult = COA.CodeSearch.McpServer.Services.IndexingResult;
+using COA.CodeSearch.McpServer.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using System.Threading.Tasks;
 using System.Threading;
@@ -16,7 +16,7 @@ using System.IO;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.DependencyInjection;
 
-namespace COA.CodeSearch.Next.McpServer.Tests.Tools
+namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
     public class IndexWorkspaceToolTests : CodeSearchToolTestBase<IndexWorkspaceTool>

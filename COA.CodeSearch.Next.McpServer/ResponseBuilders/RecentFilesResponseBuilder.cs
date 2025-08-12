@@ -3,12 +3,12 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Reduction;
-using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.Tools;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Tools;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
+namespace COA.CodeSearch.McpServer.ResponseBuilders;
 
 /// <summary>
 /// Response builder for recent files operations with token-aware optimization.

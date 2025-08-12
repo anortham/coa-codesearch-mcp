@@ -1,6 +1,6 @@
 using Lucene.Net.Index;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Boosts documents where the search query appears in the filename.

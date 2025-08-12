@@ -8,19 +8,19 @@ using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Services.Analysis;
-using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
-using COA.CodeSearch.Next.McpServer.Scoring;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Analysis;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.Scoring;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Util;
 
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Text search tool using the BaseResponseBuilder pattern for consistent response building

@@ -1,6 +1,6 @@
 using Lucene.Net.Index;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Interface for custom scoring factors that can be combined to create multi-factor scoring

@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
-namespace COA.CodeSearch.Next.McpServer.Tools.Parameters;
+namespace COA.CodeSearch.McpServer.Tools.Parameters;
 
 /// <summary>
 /// Parameters for directory search operations

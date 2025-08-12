@@ -3,10 +3,10 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.Models;
-using COA.CodeSearch.Next.McpServer.Tools.Results;
+using COA.CodeSearch.McpServer.Tools.Results;
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
+namespace COA.CodeSearch.McpServer.ResponseBuilders;
 
 /// <summary>
 /// Response builder for directory search results with token optimization

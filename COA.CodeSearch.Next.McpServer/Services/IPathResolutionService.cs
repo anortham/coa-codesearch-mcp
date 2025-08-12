@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Provides centralized path resolution for all CodeSearch directory operations

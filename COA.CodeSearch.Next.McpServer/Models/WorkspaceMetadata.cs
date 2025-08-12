@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Models;
+namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
 /// Metadata about indexed workspaces for centralized tracking

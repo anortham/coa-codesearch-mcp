@@ -1,10 +1,10 @@
-using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.McpServer.Models;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Background service that watches for file changes and automatically updates indexes.

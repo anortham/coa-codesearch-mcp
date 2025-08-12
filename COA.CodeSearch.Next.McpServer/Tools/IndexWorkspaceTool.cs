@@ -8,14 +8,14 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Tool for indexing a workspace directory with token-optimized responses

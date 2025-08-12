@@ -1,9 +1,9 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
-using COA.CodeSearch.Next.McpServer.Constants;
+using COA.CodeSearch.McpServer.Constants;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Centralized path resolution service for all CodeSearch directory operations

@@ -1,7 +1,7 @@
 using Lucene.Net.Index;
 using System.Text.RegularExpressions;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Boosts documents that contain exact matches of the search query.

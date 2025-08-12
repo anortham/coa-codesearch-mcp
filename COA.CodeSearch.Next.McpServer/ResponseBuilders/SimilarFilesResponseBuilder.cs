@@ -3,10 +3,10 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.Models;
-using COA.CodeSearch.Next.McpServer.Tools;
+using COA.CodeSearch.McpServer.Tools;
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.ResponseBuilders;
+namespace COA.CodeSearch.McpServer.ResponseBuilders;
 
 /// <summary>
 /// Response builder for similar files search results with progressive disclosure

@@ -2,7 +2,7 @@ using Lucene.Net.Index;
 using Lucene.Net.Search;
 using LuceneDirectory = Lucene.Net.Store.Directory;
 
-namespace COA.CodeSearch.Next.McpServer.Services.Lucene;
+namespace COA.CodeSearch.McpServer.Services.Lucene;
 
 internal class IndexContext : IDisposable
 {

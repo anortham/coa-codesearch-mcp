@@ -1,10 +1,10 @@
 using NUnit.Framework;
 using FluentAssertions;
 using Moq;
-using COA.CodeSearch.Next.McpServer.Tools;
-using COA.CodeSearch.Next.McpServer.Tests.Base;
-using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.Services;
+using COA.CodeSearch.McpServer.Tools;
+using COA.CodeSearch.McpServer.Tests.Base;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using System.Threading.Tasks;
@@ -13,7 +13,7 @@ using System;
 using System.Collections.Generic;
 using COA.Mcp.Framework.Models;
 
-namespace COA.CodeSearch.Next.McpServer.Tests.Tools
+namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
     public class FileSearchToolTests : CodeSearchToolTestBase<FileSearchTool>

@@ -4,7 +4,7 @@ using Lucene.Net.Util;
 using Microsoft.Extensions.Logging;
 using System.Text;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// A custom query that wraps another query and applies multiple scoring factors
