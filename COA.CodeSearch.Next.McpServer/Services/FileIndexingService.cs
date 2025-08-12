@@ -47,16 +47,16 @@ public class FileIndexingService : IFileIndexingService
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
         
         // Initialize supported extensions from configuration or defaults
-        var extensions = configuration.GetSection("Lucene:SupportedExtensions").Get<string[]>() 
+        var extensions = configuration.GetSection("CodeSearch:Lucene:SupportedExtensions").Get<string[]>() 
             ?? new[] { 
                 ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".sql",
-                ".html", ".css", ".json", ".xml", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini", ".log",
+                ".html", ".css", ".json", ".xml", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini",
                 ".sh", ".bat", ".ps1", ".dockerfile", ".makefile", ".gradle", ".csproj", ".sln", ".config"
             };
         _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
         
         // Initialize excluded directories
-        var excluded = configuration.GetSection("Lucene:ExcludedDirectories").Get<string[]>() 
+        var excluded = configuration.GetSection("CodeSearch:Lucene:ExcludedDirectories").Get<string[]>() 
             ?? PathConstants.DefaultExcludedDirectories;
         _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
     }
@@ -263,11 +263,14 @@ public class FileIndexingService : IFileIndexingService
                 continue;
             }
                 
-            var dirName = Path.GetFileName(currentDir);
-            // Skip excluded directories by name (not full path)
-            if (!string.IsNullOrEmpty(dirName) && _excludedDirectories.Contains(dirName))
+            // Skip excluded directories by checking if any part of the path contains excluded directory names
+            var relativePath = Path.GetRelativePath(directoryPath, currentDir);
+            var pathParts = relativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var shouldSkip = pathParts.Any(part => _excludedDirectories.Contains(part));
+            
+            if (shouldSkip)
             {
-                _logger.LogDebug("Skipping excluded directory: {Directory}", currentDir);
+                _logger.LogDebug("Skipping excluded directory: {Directory} (contains excluded path component)", currentDir);
                 continue;
             }
             
@@ -353,16 +356,19 @@ public class FileIndexingService : IFileIndexingService
             
             foreach (var subDir in subDirList)
             {
-                var subDirName = Path.GetFileName(subDir);
-                // Only add non-excluded subdirectories for processing
-                if (!_excludedDirectories.Contains(subDirName))
+                // Check if subdirectory path contains any excluded directory names
+                var subRelativePath = Path.GetRelativePath(directoryPath, subDir);
+                var subPathParts = subRelativePath.Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var subShouldSkip = subPathParts.Any(part => _excludedDirectories.Contains(part));
+                
+                if (!subShouldSkip)
                 {
                     _logger.LogTrace("Adding subdirectory to process: {SubDir}", subDir);
                     directoriesToProcess.Push(subDir);
                 }
                 else
                 {
-                    _logger.LogTrace("Skipping excluded subdirectory: {SubDir}", subDir);
+                    _logger.LogTrace("Skipping excluded subdirectory: {SubDir} (contains excluded path component)", subDir);
                 }
             }
         }
