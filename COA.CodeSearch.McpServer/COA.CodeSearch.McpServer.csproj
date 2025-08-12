@@ -14,13 +14,21 @@
     <PackageId>COA.CodeSearch</PackageId>
     <Version>2.0.0</Version>
     <Authors>COA Team</Authors>
-    <Description>High-performance file search MCP server with Lucene.NET backend</Description>
+    <Company>COA Team</Company>
+    <Description>High-performance file search MCP server with Lucene.NET backend for Claude Code integration</Description>
+    <PackageTags>mcp;claude-code;search;lucene;dotnet-tool;code-search</PackageTags>
+    <PackageProjectUrl>https://github.com/anortham/coa-codesearch-mcp</PackageProjectUrl>
+    <RepositoryUrl>https://github.com/anortham/coa-codesearch-mcp</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <PackageLicenseExpression>MIT</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <Copyright>Copyright (c) 2024 COA Team</Copyright>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- COA Framework packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="1.5.4" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.5.4" />
+    <PackageReference Include="COA.Mcp.Framework" Version="1.7.0" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.7.0" />
     
     <!-- Lucene.NET for search functionality -->
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
@@ -48,6 +56,10 @@
   <ItemGroup>
     <None Update="appsettings.json">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\README.md">
+      <Pack>True</Pack>
+      <PackagePath>\</PackagePath>
     </None>
   </ItemGroup>
 

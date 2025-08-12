@@ -1,6 +1,6 @@
 # CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server for blazing-fast code search and file discovery. Built with .NET 9.0 and COA MCP Framework 1.5.4, featuring Lucene-powered millisecond search with AI-optimized architecture.
+A high-performance Model Context Protocol (MCP) server for blazing-fast code search and file discovery. Built with .NET 9.0 and COA MCP Framework 1.7.0, featuring Lucene-powered millisecond search with AI-optimized architecture.
 
 ## 🚀 Features
 
@@ -36,22 +36,37 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 ### Installation as Global Tool
 
 ```bash
-# Install from package (recommended)
+# Install from NuGet (recommended)
 dotnet tool install -g COA.CodeSearch --version 2.0.0
 
+# Verify installation
+codesearch --version
+
 # Or build from source
-git clone <repository-url>
+git clone https://github.com/anortham/coa-codesearch-mcp.git
 cd coa-codesearch-mcp
 dotnet build -c Release
 dotnet pack -c Release
 dotnet tool install -g --add-source ./nupkg COA.CodeSearch
 ```
 
+### Uninstall
+
+```bash
+# Remove global tool
+dotnet tool uninstall -g COA.CodeSearch
+```
+
 ### Claude Code Integration
 
-Add to your Claude Code MCP configuration:
+Add to your Claude Code MCP configuration file:
 
-**Windows:**
+**Configuration File Locations:**
+- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
+- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- **Linux**: `~/.config/Claude/claude_desktop_config.json`
+
+**Configuration:**
 ```json
 {
   "mcpServers": {
@@ -63,17 +78,9 @@ Add to your Claude Code MCP configuration:
 }
 ```
 
-**macOS/Linux:**
-```json
-{
-  "mcpServers": {
-    "codesearch": {
-      "command": "codesearch", 
-      "args": ["stdio"]
-    }
-  }
-}
-```
+**After adding the configuration:**
+1. Restart Claude Code completely
+2. The tool will be available as `mcp__codesearch__*` in your Claude Code session
 
 ## 🛠️ Available Tools
 
@@ -187,7 +194,7 @@ Configuration via `appsettings.json`:
 - **Configuration**: Workspace-specific settings
 
 ### Framework Integration
-Built on **COA MCP Framework 1.5.4**:
+Built on **COA MCP Framework 1.7.0**:
 - Automatic tool discovery
 - Token optimization
 - Progressive response disclosure
@@ -300,8 +307,9 @@ MIT License - see [LICENSE](LICENSE) file.
 
 - **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
 - **Documentation**: [docs/](docs/) folder
-- **Framework**: [COA MCP Framework](https://github.com/anortham/coa-mcp-framework)
+- **Framework**: [COA MCP Framework 1.7.0](https://www.nuget.org/packages/COA.Mcp.Framework)
+- **NuGet Package**: [COA.CodeSearch](https://www.nuget.org/packages/COA.CodeSearch)
 
 ---
 
-**Built with** [COA MCP Framework 1.5.4](https://github.com/anortham/coa-mcp-framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
+**Built with** [COA MCP Framework 1.7.0](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
