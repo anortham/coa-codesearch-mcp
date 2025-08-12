@@ -268,10 +268,10 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     Fields = new Dictionary<string, string>()
                 };
                 
-                // Add all stored fields except path (already set above)
+                // Add all stored fields except path and content (path already set above, content excluded for token optimization)
                 foreach (var field in doc.Fields)
                 {
-                    if (field.Name != "path")
+                    if (field.Name != "path" && field.Name != "content")
                     {
                         hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
                     }
