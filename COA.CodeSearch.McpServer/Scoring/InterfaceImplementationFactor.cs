@@ -41,9 +41,9 @@ public class InterfaceImplementationFactor : IScoringFactor
 
             if (!isInterfaceSearch)
             {
-                if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+                if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
                 {
-                    _logger.LogDebug("InterfaceImplementation: File {FilePath}, NotInterfaceSearch: {Query}, Score: 0.5 (neutral)", 
+                    _logger.LogTrace("InterfaceImplementation: File {FilePath}, NotInterfaceSearch: {Query}, Score: 0.5 (neutral)", 
                         relativePath, searchContext.QueryText);
                 }
                 return 0.5f; // Neutral - not an interface search
@@ -77,9 +77,9 @@ public class InterfaceImplementationFactor : IScoringFactor
                 reason = "just reference";
             }
 
-            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
             {
-                _logger.LogDebug("InterfaceImplementation: File {FilePath}, Query: {Query}, Reason: {Reason}, Score: {Score:F3}", 
+                _logger.LogTrace("InterfaceImplementation: File {FilePath}, Query: {Query}, Reason: {Reason}, Score: {Score:F3}", 
                     relativePath, searchContext.QueryText, reason, score);
             }
 
