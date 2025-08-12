@@ -5,14 +5,14 @@ WORKDIR /app
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 WORKDIR /src
-COPY ["COA.CodeSearch.Next.McpServer.csproj", "."]
-RUN dotnet restore "./COA.CodeSearch.Next.McpServer.csproj"
+COPY ["COA.CodeSearch.McpServer.csproj", "."]
+RUN dotnet restore "./COA.CodeSearch.McpServer.csproj"
 COPY . .
 WORKDIR "/src/."
-RUN dotnet build "COA.CodeSearch.Next.McpServer.csproj" -c Release -o /app/build
+RUN dotnet build "COA.CodeSearch.McpServer.csproj" -c Release -o /app/build
 
 FROM build AS publish
-RUN dotnet publish "COA.CodeSearch.Next.McpServer.csproj" -c Release -o /app/publish /p:UseAppHost=false
+RUN dotnet publish "COA.CodeSearch.McpServer.csproj" -c Release -o /app/publish /p:UseAppHost=false
 
 FROM base AS final
 WORKDIR /app
@@ -26,4 +26,4 @@ USER mcpuser
 ENV ASPNETCORE_ENVIRONMENT=Production
 ENV DOTNET_RUNNING_IN_CONTAINER=true
 
-ENTRYPOINT ["dotnet", "COA.CodeSearch.Next.McpServer.dll"]
+ENTRYPOINT ["dotnet", "COA.CodeSearch.McpServer.dll"]
