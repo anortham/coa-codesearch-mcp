@@ -37,7 +37,7 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 
 ```bash
 # Install from NuGet (recommended)
-dotnet tool install -g COA.CodeSearch --version 2.0.0
+dotnet tool install -g COA.CodeSearch --version 2.1.0
 
 # Verify installation
 codesearch --version

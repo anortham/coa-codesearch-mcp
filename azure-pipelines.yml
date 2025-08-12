@@ -43,9 +43,9 @@ pool:
 variables:
   buildConfiguration: "Release"
   dotnetSdkVersion: "9.x"
-  # Base version for CodeSearch MCP - v2.0.0
+  # Base version for CodeSearch MCP - v2.1.0
   majorVersion: 2
-  minorVersion: 0
+  minorVersion: 1
   # Auto-incrementing patch version - increments on every build
   # The counter is keyed by major.minor version, so it resets when those change
   patchVersion: $[counter(format('{0}.{1}', variables['majorVersion'], variables['minorVersion']), 0)]
