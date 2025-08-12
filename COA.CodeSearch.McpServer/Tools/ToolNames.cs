@@ -1,7 +1,7 @@
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Constants for tool names used across the CodeSearch.Next MCP server
+/// Constants for tool names used across the CodeSearch MCP server
 /// </summary>
 public static class ToolNames
 {
