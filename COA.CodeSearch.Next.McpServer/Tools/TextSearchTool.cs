@@ -142,9 +142,9 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             // Apply mode-specific limits (but respect budget limits)
             var maxResults = responseMode switch
             {
-                "full" => Math.Min(budgetBasedMax, 15),     // Full mode: respects budget but allows more
-                "summary" => Math.Min(budgetBasedMax, 3),   // Summary: ultra-conservative like old system
-                _ => Math.Min(budgetBasedMax, 5)            // Default: match old system's ~5 result target
+                "full" => Math.Min(budgetBasedMax, 10),     // Full mode: reduced from 15
+                "summary" => Math.Min(budgetBasedMax, 2),   // Summary: ultra-lean - just 2 results
+                _ => Math.Min(budgetBasedMax, 3)            // Default: lean - just top 3 results
             };
             
             _logger.LogDebug("Token-aware search limits: budget={Budget}, tokensPerResult={TokensPerResult}, maxResults={MaxResults}, mode={Mode}, Query={Query}", 
