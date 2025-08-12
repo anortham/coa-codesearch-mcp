@@ -1,35 +1,30 @@
 # CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server for blazing-fast code search and intelligent memory management. Built with .NET 9.0, featuring Lucene-powered millisecond search and AI-optimized architecture for pattern matching and content analysis.
+A high-performance Model Context Protocol (MCP) server for blazing-fast code search and file discovery. Built with .NET 9.0 and COA MCP Framework 1.5.4, featuring Lucene-powered millisecond search with AI-optimized architecture.
 
 ## 🚀 Features
 
-- **Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
-- **Smart Memory System**: Persistent architectural knowledge and decision tracking
-- **🆕 Advanced Memory Intelligence**: Natural language commands, semantic search, temporal scoring
-- **AI-Optimized Architecture**: Pattern matching and content analysis for AI assistants
-- **Progressive Disclosure**: Intelligent summarization with drill-down capabilities
-- **Real-time Updates**: File watchers automatically update indexes on changes
-- **🆕 Parameter Standardization**: Consistent `query` parameter across all search tools
-- **🆕 Workflow Discovery**: Proactive tool guidance and dependency mapping
-- **🆕 Enhanced Error Handling**: Actionable recovery guidance instead of generic errors
-- **⚡ Confidence-Based Limiting**: Dynamic result counts based on score distribution (60-85% token savings)
-- **🔗 Resource URI System**: Two-tier access with minimal initial responses + full results on demand
-- **📊 Standardized Responses**: Unified `resultsSummary` format across all search tools
-- **🔍 CodeAnalyzer**: Custom Lucene analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
+- **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
+- **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
+- **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching  
+- **⏱️ Recent Files**: Track and find recently modified files
+- **🔗 Similar Files**: Content-based similarity detection
+- **🎯 Real-time Updates**: File watchers automatically update indexes on changes
+- **📊 AI-Optimized**: Token-efficient responses with confidence-based result limiting
+- **🌐 Centralized Storage**: All indexes in `~/.coa/codesearch` for cross-session sharing
 
 ### Performance
-- Startup: < 500ms (simplified architecture)
+- Startup: < 500ms 
 - Text search: < 10ms indexed
-- File search: < 50ms
+- File search: < 50ms  
 - Memory usage: < 200MB typical
+- Index size: ~1MB per 1000 files
 
-### 🎯 Token Optimization (New!)
-- **60-85% token reduction** for high-confidence searches
-- **Confidence-based limiting**: 2-3 results for high confidence vs 10+ default
-- **Minimal result fields**: Essential data only (path, score vs 6+ fields)
-- **Resource URIs**: Full results available on-demand without initial token cost
-- **Smart context handling**: Fewer results when context lines are included
+### 🎯 Token Optimization
+- **60-85% token reduction** through confidence-based limiting
+- **Progressive disclosure**: Essential results first, full data via resource URIs
+- **Smart context handling**: Fewer results when context lines included
+- **Standardized responses**: Consistent format across all tools
 
 ## 📋 Prerequisites
 
@@ -37,405 +32,262 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 
 ## 🚀 Quick Start
 
+### Installation as Global Tool
+
 ```bash
-# Clone and build
-git clone https://github.com/anortham/coa-codesearch-mcp.git
+# Install from package (recommended)
+dotnet tool install -g COA.CodeSearch --version 2.0.0
+
+# Or build from source
+git clone <repository-url>
 cd coa-codesearch-mcp
 dotnet build -c Release
-
-# Add to Claude Code
-# Windows
-claude mcp add codesearch "C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe"
-
-# macOS/Linux  
-claude mcp add codesearch ~/coa-codesearch-mcp/COA.CodeSearch.McpServer/bin/Release/net9.0/COA.CodeSearch.McpServer
+dotnet pack -c Release
+dotnet tool install -g --add-source ./nupkg COA.CodeSearch
 ```
 
-## 🌍 Cross-Platform Support
+### Claude Code Integration
 
-Fully supports Windows, Linux, and macOS (x64/ARM64). The server handles platform differences automatically.
+Add to your Claude Code MCP configuration:
+
+**Windows:**
+```json
+{
+  "mcpServers": {
+    "codesearch": {
+      "command": "codesearch",
+      "args": ["stdio"]
+    }
+  }
+}
+```
+
+**macOS/Linux:**
+```json
+{
+  "mcpServers": {
+    "codesearch": {
+      "command": "codesearch", 
+      "args": ["stdio"]
+    }
+  }
+}
+```
 
 ## 🛠️ Available Tools
 
-### Text Search & Analysis
-- `index_workspace` - Build search index (required for all search operations)
-- `text_search` - Search text across codebase with advanced filters and context
-- `file_search` - Find files by name with fuzzy matching and patterns
-- `directory_search` - Find directories with pattern matching support
-- `recent_files` - Find recently modified files with time filters
-- `similar_files` - Find files with similar content using MLT algorithm
-- `file_size_analysis` - Analyze file sizes and distributions
+### Core Search Tools
 
-### Essential Memory System (10 Tools)
-- `recall_context` - Load relevant context from previous sessions (**use at session start!**)
-- `store_memory` - Store any type of memory with custom fields
-- `search_memories` - Search stored memories with intelligent query expansion
-- `unified_memory` - Natural language memory operations with intent detection
-- `semantic_search` - Find memories by concepts and meaning, not just keywords
-- `hybrid_search` - Combine text search with semantic understanding
-- `memory_quality_assessment` - Evaluate and improve memory quality with scoring
-- `load_context` - Auto-load relevant memories for current working environment
-- `backup_memories` - Export memories to JSON for team sharing and version control
-- `restore_memories` - Import memories from JSON backup files
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `index_workspace` | Index files for search | `workspacePath`, `forceRebuild` |
+| `text_search` | Search file contents | `query`, `workspacePath`, `maxTokens` |
+| `file_search` | Find files by name pattern | `pattern`, `workspacePath`, `useRegex` |
+| `directory_search` | Find directories by pattern | `pattern`, `workspacePath`, `includeHidden` |
+| `recent_files` | Get recently modified files | `workspacePath`, `timeFrame` |
+| `similar_files` | Find content-similar files | `filePath`, `workspacePath`, `minScore` |
 
-### Advanced Analysis Tools
-- `search_assistant` - Orchestrate multi-step search operations with AI guidance
-- `pattern_detector` - Analyze code for patterns and anti-patterns with severity levels
-- `memory_graph_navigator` - Explore memory relationships visually with graph insights
-- `tool_usage_analytics` - View tool performance and usage patterns
-- `workflow_discovery` - Discover tool dependencies and suggested workflows for AI agents
+### System Tools
 
-### Utilities
-- `batch_operations` - Execute multiple search operations in parallel for efficiency
-- `index_health_check` - Check Lucene index status and performance metrics
-- `system_health_check` - Comprehensive system health monitoring
-- `log_diagnostics` - Manage debug logs and cleanup old log files
-- `get_version` - Get server version info and build details
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `hello_world` | Test connectivity | `name`, `includeTime` |
+| `get_system_info` | System diagnostics | `includeEnvironment` |
+
+## 📖 Usage Examples
+
+### Basic Search Operations
+
+```bash
+# Index your workspace
+mcp__codesearch__index_workspace \
+  --workspacePath "C:\source\MyProject"
+
+# Search for code patterns
+mcp__codesearch__text_search \
+  --query "async Task" \
+  --workspacePath "C:\source\MyProject"
+
+# Find files by pattern
+mcp__codesearch__file_search \
+  --pattern "*.cs" \
+  --workspacePath "C:\source\MyProject"
+
+# Get recent changes
+mcp__codesearch__recent_files \
+  --workspacePath "C:\source\MyProject" \
+  --timeFrame "24h"
+```
+
+### Advanced Operations
+
+```bash
+# Regex file search
+mcp__codesearch__file_search \
+  --pattern ".*Service\.cs$" \
+  --useRegex true \
+  --workspacePath "C:\source\MyProject"
+
+# Find similar files
+mcp__codesearch__similar_files \
+  --filePath "C:\source\MyProject\Services\UserService.cs" \
+  --workspacePath "C:\source\MyProject" \
+  --minScore 0.3
+
+# Directory search with hidden folders
+mcp__codesearch__directory_search \
+  --pattern "*test*" \
+  --includeHidden true \
+  --workspacePath "C:\source\MyProject"
+```
 
 ## ⚙️ Configuration
 
-### Essential Settings (appsettings.json)
+Configuration via `appsettings.json`:
+
 ```json
 {
-  "ResponseLimits": {
-    "MaxTokens": 25000,
-    "AutoModeSwitchThreshold": 5000
-  },
-  "FileWatcher": {
-    "Enabled": true
-  },
-  "WorkspaceAutoIndex": {
-    "Enabled": true
+  "CodeSearch": {
+    "BasePath": "~/.coa/codesearch",
+    "LogsPath": "~/.coa/codesearch/logs", 
+    "Lucene": {
+      "IndexRootPath": "~/.coa/codesearch/indexes",
+      "MaxIndexingConcurrency": 8,
+      "RAMBufferSizeMB": 256,
+      "SupportedExtensions": [".cs", ".js", ".ts", ".py", ".java", ...]
+    },
+    "FileWatcher": {
+      "Enabled": true,
+      "DebounceMilliseconds": 500
+    },
+    "QueryCache": {
+      "Enabled": true,
+      "MaxCacheSize": 1000,
+      "CacheDuration": "00:15:00"
+    }
   }
 }
 ```
 
-### Environment Variables
-- `MCP_LOG_LEVEL` - Override log level
-- `MCP_WORKSPACE_PATH` - Default workspace path
+## 🏗️ Architecture
 
-## 📁 Data Storage
+### Centralized Storage
+- **Indexes**: `~/.coa/codesearch/indexes/[workspace-hash]/`
+- **Logs**: `~/.coa/codesearch/logs/`
+- **Configuration**: Workspace-specific settings
 
-The server creates `.codesearch/` in your workspace:
-- `index/` - Lucene search indexes
-- `project-memory/` - Shared team knowledge
-- `local-memory/` - Personal notes
-- `backups/` - JSON memory exports
-- `logs/` - Debug logs
+### Framework Integration
+Built on **COA MCP Framework 1.5.4**:
+- Automatic tool discovery
+- Token optimization
+- Progressive response disclosure
+- Circuit breaker patterns
+- Memory pressure management
 
-Add `.codesearch/` to `.gitignore`, except `backups/*.json` for team sharing.
+### Search Engine
+- **Lucene.NET 4.8.0** backend
+- **Custom CodeAnalyzer** for programming language patterns
+- **Multi-factor scoring** with path relevance, recency, and type matching
+- **Configurable analyzers** per file type
 
-## 🚀 Common Workflows
+## 🧪 Development
 
-### First Time Setup
+### Building
 
-**What you say to Claude:**
-- "Index this project for searching"
-- "What was I working on last time?"
-- "Show me how to get started with code search"
-
-**Tools Claude will use:**
 ```bash
-# Index your workspace
-index_workspace --workspacePath "C:/YourProject"
+# Debug build
+dotnet build -c Debug
 
-# Load previous context  
-recall_context "what I was working on"
+# Release build  
+dotnet build -c Release
 
-# NEW: Discover available workflows
-workflow_discovery --goal "getting started"
+# Run tests
+dotnet test
 ```
 
-### Daily Usage
+### Testing
 
-**What you say to Claude:**
-- "Search for authentication code"
-- "Find files named AuthService"
-- "Show me all the Services directories"
-- "Find files similar to AuthService.cs"
-- "What files changed in the last 24 hours?"
-- "Find all error handling patterns in the code"
-- "How do I search code effectively?"
-
-**Tools Claude will use:**
 ```bash
-# Search for code patterns (NEW: standardized 'query' parameter)
-text_search --query "authentication" --workspacePath "C:/YourProject"
+# Test indexing
+mcp__codesearch__index_workspace --workspacePath "."
 
-# File search (unified parameter naming - backward compatible)  
-file_search --query "AuthService" --workspacePath "C:/YourProject"
+# Test search
+mcp__codesearch__text_search --query "LuceneIndexService"
 
-# Directory search (standardized parameter names)
-directory_search --query "Services" --workspacePath "C:/YourProject"
-
-# Find similar implementations
-similar_files --sourcePath "AuthService.cs" --workspacePath "C:/YourProject"
-
-# Analyze recent changes with time filters
-recent_files --timeFrame "24h" --workspacePath "C:/YourProject"
-
-# NEW: Multi-step search with AI guidance
-search_assistant --goal "Find all error handling patterns" --workspacePath "C:/YourProject"
-
-# NEW: Discover tool workflows and dependencies
-workflow_discovery --goal "search code"
-workflow_discovery --toolName "text_search"
+# Check system health
+mcp__codesearch__get_system_info
 ```
 
-### Memory System
+## 🔧 Troubleshooting
 
-**What you say to Claude:**
-- "Remember that we decided to use JWT for authentication"
-- "Make a note that UserService needs refactoring - high priority"
-- "What decisions did we make about authentication?"
-- "Show me how authentication patterns are connected"
-- "Backup our project memories"
+### Common Issues
 
-**Tools Claude will use:**
+**Index locks:**
 ```bash
-# Store architectural decision
-store_memory --type "ArchitecturalDecision" \
-  --content "Using JWT for authentication" \
-  --files ["AuthService.cs"]
-
-# Track technical debt with custom fields
-store_memory --type "TechnicalDebt" \
-  --content "UserService needs refactoring" \
-  --fields '{"priority": "high", "effort": "days"}'
-
-# Search memories with AI-powered understanding
-search_memories --query "authentication decisions"
-
-# Navigate memory relationships visually
-memory_graph_navigator --startPoint "authentication patterns"
-
-# Backup for version control (team sharing enabled)
-backup_memories  # Creates JSON in .codesearch/backups/
+# Remove stale locks
+rm ~/.coa/codesearch/indexes/*/write.lock
 ```
 
-### 🆕 Phase 3: Advanced Memory Intelligence
-
-**What you say to Claude:**
-- "Remember that UserService has performance issues"
-- "Find all technical debt related to authentication"
-- "Create a checklist for the database migration project"
-- "Find any security vulnerabilities in our login system"
-- "Search for authentication patterns using both text and concepts"
-- "Check the quality of memory 123"
-- "Load context for the Services directory"
-- "Show me recent architecture decisions"
-
-**Tools Claude will use:**
+**Missing results:**
 ```bash
-# Natural language memory operations
-unified_memory --command "remember that UserService has performance issues"
-unified_memory --command "find all technical debt related to authentication"
-unified_memory --command "create checklist for database migration project"
-
-# Semantic search - find by concepts, not keywords
-semantic_search --query "security vulnerabilities in user login systems"
-
-# Hybrid search - combine text and semantic understanding
-hybrid_search --query "authentication patterns"
-
-# Memory quality assessment with scoring
-memory_quality_assessment --memoryId "memory_123"
-
-# Auto-load relevant context for current work
-load_context --workingDirectory "C:/YourProject/Services"
-
-# Advanced temporal scoring for recency-weighted results
-search_memories --query "architecture decisions" --boostRecent true
+# Force rebuild index
+mcp__codesearch__index_workspace --forceRebuild true
 ```
 
-### Advanced Workflows
+**Memory issues:**
+- Reduce `RAMBufferSizeMB` in config
+- Lower `MaxIndexingConcurrency`
+- Check `MemoryPressure` settings
 
-**What you say to Claude:**
-- "Analyze this project for security and performance issues"
-- "Find all TODOs, C# files, and what changed in the last week"
-- "Help me understand how authentication is implemented"
+### Logging
 
-**Tools Claude will use:**
-```bash
-# Pattern analysis with severity levels
-pattern_detector --workspacePath "C:/YourProject" \
-  --patternTypes ["architecture", "security", "performance"]
-
-# Parallel operations for comprehensive analysis
-batch_operations --operations '[
-  {"operation": "text_search", "query": "TODO"},
-  {"operation": "file_search", "query": "*.cs"},
-  {"operation": "recent_files", "timeFrame": "7d"}
-]' --workspacePath "C:/YourProject"
-
-# AI-guided multi-step search with context preservation
-search_assistant --goal "Understand authentication implementation" \
-  --workspacePath "C:/YourProject"
-```
-
-## 📝 Custom Slash Commands
-
-This project includes custom slash commands in `.claude/commands/` that enhance your workflow:
-
-### `/checkpoint` - Save Session Progress
-Creates a timestamped checkpoint of your current work session:
-```
-/checkpoint
-```
-- Automatically captures what you've accomplished
-- Records current state and context
-- Lists next steps to continue
-- Saves files being worked on
-- Perfect for ending work sessions or switching tasks
-
-### `/resume` - Continue From Last Checkpoint
-Loads your most recent checkpoint and displays:
-```
-/resume
-```
-- Last checkpoint timestamp
-- What was accomplished
-- Current state summary
-- Next steps (numbered list)
-- Recent files modified in last 24 hours
-- Ends with "Ready to continue from checkpoint. What would you like to work on?"
-
-These commands are checked into source control, so all team members can benefit from consistent session management.
-
-## 🤖 AI Agent Optimizations
-
-This MCP server is specifically designed for optimal AI agent experience with comprehensive UX improvements:
-
-### 🎯 Unified Response Format
-All tools now follow a consistent response structure for predictable AI parsing:
+Set log levels in `appsettings.json`:
 ```json
 {
-  "success": true,
-  "operation": "text_search",
-  "query": { /* standardized query info */ },
-  "summary": { /* high-level insights */ },
-  "results": [ /* actual results */ ],
-  "resultsSummary": { "included": 3, "total": 15, "hasMore": true },
-  "insights": ["Key findings"],
-  "actions": [{ "cmd": "next steps", "description": "what it does" }],
-  "meta": { /* metadata including mode, tokens, performance */ },
-  "resourceUri": "codesearch://..."
-}
-```
-
-### 📊 Parameter Standardization
-- **All search tools** now use `query` as the primary parameter
-- **Backward compatible** with legacy parameters (`searchQuery`, `nameQuery`, `directoryQuery`)
-- **Consistent interface** across `text_search`, `file_search`, `directory_search`
-
-### 🧠 Token Optimization (60-85% reduction)
-- **Automatic Mode Switching**: Switches to summary at 5,000 tokens
-- **Progressive Disclosure**: Smart summaries with drill-down capabilities
-- **Confidence-Based Limiting**: 2-3 results for high-confidence matches
-- **Detail Request Tokens**: Get full results when needed without re-searching
-
-### 🔄 Enhanced Workflow Discovery
-```bash
-# Discover tool chains and dependencies
-workflow_discovery --goal "search code"
-workflow_discovery --toolName "text_search"
-```
-- **Dynamic Context-Aware Workflows**: Adapts to your specific goals
-- **Tool Chain Mapping**: Understand prerequisites and sequences
-- **Specialized Workflows**: Auth, performance, bug hunting patterns
-
-### 🚨 Actionable Error Handling
-Instead of generic errors, get specific recovery guidance:
-```json
-{
-  "error": "INDEX_NOT_FOUND",
-  "message": "No search index found",
-  "recovery": {
-    "steps": ["1. Run: index_workspace --workspacePath 'C:/YourProject'"],
-    "suggestedActions": [{ "cmd": "index_workspace", "description": "Create index" }]
+  "Logging": {
+    "LogLevel": {
+      "COA.CodeSearch": "Information"  // Debug, Trace for more detail
+    }
   }
 }
 ```
 
-### 📚 Comprehensive Documentation
-See [docs/AI_UX_REVIEW.md](docs/AI_UX_REVIEW.md) for:
-- Complete unified response format specification
-- Token optimization strategies
-- Progressive disclosure patterns
-- Tool description best practices
-- Implementation guidelines
+## 📚 Integration
 
-### Example: Unified Response with Progressive Disclosure
-```json
-{
-  "success": true,
-  "operation": "batch_operations",
-  "summary": {
-    "totalMatches": 150,
-    "operations": { "text_search": 2, "file_search": 1 },
-    "hotspots": ["AuthService.cs (25 matches)", "UserController.cs (18 matches)"]
-  },
-  "results": [
-    // Limited results in summary mode
-  ],
-  "insights": [
-    "Authentication logic concentrated in 3 files",
-    "TODO comments cluster in test files"
-  ],
-  "actions": [
-    { "cmd": "text_search --query 'TODO' --filePattern '*Test.cs'", "description": "Focus on test TODOs" }
-  ],
-  "meta": {
-    "mode": "summary",
-    "autoModeSwitch": true,
-    "tokens": 4500,
-    "detailRequestToken": "cache_abc123",
-    "performance": { "totalTime": "125ms" }
-  }
-}
-```
+### With ProjectKnowledge MCP
 
-## 🤖 Claude Code Integration
+CodeSearch works seamlessly with [ProjectKnowledge MCP](https://github.com/anortham/coa-projectknowledge-mcp):
 
-This MCP server is designed for Claude Code and includes:
-
-- **Custom slash commands** (`/checkpoint` and `/resume`) for session management
-- **Project-specific guidance** in `CLAUDE.md` with detailed examples
-- **AI-optimized responses** with progressive disclosure and token management
-
-For detailed usage instructions and best practices, see the project's `CLAUDE.md` file.
-
-## 🐛 Troubleshooting
-
-**Stuck indexes**
-- Delete `.codesearch/index/*/write.lock` files
-- Use `index_health_check` for automated diagnostics
-
-**Debug logging**
 ```bash
-log_diagnostics --action status
-log_diagnostics --action cleanup --cleanup true
+# Search for issues
+mcp__codesearch__text_search --query "Thread.Sleep"
+
+# Document findings
+mcp__projectknowledge__store_knowledge \
+  --type "TechnicalDebt" \
+  --content "Found Thread.Sleep anti-pattern in 5 files"
 ```
 
-**Performance monitoring**
-```bash
-system_health_check  # Comprehensive system status
-tool_usage_analytics --action summary  # Tool performance insights
-```
-
-## 📚 Documentation
-
-- [CodeAnalyzer Documentation](docs/CODE_ANALYZER.md) - How the custom code analyzer works
-- [CodeAnalyzer Implementation Guide](docs/CODE_ANALYZER_IMPLEMENTATION.md) - Technical implementation details
-- [Memory System Guide](docs/MEMORY_SYSTEM.md) - Complete memory tools documentation
-- [Tool Reference](docs/TOOLS.md) - Comprehensive tool documentation
-- [Configuration Guide](docs/CONFIGURATION.md) - All configuration options
-- [Architecture Decisions](docs/ARCHITECTURE.md) - Design patterns and decisions
+See [Integration Guide](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md) for detailed workflows.
 
 ## 📄 License
 
-MIT License - see [LICENSE](LICENSE) file
+MIT License - see [LICENSE](LICENSE) file.
 
-## 🙏 Acknowledgments
+## 🤝 Contributing
 
-Built with [Lucene.NET](https://lucenenet.apache.org/) and implements [Model Context Protocol](https://modelcontextprotocol.io/). Optimized for AI assistant workflows with pattern matching and intelligent memory management.
+1. Fork the repository
+2. Create a feature branch
+3. Make your changes
+4. Add tests if applicable
+5. Submit a pull request
+
+## 📞 Support
+
+- **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
+- **Documentation**: [docs/](docs/) folder
+- **Framework**: [COA MCP Framework](https://github.com/anortham/coa-mcp-framework)
+
+---
+
+**Built with** [COA MCP Framework 1.5.4](https://github.com/anortham/coa-mcp-framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
