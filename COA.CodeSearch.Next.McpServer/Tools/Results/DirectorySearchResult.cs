@@ -1,6 +1,6 @@
 using COA.Mcp.Framework.Models;
 
-namespace COA.CodeSearch.Next.McpServer.Tools.Results;
+namespace COA.CodeSearch.McpServer.Tools.Results;
 
 /// <summary>
 /// Result model for directory search operations

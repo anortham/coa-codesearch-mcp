@@ -1,6 +1,6 @@
 using Lucene.Net.Index;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Boosts recently modified files, as they are often more relevant for active development.

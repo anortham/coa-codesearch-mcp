@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Manages write.lock files for Lucene indexes to prevent corruption

@@ -1,6 +1,6 @@
 using Lucene.Net.Index;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Adjusts scores based on file type relevance for different search contexts.

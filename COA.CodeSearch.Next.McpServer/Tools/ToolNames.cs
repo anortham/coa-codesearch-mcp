@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Constants for tool names used across the CodeSearch.Next MCP server

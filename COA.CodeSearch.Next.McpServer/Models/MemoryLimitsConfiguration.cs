@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
 
-namespace COA.CodeSearch.Next.McpServer.Models;
+namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
 /// Configuration for memory limits and backpressure control

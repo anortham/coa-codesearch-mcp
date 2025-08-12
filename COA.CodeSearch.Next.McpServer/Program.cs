@@ -7,12 +7,12 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Tools;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Tools;
 using Serilog;
 using System.Reflection;
 
-namespace COA.CodeSearch.Next.McpServer;
+namespace COA.CodeSearch.McpServer;
 
 public class Program
 {
@@ -28,7 +28,7 @@ public class Program
         services.AddMemoryCache();
         
         // Register configuration models
-        services.Configure<COA.CodeSearch.Next.McpServer.Models.MemoryLimitsConfiguration>(
+        services.Configure<COA.CodeSearch.McpServer.Models.MemoryLimitsConfiguration>(
             configuration.GetSection("CodeSearch:MemoryPressure"));
         
         // Register core services
@@ -38,8 +38,8 @@ public class Program
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
         
         // Register Lucene services
-        services.AddSingleton<COA.CodeSearch.Next.McpServer.Services.Lucene.ILuceneIndexService, 
-                              COA.CodeSearch.Next.McpServer.Services.Lucene.LuceneIndexService>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Lucene.ILuceneIndexService, 
+                              COA.CodeSearch.McpServer.Services.Lucene.LuceneIndexService>();
         
         // Register indexing services
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();

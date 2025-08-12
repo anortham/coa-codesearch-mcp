@@ -3,7 +3,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 public class CircuitBreakerService : ICircuitBreakerService, IDisposable
 {

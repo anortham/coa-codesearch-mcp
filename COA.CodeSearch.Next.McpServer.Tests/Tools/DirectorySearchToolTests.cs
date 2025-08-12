@@ -8,14 +8,14 @@ using FluentAssertions;
 using Moq;
 using Microsoft.Extensions.Logging;
 using COA.Mcp.Framework.TokenOptimization.Models;
-using COA.CodeSearch.Next.McpServer.Tools;
-using COA.CodeSearch.Next.McpServer.Tools.Parameters;
-using COA.CodeSearch.Next.McpServer.Tools.Results;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Tests.Base;
+using COA.CodeSearch.McpServer.Tools;
+using COA.CodeSearch.McpServer.Tools.Parameters;
+using COA.CodeSearch.McpServer.Tools.Results;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Tests.Base;
 using Lucene.Net.Search;
 
-namespace COA.CodeSearch.Next.McpServer.Tests.Tools
+namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
     public class DirectorySearchToolTests : CodeSearchToolTestBase<DirectorySearchTool>

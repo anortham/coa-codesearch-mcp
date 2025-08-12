@@ -1,7 +1,7 @@
 using Lucene.Net.Index;
 using Microsoft.Extensions.Logging;
 
-namespace COA.CodeSearch.Next.McpServer.Scoring;
+namespace COA.CodeSearch.McpServer.Scoring;
 
 /// <summary>
 /// Scoring factor that boosts actual implementations over mock/test implementations

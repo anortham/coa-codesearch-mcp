@@ -5,7 +5,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// High-performance cache service for query results with workspace isolation

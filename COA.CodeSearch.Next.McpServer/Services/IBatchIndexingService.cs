@@ -1,6 +1,6 @@
 using Lucene.Net.Documents;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Service for high-performance batch indexing with configurable batch sizes and commit intervals

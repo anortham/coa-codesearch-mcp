@@ -1,4 +1,4 @@
-using COA.CodeSearch.Next.McpServer.Services.Analysis;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using Lucene.Net.Analysis;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
@@ -11,7 +11,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 
-namespace COA.CodeSearch.Next.McpServer.Services.Lucene;
+namespace COA.CodeSearch.McpServer.Services.Lucene;
 
 /// <summary>
 /// Thread-safe Lucene index service with centralized architecture support

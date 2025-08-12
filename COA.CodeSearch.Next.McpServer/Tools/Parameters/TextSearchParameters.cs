@@ -1,7 +1,7 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
 
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the text search tool

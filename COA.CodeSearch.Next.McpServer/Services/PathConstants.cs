@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Centralized constants for all path-related operations

@@ -3,9 +3,9 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Lucene;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// High-performance batch indexing service that accumulates documents and commits them in configurable batches

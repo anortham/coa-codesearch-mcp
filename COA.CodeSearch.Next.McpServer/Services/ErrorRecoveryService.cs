@@ -1,6 +1,6 @@
-using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.McpServer.Models;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 public class ErrorRecoveryService : IErrorRecoveryService
 {

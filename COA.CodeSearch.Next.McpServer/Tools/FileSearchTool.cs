@@ -9,17 +9,17 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Services.Analysis;
-using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Analysis;
+using COA.CodeSearch.McpServer.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Util;
 
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Tool for searching files by name pattern in indexed workspaces with token optimization

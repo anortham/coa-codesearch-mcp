@@ -1,7 +1,7 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Search;
 
-namespace COA.CodeSearch.Next.McpServer.Services.Lucene;
+namespace COA.CodeSearch.McpServer.Services.Lucene;
 
 /// <summary>
 /// Result of index initialization
