@@ -1,7 +1,7 @@
-# CodeSearch.Next Migration Status Report
+# CodeSearch Migration Status Report
 
 ## Executive Summary
-CodeSearch.Next is a clean rebuild on COA MCP Framework 1.4.2 with centralized architecture. Memory management has been extracted to ProjectKnowledge MCP. This document tracks the migration status from the original CodeSearch to CodeSearch.Next.
+CodeSearch is a clean rebuild on COA MCP Framework 1.4.2 with centralized architecture. Memory management has been extracted to ProjectKnowledge MCP. This document tracks the migration status from the original CodeSearch to CodeSearch.
 
 ## 🎯 Migration Progress
 
@@ -79,7 +79,7 @@ CodeSearch.Next is a clean rebuild on COA MCP Framework 1.4.2 with centralized a
 
 ### 📊 Lucene Optimizations Comparison
 
-| Setting | Old CodeSearch | CodeSearch.Next | Notes |
+| Setting | Old CodeSearch | CodeSearch | Notes |
 |---------|---------------|-----------------|-------|
 | **Analyzer** | CodeAnalyzer ✅ | CodeAnalyzer ✅ | Same custom analyzer for code |
 | **RAM Buffer** | 256MB (configurable) | 16MB (hardcoded) | ⚠️ Need to make configurable |
@@ -150,5 +150,5 @@ Once these are complete, we can safely delete the old project and rename .Next.
 
 ## File Count Comparison
 - **Old CodeSearch**: ~90 service files, 30+ tools
-- **CodeSearch.Next**: ~25 service files, 7 tools
+- **CodeSearch**: ~25 service files, 7 tools
 - **Reduction**: ~70% fewer files (cleaner, focused implementation)

@@ -1,6 +1,6 @@
-# COA CodeSearch.Next MCP Server - Claude AI Assistant Guide
+# COA CodeSearch MCP Server - Claude AI Assistant Guide
 
-## 🚨 CRITICAL: This is CodeSearch.Next (v2.0)
+## 🚨 CRITICAL: This is CodeSearch (v2.0)
 
 This is the **next-generation** CodeSearch built on COA MCP Framework 1.4.2. It's a complete rewrite with centralized architecture and clean separation from memory management (now handled by ProjectKnowledge).
 
@@ -10,7 +10,7 @@ This is the **next-generation** CodeSearch built on COA MCP Framework 1.4.2. It'
 
 ```bash
 # DO NOT RUN THESE:
-❌ dotnet run --project COA.CodeSearch.Next.McpServer -- stdio
+❌ dotnet run --project COA.CodeSearch.McpServer -- stdio
 ❌ dotnet run -- stdio --test-mode
 ```
 
@@ -175,8 +175,8 @@ mcp__codesearch-next__file_search        # Search files
 
 ## 📚 Documentation
 
-- [Vision & Architecture](COA.CodeSearch.Next.McpServer/docs/CODESEARCH_NEXT_VISION.md)
-- [Implementation Checklist](COA.CodeSearch.Next.McpServer/docs/IMPLEMENTATION_CHECKLIST.md)
+- [Vision & Architecture](COA.CodeSearch.McpServer/docs/CODESEARCH_NEXT_VISION.md)
+- [Implementation Checklist](COA.CodeSearch.McpServer/docs/IMPLEMENTATION_CHECKLIST.md)
 - [Framework Migration Guide](docs/FRAMEWORK_MIGRATION_GUIDE.md)
 - [Integration with ProjectKnowledge](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md)
 

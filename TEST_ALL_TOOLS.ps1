@@ -1,4 +1,4 @@
-# Comprehensive Test Script for CodeSearch.Next MCP Tools
+# Comprehensive Test Script for CodeSearch MCP Tools
 # This script tests all tools with various scenarios and validates outputs
 
 $ErrorActionPreference = "Continue"
@@ -6,7 +6,7 @@ $testResults = @()
 $workspace = "C:\source\COA CodeSearch MCP"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "CodeSearch.Next MCP Tools Test Suite" -ForegroundColor Cyan
+Write-Host "CodeSearch MCP Tools Test Suite" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -195,7 +195,7 @@ Write-Host "`n=== TEST 6: SimilarFilesTool ===" -ForegroundColor Cyan
 
 # Find files similar to LuceneIndexService
 Test-McpTool -ToolName "similar_files" -Description "Files similar to LuceneIndexService.cs" -Parameters @{
-    filePath = "$workspace\COA.CodeSearch.Next.McpServer\Services\Lucene\LuceneIndexService.cs"
+    filePath = "$workspace\COA.CodeSearch.McpServer\Services\Lucene\LuceneIndexService.cs"
     workspacePath = $workspace
     maxResults = 10
     minScore = 0.1
@@ -206,7 +206,7 @@ Test-McpTool -ToolName "similar_files" -Description "Files similar to LuceneInde
 
 # Find files similar to a tool
 Test-McpTool -ToolName "similar_files" -Description "Files similar to TextSearchTool.cs" -Parameters @{
-    filePath = "$workspace\COA.CodeSearch.Next.McpServer\Tools\TextSearchTool.cs"
+    filePath = "$workspace\COA.CodeSearch.McpServer\Tools\TextSearchTool.cs"
     workspacePath = $workspace
     maxResults = 5
     minScore = 0.2
