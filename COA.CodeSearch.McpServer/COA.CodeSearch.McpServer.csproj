@@ -12,7 +12,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codesearch</ToolCommandName>
     <PackageId>COA.CodeSearch</PackageId>
-    <Version>2.0.0</Version>
+    <Version>2.1.0</Version>
     <Authors>COA Team</Authors>
     <Company>COA Team</Company>
     <Description>High-performance file search MCP server with Lucene.NET backend for Claude Code integration</Description>
