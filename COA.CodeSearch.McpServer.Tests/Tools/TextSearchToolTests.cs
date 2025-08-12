@@ -15,6 +15,7 @@ using System.Threading;
 using System;
 using System.Collections.Generic;
 using COA.Mcp.Framework.Models;
+using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
@@ -25,14 +26,20 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override TextSearchTool CreateTool()
         {
-            var queryPreprocessorLoggerMock = CreateMock<Microsoft.Extensions.Logging.ILogger<QueryPreprocessor>>();
+            var queryPreprocessorLoggerMock = new Mock<ILogger<QueryPreprocessor>>();
             var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
+            var projectKnowledgeServiceMock = CreateMock<IProjectKnowledgeService>();
+            var smartDocLoggerMock = new Mock<ILogger<SmartDocumentationService>>();
+            var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
+            
             _tool = new TextSearchTool(
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
+                projectKnowledgeServiceMock.Object,
+                smartDocumentationService,
                 ToolLoggerMock.Object
             );
             return _tool;
