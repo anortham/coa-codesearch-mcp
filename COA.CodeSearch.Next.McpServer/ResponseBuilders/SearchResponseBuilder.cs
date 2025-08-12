@@ -118,25 +118,25 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         
         if (data.TotalHits == 0)
         {
-            insights.Add("No results found. Consider broadening your search terms or checking if the workspace is indexed.");
+            insights.Add("No results");
             return insights;
         }
         
-        // Distribution insights
-        if (data.Hits.Count > 0)
+        // Distribution insights - keep ultra-lean
+        if (data.Hits.Count > 0 && responseMode != "summary") // Skip insights in summary mode
         {
             var fileExtensions = data.Hits
                 .Select(h => Path.GetExtension(h.FilePath))
                 .Where(ext => !string.IsNullOrEmpty(ext))
                 .GroupBy(ext => ext)
                 .OrderByDescending(g => g.Count())
-                .Take(3)
+                .Take(2) // Just top 2
                 .ToList();
             
             if (fileExtensions.Any())
             {
-                var topTypes = string.Join(", ", fileExtensions.Select(g => $"{g.Key} ({g.Count()})"));
-                insights.Add($"Results primarily in: {topTypes}");
+                var topTypes = string.Join(", ", fileExtensions.Select(g => $"{g.Key}:{g.Count()}"));
+                insights.Add($"Types: {topTypes}");
             }
             
             // Score distribution
@@ -198,33 +198,26 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         {
             actions.Add(new AIAction
             {
-                Action = "broaden_search",
-                Description = "Try removing quotes or using wildcards (*) for partial matches",
+                Action = "broaden",
+                Description = "Use wildcards (*)",
                 Priority = 100
-            });
-            
-            actions.Add(new AIAction
-            {
-                Action = ToolNames.IndexWorkspace,
-                Description = "Ensure the workspace is indexed",
-                Priority = 90
             });
         }
         else
         {
-            // Refinement actions
-            if (data.TotalHits > 100)
+            // Refinement actions - only if really needed
+            if (data.TotalHits > 500) // Only suggest refinement for huge result sets
             {
                 actions.Add(new AIAction
                 {
-                    Action = "refine_search",
-                    Description = "Add more specific terms or use quotes for exact phrases",
+                    Action = "refine",
+                    Description = "Add terms",
                     Priority = 80
                 });
             }
             
-            // File type filtering
-            if (data.Hits.Count > 10)
+            // Skip file type filtering - not essential
+            if (false) // Disabled to save tokens
             {
                 var topExtension = data.Hits
                     .Select(h => Path.GetExtension(h.FilePath))
@@ -284,7 +277,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         var maxHits = Math.Max(1, tokenBudget / tokensPerHit);
         
         if (hits.Count <= maxHits)
-            return hits;
+            return CleanupHits(hits); // Clean up even if we're not reducing
         
         // Use progressive reduction with score-based priority
         var context = new ReductionContext
@@ -299,7 +292,37 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
             "priority",
             context);
         
-        return result.Items;
+        return CleanupHits(result.Items);
+    }
+    
+    private List<SearchHit> CleanupHits(List<SearchHit> hits)
+    {
+        // Remove redundant fields to minimize tokens
+        return hits.Select(hit => {
+            // Only keep essential fields, remove duplicates
+            var minimalFields = new Dictionary<string, string>();
+            
+            // Keep only non-duplicated essential fields
+            if (hit.Fields.ContainsKey("size"))
+                minimalFields["size"] = hit.Fields["size"];
+                
+            // Round score to 2 decimal places
+            hit.Score = (float)Math.Round(hit.Score, 2);
+            
+            // Clear empty collections
+            if (hit.HighlightedFragments?.Count == 0)
+                hit.HighlightedFragments = null;
+            
+            // Use cleaner hit structure
+            return new SearchHit
+            {
+                FilePath = hit.FilePath,
+                Score = hit.Score,
+                Fields = minimalFields, // Minimal fields only
+                HighlightedFragments = hit.HighlightedFragments,
+                LastModified = hit.LastModified
+            };
+        }).ToList();
     }
     
     private int EstimateHitTokens(SearchHit hit, string responseMode)
@@ -337,26 +360,17 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
     private string BuildSummary(SearchResult data, int includedCount, string responseMode)
     {
         if (data.TotalHits == 0)
-        {
-            return "No results found";
-        }
+            return "No results";
         
-        var summary = $"Found {data.TotalHits} result{(data.TotalHits != 1 ? "s" : "")}";
+        // Ultra-lean summary
+        var summary = $"{data.TotalHits} hits";
         
         if (includedCount < data.TotalHits)
-        {
-            summary += $" (showing top {includedCount})";
-        }
+            summary += $" (top {includedCount})";
         
-        if (!string.IsNullOrEmpty(data.Query))
-        {
-            summary += $" for '{data.Query}'";
-        }
-        
-        if (data.ProcessingTimeMs > 0)
-        {
-            summary += $" in {data.ProcessingTimeMs}ms";
-        }
+        // Skip query echo and timing in summary mode to save tokens
+        if (responseMode != "summary" && data.ProcessingTimeMs > 100) // Only show if slow
+            summary += $" {data.ProcessingTimeMs}ms";
         
         return summary;
     }
