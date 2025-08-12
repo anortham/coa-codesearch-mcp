@@ -124,18 +124,31 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             multiFactorQuery.AddScoringFactor(new ExactMatchBoostFactor(parameters.CaseSensitive)); // Exact phrase matches
             multiFactorQuery.AddScoringFactor(new InterfaceImplementationFactor(_logger)); // Reduce mock/test noise for interface searches
 
-            // Determine max results based on response mode to protect token limits
-            // We intentionally don't let users control this directly to prevent token blowouts
+            // Implement aggressive token-aware limiting like the old system
+            // The old system targeted ~1500 tokens with ~5 results for maximum relevance
             var responseMode = parameters.ResponseMode?.ToLowerInvariant() ?? "adaptive";
+            
+            // Estimate tokens per result (old system used ~300 tokens per result as baseline)
+            var hasContext = false; // We don't use context in this tool
+            var tokensPerResult = hasContext ? 200 : 100; 
+            
+            // Calculate token budget (be conservative like old system)
+            var tokenBudget = parameters.MaxTokens;
+            var safetyBudget = (int)Math.Min(tokenBudget * 0.4, 2000); // Use only 40% of budget, max 2000 tokens for results
+            
+            // Calculate max results based on token budget
+            var budgetBasedMax = Math.Max(1, safetyBudget / tokensPerResult);
+            
+            // Apply mode-specific limits (but respect budget limits)
             var maxResults = responseMode switch
             {
-                "full" => 100,     // Even in full mode, cap at 100 for safety
-                "summary" => 20,   // Summary mode gets fewer results
-                _ => 50            // Adaptive/default: moderate amount
+                "full" => Math.Min(budgetBasedMax, 15),     // Full mode: respects budget but allows more
+                "summary" => Math.Min(budgetBasedMax, 3),   // Summary: ultra-conservative like old system
+                _ => Math.Min(budgetBasedMax, 5)            // Default: match old system's ~5 result target
             };
             
-            _logger.LogDebug("Text search using ResponseMode-based MaxResults: {MaxResults} (mode: {ResponseMode}), Query: {Query}, Type: {SearchType}", 
-                maxResults, responseMode, query, searchType);
+            _logger.LogDebug("Token-aware search limits: budget={Budget}, tokensPerResult={TokensPerResult}, maxResults={MaxResults}, mode={Mode}, Query={Query}", 
+                safetyBudget, tokensPerResult, maxResults, responseMode, query);
 
             // Perform search with scoring
             var searchResult = await _luceneIndexService.SearchAsync(
