@@ -128,7 +128,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
             // Extract unique directories from search results
             var allDirectories = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
             
-            _logger.LogDebug("Processing {Count} search hits", searchResult.Hits.Count);
             
             foreach (var hit in searchResult.Hits)
             {
@@ -137,8 +136,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 var relativeDirectory = hit.Fields?.GetValueOrDefault("relativeDirectory", "");
                 var directoryName = hit.Fields?.GetValueOrDefault("directoryName", "");
                 
-                _logger.LogDebug("Processing hit: directory={Directory}, relative={Relative}, name={Name}", 
-                    directory, relativeDirectory, directoryName);
                 
                 // If we don't have directory fields, extract from file path
                 if (string.IsNullOrEmpty(directory))
@@ -186,8 +183,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 // Now process the relative directory path
                 var segments = normalizedDir.Split('/', StringSplitOptions.RemoveEmptyEntries);
                 
-                _logger.LogDebug("Processing segments: [{Segments}] from normalized dir: {Dir}", 
-                    string.Join(", ", segments), normalizedDir);
                 
                 // Build up each directory level
                 var currentPath = "";
@@ -199,14 +194,12 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                     // Check if this directory should be excluded
                     if (ExcludedDirectories.Contains(segment, StringComparer.OrdinalIgnoreCase))
                     {
-                        _logger.LogDebug("Excluding directory segment: {Segment}", segment);
                         continue;
                     }
                     
                     // Skip hidden directories if not included
                     if (!includeHidden && segment.StartsWith("."))
                     {
-                        _logger.LogDebug("Skipping hidden directory: {Segment}", segment);
                         continue;
                     }
                     
@@ -227,29 +220,21 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                             SubdirectoryCount = 0
                         };
                         
-                        _logger.LogDebug("Added directory: {Path} (name={Name}, depth={Depth})", 
-                            currentPath, segment, i + 1);
                     }
                     else
                     {
                         allDirectories[currentPath].FileCount++;
-                        _logger.LogDebug("Updated file count for {Path}: {Count}", 
-                            currentPath, allDirectories[currentPath].FileCount);
                     }
                 }
             }
             
-            _logger.LogDebug("Built {Count} unique directories before filtering", allDirectories.Count);
             
             // Now filter directories by pattern
             var directoryMap = new Dictionary<string, DirectoryMatch>(StringComparer.OrdinalIgnoreCase);
-            _logger.LogDebug("Filtering {Count} directories with pattern {Pattern}", allDirectories.Count, pattern);
             
             foreach (var kvp in allDirectories)
             {
                 var dir = kvp.Value;
-                _logger.LogDebug("Checking directory: Key={Key}, Name={Name}, Path={Path}", 
-                    kvp.Key, dir.Name, dir.Path);
                 
                 // Check if directory name matches pattern
                 bool matches = false;
@@ -271,16 +256,13 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                     matches = MatchGlobPattern(dir.Name, pattern);
                 }
                 
-                _logger.LogDebug("Pattern match result for {Name}: {Matches}", dir.Name, matches);
                 
                 if (matches)
                 {
                     directoryMap[kvp.Key] = dir;
-                    _logger.LogDebug("Added {Name} to directoryMap", dir.Name);
                 }
             }
             
-            _logger.LogDebug("After filtering: directoryMap has {Count} entries", directoryMap.Count);
             
             // Calculate subdirectory counts (from all directories, not just matching ones)
             foreach (var dir in directoryMap.Values)
@@ -291,7 +273,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 dir.SubdirectoryCount = subdirCount;
             }
             
-            _logger.LogDebug("After filtering: {Count} directories match pattern", directoryMap.Count);
             
             // Sort and limit results
             var directories = directoryMap.Values
@@ -300,8 +281,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 .Take(maxResults)
                 .ToList();
             
-            _logger.LogDebug("After sorting and limiting (maxResults={MaxResults}): {Count} directories", 
-                maxResults, directories.Count);
             
             stopwatch.Stop();
             
