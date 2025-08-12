@@ -103,11 +103,12 @@ mcp__projectknowledge__store_checkpoint \
   --content "Starting refactoring search for IRepository pattern" \
   --sessionId "refactor-2024-01"
 
-# 2. Perform complex searches
+# 2. Perform complex searches  
 mcp__codesearch__batch_operations \
+  --workspacePath "C:/MyProject" \
   --operations '[
     {"operation": "text_search", "query": "IRepository"},
-    {"operation": "file_search", "query": "*Repository.cs"}
+    {"operation": "file_search", "pattern": "*Repository.cs"}
   ]'
 
 # 3. Document findings
@@ -384,7 +385,7 @@ mcp__projectknowledge__store_knowledge --type "TechnicalDebt" --content "Found n
 mcp__projectknowledge__store_checkpoint --content "Starting security audit"
 
 # Perform searches
-mcp__codesearch__batch_operations --operations '[...]'
+mcp__codesearch__batch_operations --workspacePath "C:/MyProject" --operations '[...]'
 
 # Document findings
 mcp__projectknowledge__create_checklist --title "Security fixes"
