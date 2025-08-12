@@ -50,6 +50,9 @@ public class Program
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         
+        // Query preprocessing for code-aware search
+        services.AddSingleton<QueryPreprocessor>();
+        
         // FileWatcher as background service - register properly for auto-start
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
