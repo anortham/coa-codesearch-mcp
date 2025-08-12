@@ -122,6 +122,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             multiFactorQuery.AddScoringFactor(new FileTypeRelevanceFactor());    // Prioritize code files
             multiFactorQuery.AddScoringFactor(new RecencyBoostFactor());         // Boost recently modified
             multiFactorQuery.AddScoringFactor(new ExactMatchBoostFactor(parameters.CaseSensitive)); // Exact phrase matches
+            multiFactorQuery.AddScoringFactor(new InterfaceImplementationFactor(_logger)); // Reduce mock/test noise for interface searches
 
             // Determine max results based on response mode to protect token limits
             // We intentionally don't let users control this directly to prevent token blowouts
