@@ -58,4 +58,22 @@ public class TextSearchParameters
     /// </summary>
     [Description("Case sensitive search")]
     public bool CaseSensitive { get; set; } = false;
+
+    /// <summary>
+    /// Automatically document findings in ProjectKnowledge MCP when patterns are detected
+    /// </summary>
+    [Description("Automatically document findings in ProjectKnowledge MCP when patterns are detected")]
+    public bool DocumentFindings { get; set; } = false;
+
+    /// <summary>
+    /// Override the auto-detected knowledge type (TechnicalDebt, ProjectInsight, WorkNote)
+    /// </summary>
+    [Description("Override the auto-detected knowledge type (TechnicalDebt, ProjectInsight, WorkNote)")]
+    public string? FindingType { get; set; }
+
+    /// <summary>
+    /// Enable intelligent pattern detection for auto-documentation
+    /// </summary>
+    [Description("Enable intelligent pattern detection for auto-documentation")]
+    public bool AutoDetectPatterns { get; set; } = true;
 }

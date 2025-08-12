@@ -7,6 +7,7 @@ A high-performance Model Context Protocol (MCP) server for blazing-fast code sea
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching  
+- **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
 - **🔗 Similar Files**: Content-based similarity detection
 - **🎯 Real-time Updates**: File watchers automatically update indexes on changes
@@ -84,6 +85,7 @@ Add to your Claude Code MCP configuration:
 | `text_search` | Search file contents | `query`, `workspacePath`, `maxTokens` |
 | `file_search` | Find files by name pattern | `pattern`, `workspacePath`, `useRegex` |
 | `directory_search` | Find directories by pattern | `pattern`, `workspacePath`, `includeHidden` |
+| `batch_operations` | Execute multiple searches in batch | `workspacePath`, `operations`, `maxTokens` |
 | `recent_files` | Get recently modified files | `workspacePath`, `timeFrame` |
 | `similar_files` | Find content-similar files | `filePath`, `workspacePath`, `minScore` |
 
@@ -139,6 +141,14 @@ mcp__codesearch__directory_search \
   --pattern "*test*" \
   --includeHidden true \
   --workspacePath "C:\source\MyProject"
+
+# Batch operations - multiple searches at once
+mcp__codesearch__batch_operations \
+  --workspacePath "C:\source\MyProject" \
+  --operations '[
+    {"operation": "text_search", "query": "async Task", "id": "async_methods"},
+    {"operation": "file_search", "pattern": "*.cs", "id": "cs_files"}
+  ]'
 ```
 
 ## ⚙️ Configuration
@@ -256,19 +266,23 @@ Set log levels in `appsettings.json`:
 
 ### With ProjectKnowledge MCP
 
-CodeSearch works seamlessly with [ProjectKnowledge MCP](https://github.com/anortham/coa-projectknowledge-mcp):
+CodeSearch complements ProjectKnowledge MCP when both are configured in Claude Code. They work as separate MCP servers:
 
+- **CodeSearch**: Provides fast search and code analysis capabilities
+- **ProjectKnowledge**: Handles knowledge storage, checkpoints, and technical debt tracking
+
+**Example workflow:**
 ```bash
-# Search for issues
+# 1. Search for code patterns using CodeSearch
 mcp__codesearch__text_search --query "Thread.Sleep"
 
-# Document findings
+# 2. Store findings using ProjectKnowledge (separate tool)
 mcp__projectknowledge__store_knowledge \
-  --type "TechnicalDebt" \
-  --content "Found Thread.Sleep anti-pattern in 5 files"
+  --content "Found Thread.Sleep anti-pattern in 5 files" \
+  --type "TechnicalDebt"
 ```
 
-See [Integration Guide](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md) for detailed workflows.
+See [Integration Guide](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md) for complete workflows.
 
 ## 📄 License
 

@@ -53,6 +53,10 @@ public class Program
         // Query preprocessing for code-aware search
         services.AddSingleton<QueryPreprocessor>();
         
+        // ProjectKnowledge integration services
+        services.AddHttpClient<IProjectKnowledgeService, ProjectKnowledgeService>();
+        services.AddSingleton<SmartDocumentationService>();
+        
         // FileWatcher as background service - register properly for auto-start
         services.AddSingleton<FileWatcherService>();
         services.AddHostedService(provider => provider.GetRequiredService<FileWatcherService>());
@@ -190,6 +194,7 @@ public class Program
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
             builder.Services.AddScoped<FileSearchTool>();
+            builder.Services.AddScoped<BatchOperationsTool>(); // Batch operations for multiple searches
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
             builder.Services.AddScoped<SimilarFilesTool>(); // New! Find similar files using MoreLikeThis
