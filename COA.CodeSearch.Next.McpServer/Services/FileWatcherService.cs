@@ -128,7 +128,6 @@ public class FileWatcherService : BackgroundService
             return;
         }
         
-        _logger.LogDebug("FileWatcher event: {ChangeType} for {FilePath}", changeType, filePath);
 
         var changeEvent = new FileChangeEvent
         {
@@ -155,7 +154,7 @@ public class FileWatcherService : BackgroundService
             // Add to queue
             if (_changeQueue.TryAdd(changeEvent))
             {
-                _logger.LogInformation("Queued {ChangeType} event for: {FilePath}", changeType, filePath);
+                _logger.LogDebug("Queued {ChangeType} event for: {FilePath}", changeType, filePath);
             }
             else
             {
@@ -224,14 +223,13 @@ public class FileWatcherService : BackgroundService
     
     protected override Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("FileWatcher service ExecuteAsync started");
+        _logger.LogDebug("FileWatcher ExecuteAsync starting");
 
         // Start the background processing task
         // IMPORTANT: We must return the actual task, not Task.CompletedTask
         // Otherwise BackgroundService thinks the work is done immediately
         return Task.Run(async () => 
         {
-            _logger.LogInformation("FileWatcher Task.Run started");
             try
             {
                 await ProcessFileChangesAsync(stoppingToken);
@@ -239,58 +237,48 @@ public class FileWatcherService : BackgroundService
             catch (OperationCanceledException)
             {
                 // Expected during shutdown
-                _logger.LogInformation("FileWatcher processing cancelled");
+                _logger.LogDebug("FileWatcher processing cancelled");
             }
             catch (Exception ex)
             {
                 _logger.LogError(ex, "Fatal error in FileWatcher processing loop");
                 throw; // Re-throw to let BackgroundService handle it
             }
-            finally
-            {
-                _logger.LogInformation("FileWatcher Task.Run completed");
-            }
         }, stoppingToken);
     }
 
     private async Task ProcessFileChangesAsync(CancellationToken stoppingToken)
     {
-        _logger.LogInformation("FileWatcher started processing changes");
-        _logger.LogInformation("Debounce interval: {Debounce}ms, Batch size: {BatchSize}", 
+        _logger.LogDebug("FileWatcher processing loop started - Debounce: {Debounce}ms, Batch size: {BatchSize}", 
             _debounceInterval.TotalMilliseconds, _batchSize);
 
-        // Process changes in batches - EXACTLY like the old code
+        // Process changes in batches
         while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
                 var batch = new List<FileChangeEvent>();
                 var timeout = TimeSpan.FromMilliseconds(_debounceInterval.TotalMilliseconds);
-                
-                _logger.LogDebug("Waiting for file changes (timeout: {Timeout}ms)...", timeout.TotalMilliseconds);
 
-                // Collect a batch of changes - EXACTLY like old code
+                // Collect a batch of changes
                 while (batch.Count < _batchSize)
                 {
                     if (_changeQueue.TryTake(out var change, (int)timeout.TotalMilliseconds, stoppingToken))
                     {
                         batch.Add(change);
-                        _logger.LogDebug("Collected change {Count}/{BatchSize}: {FilePath}", 
-                            batch.Count, _batchSize, change.FilePath);
                         // Reduce timeout for subsequent items in batch
                         timeout = TimeSpan.FromMilliseconds(10);
                     }
                     else
                     {
                         // Timeout reached, process what we have
-                        _logger.LogDebug("Timeout reached after collecting {Count} changes", batch.Count);
                         break;
                     }
                 }
 
                 if (batch.Count > 0)
                 {
-                    _logger.LogInformation("Processing batch of {Count} file changes", batch.Count);
+                    _logger.LogDebug("Processing batch of {Count} file changes", batch.Count);
                     await ProcessBatchAsync(batch, stoppingToken);
                 }
 
@@ -309,14 +297,12 @@ public class FileWatcherService : BackgroundService
             }
         }
 
-        _logger.LogInformation("FileWatcher stopped processing changes");
+        _logger.LogDebug("FileWatcher stopped processing changes");
     }
 
     private async Task ProcessBatchAsync(List<FileChangeEvent> batch, CancellationToken cancellationToken)
     {
         if (batch.Count == 0) return;
-
-        _logger.LogDebug("Processing batch of {Count} file changes", batch.Count);
 
         // Group by workspace
         var workspaceGroups = batch.GroupBy(c => c.WorkspacePath);
@@ -346,7 +332,7 @@ public class FileWatcherService : BackgroundService
                     var indexed = await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
                     if (indexed)
                     {
-                        _logger.LogInformation("Successfully updated in index: {FilePath} ({ChangeType})", 
+                        _logger.LogDebug("Successfully updated in index: {FilePath} ({ChangeType})", 
                             update.FilePath, update.ChangeType);
                     }
                     else
@@ -428,7 +414,7 @@ public class FileWatcherService : BackgroundService
                     try
                     {
                         await _fileIndexingService.RemoveFileAsync(workspace, pending.FilePath, cancellationToken);
-                        _logger.LogInformation("Deleted from index: {FilePath} (verified after {Seconds:F1}s quiet period)", 
+                        _logger.LogDebug("Deleted from index: {FilePath} (verified after {Seconds:F1}s quiet period)", 
                             pending.FilePath, (now - pending.FirstSeenTime).TotalSeconds);
                     }
                     catch (Exception ex)
@@ -524,15 +510,13 @@ public class FileWatcherService : BackgroundService
         {
             if (_backgroundTaskStarted) return;
             
-            _logger.LogInformation("Self-starting FileWatcher background task from StartWatching");
+            _logger.LogDebug("Self-starting FileWatcher background task");
             
             // Start ExecuteAsync if it's not already running
             // This ensures we use the same instance that receives events
             var cts = new CancellationTokenSource();
             _executeTask = ExecuteAsync(cts.Token);
             _backgroundTaskStarted = true;
-            
-            _logger.LogInformation("FileWatcher background task self-started successfully");
         }
     }
     

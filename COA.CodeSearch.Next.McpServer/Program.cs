@@ -249,17 +249,8 @@ public class Program
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
                 
-                // CRITICAL FIX: The issue was creating two ServiceProvider instances!
-                // McpServerBuilder.RunAsync() creates its own ServiceProvider internally.
-                // Since FileWatcherService is registered via AddHostedService (line 55),
-                // it SHOULD be started automatically by the framework... let's test that.
-                
-                // If that doesn't work, we'll need a different approach:
-                // Option 1: Use a factory delegate in DI registration
-                // Option 2: Use a startup hook that runs after the container is built
-                // Option 3: Have FileWatcherService start itself on first StartWatching() call
-                
-                // Run the MCP server - let's see if it starts IHostedService automatically
+                // FileWatcherService will self-start when StartWatching is called
+                // This ensures the same instance receives and processes events
                 await builder.RunAsync();
             }
         }
