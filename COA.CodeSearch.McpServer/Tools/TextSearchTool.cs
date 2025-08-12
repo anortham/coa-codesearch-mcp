@@ -33,6 +33,8 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
+    private readonly IProjectKnowledgeService _projectKnowledgeService;
+    private readonly SmartDocumentationService _smartDocumentationService;
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
@@ -41,6 +43,8 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
+        IProjectKnowledgeService projectKnowledgeService,
+        SmartDocumentationService smartDocumentationService,
         ILogger<TextSearchTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -48,6 +52,8 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
+        _projectKnowledgeService = projectKnowledgeService;
+        _smartDocumentationService = smartDocumentationService;
         _logger = logger;
         
         // Create response builder with dependencies
@@ -172,6 +178,12 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
 
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
+
+            // Auto-documentation: store findings in ProjectKnowledge if enabled
+            if (parameters.DocumentFindings && result.Success && searchResult.TotalHits > 0)
+            {
+                await DocumentSearchFindingsAsync(parameters, searchResult, query);
+            }
 
             // Cache the successful response
             if (!parameters.NoCache && result.Success)
@@ -306,5 +318,69 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             }
         };
         return result;
+    }
+
+    /// <summary>
+    /// Document search findings in ProjectKnowledge based on intelligent pattern detection
+    /// </summary>
+    private async Task DocumentSearchFindingsAsync(TextSearchParameters parameters, SearchResult searchResult, string query)
+    {
+        try
+        {
+            // Extract file paths from search results
+            var filePaths = searchResult.Hits?.Select(h => h.FilePath).ToArray();
+            
+            // Get documentation recommendation from smart service
+            var recommendation = _smartDocumentationService.AnalyzeSearchResults(
+                query, 
+                searchResult.TotalHits, 
+                filePaths
+            );
+
+            if (!recommendation.ShouldDocument)
+            {
+                _logger.LogDebug("No documentation recommended for query: {Query}", query);
+                return;
+            }
+
+            // Use explicit FindingType if provided, otherwise use recommendation
+            var knowledgeType = parameters.FindingType ?? recommendation.KnowledgeType ?? "TechnicalDebt";
+            var content = recommendation.Content ?? $"Found {searchResult.TotalHits} instances of '{query}'";
+            var tags = recommendation.Tags ?? new[] { "codesearch-auto", "investigation" };
+            var priority = recommendation.Priority ?? "medium";
+
+            // Add search context to metadata - all values must be strings for ProjectKnowledge
+            var metadata = recommendation.Metadata ?? new Dictionary<string, object>();
+            metadata["workspace"] = Path.GetFileName(parameters.WorkspacePath);  // Project name, not full path
+            metadata["searchQuery"] = query;
+            metadata["resultCount"] = searchResult.TotalHits.ToString();  // Convert to string
+            metadata["workspacePath"] = parameters.WorkspacePath;
+            metadata["searchType"] = parameters.SearchType;
+            metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
+
+            // Store in ProjectKnowledge
+            var knowledgeId = await _projectKnowledgeService.StoreKnowledgeAsync(
+                content,
+                knowledgeType,
+                metadata,
+                tags,
+                priority
+            );
+
+            if (knowledgeId != null)
+            {
+                _logger.LogInformation("Auto-documented search findings: Query='{Query}', Type={Type}, KnowledgeId={Id}", 
+                    query, knowledgeType, knowledgeId);
+            }
+            else
+            {
+                _logger.LogWarning("Failed to auto-document search findings for query: {Query}", query);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error auto-documenting search findings for query: {Query}", query);
+            // Don't throw - documentation failure shouldn't break search
+        }
     }
 }
