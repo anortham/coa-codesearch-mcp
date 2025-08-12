@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Service for caching query results to improve performance

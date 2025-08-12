@@ -1,7 +1,7 @@
 using COA.Mcp.Framework.Prompts;
 using COA.Mcp.Protocol;
 
-namespace COA.CodeSearch.Next.McpServer.Prompts;
+namespace COA.CodeSearch.McpServer.Prompts;
 
 /// <summary>
 /// Interactive code exploration prompt that guides users through understanding a codebase.

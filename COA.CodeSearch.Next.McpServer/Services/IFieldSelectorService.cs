@@ -1,7 +1,7 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Search;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Service for efficient field retrieval using Lucene field selectors

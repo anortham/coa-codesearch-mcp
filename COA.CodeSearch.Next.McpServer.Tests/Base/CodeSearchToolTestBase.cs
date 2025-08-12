@@ -1,7 +1,7 @@
 using COA.Mcp.Framework.Testing.Base;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
-using COA.CodeSearch.Next.McpServer.Models;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization;
@@ -15,7 +15,7 @@ using System.Threading;
 using System.Linq;
 using Lucene.Net.Search;
 
-namespace COA.CodeSearch.Next.McpServer.Tests.Base
+namespace COA.CodeSearch.McpServer.Tests.Base
 {
     /// <summary>
     /// Base class for CodeSearch tool tests, providing common infrastructure and mocks.

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace COA.CodeSearch.Next.McpServer.Models;
+namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
 /// Error information for failed operations

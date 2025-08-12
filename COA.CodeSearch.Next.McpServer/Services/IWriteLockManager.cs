@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Interface for managing Lucene index write.lock files

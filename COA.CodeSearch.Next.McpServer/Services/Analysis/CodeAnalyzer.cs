@@ -5,7 +5,7 @@ using Lucene.Net.Util;
 using System.IO;
 using System.Text.RegularExpressions;
 
-namespace COA.CodeSearch.Next.McpServer.Services.Analysis;
+namespace COA.CodeSearch.McpServer.Services.Analysis;
 
 /// <summary>
 /// Custom analyzer for source code that preserves programming language punctuation and structure.

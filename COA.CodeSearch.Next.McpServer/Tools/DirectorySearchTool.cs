@@ -13,13 +13,13 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
-using COA.CodeSearch.Next.McpServer.Services;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
 using FrameworkErrorInfo = COA.Mcp.Framework.Models.ErrorInfo;
 using FrameworkRecoveryInfo = COA.Mcp.Framework.Models.RecoveryInfo;
-using COA.CodeSearch.Next.McpServer.ResponseBuilders;
-using COA.CodeSearch.Next.McpServer.Tools.Parameters;
-using COA.CodeSearch.Next.McpServer.Tools.Results;
+using COA.CodeSearch.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.Tools.Parameters;
+using COA.CodeSearch.McpServer.Tools.Results;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using Lucene.Net.Search;
@@ -27,7 +27,7 @@ using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Analysis.Standard;
 
-namespace COA.CodeSearch.Next.McpServer.Tools;
+namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Tool for searching directories by name pattern using Lucene index

@@ -2,12 +2,12 @@ using Lucene.Net.Documents;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using COA.CodeSearch.Next.McpServer.Models;
-using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Services.Lucene;
 using System.Collections.Concurrent;
 using System.Text;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Service responsible for indexing files into Lucene

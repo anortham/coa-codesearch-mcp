@@ -1,4 +1,4 @@
-namespace COA.CodeSearch.Next.McpServer.Models;
+namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
 /// Represents a file change event

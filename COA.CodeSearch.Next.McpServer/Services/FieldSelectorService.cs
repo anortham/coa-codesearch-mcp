@@ -3,7 +3,7 @@ using Lucene.Net.Search;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 
-namespace COA.CodeSearch.Next.McpServer.Services;
+namespace COA.CodeSearch.McpServer.Services;
 
 public class FieldSelectorService : IFieldSelectorService
 {
