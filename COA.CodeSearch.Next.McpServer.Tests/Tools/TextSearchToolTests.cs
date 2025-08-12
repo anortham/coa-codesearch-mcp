@@ -359,7 +359,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 Query = "test query",
                 WorkspacePath = TestWorkspacePath,
-                ResponseMode = "full" // Should use 100 max results
+                ResponseMode = "full" // Should use token-aware limiting (15 for full mode)
             };
             
             // Act
@@ -369,12 +369,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Assert
             result.Success.Should().BeTrue();
             
-            // Verify search was called with 100 (full mode limit)
+            // Verify search was called with token-aware limit (15 for full mode with 8000 token budget)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    100, // Full mode should use 100
+                    15, // Full mode token-aware limit: min(8000*0.4/100, 15) = 15
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -398,7 +398,7 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             {
                 Query = "test query",
                 WorkspacePath = TestWorkspacePath,
-                ResponseMode = "summary" // Should use 20 max results
+                ResponseMode = "summary" // Should use token-aware limiting (3 for summary mode)
             };
             
             // Act
@@ -408,12 +408,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             // Assert
             result.Success.Should().BeTrue();
             
-            // Verify search was called with 20 (summary mode limit)
+            // Verify search was called with token-aware limit (3 for summary mode)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    20, // Summary mode should use 20
+                    3, // Summary mode token-aware limit: min(8000*0.4/100, 3) = 3
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -449,12 +449,12 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             
-            // Verify search was called with 50 (adaptive mode default)
+            // Verify search was called with token-aware default limit (5 for adaptive/default mode)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    50, // Adaptive mode should use 50
+                    5, // Adaptive mode token-aware limit: min(8000*0.4/100, 5) = 5
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             
