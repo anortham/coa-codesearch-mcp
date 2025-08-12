@@ -205,7 +205,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
             result.Result.Data.Count.Should().Be(10);
-            result.Result.Data.Summary.Should().Contain("10 results");
+            result.Result.Data.Summary.Should().Contain("10 hits");
             result.Result.Insights.Should().NotBeNullOrEmpty();
             result.Result.Actions.Should().NotBeNullOrEmpty();
         }
@@ -376,12 +376,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             result.Success.Should().BeTrue();
             
-            // Verify search was called with token-aware limit (15 for full mode with 8000 token budget)
+            // Verify search was called with token-aware limit (10 for full mode)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    15, // Full mode token-aware limit: min(8000*0.4/100, 15) = 15
+                    10, // Full mode token-aware limit
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -415,12 +415,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             result.Success.Should().BeTrue();
             
-            // Verify search was called with token-aware limit (3 for summary mode)
+            // Verify search was called with token-aware limit (2 for summary mode)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    3, // Summary mode token-aware limit: min(8000*0.4/100, 3) = 3
+                    2, // Summary mode token-aware limit
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -456,12 +456,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             
-            // Verify search was called with token-aware default limit (5 for adaptive/default mode)
+            // Verify search was called with token-aware default limit (3 for adaptive/default mode)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
-                    5, // Adaptive mode token-aware limit: min(8000*0.4/100, 5) = 5
+                    3, // Adaptive mode token-aware limit
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             
