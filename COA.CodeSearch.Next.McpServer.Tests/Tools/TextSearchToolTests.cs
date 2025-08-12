@@ -5,6 +5,7 @@ using COA.CodeSearch.Next.McpServer.Tools;
 using COA.CodeSearch.Next.McpServer.Tests.Base;
 using COA.CodeSearch.Next.McpServer.Models;
 using COA.CodeSearch.Next.McpServer.Services.Lucene;
+using COA.CodeSearch.Next.McpServer.Services;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -24,11 +25,14 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Tools
         
         protected override TextSearchTool CreateTool()
         {
+            var queryPreprocessorLoggerMock = CreateMock<Microsoft.Extensions.Logging.ILogger<QueryPreprocessor>>();
+            var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
             _tool = new TextSearchTool(
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                queryPreprocessor,
                 ToolLoggerMock.Object
             );
             return _tool;

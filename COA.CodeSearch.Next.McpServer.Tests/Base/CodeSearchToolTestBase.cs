@@ -210,7 +210,13 @@ namespace COA.CodeSearch.Next.McpServer.Tests.Base
                 {
                     FilePath = $"/test/file{i}.cs",
                     Score = 1.0f - (i * 0.1f),
-                    Content = $"Test content for file {i}"
+                    Fields = new Dictionary<string, string>
+                    {
+                        { "content", $"Test content for file {i}" },
+                        { "filename", $"file{i}.cs" },
+                        { "relativePath", $"/test/file{i}.cs" },
+                        { "extension", ".cs" }
+                    }
                     // Note: SearchHit in Services.Lucene doesn't have LineNumber or MatchedField
                 });
             }
