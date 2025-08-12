@@ -83,10 +83,10 @@ public class PathRelevanceFactor : IScoringFactor
             // Split path into components
             var pathParts = relativePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries);
             
-            // Debug logging for path parsing
-            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            // Trace logging for path parsing (only in very verbose mode)
+            if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
             {
-                _logger.LogDebug("PathRelevance: Path parsing - RelativePath: '{RelativePath}', PathParts: [{PathParts}]", 
+                _logger.LogTrace("PathRelevance: Path parsing - RelativePath: '{RelativePath}', PathParts: [{PathParts}]", 
                     relativePath, string.Join(", ", pathParts.Select(p => $"'{p}'")));
             }
             
@@ -135,7 +135,7 @@ public class PathRelevanceFactor : IScoringFactor
                     part.Contains("test", StringComparison.OrdinalIgnoreCase) ||
                     part.Contains("spec", StringComparison.OrdinalIgnoreCase)).ToList();
                 
-                _logger.LogDebug("PathRelevance: Test detection - HasTestDirectory: {HasTestDirectory}, MatchingParts: [{MatchingParts}]", 
+                _logger.LogTrace("PathRelevance: Test detection - HasTestDirectory: {HasTestDirectory}, MatchingParts: [{MatchingParts}]", 
                     hasTestDirectory, string.Join(", ", testParts.Select(p => $"'{p}'")));
             }
 
@@ -192,9 +192,9 @@ public class PathRelevanceFactor : IScoringFactor
             var result = Math.Min(1.0f, Math.Max(0.05f, finalScore));
 
             // Debug logging for troubleshooting
-            if (_logger != null && _logger.IsEnabled(LogLevel.Debug))
+            if (_logger != null && _logger.IsEnabled(LogLevel.Trace))
             {
-                _logger.LogDebug("PathRelevance: File {FilePath}, IsTest: {IsTest}, HasTestDir: {HasTestDir}, TestPenalty: {TestPenalty:F3}, PathScore: {PathScore:F3}, DepthFactor: {DepthFactor:F3}, FinalScore: {FinalScore:F3}", 
+                _logger.LogTrace("PathRelevance: File {FilePath}, IsTest: {IsTest}, HasTestDir: {HasTestDir}, TestPenalty: {TestPenalty:F3}, PathScore: {PathScore:F3}, DepthFactor: {DepthFactor:F3}, FinalScore: {FinalScore:F3}", 
                     relativePath, isTestRelated, hasTestDirectory, baseScore, pathScore, depthFactor, result);
             }
 
