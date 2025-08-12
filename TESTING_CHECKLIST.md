@@ -12,7 +12,7 @@
 
 #### Test 1.1: Basic Indexing
 ```
-mcp__codesearch-next__index_workspace
+mcp__codesearch__index_workspace
 Parameters:
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - forceRebuild: false
@@ -31,7 +31,7 @@ Parameters:
 
 #### Test 1.2: Force Rebuild
 ```
-mcp__codesearch-next__index_workspace
+mcp__codesearch__index_workspace
 Parameters:
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - forceRebuild: true
@@ -43,7 +43,7 @@ Parameters:
 
 #### Test 1.3: Invalid Path
 ```
-mcp__codesearch-next__index_workspace
+mcp__codesearch__index_workspace
 Parameters:
 - workspacePath: "C:\NonExistentPath"
 - forceRebuild: false
@@ -57,7 +57,7 @@ Parameters:
 
 #### Test 2.1: Simple Search
 ```
-mcp__codesearch-next__text_search
+mcp__codesearch__text_search
 Parameters:
 - query: "LuceneIndexService"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -73,7 +73,7 @@ Parameters:
 
 #### Test 2.2: Complex Query
 ```
-mcp__codesearch-next__text_search
+mcp__codesearch__text_search
 Parameters:
 - query: "async AND (index OR search)"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -88,7 +88,7 @@ Parameters:
 
 #### Test 2.3: Code Pattern Search
 ```
-mcp__codesearch-next__text_search
+mcp__codesearch__text_search
 Parameters:
 - query: "Task<.*Result>"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -105,7 +105,7 @@ Parameters:
 
 #### Test 3.1: Extension Filter
 ```
-mcp__codesearch-next__file_search
+mcp__codesearch__file_search
 Parameters:
 - pattern: "*.cs"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -122,7 +122,7 @@ Parameters:
 
 #### Test 3.2: Name Pattern
 ```
-mcp__codesearch-next__file_search
+mcp__codesearch__file_search
 Parameters:
 - pattern: "*Tool*"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -137,7 +137,7 @@ Parameters:
 
 #### Test 3.3: Regex Pattern
 ```
-mcp__codesearch-next__file_search
+mcp__codesearch__file_search
 Parameters:
 - pattern: ".*Service\\.cs$"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -155,7 +155,7 @@ Parameters:
 
 #### Test 4.1: Named Directory
 ```
-mcp__codesearch-next__directory_search
+mcp__codesearch__directory_search
 Parameters:
 - pattern: "Services"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -172,7 +172,7 @@ Parameters:
 
 #### Test 4.2: Wildcard Pattern
 ```
-mcp__codesearch-next__directory_search
+mcp__codesearch__directory_search
 Parameters:
 - pattern: "*Test*"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -192,7 +192,7 @@ Parameters:
 
 #### Test 5.1: Hour Time Frame
 ```
-mcp__codesearch-next__recent_files
+mcp__codesearch__recent_files
 Parameters:
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - timeFrame: "1h"
@@ -208,7 +208,7 @@ Parameters:
 
 #### Test 5.2: Day Time Frame with Filter
 ```
-mcp__codesearch-next__recent_files
+mcp__codesearch__recent_files
 Parameters:
 - workspacePath: "C:\source\COA CodeSearch MCP"
 - timeFrame: "1d"
@@ -227,7 +227,7 @@ Parameters:
 
 #### Test 6.1: Similar to Service File
 ```
-mcp__codesearch-next__similar_files
+mcp__codesearch__similar_files
 Parameters:
 - filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.McpServer\Services\Lucene\LuceneIndexService.cs"
 - workspacePath: "C:\source\COA CodeSearch MCP"
@@ -245,7 +245,7 @@ Parameters:
 
 #### Test 6.2: Similar to Tool File
 ```
-mcp__codesearch-next__similar_files
+mcp__codesearch__similar_files
 Parameters:
 - filePath: "C:\source\COA CodeSearch MCP\COA.CodeSearch.McpServer\Tools\TextSearchTool.cs"
 - workspacePath: "C:\source\COA CodeSearch MCP"

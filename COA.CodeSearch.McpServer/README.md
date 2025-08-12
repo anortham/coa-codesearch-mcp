@@ -26,8 +26,8 @@ dotnet run
 ### Running with Docker
 
 ```bash
-docker build -t coa.codesearch.next.mcpserver .
-docker run -p 5000:5000 coa.codesearch.next.mcpserver
+docker build -t coa.codesearch.mcpserver .
+docker run -p 5000:5000 coa.codesearch.mcpserver
 ```
 
 ## Available Tools

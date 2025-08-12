@@ -19,7 +19,7 @@ function Test-McpTool {
     )
     
     Write-Host "Testing: $Description" -ForegroundColor Yellow
-    Write-Host "Tool: mcp__codesearch-next__$ToolName" -ForegroundColor Gray
+    Write-Host "Tool: mcp__codesearch__$ToolName" -ForegroundColor Gray
     Write-Host "Parameters:" -ForegroundColor Gray
     $Parameters.GetEnumerator() | ForEach-Object {
         Write-Host "  $($_.Key): $($_.Value)" -ForegroundColor DarkGray
