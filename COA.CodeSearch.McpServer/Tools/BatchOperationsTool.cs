@@ -4,10 +4,6 @@ using System.Text.Json;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
-using COA.Mcp.Framework.TokenOptimization;
-using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
-using COA.Mcp.Framework.TokenOptimization.Models;
-using COA.Mcp.Framework.TokenOptimization.Storage;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 
@@ -72,43 +68,79 @@ public class BatchOperation
 }
 
 /// <summary>
+/// Result from batch operations
+/// </summary>
+public class BatchOperationsResult : ToolResultBase
+{
+    public override string Operation => ToolNames.BatchOperations;
+    
+    /// <summary>
+    /// Results from each operation
+    /// </summary>
+    public List<BatchOperationResult> Operations { get; set; } = new();
+    
+    /// <summary>
+    /// Summary statistics
+    /// </summary>
+    public BatchSummary Summary { get; set; } = new();
+    
+    /// <summary>
+    /// Total execution duration in milliseconds
+    /// </summary>
+    public int TotalDurationMs { get; set; }
+}
+
+/// <summary>
+/// Result from a single operation in the batch
+/// </summary>
+public class BatchOperationResult
+{
+    public string? Id { get; set; }
+    public string Operation { get; set; } = "";
+    public string? Description { get; set; }
+    public bool Success { get; set; }
+    public string? Error { get; set; }
+    public object? Result { get; set; }
+    public int DurationMs { get; set; }
+    public int ResultCount { get; set; }
+}
+
+/// <summary>
+/// Summary of batch execution
+/// </summary>
+public class BatchSummary
+{
+    public int TotalOperations { get; set; }
+    public int SuccessfulOperations { get; set; }
+    public int FailedOperations { get; set; }
+    public int TotalResults { get; set; }
+    public int AverageDurationMs { get; set; }
+}
+
+/// <summary>
 /// Tool for executing multiple search operations in batch
 /// </summary>
-public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOptimizedResponse<BatchResult>>
+public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchOperationsResult>
 {
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly TextSearchTool _textSearchTool;
     private readonly FileSearchTool _fileSearchTool;
-    private readonly DirectorySearchTool _directorySearchTool;
-    private readonly RecentFilesTool _recentFilesTool;
-    private readonly SimilarFilesTool _similarFilesTool;
-    private readonly BaseResponseBuilder<BatchResult, BatchResult> _responseBuilder;
-    private readonly IResourceStorageService _storageService;
 
     public BatchOperationsTool(
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
-        FileSearchTool fileSearchTool,
-        DirectorySearchTool directorySearchTool,
-        RecentFilesTool recentFilesTool,
-        SimilarFilesTool similarFilesTool,
-        IResourceStorageService storageService) : base(logger)
+        FileSearchTool fileSearchTool) : base(logger)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
         _fileSearchTool = fileSearchTool;
-        _directorySearchTool = directorySearchTool;
-        _recentFilesTool = recentFilesTool;
-        _similarFilesTool = similarFilesTool;
-        _storageService = storageService;
-        _responseBuilder = new BaseResponseBuilder<BatchResult, BatchResult>(null, storageService);
     }
 
     public override string Name => ToolNames.BatchOperations;
     public override string Description => "Execute multiple search operations in batch for efficient bulk processing";
     public override ToolCategory Category => ToolCategory.Query;
 
-    protected override async Task<AIOptimizedResponse<BatchResult>> ExecuteInternalAsync(
+    protected override async Task<BatchOperationsResult> ExecuteInternalAsync(
         BatchOperationsParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -120,7 +152,15 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
             var operations = JsonSerializer.Deserialize<BatchOperation[]>(operationsJson);
             if (operations == null || operations.Length == 0)
             {
-                throw new ArgumentException("No valid operations found in operations parameter");
+                return new BatchOperationsResult
+                {
+                    Success = false,
+                    Error = new ErrorInfo 
+                    { 
+                        Code = "BATCH_INVALID_OPERATIONS", 
+                        Message = "No valid operations found in operations parameter" 
+                    }
+                };
             }
 
             var stopwatch = Stopwatch.StartNew();
@@ -128,7 +168,7 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
 
             _logger.LogInformation("Executing batch of {Count} operations", operations.Length);
 
-            foreach (var operation in operations)
+            foreach (var operation in operations.Take(10)) // Limit to 10 operations for safety
             {
                 var operationResult = await ExecuteSingleOperationAsync(
                     operation, 
@@ -140,33 +180,49 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
 
             stopwatch.Stop();
 
-            var batchResult = new BatchResult
+            var totalResults = results.Sum(r => r.ResultCount);
+            var successfulOps = results.Count(r => r.Success);
+
+            return new BatchOperationsResult
             {
+                Success = true,
                 Operations = results,
                 Summary = new BatchSummary
                 {
-                    TotalOperations = operations.Length,
-                    SuccessfulOperations = results.Count(r => r.Success),
-                    FailedOperations = results.Count(r => !r.Success),
-                    TotalDurationMs = (int)stopwatch.ElapsedMilliseconds
-                }
+                    TotalOperations = results.Count,
+                    SuccessfulOperations = successfulOps,
+                    FailedOperations = results.Count - successfulOps,
+                    TotalResults = totalResults,
+                    AverageDurationMs = results.Count > 0 ? (int)results.Average(r => r.DurationMs) : 0
+                },
+                TotalDurationMs = (int)stopwatch.ElapsedMilliseconds
             };
-
-            return await _responseBuilder.BuildResponseAsync(
-                new List<BatchResult> { batchResult },
-                parameters.MaxTokens,
-                parameters.ResponseMode,
-                cancellationToken);
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse operations JSON");
-            throw new ArgumentException($"Invalid operations JSON: {ex.Message}");
+            return new BatchOperationsResult
+            {
+                Success = false,
+                Error = new ErrorInfo 
+                { 
+                    Code = "BATCH_JSON_PARSE_ERROR", 
+                    Message = $"Invalid operations JSON: {ex.Message}" 
+                }
+            };
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Batch operations failed");
-            throw;
+            return new BatchOperationsResult
+            {
+                Success = false,
+                Error = new ErrorInfo 
+                { 
+                    Code = "BATCH_EXECUTION_ERROR", 
+                    Message = $"Batch execution failed: {ex.Message}" 
+                }
+            };
         }
     }
 
@@ -187,9 +243,6 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
             {
                 "text_search" => await ExecuteTextSearchAsync(operation, workspacePath, batchParams, cancellationToken),
                 "file_search" => await ExecuteFileSearchAsync(operation, workspacePath, batchParams, cancellationToken),
-                "directory_search" => await ExecuteDirectorySearchAsync(operation, workspacePath, batchParams, cancellationToken),
-                "recent_files" => await ExecuteRecentFilesAsync(operation, workspacePath, batchParams, cancellationToken),
-                "similar_files" => await ExecuteSimilarFilesAsync(operation, workspacePath, batchParams, cancellationToken),
                 _ => throw new ArgumentException($"Unknown operation type: {operation.operation}")
             };
 
@@ -202,7 +255,8 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
                 Description = operation.description,
                 Success = true,
                 Result = result,
-                DurationMs = (int)stopwatch.ElapsedMilliseconds
+                DurationMs = (int)stopwatch.ElapsedMilliseconds,
+                ResultCount = GetResultCount(result)
             };
         }
         catch (Exception ex)
@@ -217,7 +271,8 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
                 Description = operation.description,
                 Success = false,
                 Error = ex.Message,
-                DurationMs = (int)stopwatch.ElapsedMilliseconds
+                DurationMs = (int)stopwatch.ElapsedMilliseconds,
+                ResultCount = 0
             };
         }
     }
@@ -235,7 +290,7 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
         {
             Query = operation.query,
             WorkspacePath = workspacePath,
-            MaxTokens = batchParams.MaxTokens / 4, // Allocate portion of tokens
+            MaxTokens = Math.Min(batchParams.MaxTokens / 4, 2000), // Limit tokens for batch
             NoCache = batchParams.NoCache,
             ResponseMode = "summary", // Use summary for batch to save tokens
             CaseSensitive = operation.caseSensitive ?? false,
@@ -258,112 +313,31 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, AIOpti
         {
             Pattern = operation.pattern,
             WorkspacePath = workspacePath,
-            MaxTokens = batchParams.MaxTokens / 4,
+            MaxTokens = Math.Min(batchParams.MaxTokens / 4, 2000),
             NoCache = batchParams.NoCache,
             ResponseMode = "summary",
             UseRegex = operation.useRegex ?? false,
-            MaxResults = operation.maxResults ?? 20
+            MaxResults = Math.Min(operation.maxResults ?? 20, 50) // Limit results
         };
 
         return await _fileSearchTool.ExecuteAsync(parameters, cancellationToken);
     }
 
-    private async Task<object> ExecuteDirectorySearchAsync(
-        BatchOperation operation,
-        string workspacePath,
-        BatchOperationsParameters batchParams,
-        CancellationToken cancellationToken)
+    private int GetResultCount(object? result)
     {
-        if (string.IsNullOrEmpty(operation.pattern))
-            throw new ArgumentException("directory_search requires 'pattern' parameter");
-
-        var parameters = new DirectorySearchParameters
+        // Simple result counting - this could be made more sophisticated
+        try
         {
-            Pattern = operation.pattern,
-            WorkspacePath = workspacePath,
-            MaxTokens = batchParams.MaxTokens / 4,
-            NoCache = batchParams.NoCache,
-            ResponseMode = "summary",
-            UseRegex = operation.useRegex ?? false,
-            MaxResults = operation.maxResults ?? 20
-        };
-
-        return await _directorySearchTool.ExecuteAsync(parameters, cancellationToken);
-    }
-
-    private async Task<object> ExecuteRecentFilesAsync(
-        BatchOperation operation,
-        string workspacePath,
-        BatchOperationsParameters batchParams,
-        CancellationToken cancellationToken)
-    {
-        var parameters = new RecentFilesParameters
+            if (result is ToolResultBase toolResult && toolResult.Success)
+            {
+                // Could use reflection to count items in collections
+                return 1; // Placeholder - just count successful operations
+            }
+            return 0;
+        }
+        catch
         {
-            WorkspacePath = workspacePath,
-            MaxTokens = batchParams.MaxTokens / 4,
-            NoCache = batchParams.NoCache,
-            ResponseMode = "summary",
-            TimeFrame = operation.timeFrame ?? "7d",
-            MaxResults = operation.maxResults ?? 20
-        };
-
-        return await _recentFilesTool.ExecuteAsync(parameters, cancellationToken);
+            return 0;
+        }
     }
-
-    private async Task<object> ExecuteSimilarFilesAsync(
-        BatchOperation operation,
-        string workspacePath,
-        BatchOperationsParameters batchParams,
-        CancellationToken cancellationToken)
-    {
-        if (string.IsNullOrEmpty(operation.filePath))
-            throw new ArgumentException("similar_files requires 'filePath' parameter");
-
-        var parameters = new SimilarFilesParameters
-        {
-            FilePath = operation.filePath,
-            WorkspacePath = workspacePath,
-            MaxTokens = batchParams.MaxTokens / 4,
-            NoCache = batchParams.NoCache,
-            ResponseMode = "summary",
-            MinScore = operation.minScore ?? 0.1,
-            MaxResults = operation.maxResults ?? 10
-        };
-
-        return await _similarFilesTool.ExecuteAsync(parameters, cancellationToken);
-    }
-}
-
-/// <summary>
-/// Result from batch operations
-/// </summary>
-public class BatchResult
-{
-    public List<BatchOperationResult> Operations { get; set; } = new();
-    public BatchSummary Summary { get; set; } = new();
-}
-
-/// <summary>
-/// Result from a single operation in the batch
-/// </summary>
-public class BatchOperationResult
-{
-    public string? Id { get; set; }
-    public string Operation { get; set; } = "";
-    public string? Description { get; set; }
-    public bool Success { get; set; }
-    public string? Error { get; set; }
-    public object? Result { get; set; }
-    public int DurationMs { get; set; }
-}
-
-/// <summary>
-/// Summary of batch execution
-/// </summary>
-public class BatchSummary
-{
-    public int TotalOperations { get; set; }
-    public int SuccessfulOperations { get; set; }
-    public int FailedOperations { get; set; }
-    public int TotalDurationMs { get; set; }
 }
