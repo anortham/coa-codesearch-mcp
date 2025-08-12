@@ -235,8 +235,13 @@ stages:
           - powershell: |
               Write-Host "Generated NuGet packages:"
               Write-Host "========================="
-              Get-ChildItem -Path "$(Build.ArtifactStagingDirectory)\packages" -Filter "*.nupkg" | ForEach-Object {
-                  Write-Host "$($_.Name) - Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+              $packagesPath = "$(Build.ArtifactStagingDirectory)/packages"
+              if (Test-Path $packagesPath) {
+                  Get-ChildItem -Path $packagesPath -Filter "*.nupkg" | ForEach-Object {
+                      Write-Host "$($_.Name) - Size: $([math]::Round($_.Length / 1MB, 2)) MB"
+                  }
+              } else {
+                  Write-Host "Packages directory not found at: $packagesPath"
               }
               Write-Host "========================="
             displayName: "List generated packages"
@@ -244,7 +249,7 @@ stages:
           - task: PublishBuildArtifacts@1
             displayName: "Publish artifacts"
             inputs:
-              PathtoPublish: '$(Build.ArtifactStagingDirectory)\packages'
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/packages'
               ArtifactName: "packages"
               publishLocation: "Container"
 
@@ -292,8 +297,13 @@ stages:
           - powershell: |
               Write-Host "Packages to publish to NuGet.org:"
               Write-Host "================================="
-              Get-ChildItem -Path "$(System.ArtifactsDirectory)\packages" -Filter "*.nupkg" | ForEach-Object {
-                  Write-Host $_.Name
+              $packagesPath = "$(System.ArtifactsDirectory)/packages"
+              if (Test-Path $packagesPath) {
+                  Get-ChildItem -Path $packagesPath -Filter "*.nupkg" | ForEach-Object {
+                      Write-Host $_.Name
+                  }
+              } else {
+                  Write-Host "Packages directory not found at: $packagesPath"
               }
               Write-Host "================================="
             displayName: "List packages to publish"
