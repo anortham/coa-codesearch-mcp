@@ -1,225 +1,91 @@
-# COA CodeSearch MCP Server - Claude AI Assistant Guide
+# CodeSearch MCP Server - Development Guide
 
-## 🚨 CRITICAL: This is CodeSearch (v2.0)
+## 🚨 CRITICAL: This is CodeSearch v2.0
 
-This is the **next-generation** CodeSearch built on COA MCP Framework 1.5.4. It's a complete rewrite with centralized architecture and clean separation from memory management (now handled by ProjectKnowledge).
+Built on COA MCP Framework 1.5.4. Clean search-only architecture - memory management is handled by ProjectKnowledge MCP.
 
-## 🚨 CRITICAL WARNINGS - READ FIRST
+## 🚨 CRITICAL WARNINGS
 
-### 1. **NEVER Run MCP Server Locally**
-
+### NEVER Run MCP Server Locally
 ```bash
-# DO NOT RUN THESE:
 ❌ dotnet run --project COA.CodeSearch.McpServer -- stdio
-❌ dotnet run -- stdio --test-mode
 ```
+**Why**: Creates orphaned processes that lock Lucene indexes.
 
-**Why**: Creates orphaned processes that lock Lucene indexes, breaking all search operations.
+### Before Testing Changes
+⚠️  **USER MUST RESTART CLAUDE CODE** after any code changes - MCP tools run from installed version, not your edits.
 
-### 2. **Build Configuration**
-
-- **During Development**: Use `dotnet build -c Debug` (Release DLL is locked by running session)
+### Build Configuration  
+- **Development**: `dotnet build -c Debug`
 - **Before Tests**: ALWAYS build first: `dotnet build -c Debug && dotnet test`
-- **For User**: They build Release mode after exiting Claude Code
-
-### 3. **🚨 STOP! CODE vs RUNTIME VERSION 🚨**
-
-```
-⚠️  BEFORE TESTING ANY MCP TOOL CHANGES:
-    1. User must restart Claude Code
-    2. Changes don't work until restart
-    3. NO EXCEPTIONS TO THIS RULE
-```
-
-- **MCP Tools (`mcp__codesearch-next__*`)**: Execute on INSTALLED server, not your edits
-- **Testing Changes**: Must build → user reinstalls → new Claude session
-- **⚠️ REMINDER**: If you edit tool code, IMMEDIATELY tell user to restart before testing
-
-### 4. **Path Resolution**
-
-- **ALWAYS** use `IPathResolutionService` for ALL path computation
-- **NEVER** use `Path.Combine()` for building .coa paths manually
-- PathResolutionService computes paths; services create directories when needed
-
-### 5. **Editing Code**
-
-- **NEVER** make assumptions about what properties or methods are available on a type, go look it up and see
-- **ALWAYS** verify interface methods before using them
-- **ALWAYS** check the COA MCP Framework interfaces and base classes
-
-### 6. **Commit Changes**
-
-- **ALWAYS** use git and commit code after code changes after you've checked that the project builds and the tests pass
-- **NEVER** check in broken builds or failing tests! BUILD -> TEST -> COMMIT IN THAT ORDER
 
 ## 🏗️ Project Status
 
-### ✅ Working Components
-- **Core Services**: PathResolution, LuceneIndex, QueryCache, CircuitBreaker, MemoryPressure
-- **Working Tools**: HelloWorldTool, SystemInfoTool, IndexWorkspaceTool
-- **Build Status**: Project builds successfully
+### ✅ Working Tools (6 total)
+- `hello_world`, `get_system_info` (system)
+- `index_workspace` (indexing)
+- `text_search`, `file_search`, `directory_search` (search - some WIP)
+- `recent_files`, `similar_files` (discovery - WIP)
 
-### 🚧 In Progress
-- **Search Tools**: Need implementation using correct ILuceneIndexService interface
-- **File Services**: FileIndexingService, BatchIndexingService need refactoring
-- **Background Services**: FileWatcherService depends on FileIndexingService
+### 🚧 In Progress  
+- File services need ILuceneIndexService interface fixes
+- FileWatcher depends on FileIndexingService
+- Background services integration
 
-## 📋 Development Guidelines
+## ⚙️ Development Guidelines
 
-### 1. **Framework Usage**
-
-This project uses COA MCP Framework 1.5.4. All tools must:
-- Inherit from `McpToolBase<TParams, TResult>`
-- Use `ToolResultBase` for results
-- Use `ToolCategory` enum from `COA.Mcp.Framework`
-- Follow the framework patterns (see HelloWorldTool for reference)
-
-### 2. **Service Interfaces**
-
-**ALWAYS verify interface methods before using them:**
-
+### Framework Usage
+Built on COA MCP Framework 1.5.4:
 ```csharp
-// ILuceneIndexService provides these methods:
-- InitializeIndexAsync(workspacePath)
-- IndexDocumentAsync(workspacePath, document)
-- IndexDocumentsAsync(workspacePath, documents)
-- DeleteDocumentAsync(workspacePath, filePath)
-- SearchAsync(workspacePath, query, maxResults)
-- GetDocumentCountAsync(workspacePath)
-- ClearIndexAsync(workspacePath)
-- CommitAsync(workspacePath)
-- IndexExistsAsync(workspacePath)
-- GetHealthAsync(workspacePath)
-- GetStatisticsAsync(workspacePath)
-
-// It does NOT provide:
-- GetIndexWriterAsync() ❌
-- Direct IndexWriter access ❌
-```
-
-### 3. **Tool Implementation Pattern**
-
-```csharp
-public class MyTool : McpToolBase<MyParameters, MyResult>
+public class MyTool : McpToolBase<TParams, TResult>
 {
-    private readonly ILogger<MyTool> _logger;
-    
-    public MyTool(ILogger<MyTool> logger) : base(logger)
+    protected override async Task<TResult> ExecuteInternalAsync(...)
     {
-        _logger = logger;
-    }
-    
-    public override string Name => "my_tool";
-    public override string Description => "Description here";
-    public override ToolCategory Category => ToolCategory.Query;
-    
-    protected override async Task<MyResult> ExecuteInternalAsync(
-        MyParameters parameters,
-        CancellationToken cancellationToken)
-    {
-        // Use ValidateRequired, ValidateRange, etc. from base class
-        var param = ValidateRequired(parameters.SomeParam, nameof(parameters.SomeParam));
-        
-        // Return result with Success/Error properly set
-        return new MyResult
-        {
-            Success = true,
-            // Set other properties
-        };
+        // Use ValidateRequired, ValidateRange from base
     }
 }
 ```
 
-## 🔍 Architecture Overview
+### Service Interfaces
+**ALWAYS verify interface methods** - don't assume they exist:
 
-### Centralized Storage
-- All indexes in `~/.coa/codesearch/indexes/`
-- Workspace isolation via hash-based directories
-- Single service instance serves all workspaces
-
-### Service Architecture
-```
-Core Services:
-├── IPathResolutionService     # Path management
-├── ILuceneIndexService         # Search operations
-├── IQueryCacheService          # Result caching
-├── ICircuitBreakerService     # Fault tolerance
-├── IMemoryPressureService     # Resource monitoring
-├── IIndexingMetricsService    # Performance metrics
-├── IFieldSelectorService      # Field optimization
-└── IErrorRecoveryService      # Error handling
-
-Tools (via COA MCP Framework):
-├── IndexWorkspaceTool         # Index management
-├── TextSearchTool             # Full-text search (TODO)
-├── FileSearchTool             # File name search (TODO)
-├── DirectorySearchTool        # Directory search (TODO)
-├── RecentFilesTool            # Recent files (TODO)
-└── SimilarFilesTool           # Similar files (TODO)
+```csharp
+// ILuceneIndexService provides:
+✅ InitializeIndexAsync, IndexDocumentAsync, SearchAsync, etc.
+❌ GetIndexWriterAsync() - does NOT exist
 ```
 
-## 🚀 Quick Reference
-
-### Essential Commands
-
-```bash
-# Development workflow
-dotnet build -c Debug          # Build during development
-dotnet test                    # Run tests (always build first!)
-
-# Tool naming convention (when they're implemented)
-mcp__codesearch-next__index_workspace    # Index a workspace
-mcp__codesearch-next__text_search        # Search text
-mcp__codesearch-next__file_search        # Search files
+### Path Resolution  
+**ALWAYS use IPathResolutionService** for path computation:
+```csharp
+❌ Path.Combine("~/.coa", "indexes")  
+✅ _pathResolver.GetIndexPath(workspacePath)
 ```
-
-## 📚 Documentation
-
-- [Vision & Architecture](COA.CodeSearch.McpServer/docs/CODESEARCH_NEXT_VISION.md)
-- [Implementation Checklist](COA.CodeSearch.McpServer/docs/IMPLEMENTATION_CHECKLIST.md)
-- [Framework Migration Guide](docs/FRAMEWORK_MIGRATION_GUIDE.md)
-- [Integration with ProjectKnowledge](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md)
-
-## ⚠️ Common Pitfalls
-
-1. **Don't assume interface methods** - Always check what's actually available
-2. **Don't access IndexWriter directly** - Use ILuceneIndexService methods
-3. **Don't run locally** - MCP servers are managed by Claude Code
-4. **Don't mix concerns** - Search is here, memory is in ProjectKnowledge
-5. **Don't use Release mode during dev** - DLL gets locked by running session
-
-## 🔗 Related Projects
-
-- **COA MCP Framework**: The foundation this is built on (`C:\source\COA MCP Framework`)
-- **ProjectKnowledge MCP**: Handles memory and knowledge management
-- **Legacy CodeSearch**: Being replaced by this project
-
-## 💡 Implementation Tips
-
-- Check HelloWorldTool and SystemInfoTool for working examples
-- Use ILuceneIndexService.IndexDocumentsAsync() for batch indexing
-- All tools auto-register via framework's DiscoverTools()
-- Progressive disclosure happens automatically at 5k tokens
-- Centralized indexes mean no more lock conflicts between sessions
-
-## 🐛 Troubleshooting
-
-### Build Errors
-- **"Type or namespace not found"**: Check COA.Mcp.Framework references
-- **"Method does not exist"**: Verify against actual interface, not assumptions
-- **"Access denied"**: Use Debug mode, Release DLL may be locked
-
-### Common Issues
-- **Stuck write.lock files**: Exit Claude Code, delete `.coa/codesearch/indexes/*/write.lock`
-- **Changes not working**: User must restart Claude Code after rebuild
-- **Missing tools**: Check if tool is registered in Program.cs
 
 ## 🎯 Current Focus
 
-The immediate priority is to:
-1. Fix FileIndexingService to use ILuceneIndexService properly
-2. Implement remaining search tools with correct interfaces
-3. Get FileWatcherService working again
-4. Test with Claude Code
+1. Fix remaining search tools to use ILuceneIndexService properly
+2. Complete FileWatcher integration  
+3. Test all tools with Claude Code
 
-Remember: This is a clean slate rebuild on COA MCP Framework. Don't carry over assumptions from the old CodeSearch - verify everything!
+## 🔧 Essential Commands
+
+```bash
+# Development workflow
+dotnet build -c Debug && dotnet test
+
+# Tool names (when implemented)
+mcp__codesearch__index_workspace
+mcp__codesearch__text_search
+mcp__codesearch__file_search
+```
+
+## 🐛 Troubleshooting
+
+**Build errors**: Check COA.Mcp.Framework references and verify interface methods exist
+**Stuck locks**: Exit Claude Code, delete `~/.coa/codesearch/indexes/*/write.lock`  
+**Changes not working**: User must restart Claude Code after rebuild
+
+---
+
+**Key Point**: This is a clean rebuild - verify everything, don't carry over assumptions from old CodeSearch!
