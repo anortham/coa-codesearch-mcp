@@ -2,7 +2,7 @@
 
 ## 🚨 CRITICAL: This is CodeSearch (v2.0)
 
-This is the **next-generation** CodeSearch built on COA MCP Framework 1.4.2. It's a complete rewrite with centralized architecture and clean separation from memory management (now handled by ProjectKnowledge).
+This is the **next-generation** CodeSearch built on COA MCP Framework 1.5.4. It's a complete rewrite with centralized architecture and clean separation from memory management (now handled by ProjectKnowledge).
 
 ## 🚨 CRITICAL WARNINGS - READ FIRST
 
@@ -68,7 +68,7 @@ This is the **next-generation** CodeSearch built on COA MCP Framework 1.4.2. It'
 
 ### 1. **Framework Usage**
 
-This project uses COA MCP Framework 1.4.2. All tools must:
+This project uses COA MCP Framework 1.5.4. All tools must:
 - Inherit from `McpToolBase<TParams, TResult>`
 - Use `ToolResultBase` for results
 - Use `ToolCategory` enum from `COA.Mcp.Framework`
