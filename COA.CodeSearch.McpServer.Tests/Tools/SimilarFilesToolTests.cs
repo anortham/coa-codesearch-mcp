@@ -58,6 +58,7 @@ public class SimilarFilesToolTests : IDisposable
             _storageServiceMock.Object,
             _keyGeneratorMock.Object,
             _pathResolutionServiceMock.Object,
+            new Mock<COA.VSCodeBridge.IVSCodeBridge>().Object,
             _loggerMock.Object
         );
 
@@ -188,7 +189,7 @@ public class SimilarFilesToolTests : IDisposable
         // Assert
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
-        Assert.That((bool)result.Meta.ExtensionData["cacheHit"], Is.True);
+        Assert.That((bool)result.Meta?.ExtensionData?["cacheHit"]!, Is.True);
         _luceneIndexServiceMock.Verify(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 

@@ -38,8 +38,14 @@ public class SearchHit
     // Content removed - loaded on-demand when context is needed
     public Dictionary<string, string> Fields { get; set; } = new();
     public List<string>? HighlightedFragments { get; set; }
-    public string? Snippet => HighlightedFragments?.FirstOrDefault();
+    public string? Snippet { get; set; }
     public DateTime? LastModified { get; set; }
+    public int? LineNumber { get; set; }
+    
+    // NEW: Rich context for VS Code visualization
+    public List<string>? ContextLines { get; set; }
+    public int? StartLine { get; set; }
+    public int? EndLine { get; set; }
     
     // Helper properties for common fields
     public string? FileName => Fields.GetValueOrDefault("filename");

@@ -28,6 +28,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
@@ -90,6 +91,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -142,6 +144,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -189,6 +192,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -234,6 +238,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -298,6 +303,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()),
                 Times.Never);
         }
@@ -314,6 +320,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -351,6 +358,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -393,6 +401,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Index corrupted"));
             

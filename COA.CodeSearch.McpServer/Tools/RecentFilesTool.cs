@@ -13,6 +13,8 @@ using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -31,6 +33,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly RecentFilesResponseBuilder _responseBuilder;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<RecentFilesTool> _logger;
 
     public RecentFilesTool(
@@ -39,6 +42,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<RecentFilesTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -47,6 +51,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new RecentFilesResponseBuilder(null, storageService);
+        _vscode = vscode;
         _logger = logger;
     }
 
@@ -110,13 +115,14 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
             // TODO: Fix NumericRangeQuery once we understand the indexing issue
             var query = new MatchAllDocsQuery();
             
-            SearchResult searchResult;
+            COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult;
             try
             {
                 searchResult = await _luceneIndexService.SearchAsync(
                     workspacePath,
                     query,
                     500,  // Get many files for filtering
+                    false, // No snippets needed for recent files
                     cancellationToken
                 );
             }
@@ -211,6 +217,32 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
             
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(recentFilesResult, context);
+            
+            // NEW: Send timeline visualizations to VS Code (if connected)
+            if (_vscode.IsConnected && result.Success && recentFiles.Count > 0)
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // 1. Show timeline chart of recent activity
+                        await SendTimelineVisualizationAsync(recentFiles, timeFrame);
+                        
+                        // 2. Show file type distribution
+                        await SendFileTypeDistributionAsync(recentFiles);
+                        
+                        // 3. Show recent activity data grid with sortable columns
+                        await SendRecentFilesDataGridAsync(recentFiles, timeFrame);
+                        
+                        _logger.LogDebug("Successfully sent recent files visualizations to VS Code");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send recent files visualizations to VS Code (non-blocking)");
+                    }
+                }, cancellationToken);
+            }
             
             // Cache the successful response
             if (!parameters.NoCache && result.Success)
@@ -339,6 +371,157 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
             }
         };
         return result;
+    }
+    
+    private async Task SendTimelineVisualizationAsync(List<RecentFileInfo> recentFiles, TimeSpan timeFrame)
+    {
+        try
+        {
+            // Group files by hour/day depending on timeframe
+            var groupingUnit = timeFrame.TotalDays <= 1 ? "hour" : "day";
+            var timelineData = new Dictionary<string, double>();
+            
+            if (groupingUnit == "hour")
+            {
+                // Group by hour for recent activity (last 24 hours)
+                var hourGroups = recentFiles
+                    .GroupBy(f => f.LastModified.ToString("yyyy-MM-dd HH:00"))
+                    .OrderBy(g => g.Key)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (double)g.Count()
+                    );
+                timelineData = hourGroups;
+            }
+            else
+            {
+                // Group by day for longer timeframes
+                var dayGroups = recentFiles
+                    .GroupBy(f => f.LastModified.ToString("yyyy-MM-dd"))
+                    .OrderBy(g => g.Key)
+                    .ToDictionary(
+                        g => g.Key,
+                        g => (double)g.Count()
+                    );
+                timelineData = dayGroups;
+            }
+            
+            await _vscode.ShowMetricsChartAsync(
+                timelineData,
+                "line",
+                $"Recent File Activity Timeline ({groupingUnit}ly)"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send timeline visualization");
+        }
+    }
+    
+    private async Task SendFileTypeDistributionAsync(List<RecentFileInfo> recentFiles)
+    {
+        try
+        {
+            var fileTypeGroups = recentFiles
+                .GroupBy(f => string.IsNullOrEmpty(f.Extension) ? "No Extension" : f.Extension.ToLowerInvariant())
+                .OrderByDescending(g => g.Count())
+                .Take(10) // Top 10 file types
+                .ToDictionary(
+                    g => g.Key,
+                    g => (double)g.Count()
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                fileTypeGroups,
+                "pie",
+                "Recent Files by Type"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send file type distribution");
+        }
+    }
+    
+    private async Task SendRecentFilesDataGridAsync(List<RecentFileInfo> recentFiles, TimeSpan timeFrame)
+    {
+        try
+        {
+            var gridData = recentFiles.Select(f => new Dictionary<string, object>
+            {
+                ["File"] = f.FileName,
+                ["Path"] = f.FilePath,
+                ["Extension"] = f.Extension,
+                ["Modified"] = f.LastModified.ToString("yyyy-MM-dd HH:mm:ss"),
+                ["Size"] = FormatFileSize(f.SizeBytes),
+                ["Age"] = FormatTimeAgo(f.ModifiedAgo)
+            }).ToList();
+            
+            var dataGridData = new COA.VSCodeBridge.Models.DataGridData
+            {
+                Columns = new List<COA.VSCodeBridge.Models.DataGridColumn>
+                {
+                    new() { Name = "File", Type = "string" },
+                    new() { Name = "Path", Type = "string", Formatter = "file-path" },
+                    new() { Name = "Extension", Type = "string" },
+                    new() { Name = "Modified", Type = "string" },
+                    new() { Name = "Size", Type = "string" },
+                    new() { Name = "Age", Type = "string" }
+                },
+                Rows = gridData.Select(row => new object[]
+                {
+                    row["File"], row["Path"], row["Extension"], 
+                    row["Modified"], row["Size"], row["Age"]
+                }).ToList()
+            };
+            
+            await _vscode.ShowDataAsync(
+                dataGridData,
+                new COA.VSCodeBridge.Models.DisplayOptions
+                {
+                    Title = $"Recent Files (Last {FormatTimeSpan(timeFrame)})",
+                    Interactive = true
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send recent files data grid");
+        }
+    }
+    
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        var order = (int)Math.Floor(Math.Log(bytes, 1024));
+        order = Math.Min(order, sizes.Length - 1);
+        
+        var result = Math.Round(bytes / Math.Pow(1024, order), 1);
+        return $"{result} {sizes[order]}";
+    }
+    
+    private static string FormatTimeAgo(TimeSpan timeAgo)
+    {
+        if (timeAgo.TotalMinutes < 1)
+            return "Just now";
+        if (timeAgo.TotalHours < 1)
+            return $"{(int)timeAgo.TotalMinutes}m ago";
+        if (timeAgo.TotalDays < 1)
+            return $"{(int)timeAgo.TotalHours}h ago";
+        return $"{(int)timeAgo.TotalDays}d ago";
+    }
+    
+    private static string FormatTimeSpan(TimeSpan timeSpan)
+    {
+        if (timeSpan.TotalMinutes < 60)
+            return $"{(int)timeSpan.TotalMinutes} minutes";
+        if (timeSpan.TotalHours < 24)
+            return $"{(int)timeSpan.TotalHours} hours";
+        if (timeSpan.TotalDays < 7)
+            return $"{(int)timeSpan.TotalDays} days";
+        return $"{(int)timeSpan.TotalDays / 7} weeks";
     }
 }
 

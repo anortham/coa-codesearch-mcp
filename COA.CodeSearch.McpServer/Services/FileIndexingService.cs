@@ -77,11 +77,9 @@ public class FileIndexingService : IFileIndexingService
                 return result;
             }
 
-            // Clear existing index if requested
-            if (initResult.IsNewIndex)
-            {
-                await _luceneIndexService.ClearIndexAsync(workspacePath, cancellationToken);
-            }
+            // Note: Index clearing/rebuilding is now handled by the calling tool
+            // ForceRebuildIndexAsync handles schema recreation when needed
+            // ClearIndexAsync is only used for document removal without schema changes
 
             // Index all files in the workspace
             result.IndexedFileCount = await IndexDirectoryAsync(workspacePath, workspacePath, cancellationToken);
@@ -399,6 +397,16 @@ public class FileIndexingService : IFileIndexingService
             var relativeDirectoryPath = Path.GetRelativePath(workspacePath, directoryPath);
             var directoryName = Path.GetFileName(directoryPath) ?? "";
             
+            // Create field type for term vectors with positions and offsets
+            var termVectorFieldType = new FieldType(TextField.TYPE_NOT_STORED)
+            {
+                StoreTermVectors = true,
+                StoreTermVectorPositions = true,
+                StoreTermVectorOffsets = true,
+                StoreTermVectorPayloads = false
+            };
+            termVectorFieldType.Freeze();
+
             // Create Lucene document
             var document = new Document
             {
@@ -414,7 +422,14 @@ public class FileIndexingService : IFileIndexingService
                 // Directory fields for directory search
                 new StringField("directory", directoryPath, Field.Store.YES),
                 new StringField("relativeDirectory", relativeDirectoryPath, Field.Store.YES),
-                new StringField("directoryName", directoryName, Field.Store.YES)
+                new StringField("directoryName", directoryName, Field.Store.YES),
+                
+                // NEW: Content with term vectors for line number calculation
+                new Field("content_tv", content, termVectorFieldType),
+                
+                // NEW: Store line break positions for efficient line number lookup
+                new StoredField("line_breaks", LineNumberService.SerializeLineBreaks(content)),
+                new Int32Field("line_count", content.Count(c => c == '\n') + 1, Field.Store.YES)
             };
 
             // Add searchable path components
