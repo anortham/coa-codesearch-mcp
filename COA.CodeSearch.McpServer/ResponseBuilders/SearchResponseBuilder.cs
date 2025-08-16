@@ -216,17 +216,16 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
                 });
             }
             
-            // Skip file type filtering - not essential
-            if (false) // Disabled to save tokens
-            {
-                var topExtension = data.Hits
-                    .Select(h => Path.GetExtension(h.FilePath))
-                    .Where(ext => !string.IsNullOrEmpty(ext))
-                    .GroupBy(ext => ext)
-                    .OrderByDescending(g => g.Count())
-                    .FirstOrDefault();
-                
-                if (topExtension != null)
+            // File type filtering disabled to save tokens
+            /*
+            var topExtension = data.Hits
+                .Select(h => Path.GetExtension(h.FilePath))
+                .Where(ext => !string.IsNullOrEmpty(ext))
+                .GroupBy(ext => ext)
+                .OrderByDescending(g => g.Count())
+                .FirstOrDefault();
+            
+            if (topExtension != null)
                 {
                     actions.Add(new AIAction
                     {
@@ -235,7 +234,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
                         Priority = 70
                     });
                 }
-            }
+            */
             
             // Explore high-scoring results
             if (data.Hits.Any(h => h.Score > 0.8f))

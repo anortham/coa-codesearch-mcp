@@ -34,6 +34,11 @@ public interface ILuceneIndexService
     Task<SearchResult> SearchAsync(string workspacePath, Query query, int maxResults = 100, CancellationToken cancellationToken = default);
     
     /// <summary>
+    /// Search the index with snippet options
+    /// </summary>
+    Task<SearchResult> SearchAsync(string workspacePath, Query query, int maxResults, bool includeSnippets, CancellationToken cancellationToken = default);
+    
+    /// <summary>
     /// Get total document count in the index
     /// </summary>
     Task<int> GetDocumentCountAsync(string workspacePath, CancellationToken cancellationToken = default);
@@ -42,6 +47,12 @@ public interface ILuceneIndexService
     /// Clear all documents from an index
     /// </summary>
     Task ClearIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
+    
+    /// <summary>
+    /// Force rebuild the index with new schema - completely recreates the index structure
+    /// Use this when schema changes require a complete rebuild (e.g., new field types, term vectors)
+    /// </summary>
+    Task ForceRebuildIndexAsync(string workspacePath, CancellationToken cancellationToken = default);
     
     /// <summary>
     /// Commit any pending changes to the index

@@ -22,6 +22,8 @@ using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.CodeSearch.McpServer.Tools.Results;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -40,6 +42,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly DirectorySearchResponseBuilder _responseBuilder;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<DirectorySearchTool> _logger;
     
     private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
@@ -55,6 +58,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<DirectorySearchTool> logger)
         : base(logger)
     {
@@ -64,6 +68,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new DirectorySearchResponseBuilder(null, storageService);
+        _vscode = vscode;
         _logger = logger;
     }
 
@@ -123,6 +128,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 workspacePath, 
                 luceneQuery, 
                 10000, // Get many results to extract all directories
+                false, // No snippets needed for directory search
                 cancellationToken);
             
             // Extract unique directories from search results
@@ -317,6 +323,32 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
             
             var response = await _responseBuilder.BuildResponseAsync(result, context);
             
+            // NEW: Send directory visualizations to VS Code (if connected)
+            if (_vscode.IsConnected && response.Success && result.Directories.Count > 0)
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // 1. Show directory structure tree
+                        await SendDirectoryStructureVisualizationAsync(result.Directories, pattern);
+                        
+                        // 2. Show depth distribution
+                        await SendDirectoryDepthVisualizationAsync(result.Directories);
+                        
+                        // 3. Show directories data grid with sortable columns
+                        await SendDirectoriesDataGridAsync(result.Directories, pattern, workspacePath);
+                        
+                        _logger.LogDebug("Successfully sent directory search visualizations to VS Code");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send directory search visualizations to VS Code (non-blocking)");
+                    }
+                }, cancellationToken);
+            }
+            
             // Add metadata
             response.Meta ??= new AIResponseMeta();
             response.Meta.ExecutionTime = $"{stopwatch.ElapsedMilliseconds}ms";
@@ -415,5 +447,117 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 }
             }
         };
+    }
+    
+    private async Task SendDirectoryStructureVisualizationAsync(List<DirectoryMatch> directories, string pattern)
+    {
+        try
+        {
+            // Group directories by their parent to show hierarchy
+            var structureData = directories
+                .GroupBy(d => d.ParentPath)
+                .Take(15) // Limit for readability
+                .ToDictionary(
+                    g => Path.GetFileName(g.Key) ?? "Root",
+                    g => (double)g.Count()
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                structureData,
+                "bar",
+                $"Directory Distribution (Pattern: {pattern})"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send directory structure visualization");
+        }
+    }
+    
+    private async Task SendDirectoryDepthVisualizationAsync(List<DirectoryMatch> directories)
+    {
+        try
+        {
+            var depthGroups = directories
+                .GroupBy(d => $"Level {d.Depth}")
+                .OrderBy(g => g.Key)
+                .ToDictionary(
+                    g => g.Key,
+                    g => (double)g.Count()
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                depthGroups,
+                "pie",
+                "Directories by Depth Level"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send directory depth visualization");
+        }
+    }
+    
+    private async Task SendDirectoriesDataGridAsync(List<DirectoryMatch> directories, string pattern, string workspacePath)
+    {
+        try
+        {
+            var gridData = directories.Select(d => new Dictionary<string, object>
+            {
+                ["Directory"] = d.Name,
+                ["Path"] = Path.Combine(workspacePath, d.Path.Replace('/', Path.DirectorySeparatorChar)),
+                ["Type"] = "Directory",
+                ["Parent"] = d.ParentPath,
+                ["Depth"] = d.Depth,
+                ["Files"] = d.FileCount,
+                ["Subdirs"] = d.SubdirectoryCount,
+                ["Hidden"] = d.IsHidden ? "Yes" : "No"
+            }).ToList();
+            
+            var dataGridData = new COA.VSCodeBridge.Models.DataGridData
+            {
+                Columns = new List<COA.VSCodeBridge.Models.DataGridColumn>
+                {
+                    new() { Name = "Directory", Type = "string" },
+                    new() { Name = "Path", Type = "string", Formatter = "file-path" },
+                    new() { Name = "Type", Type = "string" },
+                    new() { Name = "Parent", Type = "string" },
+                    new() { Name = "Depth", Type = "number" },
+                    new() { Name = "Files", Type = "number" },
+                    new() { Name = "Subdirs", Type = "number" },
+                    new() { Name = "Hidden", Type = "string" }
+                },
+                Rows = gridData.Select(row => new object[]
+                {
+                    row["Directory"], row["Path"], row["Type"], row["Parent"], 
+                    row["Depth"], row["Files"], row["Subdirs"], row["Hidden"]
+                }).ToList()
+            };
+            
+            await _vscode.ShowDataAsync(
+                dataGridData,
+                new COA.VSCodeBridge.Models.DisplayOptions
+                {
+                    Title = $"Directories Matching '{pattern}'",
+                    Interactive = true
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send directories data grid");
+        }
+    }
+    
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        var order = (int)Math.Floor(Math.Log(bytes, 1024));
+        order = Math.Min(order, sizes.Length - 1);
+        
+        var result = Math.Round(bytes / Math.Pow(1024, order), 1);
+        return $"{result} {sizes[order]}";
     }
 }

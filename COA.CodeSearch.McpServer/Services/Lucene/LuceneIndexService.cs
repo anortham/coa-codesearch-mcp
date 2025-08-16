@@ -28,6 +28,8 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     private readonly IPathResolutionService _pathResolution;
     private readonly ICircuitBreakerService _circuitBreaker;
     private readonly IMemoryPressureService _memoryPressure;
+    private readonly LineNumberService _lineNumberService;
+    private readonly SmartSnippetService _snippetService;
     private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly SemaphoreSlim _globalLock = new(1, 1);
@@ -44,13 +46,17 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         IConfiguration configuration,
         IPathResolutionService pathResolution,
         ICircuitBreakerService circuitBreaker,
-        IMemoryPressureService memoryPressure)
+        IMemoryPressureService memoryPressure,
+        LineNumberService lineNumberService,
+        SmartSnippetService snippetService)
     {
         _logger = logger;
         _configuration = configuration;
         _pathResolution = pathResolution;
         _circuitBreaker = circuitBreaker;
         _memoryPressure = memoryPressure;
+        _lineNumberService = lineNumberService;
+        _snippetService = snippetService;
         _codeAnalyzer = new CodeAnalyzer(LUCENE_VERSION);
         
         // Load configuration
@@ -239,6 +245,11 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     
     public async Task<SearchResult> SearchAsync(string workspacePath, Query query, int maxResults = DEFAULT_MAX_RESULTS, CancellationToken cancellationToken = default)
     {
+        return await SearchAsync(workspacePath, query, maxResults, false, cancellationToken);
+    }
+
+    public async Task<SearchResult> SearchAsync(string workspacePath, Query query, int maxResults, bool includeSnippets, CancellationToken cancellationToken = default)
+    {
         var context = await GetOrCreateContextAsync(workspacePath, cancellationToken);
         var stopwatch = Stopwatch.StartNew();
         
@@ -256,8 +267,9 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             var topDocs = searcher.Search(query, maxResults);
             
             var hits = new List<SearchHit>();
-            foreach (var scoreDoc in topDocs.ScoreDocs)
+            for (int i = 0; i < topDocs.ScoreDocs.Length; i++)
             {
+                var scoreDoc = topDocs.ScoreDocs[i];
                 var doc = searcher.Doc(scoreDoc.Doc);
                 
                 var hit = new SearchHit
@@ -271,7 +283,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 // Add all stored fields except path and content (path already set above, content excluded for token optimization)
                 foreach (var field in doc.Fields)
                 {
-                    if (field.Name != "path" && field.Name != "content")
+                    if (field.Name != "path" && field.Name != "content" && field.Name != "content_tv" && field.Name != "line_breaks")
                     {
                         hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
                     }
@@ -284,18 +296,42 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     hit.LastModified = new DateTime(ticks, DateTimeKind.Utc);
                 }
                 
+                // NEW: Calculate line number using term vectors
+                var lineResult = _lineNumberService.CalculateLineNumber(searcher, scoreDoc.Doc, query.ToString());
+                hit.LineNumber = lineResult.LineNumber;
+                
+                // Add debug info to fields if line number calculation was precise
+                if (lineResult.HasPreciseLocation && lineResult.CharacterOffset.HasValue)
+                {
+                    hit.Fields["character_offset"] = lineResult.CharacterOffset.Value.ToString();
+                    hit.Fields["precise_location"] = "true";
+                }
+                
                 hits.Add(hit);
             }
             
             stopwatch.Stop();
             
-            return new SearchResult
+            var searchResult = new SearchResult
             {
                 TotalHits = topDocs.TotalHits,
                 Hits = hits,
                 SearchTime = stopwatch.Elapsed,
                 Query = query.ToString()
             };
+
+            // Generate snippets if requested (for VS Code visualization)
+            if (includeSnippets)
+            {
+                searchResult = await _snippetService.EnhanceWithSnippetsAsync(
+                    searchResult, 
+                    query, 
+                    searcher, 
+                    forVisualization: true, 
+                    cancellationToken);
+            }
+
+            return searchResult;
         }
         finally
         {
@@ -338,6 +374,82 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         finally
         {
             context.Lock.Release();
+        }
+    }
+
+    /// <summary>
+    /// Force rebuild the index with new schema - properly recreates the index structure
+    /// This is the correct method to use when schema changes require a complete rebuild
+    /// </summary>
+    public async Task ForceRebuildIndexAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var workspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath);
+        
+        await _globalLock.WaitAsync(cancellationToken);
+        try
+        {
+            _logger.LogInformation("Starting force rebuild for workspace {Path}", workspacePath);
+            
+            // Step 1: Close and dispose existing context if it exists
+            if (_indexes.TryGetValue(workspaceHash, out var existingContext))
+            {
+                await DisposeContextAsync(existingContext);
+                _indexes.TryRemove(workspaceHash, out _);
+                _logger.LogDebug("Disposed existing index context for force rebuild");
+            }
+            
+            // Step 2: Create new IndexWriter with OpenMode.CREATE to rebuild schema
+            var indexPath = _pathResolution.GetIndexPath(workspacePath);
+            var directory = _useRamDirectory
+                ? new RAMDirectory() as global::Lucene.Net.Store.Directory
+                : FSDirectory.Open(indexPath);
+            
+            // Create new context
+            var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
+            
+            // Configure IndexWriter for complete rebuild
+            var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
+            var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
+            var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
+            
+            var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
+            {
+                // CRITICAL: Use CREATE mode to rebuild schema completely
+                OpenMode = OpenMode.CREATE,
+                RAMBufferSizeMB = ramBuffer,
+                MaxBufferedDocs = maxBufferedDocs
+            };
+            
+            // Configure merge policy
+            var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
+            if (mergePolicyType == "TieredMergePolicy")
+            {
+                var mergePolicy = new TieredMergePolicy
+                {
+                    MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
+                    SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
+                    MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                };
+                config.MergePolicy = mergePolicy;
+            }
+            
+            config.MaxThreadStates = maxThreadStates;
+            
+            // Create new IndexWriter with CREATE mode
+            context.Writer = new IndexWriter(directory, config);
+            
+            // Step 3: Register the new context
+            if (!_indexes.TryAdd(workspaceHash, context))
+            {
+                context.Dispose();
+                throw new InvalidOperationException($"Failed to add rebuilt index context for workspace {workspaceHash}");
+            }
+            
+            _logger.LogInformation("Force rebuild completed for workspace {Path} - new schema ready", workspacePath);
+        }
+        finally
+        {
+            _globalLock.Release();
         }
     }
     

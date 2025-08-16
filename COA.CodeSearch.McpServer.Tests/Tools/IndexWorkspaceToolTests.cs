@@ -41,6 +41,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 ServiceProvider,
+                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
@@ -124,11 +125,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data?.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
-            result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Summary.Should().Contain("Created new index");
-            result.Result.Data.Summary.Should().Contain("50 files");
+            result.Result.Data?.Should().NotBeNull();
+            result.Result.Data?.Summary.Should().Contain("Created new index");
+            result.Result.Data?.Summary.Should().Contain("50 files");
             result.Result.Insights.Should().NotBeNullOrEmpty();
             result.Result.Actions.Should().NotBeNullOrEmpty();
             
@@ -179,12 +180,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data?.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             // IndexResponseBuilder says "Updated index" even when no update happened
             // This is a known limitation - it doesn't distinguish between actual update and no-op
-            result.Result.Data.Summary.Should().Contain("Updated index");
-            result.Result.Data.Summary.Should().Contain("100 files");
+            result.Result.Data?.Summary.Should().Contain("Updated index");
+            result.Result.Data?.Summary.Should().Contain("100 files");
             
             // Verify indexing was NOT performed (this is the real test)
             FileIndexingServiceMock.Verify(
@@ -244,13 +245,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data?.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
-            result.Result.Data.Summary.Should().Contain("75 files");
+            result.Result.Data?.Summary.Should().Contain("75 files");
             
-            // Verify index was cleared
+            // Verify index was force rebuilt (not just cleared)
             LuceneIndexServiceMock.Verify(
-                x => x.ClearIndexAsync(TestWorkspacePath, It.IsAny<CancellationToken>()),
+                x => x.ForceRebuildIndexAsync(TestWorkspacePath, It.IsAny<CancellationToken>()),
                 Times.Once);
             
             // Verify indexing was performed
@@ -306,6 +307,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 ServiceProvider,
+                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
             
@@ -320,7 +322,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data?.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             
             // File watcher won't be started since FileWatcherService is null
@@ -501,7 +503,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Results.Should().NotBeNull();
+            result.Result.Data?.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             
             // Check for statistics-related insights

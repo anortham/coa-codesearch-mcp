@@ -40,6 +40,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 queryPreprocessor,
                 projectKnowledgeServiceMock.Object,
                 smartDocumentationService,
+                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
@@ -117,9 +118,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Data.Summary.Should().Be("Cached results");
             result.Result.Meta?.ExtensionData?.Should().ContainKey("cacheHit");
             
-            // Verify that Lucene search was not called
+            // Verify that Lucene search was not called (check both overloads)
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                Times.Never);
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
                 Times.Never);
         }
         
@@ -135,6 +139,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -168,9 +173,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 x => x.GetAsync<SearchResult>(It.IsAny<string>()),
                 Times.Never);
             
-            // Verify search was performed
+            // Verify search was performed (5-parameter version)
             LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
+                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
                 Times.Once);
         }
         
@@ -186,6 +191,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     TestWorkspacePath,
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -222,6 +228,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -266,6 +273,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -303,6 +311,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Search failed"));
             
@@ -322,7 +331,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result!.Success.Should().BeFalse(); // But search failed
             result.Result.Error.Should().NotBeNull();
             result.Result.Error!.Code.Should().Be("SEARCH_ERROR");
-            result.Result.Error.Message.Should().Contain("Search failed");
+            result.Result.Error.Message.Should().Contain("Error performing search: Search failed");
             result.Result.Error.Recovery.Should().NotBeNull();
             result.Result.Error.Recovery!.Steps.Should().NotBeNullOrEmpty();
         }
@@ -382,6 +391,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
                     10, // Full mode token-aware limit
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -421,6 +431,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
                     2, // Summary mode token-aware limit
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
         }
@@ -437,6 +448,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Lucene.Net.Search.Query>(),
                     It.IsAny<int>(),
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
@@ -462,6 +474,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<string>(),
                     It.IsAny<Query>(),
                     3, // Adaptive mode token-aware limit
+                    It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()),
                 Times.Once);
             
