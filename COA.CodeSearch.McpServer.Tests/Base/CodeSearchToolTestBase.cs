@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
 using Moq;
 using System.IO;
+using COA.VSCodeBridge;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
@@ -33,6 +34,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
         protected Mock<ICircuitBreakerService> CircuitBreakerServiceMock { get; private set; } = null!;
         protected Mock<IMemoryPressureService> MemoryPressureServiceMock { get; private set; } = null!;
         protected Mock<IQueryCacheService> QueryCacheServiceMock { get; private set; } = null!;
+        protected Mock<COA.VSCodeBridge.IVSCodeBridge> VSCodeBridgeMock { get; private set; } = null!;
         
         // Test workspace paths
         protected string TestWorkspacePath { get; private set; } = null!;
@@ -52,6 +54,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             CircuitBreakerServiceMock = CreateMock<ICircuitBreakerService>();
             MemoryPressureServiceMock = CreateMock<IMemoryPressureService>();
             QueryCacheServiceMock = CreateMock<IQueryCacheService>();
+            VSCodeBridgeMock = CreateMock<COA.VSCodeBridge.IVSCodeBridge>();
             
             // Add real services that don't need mocking
             services.AddMemoryCache();
@@ -143,8 +146,12 @@ namespace COA.CodeSearch.McpServer.Tests.Base
         /// </summary>
         protected void SetupSearchResults(string workspacePath, SearchResult result)
         {
+            // Setup both overloads to handle backward compatibility
             LuceneIndexServiceMock
                 .Setup(x => x.SearchAsync(workspacePath, It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(result);
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(workspacePath, It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(result);
         }
         

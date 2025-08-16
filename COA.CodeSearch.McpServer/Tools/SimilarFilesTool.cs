@@ -15,6 +15,8 @@ using COA.CodeSearch.McpServer.ResponseBuilders;
 using FrameworkErrorInfo = COA.Mcp.Framework.Models.ErrorInfo;
 using FrameworkRecoveryInfo = COA.Mcp.Framework.Models.RecoveryInfo;
 using Microsoft.Extensions.Logging;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
 using Lucene.Net.Index;
@@ -36,6 +38,7 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly SimilarFilesResponseBuilder _responseBuilder;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<SimilarFilesTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
@@ -45,6 +48,7 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         IPathResolutionService pathResolutionService,
+        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<SimilarFilesTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -52,6 +56,7 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _pathResolutionService = pathResolutionService;
+        _vscode = vscode;
         _logger = logger;
         
         // Create response builder with dependencies
@@ -146,6 +151,32 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
             
             // Use response builder to create optimized response
             var response = await _responseBuilder.BuildResponseAsync(result, context);
+            
+            // NEW: Send similarity visualizations to VS Code (if connected)
+            if (_vscode.IsConnected && response.Success && result.SimilarFiles.Count > 0)
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // 1. Show similarity scores chart
+                        await SendSimilarityScoresVisualizationAsync(result.SimilarFiles, result.QueryFile);
+                        
+                        // 2. Show file type distribution of similar files
+                        await SendSimilarFileTypesVisualizationAsync(result.SimilarFiles);
+                        
+                        // 3. Show similar files data grid with scores and details
+                        await SendSimilarFilesDataGridAsync(result.SimilarFiles, result.QueryFile);
+                        
+                        _logger.LogDebug("Successfully sent similar files visualizations to VS Code");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send similar files visualizations to VS Code (non-blocking)");
+                    }
+                }, cancellationToken);
+            }
             
             // Cache the response
             if (!parameters.NoCache)
@@ -376,6 +407,120 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                 "Try adjusting the minimum score threshold for broader matches"
             }
         };
+    }
+    
+    private async Task SendSimilarityScoresVisualizationAsync(List<SimilarFile> similarFiles, string sourceFilePath)
+    {
+        try
+        {
+            var scoresData = similarFiles
+                .OrderByDescending(f => f.Score)
+                .Take(10) // Top 10 most similar
+                .ToDictionary(
+                    f => Path.GetFileName(f.Path),
+                    f => Math.Round((double)f.Score, 3)
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                scoresData,
+                "bar",
+                $"Similarity Scores (Source: {Path.GetFileName(sourceFilePath)})"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send similarity scores visualization");
+        }
+    }
+    
+    private async Task SendSimilarFileTypesVisualizationAsync(List<SimilarFile> similarFiles)
+    {
+        try
+        {
+            var fileTypeGroups = similarFiles
+                .GroupBy(f => {
+                    var ext = Path.GetExtension(f.Path);
+                    return string.IsNullOrEmpty(ext) ? "No Extension" : ext.ToLowerInvariant();
+                })
+                .OrderByDescending(g => g.Count())
+                .ToDictionary(
+                    g => g.Key,
+                    g => (double)g.Count()
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                fileTypeGroups,
+                "pie",
+                "Similar Files by Type"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send similar file types visualization");
+        }
+    }
+    
+    private async Task SendSimilarFilesDataGridAsync(List<SimilarFile> similarFiles, string sourceFilePath)
+    {
+        try
+        {
+            var gridData = similarFiles
+                .OrderByDescending(f => f.Score)
+                .Select(f => new Dictionary<string, object>
+                {
+                    ["File"] = Path.GetFileName(f.Path),
+                    ["Path"] = f.Path,
+                    ["Extension"] = Path.GetExtension(f.Path),
+                    ["Similarity"] = $"{Math.Round(f.Score * 100, 1)}%",
+                    ["Score"] = Math.Round(f.Score, 4),
+                    ["Size"] = FormatFileSize(f.SizeBytes),
+                    ["Modified"] = f.LastModified.ToString("yyyy-MM-dd HH:mm")
+                }).ToList();
+            
+            var dataGridData = new COA.VSCodeBridge.Models.DataGridData
+            {
+                Columns = new List<COA.VSCodeBridge.Models.DataGridColumn>
+                {
+                    new() { Name = "File", Type = "string" },
+                    new() { Name = "Path", Type = "string", Formatter = "file-path" },
+                    new() { Name = "Extension", Type = "string" },
+                    new() { Name = "Similarity", Type = "string" },
+                    new() { Name = "Score", Type = "number" },
+                    new() { Name = "Size", Type = "string" },
+                    new() { Name = "Modified", Type = "string" }
+                },
+                Rows = gridData.Select(row => new object[]
+                {
+                    row["File"], row["Path"], row["Extension"], 
+                    row["Similarity"], row["Score"], row["Size"], row["Modified"]
+                }).ToList()
+            };
+            
+            await _vscode.ShowDataAsync(
+                dataGridData,
+                new COA.VSCodeBridge.Models.DisplayOptions
+                {
+                    Title = $"Files Similar to {Path.GetFileName(sourceFilePath)}",
+                    Interactive = true
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send similar files data grid");
+        }
+    }
+    
+    private static string FormatFileSize(long bytes)
+    {
+        if (bytes == 0) return "0 B";
+        
+        string[] sizes = { "B", "KB", "MB", "GB" };
+        var order = (int)Math.Floor(Math.Log(bytes, 1024));
+        order = Math.Min(order, sizes.Length - 1);
+        
+        var result = Math.Round(bytes / Math.Pow(1024, order), 1);
+        return $"{result} {sizes[order]}";
     }
 }
 

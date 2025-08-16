@@ -1,12 +1,13 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
+using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the text search tool
 /// </summary>
-public class TextSearchParameters
+public class TextSearchParameters : VisualizableParameters
 {
     /// <summary>
     /// The search query string

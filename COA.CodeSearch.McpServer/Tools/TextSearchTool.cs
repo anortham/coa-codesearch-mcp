@@ -19,13 +19,16 @@ using Lucene.Net.Analysis.Standard;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Util;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
+using COA.Mcp.Framework.Interfaces;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Text search tool using the BaseResponseBuilder pattern for consistent response building
 /// </summary>
-public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedResponse<SearchResult>>
+public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>, IVisualizationCapable
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -35,6 +38,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     private readonly QueryPreprocessor _queryPreprocessor;
     private readonly IProjectKnowledgeService _projectKnowledgeService;
     private readonly SmartDocumentationService _smartDocumentationService;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
@@ -45,6 +49,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         QueryPreprocessor queryPreprocessor,
         IProjectKnowledgeService projectKnowledgeService,
         SmartDocumentationService smartDocumentationService,
+        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<TextSearchTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -54,6 +59,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         _queryPreprocessor = queryPreprocessor;
         _projectKnowledgeService = projectKnowledgeService;
         _smartDocumentationService = smartDocumentationService;
+        _vscode = vscode;
         _logger = logger;
         
         // Create response builder with dependencies
@@ -64,7 +70,21 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     public override string Description => "Search for text content using BaseResponseBuilder pattern for consistent responses";
     public override ToolCategory Category => ToolCategory.Query;
 
-    protected override async Task<AIOptimizedResponse<SearchResult>> ExecuteInternalAsync(
+    /// <summary>
+    /// Gets the default visualization configuration for text search
+    /// Text search is an opt-in visualization tool since it's called frequently
+    /// </summary>
+    public VisualizationConfig GetDefaultVisualizationConfig() => new()
+    {
+        ShowByDefault = false,              // Opt-in only - too frequent otherwise
+        PreferredView = "grid",             // Interactive grid with clickable files
+        Priority = VisualizationPriority.OnRequest,
+        ConsolidateTabs = true,             // Replace previous search results
+        MaxConcurrentTabs = 1,              // One search visualization at a time
+        NavigateToFirstResult = false       // Don't auto-navigate, let user choose
+    };
+
+    protected override async Task<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>> ExecuteInternalAsync(
         TextSearchParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -81,7 +101,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         // Check cache first (unless explicitly disabled)
         if (!parameters.NoCache)
         {
-            var cached = await _cacheService.GetAsync<AIOptimizedResponse<SearchResult>>(cacheKey);
+            var cached = await _cacheService.GetAsync<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>(cacheKey);
             if (cached != null)
             {
                 _logger.LogDebug("Returning cached search results for query: {Query}", query);
@@ -157,10 +177,13 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
                 safetyBudget, tokensPerResult, maxResults, responseMode, query);
 
             // Perform search with scoring
+            // Always include snippets for better context in results
+            var includeSnippets = true;  // Always generate snippets for rich results
             var searchResult = await _luceneIndexService.SearchAsync(
                 workspacePath, 
                 multiFactorQuery,  // Use the multi-factor query instead of plain query
-                maxResults, 
+                maxResults,
+                includeSnippets,
                 cancellationToken);
             
             // Add query to result for insights
@@ -178,6 +201,38 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
 
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
+
+            // NEW: Smart visualization using IVisualizationCapable interface
+            _logger.LogInformation("VS Code Bridge Status - IsConnected: {IsConnected}, Success: {Success}, TotalHits: {TotalHits}", 
+                _vscode.IsConnected, result.Success, searchResult.TotalHits);
+            
+            // Show in VS Code only when explicitly requested
+            if (result.Success && searchResult.TotalHits > 0 && (parameters.ShowInVSCode ?? false))
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await _vscode.HandleSmartVisualizationAsync(
+                            this,           // IVisualizationCapable tool
+                            parameters,     // VisualizableParameters with user overrides
+                            searchResult,   // Result to visualize
+                            _logger,        // Logger for diagnostics
+                            cancellationToken);
+                        _logger.LogInformation("Successfully handled smart visualization for query: {Query}", query);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to handle smart visualization for query: {Query}", query);
+                    }
+                }, cancellationToken);
+            }
+            else
+            {
+                _logger.LogDebug("Skipping visualization - ShowInVSCode={ShowInVSCode}, IsConnected={IsConnected}, Success={Success}, TotalHits={TotalHits}", 
+                    parameters.ShowInVSCode, _vscode.IsConnected, result.Success, searchResult.TotalHits);
+            }
 
             // Auto-documentation: store findings in ProjectKnowledge if enabled
             if (parameters.DocumentFindings && result.Success && searchResult.TotalHits > 0)
@@ -201,7 +256,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error performing text search for query: {Query}", query);
-            return new AIOptimizedResponse<SearchResult>
+            return new AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>
             {
                 Success = false,
                 Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -223,6 +278,98 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         }
     }
 
+    /// <summary>
+    /// Send search results to VS Code as interactive data grid visualization
+    /// </summary>
+    private async Task SendSearchVisualizationsAsync(TextSearchParameters parameters, COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string query)
+    {
+        try
+        {
+            // Convert search results to SearchResult format for VS Code Bridge
+            var searchResults = searchResult.Hits?.Select(hit => new COA.VSCodeBridge.Extensions.SearchResult(
+                FilePath: hit.FilePath,
+                Line: hit.LineNumber ?? 1, // Will be calculated from term vectors soon
+                Score: hit.Score,
+                Preview: hit.Snippet ?? ""
+            )).ToList() ?? new List<COA.VSCodeBridge.Extensions.SearchResult>();
+
+            // 1. Show search results as markdown with code context and clickable links
+            await _vscode.ShowSearchResultsAsMarkdownAsync(
+                searchResults,
+                query,
+                $"Search: \"{query}\" ({searchResult.TotalHits} found)"
+            );
+
+            _logger.LogDebug("Successfully sent search markdown visualization to VS Code for query: {Query}", query);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send search visualizations for query: {Query}", query);
+            // Don't throw - visualization failure shouldn't break the main search functionality
+        }
+    }
+
+    /// <summary>
+    /// Calculate search metrics for visualization
+    /// </summary>
+    private Dictionary<string, double> CalculateSearchMetrics(COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult)
+    {
+        var fileTypes = new Dictionary<string, int>();
+        
+        if (searchResult.Hits != null)
+        {
+            foreach (var hit in searchResult.Hits)
+            {
+                var extension = Path.GetExtension(hit.FilePath)?.ToLowerInvariant();
+                if (string.IsNullOrEmpty(extension))
+                    extension = "no-ext";
+                else
+                    extension = extension.TrimStart('.');
+                
+                fileTypes[extension] = fileTypes.TryGetValue(extension, out var count) ? count + 1 : 1;
+            }
+        }
+        
+        return fileTypes.ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
+    }
+
+    /// <summary>
+    /// Generate search insights for markdown display
+    /// </summary>
+    private string GenerateSearchInsights(COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, TextSearchParameters parameters)
+    {
+        var insights = new System.Text.StringBuilder();
+        
+        insights.AppendLine($"# Search Analysis");
+        insights.AppendLine();
+        insights.AppendLine($"**Query:** `{searchResult.Query}`");
+        insights.AppendLine($"**Total Results:** {searchResult.TotalHits}");
+        insights.AppendLine($"**Search Type:** {parameters.SearchType ?? "standard"}");
+        insights.AppendLine($"**Case Sensitive:** {parameters.CaseSensitive}");
+        insights.AppendLine();
+        
+        if (searchResult.Hits?.Any() == true)
+        {
+            insights.AppendLine("## Top Results");
+            insights.AppendLine();
+            
+            var topResults = searchResult.Hits.Take(5);
+            foreach (var hit in topResults)
+            {
+                insights.AppendLine($"- **{Path.GetFileName(hit.FilePath)}** (Score: {hit.Score:F2})");
+                if (!string.IsNullOrEmpty(hit.Snippet))
+                {
+                    insights.AppendLine($"  ```");
+                    insights.AppendLine($"  {hit.Snippet.Trim()}");
+                    insights.AppendLine($"  ```");
+                }
+                insights.AppendLine();
+            }
+        }
+        
+        return insights.ToString();
+    }
+
     private Lucene.Net.Search.Query? ParseQuery(string query)
     {
         try
@@ -239,9 +386,9 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         }
     }
 
-    private AIOptimizedResponse<SearchResult> CreateNoIndexError(string workspacePath)
+    private AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult> CreateNoIndexError(string workspacePath)
     {
-        var result = new AIOptimizedResponse<SearchResult>
+        var result = new AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -276,9 +423,9 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         return result;
     }
 
-    private AIOptimizedResponse<SearchResult> CreateQueryParseError(string query, string? customMessage = null)
+    private AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult> CreateQueryParseError(string query, string? customMessage = null)
     {
-        var result = new AIOptimizedResponse<SearchResult>
+        var result = new AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>
         {
             Success = false,
             Error = new COA.Mcp.Framework.Models.ErrorInfo
@@ -323,7 +470,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     /// <summary>
     /// Document search findings in ProjectKnowledge based on intelligent pattern detection
     /// </summary>
-    private async Task DocumentSearchFindingsAsync(TextSearchParameters parameters, SearchResult searchResult, string query)
+    private async Task DocumentSearchFindingsAsync(TextSearchParameters parameters, COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string query)
     {
         try
         {

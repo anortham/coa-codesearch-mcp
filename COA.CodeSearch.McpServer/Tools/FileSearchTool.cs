@@ -18,6 +18,8 @@ using Lucene.Net.Index;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Util;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -32,6 +34,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly FileSearchResponseBuilder _responseBuilder;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<FileSearchTool> _logger;
 
     public FileSearchTool(
@@ -40,6 +43,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<FileSearchTool> logger) : base(logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -48,6 +52,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new FileSearchResponseBuilder(null, storageService);
+        _vscode = vscode;
         _logger = logger;
     }
 
@@ -128,6 +133,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 workspacePath,
                 query,
                 maxResults * 10,  // Get more results since we might filter
+                false, // No snippets needed for file search
                 cancellationToken
             );
             
@@ -223,6 +229,23 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
             
+            // NEW: Send rich visualizations to VS Code (if connected)
+            if (_vscode.IsConnected && result.Success && files.Count > 0)
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        await SendFileSearchVisualizationsAsync(parameters, files, directories);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send file search visualization to VS Code");
+                    }
+                }, cancellationToken);
+            }
+            
             // Add directories to extension data if requested
             if (directories != null)
             {
@@ -268,6 +291,105 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
             };
             return errorResult;
         }
+    }
+    
+    /// <summary>
+    /// Send file search results to VS Code as interactive data grid and charts
+    /// </summary>
+    private async Task SendFileSearchVisualizationsAsync(FileSearchParameters parameters, List<FileSearchMatch> files, List<string>? directories)
+    {
+        try
+        {
+            // 1. Convert files to SearchResult format for proper navigation
+            var searchResults = files.Select(f => new COA.VSCodeBridge.Extensions.SearchResult(
+                FilePath: f.FilePath,
+                Line: 1,
+                Score: 1.0,
+                Preview: $"{f.FileName} ({f.Extension})"
+            )).ToList();
+
+            // Show interactive search results with working navigation
+            await _vscode.ShowSearchResultsAsync(
+                searchResults,
+                $"File Search: \"{parameters.Pattern}\" ({files.Count} files)"
+            );
+
+            // 2. Show file type distribution as chart if we have variety
+            if (files.Count > 3)
+            {
+                var extensionMetrics = CalculateFileTypeMetrics(files);
+                if (extensionMetrics.Count > 1)
+                {
+                    await _vscode.ShowMetricsChartAsync(
+                        extensionMetrics,
+                        "pie",
+                        "File Distribution by Type"
+                    );
+                }
+            }
+
+            // 3. Show directory distribution if directories were included
+            if (directories?.Count > 1)
+            {
+                var directoryMetrics = CalculateDirectoryMetrics(files);
+                await _vscode.ShowMetricsChartAsync(
+                    directoryMetrics,
+                    "bar",
+                    "Files by Directory"
+                );
+            }
+
+            _logger.LogDebug("Successfully sent file search visualizations to VS Code for pattern: {Pattern}", parameters.Pattern);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send file search visualizations for pattern: {Pattern}", parameters.Pattern);
+            // Don't throw - visualization failure shouldn't break the main search functionality
+        }
+    }
+
+    /// <summary>
+    /// Calculate file type distribution metrics
+    /// </summary>
+    private Dictionary<string, double> CalculateFileTypeMetrics(List<FileSearchMatch> files)
+    {
+        var extensionCounts = new Dictionary<string, int>();
+        
+        foreach (var file in files)
+        {
+            var extension = file.Extension;
+            if (string.IsNullOrEmpty(extension))
+                extension = "no-ext";
+            else
+                extension = extension.TrimStart('.');
+            
+            extensionCounts[extension] = extensionCounts.TryGetValue(extension, out var count) ? count + 1 : 1;
+        }
+        
+        return extensionCounts.ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
+    }
+
+    /// <summary>
+    /// Calculate directory distribution metrics
+    /// </summary>
+    private Dictionary<string, double> CalculateDirectoryMetrics(List<FileSearchMatch> files)
+    {
+        var directoryCounts = new Dictionary<string, int>();
+        
+        foreach (var file in files)
+        {
+            var directory = Path.GetFileName(file.Directory) ?? "root";
+            if (string.IsNullOrEmpty(directory))
+                directory = "root";
+            
+            directoryCounts[directory] = directoryCounts.TryGetValue(directory, out var count) ? count + 1 : 1;
+        }
+        
+        // Only show top 10 directories to avoid clutter
+        return directoryCounts
+            .OrderByDescending(kvp => kvp.Value)
+            .Take(10)
+            .ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
     }
     
     private Regex ConvertGlobToRegex(string pattern)

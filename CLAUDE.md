@@ -8,6 +8,13 @@
 ```
 Creates orphaned processes that lock Lucene indexes. User must restart Claude Code after code changes.
 
+### 🔄 CODE CHANGES REQUIRE RESTART
+**IMPORTANT**: After making ANY code changes:
+1. Exit Claude Code completely 
+2. Build the project: `dotnet build -c Release`
+3. Restart Claude Code to load new version
+4. **Testing before restart shows OLD CODE - not your changes!**
+
 ### ⚠️ Path Resolution
 ```csharp
 ❌ Path.Combine("~/.coa", "indexes")  
@@ -41,5 +48,6 @@ dotnet format --verify-no-changes
 ## Troubleshooting
 
 - **Stuck locks**: Exit Claude Code, delete `~/.coa/codesearch/indexes/*/write.lock`
-- **Changes not working**: Restart Claude Code after rebuild
+- **Changes not working**: **EXIT AND RESTART CLAUDE CODE** - code changes don't take effect until restart
 - **Build errors**: Verify COA.Mcp.Framework references
+- **Testing shows old behavior**: You're testing cached old code - restart Claude Code first!

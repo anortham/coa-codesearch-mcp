@@ -6,6 +6,8 @@ using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -125,15 +127,18 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly TextSearchTool _textSearchTool;
     private readonly FileSearchTool _fileSearchTool;
+    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
 
     public BatchOperationsTool(
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
-        FileSearchTool fileSearchTool) : base(logger)
+        FileSearchTool fileSearchTool,
+        COA.VSCodeBridge.IVSCodeBridge vscode) : base(logger)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
         _fileSearchTool = fileSearchTool;
+        _vscode = vscode;
     }
 
     public override string Name => ToolNames.BatchOperations;
@@ -183,7 +188,7 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
             var totalResults = results.Sum(r => r.ResultCount);
             var successfulOps = results.Count(r => r.Success);
 
-            return new BatchOperationsResult
+            var batchResult = new BatchOperationsResult
             {
                 Success = true,
                 Operations = results,
@@ -197,6 +202,34 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
                 },
                 TotalDurationMs = (int)stopwatch.ElapsedMilliseconds
             };
+
+            // NEW: Send batch operations visualizations to VS Code (if connected)
+            if (_vscode.IsConnected && batchResult.Success && results.Count > 0)
+            {
+                // Fire and forget - don't block the main response
+                _ = Task.Run(async () =>
+                {
+                    try
+                    {
+                        // 1. Show operation results summary chart
+                        await SendBatchSummaryVisualizationAsync(batchResult.Summary);
+                        
+                        // 2. Show execution timeline
+                        await SendExecutionTimelineAsync(results);
+                        
+                        // 3. Show operations data grid with results and timings
+                        await SendBatchOperationsDataGridAsync(results);
+                        
+                        _logger.LogDebug("Successfully sent batch operations visualizations to VS Code");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Failed to send batch operations visualizations to VS Code (non-blocking)");
+                    }
+                }, cancellationToken);
+            }
+
+            return batchResult;
         }
         catch (JsonException ex)
         {
@@ -338,6 +371,103 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
         catch
         {
             return 0;
+        }
+    }
+    
+    private async Task SendBatchSummaryVisualizationAsync(BatchSummary summary)
+    {
+        try
+        {
+            var summaryData = new Dictionary<string, double>
+            {
+                ["Successful"] = summary.SuccessfulOperations,
+                ["Failed"] = summary.FailedOperations,
+                ["Total Results"] = summary.TotalResults
+            };
+            
+            await _vscode.ShowMetricsChartAsync(
+                summaryData,
+                "bar",
+                "Batch Operations Summary"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send batch summary visualization");
+        }
+    }
+    
+    private async Task SendExecutionTimelineAsync(List<BatchOperationResult> results)
+    {
+        try
+        {
+            var timelineData = results
+                .Where(r => !string.IsNullOrEmpty(r.Id))
+                .ToDictionary(
+                    r => r.Id ?? r.Operation,
+                    r => (double)r.DurationMs
+                );
+            
+            await _vscode.ShowMetricsChartAsync(
+                timelineData,
+                "line",
+                "Operation Execution Timeline (ms)"
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send execution timeline visualization");
+        }
+    }
+    
+    private async Task SendBatchOperationsDataGridAsync(List<BatchOperationResult> results)
+    {
+        try
+        {
+            var gridData = results.Select((r, index) => new Dictionary<string, object>
+            {
+                ["#"] = index + 1,
+                ["ID"] = r.Id ?? $"Op{index + 1}",
+                ["Operation"] = r.Operation,
+                ["Description"] = r.Description ?? "No description",
+                ["Status"] = r.Success ? "✅ Success" : "❌ Failed",
+                ["Duration"] = $"{r.DurationMs}ms",
+                ["Results"] = r.ResultCount,
+                ["Error"] = r.Error ?? ""
+            }).ToList();
+            
+            var dataGridData = new COA.VSCodeBridge.Models.DataGridData
+            {
+                Columns = new List<COA.VSCodeBridge.Models.DataGridColumn>
+                {
+                    new() { Name = "#", Type = "number" },
+                    new() { Name = "ID", Type = "string" },
+                    new() { Name = "Operation", Type = "string" },
+                    new() { Name = "Description", Type = "string" },
+                    new() { Name = "Status", Type = "string" },
+                    new() { Name = "Duration", Type = "string" },
+                    new() { Name = "Results", Type = "number" },
+                    new() { Name = "Error", Type = "string" }
+                },
+                Rows = gridData.Select(row => new object[]
+                {
+                    row["#"], row["ID"], row["Operation"], row["Description"], 
+                    row["Status"], row["Duration"], row["Results"], row["Error"]
+                }).ToList()
+            };
+            
+            await _vscode.ShowDataAsync(
+                dataGridData,
+                new COA.VSCodeBridge.Models.DisplayOptions
+                {
+                    Title = "Batch Operations Results",
+                    Interactive = true
+                }
+            );
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to send batch operations data grid");
         }
     }
 }
