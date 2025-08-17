@@ -77,13 +77,23 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         var actions = GenerateActions(data, actionsBudget);
         
         // Build the response
+        // Create a copy of the data for AI response with reduced hits
+        var aiData = new SearchResult
+        {
+            TotalHits = data.TotalHits,
+            Hits = reducedHits,
+            SearchTime = data.SearchTime,
+            Query = data.Query
+            // ProcessingTimeMs is a computed property, no need to set it
+        };
+        
         var response = new AIOptimizedResponse<SearchResult>
         {
             Success = true,
             Data = new AIResponseData<SearchResult>
             {
                 Summary = BuildSummary(data, reducedHits.Count, context.ResponseMode),
-                Results = data, // Pass the whole SearchResult, not just the hits list
+                Results = aiData, // Pass the copy with reduced hits for AI
                 Count = data.TotalHits,
                 ExtensionData = new Dictionary<string, object>
                 {
