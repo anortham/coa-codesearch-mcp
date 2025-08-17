@@ -18,7 +18,7 @@ using Lucene.Net.Index;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Util;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -300,18 +300,29 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
     {
         try
         {
-            // 1. Convert files to SearchResult format for proper navigation
-            var searchResults = files.Select(f => new COA.VSCodeBridge.Extensions.SearchResult(
-                FilePath: f.FilePath,
-                Line: 1,
-                Score: 1.0,
-                Preview: $"{f.FileName} ({f.Extension})"
-            )).ToList();
+            // 1. Convert files to search results format for proper navigation
+            var searchResultsData = new
+            {
+                query = parameters.Pattern,
+                totalHits = files.Count,
+                results = files.Select(f => new
+                {
+                    filePath = f.FilePath,
+                    lineNumber = 1,
+                    score = 1.0,
+                    snippet = $"{f.FileName} ({f.Extension})"
+                }).ToList()
+            };
 
             // Show interactive search results with working navigation
-            await _vscode.ShowSearchResultsAsync(
-                searchResults,
-                $"File Search: \"{parameters.Pattern}\" ({files.Count} files)"
+            await _vscode.SendVisualizationAsync(
+                "code-search",
+                searchResultsData,
+                new VisualizationHint
+                {
+                    Interactive = true,
+                    ConsolidateTabs = true
+                }
             );
 
             // 2. Show file type distribution as chart if we have variety
@@ -320,10 +331,15 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 var extensionMetrics = CalculateFileTypeMetrics(files);
                 if (extensionMetrics.Count > 1)
                 {
-                    await _vscode.ShowMetricsChartAsync(
-                        extensionMetrics,
-                        "pie",
-                        "File Distribution by Type"
+                    await _vscode.SendVisualizationAsync(
+                        "data-grid",
+                        new
+                        {
+                            title = "File Distribution by Type",
+                            chartType = "pie",
+                            data = extensionMetrics
+                        },
+                        new VisualizationHint { Interactive = true }
                     );
                 }
             }
@@ -332,10 +348,15 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
             if (directories?.Count > 1)
             {
                 var directoryMetrics = CalculateDirectoryMetrics(files);
-                await _vscode.ShowMetricsChartAsync(
-                    directoryMetrics,
-                    "bar",
-                    "Files by Directory"
+                await _vscode.SendVisualizationAsync(
+                    "data-grid",
+                    new
+                    {
+                        title = "Files by Directory",
+                        chartType = "bar",
+                        data = directoryMetrics
+                    },
+                    new VisualizationHint { Interactive = true }
                 );
             }
 
