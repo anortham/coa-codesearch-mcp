@@ -13,7 +13,7 @@ using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
@@ -406,10 +406,15 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                 timelineData = dayGroups;
             }
             
-            await _vscode.ShowMetricsChartAsync(
-                timelineData,
-                "line",
-                $"Recent File Activity Timeline ({groupingUnit}ly)"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = $"Recent File Activity Timeline ({groupingUnit}ly)",
+                    chartType = "line",
+                    data = timelineData
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -431,10 +436,15 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                     g => (double)g.Count()
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                fileTypeGroups,
-                "pie",
-                "Recent Files by Type"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = "Recent Files by Type",
+                    chartType = "pie",
+                    data = fileTypeGroups
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -475,12 +485,18 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                 }).ToList()
             };
             
-            await _vscode.ShowDataAsync(
-                dataGridData,
-                new COA.VSCodeBridge.Models.DisplayOptions
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
                 {
-                    Title = $"Recent Files (Last {FormatTimeSpan(timeFrame)})",
-                    Interactive = true
+                    title = $"Recent Files (Last {FormatTimeSpan(timeFrame)})",
+                    columns = dataGridData.Columns,
+                    rows = dataGridData.Rows
+                },
+                new VisualizationHint
+                {
+                    Interactive = true,
+                    ConsolidateTabs = true
                 }
             );
         }

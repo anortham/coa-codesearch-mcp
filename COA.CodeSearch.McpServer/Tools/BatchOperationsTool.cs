@@ -6,7 +6,7 @@ using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -385,10 +385,15 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
                 ["Total Results"] = summary.TotalResults
             };
             
-            await _vscode.ShowMetricsChartAsync(
-                summaryData,
-                "bar",
-                "Batch Operations Summary"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = "Batch Operations Summary",
+                    chartType = "bar",
+                    data = summaryData
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -408,10 +413,15 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
                     r => (double)r.DurationMs
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                timelineData,
-                "line",
-                "Operation Execution Timeline (ms)"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = "Operation Execution Timeline (ms)",
+                    chartType = "line",
+                    data = timelineData
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -456,12 +466,18 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
                 }).ToList()
             };
             
-            await _vscode.ShowDataAsync(
-                dataGridData,
-                new COA.VSCodeBridge.Models.DisplayOptions
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
                 {
-                    Title = "Batch Operations Results",
-                    Interactive = true
+                    title = "Batch Operations Results",
+                    columns = dataGridData.Columns,
+                    rows = dataGridData.Rows
+                },
+                new VisualizationHint
+                {
+                    Interactive = true,
+                    ConsolidateTabs = true
                 }
             );
         }

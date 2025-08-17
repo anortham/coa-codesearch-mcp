@@ -297,7 +297,20 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 }
                 
                 // NEW: Calculate line number using term vectors
-                var lineResult = _lineNumberService.CalculateLineNumber(searcher, scoreDoc.Doc, query.ToString());
+                // Extract the original query text from MultiFactorScoreQuery if wrapped
+                string queryText = query.ToString();
+                if (query is COA.CodeSearch.McpServer.Scoring.MultiFactorScoreQuery multiFactorQuery)
+                {
+                    // Extract the base query part from the wrapper format
+                    // Format: "MultiFactorScore(content:term, factors=[...])"
+                    var startIdx = queryText.IndexOf('(') + 1;
+                    var endIdx = queryText.IndexOf(", factors=");
+                    if (startIdx > 0 && endIdx > startIdx)
+                    {
+                        queryText = queryText.Substring(startIdx, endIdx - startIdx);
+                    }
+                }
+                var lineResult = _lineNumberService.CalculateLineNumber(searcher, scoreDoc.Doc, queryText);
                 hit.LineNumber = lineResult.LineNumber;
                 
                 // Add debug info to fields if line number calculation was precise

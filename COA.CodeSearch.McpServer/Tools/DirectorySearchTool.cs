@@ -22,7 +22,7 @@ using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.CodeSearch.McpServer.Tools.Results;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
@@ -462,10 +462,15 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                     g => (double)g.Count()
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                structureData,
-                "bar",
-                $"Directory Distribution (Pattern: {pattern})"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = $"Directory Distribution (Pattern: {pattern})",
+                    chartType = "bar",
+                    data = structureData
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -486,10 +491,15 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                     g => (double)g.Count()
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                depthGroups,
-                "pie",
-                "Directories by Depth Level"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = "Directories by Depth Level",
+                    chartType = "pie",
+                    data = depthGroups
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -534,12 +544,18 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
                 }).ToList()
             };
             
-            await _vscode.ShowDataAsync(
-                dataGridData,
-                new COA.VSCodeBridge.Models.DisplayOptions
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
                 {
-                    Title = $"Directories Matching '{pattern}'",
-                    Interactive = true
+                    title = $"Directories Matching '{pattern}'",
+                    columns = dataGridData.Columns,
+                    rows = dataGridData.Rows
+                },
+                new VisualizationHint
+                {
+                    Interactive = true,
+                    ConsolidateTabs = true
                 }
             );
         }

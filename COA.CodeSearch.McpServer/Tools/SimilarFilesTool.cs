@@ -15,7 +15,7 @@ using COA.CodeSearch.McpServer.ResponseBuilders;
 using FrameworkErrorInfo = COA.Mcp.Framework.Models.ErrorInfo;
 using FrameworkRecoveryInfo = COA.Mcp.Framework.Models.RecoveryInfo;
 using Microsoft.Extensions.Logging;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Documents;
@@ -421,10 +421,15 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                     f => Math.Round((double)f.Score, 3)
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                scoresData,
-                "bar",
-                $"Similarity Scores (Source: {Path.GetFileName(sourceFilePath)})"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = $"Similarity Scores (Source: {Path.GetFileName(sourceFilePath)})",
+                    chartType = "bar",
+                    data = scoresData
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -448,10 +453,15 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                     g => (double)g.Count()
                 );
             
-            await _vscode.ShowMetricsChartAsync(
-                fileTypeGroups,
-                "pie",
-                "Similar Files by Type"
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
+                {
+                    title = "Similar Files by Type",
+                    chartType = "pie",
+                    data = fileTypeGroups
+                },
+                new VisualizationHint { Interactive = true }
             );
         }
         catch (Exception ex)
@@ -496,12 +506,18 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
                 }).ToList()
             };
             
-            await _vscode.ShowDataAsync(
-                dataGridData,
-                new COA.VSCodeBridge.Models.DisplayOptions
+            await _vscode.SendVisualizationAsync(
+                "data-grid",
+                new
                 {
-                    Title = $"Files Similar to {Path.GetFileName(sourceFilePath)}",
-                    Interactive = true
+                    title = $"Files Similar to {Path.GetFileName(sourceFilePath)}",
+                    columns = dataGridData.Columns,
+                    rows = dataGridData.Rows
+                },
+                new VisualizationHint
+                {
+                    Interactive = true,
+                    ConsolidateTabs = true
                 }
             );
         }
