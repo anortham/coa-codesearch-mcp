@@ -1,3 +1,4 @@
+using System.IO;
 using Lucene.Net.Index;
 using Lucene.Net.Search;
 using Lucene.Net.Search.Highlight;
@@ -16,8 +17,6 @@ public class SmartSnippetService
 {
     private readonly ILogger<SmartSnippetService> _logger;
     
-    private const int FRAGMENT_SIZE = 150; // ~3 lines of code
-    private const int MAX_FRAGMENTS = 3;   // Top 3 matches per file
     private const int CONTEXT_LINES = 3;   // Lines before/after match
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
@@ -58,7 +57,7 @@ public class SmartSnippetService
             
             var highlighter = new Highlighter(formatter, scorer)
             {
-                TextFragmenter = new SimpleFragmenter(FRAGMENT_SIZE)
+                TextFragmenter = new NullFragmenter()
             };
             
             _logger.LogDebug("Created highlighter with content query: {Query}", contentQuery?.ToString() ?? "null");
@@ -118,40 +117,42 @@ public class SmartSnippetService
             return hit;
         }
 
-        // Extract highlighted fragments using Lucene highlighter
-        try
-        {
-            _logger.LogDebug("Attempting to highlight content of length {Length} for {FilePath}", content.Length, hit.FilePath);
-            using var tokenStream = analyzer.GetTokenStream("content", content);
-            var fragments = highlighter.GetBestFragments(tokenStream, content, MAX_FRAGMENTS);
-            
-            _logger.LogDebug("Generated {FragmentCount} fragments for {FilePath}", fragments?.Length ?? 0, hit.FilePath);
-            
-            if (fragments != null && fragments.Any())
-            {
-                hit.HighlightedFragments = fragments.ToList();
-                hit.Snippet = fragments.FirstOrDefault();
-                _logger.LogDebug("Best fragment: {Fragment}", hit.Snippet);
-            }
-            else
-            {
-                _logger.LogDebug("No fragments generated for {FilePath}", hit.FilePath);
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to generate highlighted fragments for {FilePath}", hit.FilePath);
-        }
-
-        // This code block is replaced above
-
-        // Extract context lines around the match
+        // Extract context lines around the match first
         if (hit.LineNumber.HasValue)
         {
             var contextInfo = ExtractContextLines(content, hit.LineNumber.Value);
             hit.ContextLines = contextInfo.Lines;
             hit.StartLine = contextInfo.StartLine;
             hit.EndLine = contextInfo.EndLine;
+            
+            // Apply highlighting to the complete context lines
+            try
+            {
+                var contextText = string.Join("\n", contextInfo.Lines);
+                _logger.LogDebug("Highlighting context of {LineCount} complete lines for {FilePath}", contextInfo.Lines.Count, hit.FilePath);
+                
+                using var tokenStream = analyzer.GetTokenStream("content", contextText);
+                var highlightedContext = highlighter.GetBestFragment(tokenStream, contextText);
+                
+                if (!string.IsNullOrEmpty(highlightedContext))
+                {
+                    hit.Snippet = highlightedContext;
+                    // Don't set HighlightedFragments - this goes to AI and we don't want «» markers there
+                    // hit.HighlightedFragments = new List<string> { highlightedContext };
+                    _logger.LogDebug("Generated highlighted context snippet for {FilePath}", hit.FilePath);
+                }
+                else
+                {
+                    // Fallback to unhighlighted context
+                    hit.Snippet = contextText;
+                    _logger.LogDebug("Using unhighlighted context for {FilePath}", hit.FilePath);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to highlight context lines for {FilePath}, using unhighlighted context", hit.FilePath);
+                hit.Snippet = string.Join("\n", contextInfo.Lines);
+            }
         }
 
         return hit;
@@ -162,17 +163,26 @@ public class SmartSnippetService
     /// </summary>
     private (List<string> Lines, int StartLine, int EndLine) ExtractContextLines(string content, int matchLineNumber)
     {
-        var lines = content.Split('\n');
+        // Use StringReader for cross-platform line ending handling
+        var allLines = new List<string>();
+        using (var reader = new StringReader(content))
+        {
+            string line;
+            while ((line = reader.ReadLine()) != null)
+            {
+                allLines.Add(line);
+            }
+        }
         
         // Calculate context window
         var startLine = Math.Max(1, matchLineNumber - CONTEXT_LINES);
-        var endLine = Math.Min(lines.Length, matchLineNumber + CONTEXT_LINES);
+        var endLine = Math.Min(allLines.Count, matchLineNumber + CONTEXT_LINES);
         
         // Extract lines (convert to 0-based for array access)
         var startIndex = startLine - 1;
         var count = endLine - startLine + 1;
         
-        var contextLines = lines
+        var contextLines = allLines
             .Skip(startIndex)
             .Take(count)
             .ToList();
@@ -182,7 +192,7 @@ public class SmartSnippetService
 
     /// <summary>
     /// Get document ID from SearchHit
-    /// This is a simplified approach - in production you might want to store docId in SearchHit
+    /// TODO: Optimize by storing docId in SearchHit during initial search
     /// </summary>
     private int? GetDocumentId(SearchHit hit, IndexSearcher searcher)
     {
@@ -205,32 +215,6 @@ public class SmartSnippetService
             _logger.LogWarning(ex, "Failed to find document ID for {FilePath}", hit.FilePath);
             return null;
         }
-    }
-
-    /// <summary>
-    /// Create a simple text snippet without HTML highlighting
-    /// Used when we want context but not markup
-    /// </summary>
-    public string CreatePlainTextSnippet(string content, int lineNumber, int contextLines = 2)
-    {
-        if (string.IsNullOrEmpty(content))
-        {
-            return string.Empty;
-        }
-
-        var lines = content.Split('\n');
-        var startLine = Math.Max(0, lineNumber - contextLines - 1);
-        var endLine = Math.Min(lines.Length, lineNumber + contextLines);
-        
-        var snippet = string.Join('\n', lines.Skip(startLine).Take(endLine - startLine));
-        
-        // Trim to reasonable length
-        if (snippet.Length > 300)
-        {
-            snippet = snippet.Substring(0, 297) + "...";
-        }
-
-        return snippet;
     }
 
     /// <summary>
