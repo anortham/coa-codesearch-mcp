@@ -168,7 +168,8 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                             FilePath = filePath,
                             FileName = fileName,
                             Directory = Path.GetDirectoryName(filePath) ?? "",
-                            Extension = Path.GetExtension(filePath)
+                            Extension = Path.GetExtension(filePath),
+                            Score = CalculateFileMatchScore(fileName, pattern, useRegex)
                         });
                     }
                 }
@@ -229,19 +230,29 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
             
-            // NEW: Send rich visualizations to VS Code (if connected)
-            if (_vscode.IsConnected && result.Success && files.Count > 0)
+            // Open first result in VS Code if requested
+            if ((parameters.OpenFirstResult ?? false) && _vscode.IsConnected && result.Success && files.Count > 0)
             {
                 // Fire and forget - don't block the main response
                 _ = Task.Run(async () =>
                 {
                     try
                     {
-                        await SendFileSearchVisualizationsAsync(parameters, files, directories);
+                        var firstFile = files.First();
+                        var success = await _vscode.OpenFileAsync(firstFile.FilePath);
+                        
+                        if (success)
+                        {
+                            _logger.LogDebug("Opened file in VS Code: {FilePath}", firstFile.FilePath);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Failed to open file in VS Code: {FilePath}", firstFile.FilePath);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogWarning(ex, "Failed to send file search visualization to VS Code");
+                        _logger.LogWarning(ex, "Failed to open first file result in VS Code");
                     }
                 }, cancellationToken);
             }
@@ -294,123 +305,46 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
     }
     
     /// <summary>
-    /// Send file search results to VS Code as interactive data grid and charts
+    /// Calculate a relevance score for file name matches
     /// </summary>
-    private async Task SendFileSearchVisualizationsAsync(FileSearchParameters parameters, List<FileSearchMatch> files, List<string>? directories)
+    private float CalculateFileMatchScore(string fileName, string pattern, bool isRegex)
     {
-        try
-        {
-            // 1. Convert files to search results format for proper navigation
-            var searchResultsData = new
-            {
-                query = parameters.Pattern,
-                totalHits = files.Count,
-                results = files.Select(f => new
-                {
-                    filePath = f.FilePath,
-                    lineNumber = 1,
-                    score = 1.0,
-                    snippet = $"{f.FileName} ({f.Extension})"
-                }).ToList()
-            };
-
-            // Show interactive search results with working navigation
-            await _vscode.SendVisualizationAsync(
-                "code-search",
-                searchResultsData,
-                new VisualizationHint
-                {
-                    Interactive = true,
-                    ConsolidateTabs = true
-                }
-            );
-
-            // 2. Show file type distribution as chart if we have variety
-            if (files.Count > 3)
-            {
-                var extensionMetrics = CalculateFileTypeMetrics(files);
-                if (extensionMetrics.Count > 1)
-                {
-                    await _vscode.SendVisualizationAsync(
-                        "data-grid",
-                        new
-                        {
-                            title = "File Distribution by Type",
-                            chartType = "pie",
-                            data = extensionMetrics
-                        },
-                        new VisualizationHint { Interactive = true }
-                    );
-                }
-            }
-
-            // 3. Show directory distribution if directories were included
-            if (directories?.Count > 1)
-            {
-                var directoryMetrics = CalculateDirectoryMetrics(files);
-                await _vscode.SendVisualizationAsync(
-                    "data-grid",
-                    new
-                    {
-                        title = "Files by Directory",
-                        chartType = "bar",
-                        data = directoryMetrics
-                    },
-                    new VisualizationHint { Interactive = true }
-                );
-            }
-
-            _logger.LogDebug("Successfully sent file search visualizations to VS Code for pattern: {Pattern}", parameters.Pattern);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send file search visualizations for pattern: {Pattern}", parameters.Pattern);
-            // Don't throw - visualization failure shouldn't break the main search functionality
-        }
-    }
-
-    /// <summary>
-    /// Calculate file type distribution metrics
-    /// </summary>
-    private Dictionary<string, double> CalculateFileTypeMetrics(List<FileSearchMatch> files)
-    {
-        var extensionCounts = new Dictionary<string, int>();
+        // Remove wildcards and extension for comparison
+        var cleanPattern = pattern.Replace("*", "").Replace("?", "").Replace(".cs", "").Replace(".ts", "").Replace(".js", "");
         
-        foreach (var file in files)
-        {
-            var extension = file.Extension;
-            if (string.IsNullOrEmpty(extension))
-                extension = "no-ext";
-            else
-                extension = extension.TrimStart('.');
+        // If pattern is empty after cleaning (like *.cs), give medium score
+        if (string.IsNullOrEmpty(cleanPattern))
+            return 0.5f;
             
-            extensionCounts[extension] = extensionCounts.TryGetValue(extension, out var count) ? count + 1 : 1;
-        }
+        var fileNameLower = Path.GetFileNameWithoutExtension(fileName).ToLowerInvariant();
+        var patternLower = cleanPattern.ToLowerInvariant();
         
-        return extensionCounts.ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
-    }
-
-    /// <summary>
-    /// Calculate directory distribution metrics
-    /// </summary>
-    private Dictionary<string, double> CalculateDirectoryMetrics(List<FileSearchMatch> files)
-    {
-        var directoryCounts = new Dictionary<string, int>();
-        
-        foreach (var file in files)
-        {
-            var directory = Path.GetFileName(file.Directory) ?? "root";
-            if (string.IsNullOrEmpty(directory))
-                directory = "root";
+        // Exact match (ignoring extension) = highest score
+        if (fileNameLower == patternLower)
+            return 1.0f;
             
-            directoryCounts[directory] = directoryCounts.TryGetValue(directory, out var count) ? count + 1 : 1;
-        }
-        
-        // Only show top 10 directories to avoid clutter
-        return directoryCounts
-            .OrderByDescending(kvp => kvp.Value)
-            .Take(10)
-            .ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
+        // Exact match with case difference = very high score
+        if (fileNameLower.Equals(patternLower, StringComparison.OrdinalIgnoreCase))
+            return 0.95f;
+            
+        // Starts with pattern = high score
+        if (fileNameLower.StartsWith(patternLower))
+            return 0.85f;
+            
+        // Ends with pattern = good score
+        if (fileNameLower.EndsWith(patternLower))
+            return 0.75f;
+            
+        // Contains as word boundary = decent score
+        if (System.Text.RegularExpressions.Regex.IsMatch(fileNameLower, $@"\b{System.Text.RegularExpressions.Regex.Escape(patternLower)}\b"))
+            return 0.65f;
+            
+        // Contains pattern anywhere = lower score
+        if (fileNameLower.Contains(patternLower))
+            return 0.5f;
+            
+        // Matched by wildcard/regex but pattern not directly found = lowest score
+        return 0.3f;
     }
     
     private Regex ConvertGlobToRegex(string pattern)
@@ -520,6 +454,12 @@ public class FileSearchParameters
     /// </summary>
     [Description("Disable caching for this request")]
     public bool NoCache { get; set; } = false;
+    
+    /// <summary>
+    /// Automatically open the first matching file in VS Code
+    /// </summary>
+    [Description("Automatically open the first matching file in VS Code")]
+    public bool? OpenFirstResult { get; set; }
 }
 
 /// <summary>
@@ -569,4 +509,9 @@ public class FileSearchMatch
     /// File extension
     /// </summary>
     public string Extension { get; set; } = string.Empty;
+    
+    /// <summary>
+    /// Lucene relevance score
+    /// </summary>
+    public float Score { get; set; }
 }

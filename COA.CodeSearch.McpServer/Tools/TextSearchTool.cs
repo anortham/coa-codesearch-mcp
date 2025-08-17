@@ -18,6 +18,8 @@ using Microsoft.Extensions.Logging;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
+using Lucene.Net.Search.Highlight;
+using Lucene.Net.Index;
 using Lucene.Net.Util;
 using COA.Mcp.Framework.Interfaces;
 using COA.VSCodeBridge;
@@ -194,7 +196,18 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             {
                 try
                 {
-                    // Prepare search results data for visualization
+                    // Log what we have in searchResult before sending to VS Code
+                    if (searchResult.Hits?.Any() == true)
+                    {
+                        var firstHit = searchResult.Hits.First();
+                        _logger.LogDebug("First hit before VS Code visualization: Snippet={HasSnippet}, ContextLines={LineCount}, StartLine={StartLine}", 
+                            !string.IsNullOrEmpty(firstHit.Snippet), 
+                            firstHit.ContextLines?.Count ?? 0, 
+                            firstHit.StartLine);
+                    }
+                    
+                    // Create enhanced visualization data with richer context for VS Code (separate from AI response)
+                    // Use the original search hits before token reduction for richer VS Code display
                     var visualizationData = new
                     {
                         query = query,
@@ -203,12 +216,12 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
                         results = searchResult.Hits?.Select(hit => new
                         {
                             filePath = hit.FilePath,
-                            line = hit.LineNumber ?? 1,  // VS Code Bridge expects 'line' not 'lineNumber'
-                            column = 1,  // Add column for better navigation
+                            line = hit.LineNumber ?? 1,  // The actual match line (for navigation)
+                            column = 1,
                             score = hit.Score,
                             snippet = hit.Snippet ?? string.Join("\n", hit.ContextLines ?? new List<string>()),
                             preview = hit.Snippet ?? string.Join("\n", hit.ContextLines ?? new List<string>()),
-                            startLine = hit.StartLine,
+                            startLine = hit.StartLine ?? (hit.LineNumber ?? 1),  // First line of context display
                             endLine = hit.EndLine,
                             contextLines = hit.ContextLines
                         }).ToList()
@@ -436,5 +449,6 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             // Don't throw - documentation failure shouldn't break search
         }
     }
+
 
 }
