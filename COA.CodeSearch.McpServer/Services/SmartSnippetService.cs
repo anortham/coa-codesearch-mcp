@@ -46,8 +46,8 @@ public class SmartSnippetService
         try
         {
             // Create Lucene highlighter for fragment extraction
-            // Use <mark> tags that VS Code Bridge can handle natively
-            var formatter = new SimpleHTMLFormatter("<mark>", "</mark>");
+            // Use chevrons for highlighting to avoid HTML parsing issues
+            var formatter = new SimpleHTMLFormatter("«", "»");
             
             var analyzer = new CodeAnalyzer(LUCENE_VERSION);
             
