@@ -1,5 +1,13 @@
 # CodeSearch MCP Server
 
+## 🎨 VS Code Bridge Integration
+
+**NEW**: Tools use `IVSCodeBridge` for rich VS Code displays:
+- Return structured data with search results
+- VS Code Bridge handles all rendering and visualization
+- Line numbers and code snippets are automatically displayed
+- See `docs/VISUALIZATION_INTEGRATION.md` for implementation details
+
 ## Critical Development Warnings
 
 ### ⚠️ NEVER Run MCP Server Locally

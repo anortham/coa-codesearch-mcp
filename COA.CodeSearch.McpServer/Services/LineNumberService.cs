@@ -92,6 +92,10 @@ public class LineNumberService
             if (firstMatchOffset.HasValue)
             {
                 var lineNumber = GetLineNumberFromOffset(firstMatchOffset.Value, lineBreaks);
+                
+                // Debug: Log first few line breaks to understand positions
+                var firstBreaks = string.Join(", ", lineBreaks.Take(10).Select((pos, idx) => $"Line {idx+1} ends at {pos}"));
+                _logger.LogDebug("First line breaks: {LineBreaks}", firstBreaks);
                 _logger.LogDebug("Calculated line number {LineNumber} from offset {Offset} using {LineBreakCount} line breaks", 
                     lineNumber, firstMatchOffset.Value, lineBreaks.Length);
                 
@@ -125,13 +129,21 @@ public class LineNumberService
         if (lineIndex >= 0)
         {
             // Exact match on a line break - we're at the end of that line
-            return lineIndex + 1;
+            return lineIndex + 2; // +2 because we're at the END of line lineIndex
         }
         else
         {
             // Not an exact match - get the insertion point
             var insertionPoint = ~lineIndex;
-            return insertionPoint + 1; // Line numbers are 1-based
+            // insertionPoint tells us how many line breaks come before our position
+            // So if there are N line breaks before us, we're on line N+1
+            // 
+            // For now, just use the standard calculation without adjustment
+            // The offset discrepancy needs more investigation
+            var lineNumber = insertionPoint + 1; // Line numbers are 1-based
+            
+            // Ensure we never return negative or zero line numbers
+            return Math.Max(1, lineNumber);
         }
     }
 

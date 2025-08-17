@@ -14,7 +14,7 @@ using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using COA.VSCodeBridge.Extensions;
+using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -203,7 +203,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
                 // NEW: Send rich visualizations to VS Code (if connected)
-                if (_vscode.IsConnected && result.Success)
+                if ((parameters.ShowInVSCode ?? false) && _vscode.IsConnected && result.Success)
                 {
                     // Fire and forget - don't block the main response
                     _ = Task.Run(async () =>
@@ -274,7 +274,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
                 // NEW: Send rich visualizations to VS Code (if connected)
-                if (_vscode.IsConnected && result.Success)
+                if ((parameters.ShowInVSCode ?? false) && _vscode.IsConnected && result.Success)
                 {
                     // Fire and forget - don't block the main response
                     _ = Task.Run(async () =>
@@ -321,81 +321,23 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     }
     
     /// <summary>
-    /// Send index statistics and progress to VS Code as interactive visualizations
+    /// Send index summary to VS Code as markdown visualization
     /// </summary>
     private async Task SendIndexVisualizationsAsync(IndexResult indexResult, bool isRebuild)
     {
         try
         {
-            var workspaceName = Path.GetFileName(indexResult.WorkspacePath);
-            
-            // 1. Show index statistics as chart
-            var indexMetrics = new Dictionary<string, double>
-            {
-                ["Documents Indexed"] = indexResult.FilesIndexed,
-                ["Documents Skipped"] = indexResult.FilesSkipped,
-                ["Index Size (MB)"] = Math.Round(indexResult.TotalSizeBytes / (1024.0 * 1024.0), 2),
-                ["Index Time (seconds)"] = Math.Round(indexResult.IndexTimeMs / 1000.0, 2)
-            };
-
-            await _vscode.ShowMetricsChartAsync(
-                indexMetrics,
-                "bar",
-                $"Index Statistics: {workspaceName}"
-            );
-
-            // 2. Show file type distribution if available
-            if (indexResult.Statistics?.FileTypeDistribution?.Any() == true)
-            {
-                var fileTypeMetrics = indexResult.Statistics.FileTypeDistribution
-                    .ToDictionary(kvp => kvp.Key, kvp => (double)kvp.Value);
-
-                await _vscode.ShowMetricsChartAsync(
-                    fileTypeMetrics,
-                    "pie",
-                    "File Type Distribution"
-                );
-            }
-
-            // 3. Show index summary as enhanced markdown
+            // Only show the markdown summary view
             var summary = GenerateIndexSummary(indexResult, isRebuild);
-            await _vscode.ShowMarkdownAsync(
-                summary,
-                $"Index Summary: {workspaceName}"
+            await _vscode.SendVisualizationAsync(
+                "markdown",
+                new { content = summary },
+                new VisualizationHint 
+                { 
+                    Interactive = false,
+                    ConsolidateTabs = true
+                }
             );
-
-            // 4. Show detailed stats as data grid if we have enough information
-            if (indexResult.Statistics != null)
-            {
-                var statsData = new DataGridData
-                {
-                    Columns = new List<DataGridColumn>
-                    {
-                        new() { Name = "Metric", Type = "string" },
-                        new() { Name = "Value", Type = "string" },
-                        new() { Name = "Description", Type = "string" }
-                    },
-                    Rows = new List<object[]>
-                    {
-                        new object[] { "Total Documents", indexResult.Statistics.DocumentCount.ToString(), "Number of indexed documents" },
-                        new object[] { "Deleted Documents", indexResult.Statistics.DeletedDocumentCount.ToString(), "Number of deleted documents" },
-                        new object[] { "Segments", indexResult.Statistics.SegmentCount.ToString(), "Number of index segments" },
-                        new object[] { "Index Size", $"{Math.Round(indexResult.Statistics.IndexSizeBytes / (1024.0 * 1024.0), 2)} MB", "Total index size on disk" },
-                        new object[] { "File Watcher", indexResult.WatcherEnabled ? "Enabled" : "Disabled", "Automatic file change detection" },
-                        new object[] { "Is New Index", indexResult.IsNewIndex ? "Yes" : "No", "Whether this was a new or existing index" }
-                    }
-                };
-
-                await _vscode.ShowDataAsync(
-                    statsData,
-                    new DisplayOptions
-                    {
-                        Title = "Detailed Index Statistics",
-                        Interactive = true,
-                        Location = "panel"
-                    }
-                );
-            }
 
             _logger.LogDebug("Successfully sent index visualizations to VS Code for workspace: {WorkspacePath}", indexResult.WorkspacePath);
         }
@@ -537,6 +479,12 @@ public class IndexWorkspaceParameters
     [Description("Maximum tokens for response (default: 8000)")]
     [Range(100, 100000)]
     public int? MaxTokens { get; set; }
+    
+    /// <summary>
+    /// Whether to show visualization in VS Code
+    /// </summary>
+    [Description("Whether to show visualization in VS Code (default: false)")]
+    public bool? ShowInVSCode { get; set; }
 }
 
 /// <summary>
