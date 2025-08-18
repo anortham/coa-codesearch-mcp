@@ -202,22 +202,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 // Use response builder to create optimized response
                 var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
-                // NEW: Send rich visualizations to VS Code (if connected)
-                if ((parameters.ShowInVSCode ?? false) && _vscode.IsConnected && result.Success)
-                {
-                    // Fire and forget - don't block the main response
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await SendIndexVisualizationsAsync(indexResultData, parameters.ForceRebuild == true);
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to send index visualization to VS Code");
-                        }
-                    }, cancellationToken);
-                }
                 
                 return result;
             }
@@ -273,22 +257,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 // Use response builder to create optimized response
                 var result = await _responseBuilder.BuildResponseAsync(indexResultData, context);
                 
-                // NEW: Send rich visualizations to VS Code (if connected)
-                if ((parameters.ShowInVSCode ?? false) && _vscode.IsConnected && result.Success)
-                {
-                    // Fire and forget - don't block the main response
-                    _ = Task.Run(async () =>
-                    {
-                        try
-                        {
-                            await SendIndexVisualizationsAsync(indexResultData, false); // Not a rebuild
-                        }
-                        catch (Exception ex)
-                        {
-                            _logger.LogWarning(ex, "Failed to send index visualization to VS Code");
-                        }
-                    }, cancellationToken);
-                }
                 
                 return result;
             }
@@ -318,84 +286,6 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
             };
             return exceptionErrorResult;
         }
-    }
-    
-    /// <summary>
-    /// Send index summary to VS Code as markdown visualization
-    /// </summary>
-    private async Task SendIndexVisualizationsAsync(IndexResult indexResult, bool isRebuild)
-    {
-        try
-        {
-            // Only show the markdown summary view
-            var summary = GenerateIndexSummary(indexResult, isRebuild);
-            await _vscode.SendVisualizationAsync(
-                "markdown",
-                new { content = summary },
-                new VisualizationHint 
-                { 
-                    Interactive = false,
-                    ConsolidateTabs = true
-                }
-            );
-
-            _logger.LogDebug("Successfully sent index visualizations to VS Code for workspace: {WorkspacePath}", indexResult.WorkspacePath);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send index visualizations for workspace: {WorkspacePath}", indexResult.WorkspacePath);
-            // Don't throw - visualization failure shouldn't break the main indexing functionality
-        }
-    }
-
-    /// <summary>
-    /// Generate index summary markdown content
-    /// </summary>
-    private string GenerateIndexSummary(IndexResult indexResult, bool isRebuild)
-    {
-        var summary = new System.Text.StringBuilder();
-        var workspaceName = Path.GetFileName(indexResult.WorkspacePath);
-        
-        summary.AppendLine($"# Index {(isRebuild ? "Rebuild" : "Update")} Complete");
-        summary.AppendLine();
-        summary.AppendLine($"**Workspace:** `{workspaceName}`");
-        summary.AppendLine($"**Path:** `{indexResult.WorkspacePath}`");
-        summary.AppendLine($"**Operation:** {(indexResult.IsNewIndex ? "New Index Created" : "Existing Index Updated")}");
-        summary.AppendLine();
-        
-        summary.AppendLine("## Results");
-        summary.AppendLine();
-        summary.AppendLine($"- **Files Indexed:** {indexResult.FilesIndexed:N0}");
-        summary.AppendLine($"- **Files Skipped:** {indexResult.FilesSkipped:N0}");
-        summary.AppendLine($"- **Total Size:** {Math.Round(indexResult.TotalSizeBytes / (1024.0 * 1024.0), 2):N2} MB");
-        summary.AppendLine($"- **Index Time:** {Math.Round(indexResult.IndexTimeMs / 1000.0, 2):N2} seconds");
-        summary.AppendLine($"- **File Watcher:** {(indexResult.WatcherEnabled ? "✅ Enabled" : "❌ Disabled")}");
-        summary.AppendLine();
-        
-        if (indexResult.Statistics?.FileTypeDistribution?.Any() == true)
-        {
-            summary.AppendLine("## File Types Indexed");
-            summary.AppendLine();
-            var sortedTypes = indexResult.Statistics.FileTypeDistribution
-                .OrderByDescending(kvp => kvp.Value)
-                .Take(10);
-            
-            foreach (var fileType in sortedTypes)
-            {
-                summary.AppendLine($"- **{fileType.Key}**: {fileType.Value:N0} files");
-            }
-            summary.AppendLine();
-        }
-        
-        summary.AppendLine("## Next Steps");
-        summary.AppendLine();
-        summary.AppendLine("You can now search this workspace using:");
-        summary.AppendLine("- `text_search` - Search for content within files");
-        summary.AppendLine("- `file_search` - Find files by name pattern");
-        summary.AppendLine("- `recent_files` - View recently modified files");
-        summary.AppendLine("- `similar_files` - Find files similar to a given file");
-        
-        return summary.ToString();
     }
     
     private AIOptimizedResponse<IndexWorkspaceResult> CreateDirectoryNotFoundError(string workspacePath)
@@ -480,11 +370,6 @@ public class IndexWorkspaceParameters
     [Range(100, 100000)]
     public int? MaxTokens { get; set; }
     
-    /// <summary>
-    /// Whether to show visualization in VS Code
-    /// </summary>
-    [Description("Whether to show visualization in VS Code (default: false)")]
-    public bool? ShowInVSCode { get; set; }
 }
 
 /// <summary>
