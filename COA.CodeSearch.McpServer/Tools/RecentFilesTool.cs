@@ -226,16 +226,10 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
                 {
                     try
                     {
-                        // 1. Show timeline chart of recent activity
+                        // Show timeline chart of recent activity
                         await SendTimelineVisualizationAsync(recentFiles, timeFrame);
                         
-                        // 2. Show file type distribution
-                        await SendFileTypeDistributionAsync(recentFiles);
-                        
-                        // 3. Show recent activity data grid with sortable columns
-                        await SendRecentFilesDataGridAsync(recentFiles, timeFrame);
-                        
-                        _logger.LogDebug("Successfully sent recent files visualizations to VS Code");
+                        _logger.LogDebug("Successfully sent recent files timeline visualization to VS Code");
                     }
                     catch (Exception ex)
                     {
@@ -379,40 +373,36 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         {
             // Group files by hour/day depending on timeframe
             var groupingUnit = timeFrame.TotalDays <= 1 ? "hour" : "day";
-            var timelineData = new Dictionary<string, double>();
             
-            if (groupingUnit == "hour")
+            // Convert files to timeline events
+            var events = recentFiles.Select((file, index) => new
             {
-                // Group by hour for recent activity (last 24 hours)
-                var hourGroups = recentFiles
-                    .GroupBy(f => f.LastModified.ToString("yyyy-MM-dd HH:00"))
-                    .OrderBy(g => g.Key)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => (double)g.Count()
-                    );
-                timelineData = hourGroups;
-            }
-            else
-            {
-                // Group by day for longer timeframes
-                var dayGroups = recentFiles
-                    .GroupBy(f => f.LastModified.ToString("yyyy-MM-dd"))
-                    .OrderBy(g => g.Key)
-                    .ToDictionary(
-                        g => g.Key,
-                        g => (double)g.Count()
-                    );
-                timelineData = dayGroups;
-            }
+                id = $"file-{index}",
+                timestamp = file.LastModified.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                title = file.FileName,
+                description = $"Modified in {file.Directory}",
+                type = "file_modification",
+                category = file.Extension.TrimStart('.'),
+                metadata = new
+                {
+                    filePath = file.FilePath,
+                    sizeBytes = file.SizeBytes,
+                    extension = file.Extension
+                }
+            }).ToArray();
             
             await _vscode.SendVisualizationAsync(
-                "data-grid",
+                "timeline",
                 new
                 {
-                    title = $"Recent File Activity Timeline ({groupingUnit}ly)",
-                    chartType = "line",
-                    data = timelineData
+                    title = $"Recent File Activity ({recentFiles.Count} files)",
+                    events = events,
+                    groupBy = groupingUnit,
+                    dateRange = new
+                    {
+                        start = recentFiles.Min(f => f.LastModified).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
+                        end = recentFiles.Max(f => f.LastModified).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+                    }
                 },
                 new VisualizationHint { Interactive = true }
             );
@@ -420,89 +410,6 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         catch (Exception ex)
         {
             _logger.LogWarning(ex, "Failed to send timeline visualization");
-        }
-    }
-    
-    private async Task SendFileTypeDistributionAsync(List<RecentFileInfo> recentFiles)
-    {
-        try
-        {
-            var fileTypeGroups = recentFiles
-                .GroupBy(f => string.IsNullOrEmpty(f.Extension) ? "No Extension" : f.Extension.ToLowerInvariant())
-                .OrderByDescending(g => g.Count())
-                .Take(10) // Top 10 file types
-                .ToDictionary(
-                    g => g.Key,
-                    g => (double)g.Count()
-                );
-            
-            await _vscode.SendVisualizationAsync(
-                "data-grid",
-                new
-                {
-                    title = "Recent Files by Type",
-                    chartType = "pie",
-                    data = fileTypeGroups
-                },
-                new VisualizationHint { Interactive = true }
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send file type distribution");
-        }
-    }
-    
-    private async Task SendRecentFilesDataGridAsync(List<RecentFileInfo> recentFiles, TimeSpan timeFrame)
-    {
-        try
-        {
-            var gridData = recentFiles.Select(f => new Dictionary<string, object>
-            {
-                ["File"] = f.FileName,
-                ["Path"] = f.FilePath,
-                ["Extension"] = f.Extension,
-                ["Modified"] = f.LastModified.ToString("yyyy-MM-dd HH:mm:ss"),
-                ["Size"] = FormatFileSize(f.SizeBytes),
-                ["Age"] = FormatTimeAgo(f.ModifiedAgo)
-            }).ToList();
-            
-            var dataGridData = new COA.VSCodeBridge.Models.DataGridData
-            {
-                Columns = new List<COA.VSCodeBridge.Models.DataGridColumn>
-                {
-                    new() { Name = "File", Type = "string" },
-                    new() { Name = "Path", Type = "string", Formatter = "file-path" },
-                    new() { Name = "Extension", Type = "string" },
-                    new() { Name = "Modified", Type = "string" },
-                    new() { Name = "Size", Type = "string" },
-                    new() { Name = "Age", Type = "string" }
-                },
-                Rows = gridData.Select(row => new object[]
-                {
-                    row["File"], row["Path"], row["Extension"], 
-                    row["Modified"], row["Size"], row["Age"]
-                }).ToList()
-            };
-            
-            await _vscode.SendVisualizationAsync(
-                "data-grid",
-                new
-                {
-                    title = $"Recent Files (Last {FormatTimeSpan(timeFrame)})",
-                    columns = dataGridData.Columns,
-                    rows = dataGridData.Rows
-                },
-                new VisualizationHint
-                {
-                    Interactive = true,
-                    ConsolidateTabs = true
-                }
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send recent files data grid");
         }
     }
     
