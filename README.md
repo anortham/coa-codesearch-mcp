@@ -1,6 +1,8 @@
 # CodeSearch MCP Server
 
-A high-performance Model Context Protocol (MCP) server for blazing-fast code search and file discovery. Built with .NET 9.0 and COA MCP Framework 1.7.0, featuring Lucene-powered millisecond search with AI-optimized architecture.
+A lightning-fast code search tool for Claude Code that helps you find files, search code, and understand your projects instantly. Just ask Claude to "find all my React components" or "show me recent changes" and get results in milliseconds.
+
+Built with .NET 9.0 and COA MCP Framework 1.7.19, featuring Lucene-powered search with AI-optimized responses.
 
 ## 🚀 Features
 
@@ -80,7 +82,19 @@ Add to your Claude Code MCP configuration file:
 
 **After adding the configuration:**
 1. Restart Claude Code completely
-2. The tool will be available as `mcp__codesearch__*` in your Claude Code session
+2. Claude will now have powerful search capabilities - just ask naturally!
+
+## 🌟 What Makes This Special
+
+Unlike basic file search, CodeSearch understands your code:
+
+- **Smart Pattern Recognition**: Finds `async Task`, `[Fact]`, `interface IService` patterns
+- **Context-Aware**: Knows the difference between C# classes and JavaScript functions  
+- **Instant Results**: Millisecond search across millions of lines of code
+- **Fuzzy Matching**: Finds files even with typos in names
+- **Content Similarity**: "Find files like this one" using advanced analysis
+- **Recent Activity**: Tracks what you've been working on lately
+- **Cross-Project**: Search across multiple workspaces from one place
 
 ## 🛠️ Available Tools
 
@@ -103,60 +117,80 @@ Add to your Claude Code MCP configuration file:
 | `hello_world` | Test connectivity | `name`, `includeTime` |
 | `get_system_info` | System diagnostics | `includeEnvironment` |
 
-## 📖 Usage Examples
+## 💬 How to Use with Claude Code
 
-### Basic Search Operations
+Once installed, just chat naturally with Claude Code! Here are examples of what you can say:
 
-```bash
-# Index your workspace
-mcp__codesearch__index_workspace \
-  --workspacePath "C:\source\MyProject"
+### Finding Files and Code
 
-# Search for code patterns
-mcp__codesearch__text_search \
-  --query "async Task" \
-  --workspacePath "C:\source\MyProject"
-
-# Find files by pattern
-mcp__codesearch__file_search \
-  --pattern "*.cs" \
-  --workspacePath "C:\source\MyProject"
-
-# Get recent changes
-mcp__codesearch__recent_files \
-  --workspacePath "C:\source\MyProject" \
-  --timeFrame "24h"
+**"Find all my TypeScript files"**
+```
+Claude will search for *.ts files in your project
 ```
 
-### Advanced Operations
-
-```bash
-# Regex file search
-mcp__codesearch__file_search \
-  --pattern ".*Service\.cs$" \
-  --useRegex true \
-  --workspacePath "C:\source\MyProject"
-
-# Find similar files
-mcp__codesearch__similar_files \
-  --filePath "C:\source\MyProject\Services\UserService.cs" \
-  --workspacePath "C:\source\MyProject" \
-  --minScore 0.3
-
-# Directory search with hidden folders
-mcp__codesearch__directory_search \
-  --pattern "*test*" \
-  --includeHidden true \
-  --workspacePath "C:\source\MyProject"
-
-# Batch operations - multiple searches at once
-mcp__codesearch__batch_operations \
-  --workspacePath "C:\source\MyProject" \
-  --operations '[
-    {"operation": "text_search", "query": "async Task", "id": "async_methods"},
-    {"operation": "file_search", "pattern": "*.cs", "id": "cs_files"}
-  ]'
+**"Show me all the async functions in my codebase"**
+```  
+Claude will search for patterns like "async function" and "async Task"
 ```
+
+**"Find files containing 'UserService'"**
+```
+Claude will search file contents for the term "UserService"
+```
+
+**"What files have been changed in the last 2 days?"**
+```
+Claude will show recently modified files with timestamps
+```
+
+### Project Understanding
+
+**"Find all my React components"**
+```
+Claude will look for .jsx, .tsx files and React patterns
+```
+
+**"Show me all the test files"**
+```
+Claude will find files with "test", "spec" in names or paths
+```
+
+**"Find files similar to UserController.cs"**
+```
+Claude will use content analysis to find structurally similar files
+```
+
+**"Search for all database queries in my project"**
+```
+Claude will look for SQL patterns, ORM calls, etc.
+```
+
+### Development Workflow
+
+**"Index my project for searching"**
+```
+Claude will scan and index your files for fast searching
+```
+
+**"Find all TODO comments"**
+```
+Claude will search for TODO, FIXME, HACK comments
+```
+
+**"Show me configuration files"**
+```
+Claude will find .json, .yaml, .config files
+```
+
+### Advanced Examples
+
+**"Find all files in the Services directory that haven't been touched in 30 days"**
+
+**"Search for error handling patterns in my C# code"**
+
+**"Find all API endpoints in my project"**
+
+**"Show me files that import React but don't use hooks"**
 
 ## ⚙️ Configuration
 
@@ -194,7 +228,7 @@ Configuration via `appsettings.json`:
 - **Configuration**: Workspace-specific settings
 
 ### Framework Integration
-Built on **COA MCP Framework 1.7.0**:
+Built on **COA MCP Framework 1.7.19**:
 - Automatic tool discovery
 - Token optimization
 - Progressive response disclosure
@@ -239,22 +273,28 @@ mcp__codesearch__get_system_info
 
 ### Common Issues
 
-**Index locks:**
-```bash
-# Remove stale locks
-rm ~/.coa/codesearch/indexes/*/write.lock
+**"Claude says it can't find files I know exist"**
+```
+Tell Claude: "Please index my project for searching first"
 ```
 
-**Missing results:**
-```bash
-# Force rebuild index
-mcp__codesearch__index_workspace --forceRebuild true
+**"Search results seem outdated"**
+```
+Ask Claude: "Rebuild the search index for this project"
 ```
 
-**Memory issues:**
-- Reduce `RAMBufferSizeMB` in config
-- Lower `MaxIndexingConcurrency`
-- Check `MemoryPressure` settings
+**"Claude is responding slowly to search requests"**
+- Try asking for fewer results: "Find 5 recent TypeScript files"
+- Ask Claude to check system memory: "Check CodeSearch memory usage"
+
+**"Getting index lock errors"**
+```
+Close Claude Code completely and restart it
+```
+
+**Installation issues:**
+- Make sure you have .NET 9.0 installed: `dotnet --version`
+- Try reinstalling: `dotnet tool uninstall -g COA.CodeSearch && dotnet tool install -g COA.CodeSearch`
 
 ### Logging
 
@@ -307,9 +347,9 @@ MIT License - see [LICENSE](LICENSE) file.
 
 - **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
 - **Documentation**: [docs/](docs/) folder
-- **Framework**: [COA MCP Framework 1.7.0](https://www.nuget.org/packages/COA.Mcp.Framework)
+- **Framework**: [COA MCP Framework 1.7.19](https://www.nuget.org/packages/COA.Mcp.Framework)
 - **NuGet Package**: [COA.CodeSearch](https://www.nuget.org/packages/COA.CodeSearch)
 
 ---
 
-**Built with** [COA MCP Framework 1.7.0](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
+**Built with** [COA MCP Framework 1.7.19](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
