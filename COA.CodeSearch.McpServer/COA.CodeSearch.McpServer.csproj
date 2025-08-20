@@ -28,11 +28,11 @@
 
   <ItemGroup>
     <!-- COA Framework packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="1.7.9" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.7.9" />
+    <PackageReference Include="COA.Mcp.Framework" Version="1.7.19" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.7.19" />
     
     <!-- VS Code Bridge integration -->
-    <ProjectReference Include="..\..\MCP-VSCode-Bridge\client-libraries\dotnet\VSCodeBridge.csproj" />
+    <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.0.0" />
     
     <!-- Lucene.NET for search functionality -->
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />

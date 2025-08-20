@@ -48,7 +48,7 @@ public class LineNumberService
                 lineBreaks.Length, docId, string.Join(", ", lineBreaks.Take(5)) + (lineBreaks.Length > 5 ? "..." : ""));
 
             // Get term vectors from IndexReader
-            Fields termVectors = null;
+            Fields? termVectors = null;
             var indexReader = searcher.IndexReader;
             
             // Handle both composite and atomic readers

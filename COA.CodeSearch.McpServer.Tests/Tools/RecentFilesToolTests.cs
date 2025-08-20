@@ -103,15 +103,15 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
             result.Data.Should().NotBeNull();
-            result.Data?.Results.Should().NotBeNull();
+            result.Data!.Results.Should().NotBeNull();
             
             // Should have recent files (old file should be filtered out by date range query)
-            result.Data?.Results.Files.Should().HaveCountGreaterThan(0);
-            result.Data?.Results.TimeFrameRequested.Should().Be("1d");
-            result.Data?.Results.TotalFiles.Should().BeGreaterThan(0);
+            result.Data!.Results!.Files.Should().HaveCountGreaterThan(0);
+            result.Data!.Results.TimeFrameRequested.Should().Be("1d");
+            result.Data!.Results.TotalFiles.Should().BeGreaterThan(0);
             
             // Files should be sorted by modification time (most recent first)
-            var files = result.Data?.Results?.Files;
+            var files = result.Data!.Results!.Files;
             if (files.Count > 1)
             {
                 files[0].LastModified.Should().BeAfter(files[1].LastModified);
@@ -144,8 +144,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data?.Results.Files.Should().NotContain(f => f.Extension == ".txt");
-            result.Data?.Results.Files.Should().OnlyContain(f => f.Extension == ".cs" || f.Extension == ".js");
+            result.Data!.Results!.Files.Should().NotContain(f => f.Extension == ".txt");
+            result.Data!.Results!.Files.Should().OnlyContain(f => f.Extension == ".cs" || f.Extension == ".js");
         }
         
         [Test]
@@ -185,8 +185,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data?.Results.Files.Should().HaveCount(1);
-            result.Data?.Results.Files[0].FilePath.Should().Be("cached-file.cs");
+            result.Data!.Results!.Files.Should().HaveCount(1);
+            result.Data!.Results!.Files[0].FilePath.Should().Be("cached-file.cs");
             result.Meta!.ExtensionData.Should().ContainKey("cacheHit");
             
             // Should not have called the index service (check both overloads)
@@ -252,7 +252,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data?.Results?.TimeFrameRequested.Should().Be(timeFrame);
+            result.Data!.Results!.TimeFrameRequested.Should().Be(timeFrame);
             
             // Verify the cutoff time is approximately correct (within 1 minute tolerance)
             var expectedCutoff = DateTime.UtcNow.AddDays(-expectedDays);
@@ -369,7 +369,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
             
-            var files = result.Data?.Results.Files;
+            var files = result.Data!.Results!.Files;
             files.Should().HaveCount(3);
             files[0].FileName.Should().Be("file2.js"); // Most recent first
             files[1].FileName.Should().Be("file3.txt");
@@ -400,7 +400,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
             
-            var file = result.Data?.Results?.Files.Should().ContainSingle().Subject;
+            var file = result.Data!.Results!.Files.Should().ContainSingle().Subject;
             file.LastModified.Should().Be(modifiedTime);
             file.ModifiedAgo.Should().BeCloseTo(TimeSpan.FromHours(2), TimeSpan.FromMinutes(1));
         }

@@ -28,7 +28,7 @@ public class SmartSnippetService
     /// <summary>
     /// Enhance search results with smart snippets for visualization
     /// </summary>
-    public async Task<SearchResult> EnhanceWithSnippetsAsync(
+    public Task<SearchResult> EnhanceWithSnippetsAsync(
         SearchResult result, 
         Query query, 
         IndexSearcher searcher,
@@ -37,7 +37,7 @@ public class SmartSnippetService
     {
         if (!forVisualization || result.Hits == null || !result.Hits.Any())
         {
-            return result;
+            return Task.FromResult(result);
         }
 
         _logger.LogDebug("Generating snippets for {HitCount} search results", result.Hits.Count);
@@ -84,12 +84,12 @@ public class SmartSnippetService
             }
 
             result.Hits = enhancedHits;
-            return result;
+            return Task.FromResult(result);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Failed to enhance search results with snippets");
-            return result; // Return original results if snippet generation fails
+            return Task.FromResult(result); // Return original results if snippet generation fails
         }
     }
 
@@ -167,7 +167,7 @@ public class SmartSnippetService
         var allLines = new List<string>();
         using (var reader = new StringReader(content))
         {
-            string line;
+            string? line;
             while ((line = reader.ReadLine()) != null)
             {
                 allLines.Add(line);
