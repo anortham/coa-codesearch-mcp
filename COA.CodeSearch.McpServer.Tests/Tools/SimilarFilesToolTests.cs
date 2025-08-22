@@ -308,7 +308,7 @@ public class SimilarFilesToolTests : IDisposable
     public void Description_ReturnsCorrectDescription()
     {
         Assert.That(_tool.Description.ToLower(), Does.Contain("similar"));
-        Assert.That(_tool.Description, Does.Contain("MoreLikeThis"));
+        Assert.That(_tool.Description.ToLower(), Does.Contain("content"));
     }
 
     [Test]

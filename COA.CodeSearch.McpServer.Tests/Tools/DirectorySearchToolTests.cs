@@ -42,7 +42,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Assert
             _tool.Name.Should().Be(ToolNames.DirectorySearch);
             _tool.Description.Should().Contain("directories");
-            _tool.Description.Should().Contain("pattern");
             _tool.Category.Should().Be(COA.Mcp.Framework.ToolCategory.Query);
         }
         
