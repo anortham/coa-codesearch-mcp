@@ -125,7 +125,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data.Should().NotBeNull();
+            result.Result!.Data.Should().NotBeNull();
             result.Result.Data!.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             result.Result.Data!.Summary.Should().Contain("Created new index");
@@ -180,7 +180,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data!.Results.Should().NotBeNull();
+            result.Result!.Data!.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             // IndexResponseBuilder says "Updated index" even when no update happened
             // This is a known limitation - it doesn't distinguish between actual update and no-op
@@ -245,7 +245,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data!.Results.Should().NotBeNull();
+            result.Result!.Data!.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             result.Result.Data!.Summary.Should().Contain("75 files");
             
@@ -322,7 +322,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data!.Results.Should().NotBeNull();
+            result.Result!.Data!.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             
             // File watcher won't be started since FileWatcherService is null
@@ -503,7 +503,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert
             result.Success.Should().BeTrue();
-            result.Result.Data!.Results.Should().NotBeNull();
+            result.Result!.Data!.Results.Should().NotBeNull();
             result.Result.Success.Should().BeTrue();
             
             // Check for statistics-related insights
