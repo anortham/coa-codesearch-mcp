@@ -142,7 +142,7 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
     }
 
     public override string Name => ToolNames.BatchOperations;
-    public override string Description => "Execute multiple search operations in batch for efficient bulk processing";
+    public override string Description => "Run multiple searches at once. Ideal for comprehensive code analysis or when you need results from different search types simultaneously.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<BatchOperationsResult> ExecuteInternalAsync(

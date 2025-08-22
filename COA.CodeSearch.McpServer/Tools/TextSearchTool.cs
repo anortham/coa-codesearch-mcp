@@ -69,7 +69,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     }
 
     public override string Name => ToolNames.TextSearch;
-    public override string Description => "Search for text content using BaseResponseBuilder pattern for consistent responses";
+    public override string Description => "Search for text in code files. Perfect for finding function definitions, error messages, or specific implementations across your codebase.";
     public override ToolCategory Category => ToolCategory.Query;
 
 

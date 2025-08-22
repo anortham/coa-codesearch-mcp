@@ -73,7 +73,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
     }
 
     public override string Name => ToolNames.DirectorySearch;
-    public override string Description => "Search for directories by name pattern with token-optimized responses";
+    public override string Description => "Find directories and folders by name. Useful for navigating large project structures or finding specific modules.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<DirectorySearchResult>> ExecuteInternalAsync(
