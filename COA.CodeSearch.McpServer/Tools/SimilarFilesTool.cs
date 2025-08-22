@@ -64,7 +64,7 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
     }
 
     public override string Name => ToolNames.SimilarFiles;
-    public override string Description => "Find files similar in content to a specified file using MoreLikeThis analysis";
+    public override string Description => "Find files with similar content. Great for discovering related implementations, test files, or duplicate code patterns.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<SimilarFilesResult>> ExecuteInternalAsync(

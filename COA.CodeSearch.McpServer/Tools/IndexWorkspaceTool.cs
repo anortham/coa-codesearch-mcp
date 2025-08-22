@@ -59,7 +59,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     }
 
     public override string Name => ToolNames.IndexWorkspace;
-    public override string Description => "Index a workspace directory with token-optimized progress reporting";
+    public override string Description => "Build a searchable index of your codebase. Required first step before searching. Shows real-time progress for large projects.";
     public override ToolCategory Category => ToolCategory.Resources;
 
     protected override async Task<AIOptimizedResponse<IndexWorkspaceResult>> ExecuteInternalAsync(
