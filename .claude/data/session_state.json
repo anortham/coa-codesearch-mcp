@@ -1,0 +1,31 @@
+{
+  "session_id": "3021d522-f086-4acf-8714-21537961cc79",
+  "created_at": "2025-08-23T18:58:43.131703",
+  "workspace_path": "C:\\source\\COA CodeSearch MCP",
+  "project_detection": {
+    "csharp": {
+      "solutions": [
+        "COA.CodeSearch.McpServer.sln"
+      ],
+      "projects": [
+        "COA.CodeSearch.McpServer/COA.CodeSearch.McpServer.csproj",
+        "COA.CodeSearch.McpServer.Tests/COA.CodeSearch.McpServer.Tests.csproj"
+      ],
+      "detected": true
+    },
+    "typescript": {
+      "configs": [],
+      "packages": [],
+      "detected": false
+    }
+  },
+  "csharp": {
+    "solution_loaded": false,
+    "solution_path": null,
+    "verified_types": []
+  },
+  "typescript": {
+    "workspace_loaded": false,
+    "verified_types": []
+  }
+}
