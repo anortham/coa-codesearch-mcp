@@ -69,7 +69,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     }
 
     public override string Name => ToolNames.TextSearch;
-    public override string Description => "Search across your entire codebase. 10x faster than grep with 80% fewer tokens. Perfect for finding functions, errors, or implementations workspace-wide.";
+    public override string Description => "Search for text in code files. Perfect for finding function definitions, error messages, or specific implementations across your codebase.";
     public override ToolCategory Category => ToolCategory.Query;
 
 
