@@ -214,7 +214,6 @@ public class Program
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
             builder.Services.AddScoped<FileSearchTool>();
-            builder.Services.AddScoped<FileContentSearchTool>(); // Search within a specific file
             builder.Services.AddScoped<BatchOperationsTool>(); // Batch operations for multiple searches
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
