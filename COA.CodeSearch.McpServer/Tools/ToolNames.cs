@@ -9,6 +9,7 @@ public static class ToolNames
     public const string IndexWorkspace = "index_workspace";
     public const string TextSearch = "text_search";
     public const string FileSearch = "file_search";
+    public const string FileContentSearch = "file_content_search";
     public const string BatchOperations = "batch_operations";
     
     // Future tools
