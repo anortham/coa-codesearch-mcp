@@ -38,13 +38,14 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
     private readonly ILogger<FileSearchTool> _logger;
 
     public FileSearchTool(
+        IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<FileSearchTool> logger) : base(logger)
+        ILogger<FileSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;

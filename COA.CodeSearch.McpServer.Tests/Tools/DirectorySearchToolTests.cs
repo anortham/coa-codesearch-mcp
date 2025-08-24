@@ -25,6 +25,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         protected override DirectorySearchTool CreateTool()
         {
             _tool = new DirectorySearchTool(
+                ServiceProvider,
                 PathResolutionServiceMock.Object,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,

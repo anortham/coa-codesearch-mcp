@@ -33,6 +33,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             
             _tool = new TextSearchTool(
+                ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,

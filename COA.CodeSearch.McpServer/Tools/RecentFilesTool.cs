@@ -37,13 +37,14 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
     private readonly ILogger<RecentFilesTool> _logger;
 
     public RecentFilesTool(
+        IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<RecentFilesTool> logger) : base(logger)
+        ILogger<RecentFilesTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;

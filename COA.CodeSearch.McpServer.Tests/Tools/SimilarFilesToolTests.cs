@@ -53,6 +53,7 @@ public class SimilarFilesToolTests : IDisposable
         _testDirectory = new RAMDirectory();
 
         _tool = new SimilarFilesTool(
+            null,
             _luceneIndexServiceMock.Object,
             _cacheServiceMock.Object,
             _storageServiceMock.Object,
