@@ -44,6 +44,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
+        IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
@@ -52,7 +53,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         IProjectKnowledgeService projectKnowledgeService,
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<TextSearchTool> logger) : base(logger)
+        ILogger<TextSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

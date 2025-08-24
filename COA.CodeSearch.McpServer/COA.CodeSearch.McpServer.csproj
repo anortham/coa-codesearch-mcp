@@ -28,8 +28,8 @@
 
   <ItemGroup>
     <!-- COA Framework packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="1.7.19" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="1.7.19" />
+    <PackageReference Include="COA.Mcp.Framework" Version="2.0.1" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.0.1" />
     
     <!-- VS Code Bridge integration -->
     <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.0.0" />

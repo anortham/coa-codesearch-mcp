@@ -34,13 +34,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         protected override IndexWorkspaceTool CreateTool()
         {
             _tool = new IndexWorkspaceTool(
+                ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                ServiceProvider,
                 VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
@@ -300,13 +300,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Recreate tool with new service provider
             _tool = new IndexWorkspaceTool(
+                ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                ServiceProvider,
                 VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );

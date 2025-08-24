@@ -53,6 +53,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
     };
 
     public DirectorySearchTool(
+        IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         ILuceneIndexService luceneService,
         IResponseCacheService cacheService,
@@ -60,7 +61,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<DirectorySearchTool> logger)
-        : base(logger)
+        : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
         _luceneService = luceneService;

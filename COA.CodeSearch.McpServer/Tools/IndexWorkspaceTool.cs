@@ -36,15 +36,15 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
     public IndexWorkspaceTool(
+        IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
         IFileIndexingService fileIndexingService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        IServiceProvider serviceProvider,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<IndexWorkspaceTool> logger) : base(logger)
+        ILogger<IndexWorkspaceTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;

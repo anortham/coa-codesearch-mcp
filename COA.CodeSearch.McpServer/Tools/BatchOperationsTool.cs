@@ -130,10 +130,11 @@ public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchO
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
 
     public BatchOperationsTool(
+        IServiceProvider serviceProvider,
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
         FileSearchTool fileSearchTool,
-        COA.VSCodeBridge.IVSCodeBridge vscode) : base(logger)
+        COA.VSCodeBridge.IVSCodeBridge vscode) : base(serviceProvider)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
