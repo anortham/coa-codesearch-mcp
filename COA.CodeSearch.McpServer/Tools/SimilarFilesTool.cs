@@ -43,13 +43,14 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     public SimilarFilesTool(
+        IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         IPathResolutionService pathResolutionService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<SimilarFilesTool> logger) : base(logger)
+        ILogger<SimilarFilesTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

@@ -29,6 +29,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         protected override RecentFilesTool CreateTool()
         {
             _tool = new RecentFilesTool(
+                ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,

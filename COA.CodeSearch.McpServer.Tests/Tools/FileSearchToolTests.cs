@@ -23,6 +23,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         protected override FileSearchTool CreateTool()
         {
             _tool = new FileSearchTool(
+                ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
