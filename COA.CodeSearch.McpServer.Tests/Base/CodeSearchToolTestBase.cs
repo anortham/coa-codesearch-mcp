@@ -176,7 +176,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
                 
             LuceneIndexServiceMock
                 .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexInitResult
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexInitResult
                 {
                     Success = true,
                     IsNewIndex = false,
@@ -186,7 +186,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
                 
             LuceneIndexServiceMock
                 .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexStatistics
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
                 {
                     DocumentCount = documentCount,
                     DeletedDocumentCount = 0,
@@ -214,12 +214,12 @@ namespace COA.CodeSearch.McpServer.Tests.Base
         /// <summary>
         /// Creates a test search result.
         /// </summary>
-        protected Services.Lucene.SearchResult CreateTestSearchResult(int hitCount = 10)
+        protected COA.CodeSearch.McpServer.Services.Lucene.SearchResult CreateTestSearchResult(int hitCount = 10)
         {
-            var hits = new List<Services.Lucene.SearchHit>();
+            var hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>();
             for (int i = 0; i < hitCount; i++)
             {
-                hits.Add(new Services.Lucene.SearchHit
+                hits.Add(new COA.CodeSearch.McpServer.Services.Lucene.SearchHit
                 {
                     FilePath = $"/test/file{i}.cs",
                     Score = 1.0f - (i * 0.1f),
@@ -234,7 +234,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
                 });
             }
             
-            return new Services.Lucene.SearchResult
+            return new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "test query",
                 TotalHits = hitCount,
