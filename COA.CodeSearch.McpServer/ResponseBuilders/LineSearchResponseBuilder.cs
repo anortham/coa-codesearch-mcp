@@ -85,7 +85,7 @@ public class LineSearchResponseBuilder : BaseResponseBuilder<LineSearchResult, A
             TotalFilesWithMatches = data.TotalFilesWithMatches,
             TotalLineMatches = data.TotalLineMatches, // Keep original count
             SearchTime = data.SearchTime,
-            Query = data.Query,
+            Query = data.Query ?? "",
             Truncated = wasTruncated,
             Insights = null // Will be handled by framework
         };

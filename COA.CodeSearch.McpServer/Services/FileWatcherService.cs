@@ -233,7 +233,7 @@ public class FileWatcherService : BackgroundService
             try
             {
                 // Auto-discover and start watching existing indexed workspaces
-                await AutoStartExistingWorkspacesAsync(stoppingToken);
+                AutoStartExistingWorkspaces(stoppingToken);
                 
                 await ProcessFileChangesAsync(stoppingToken);
             }
@@ -538,7 +538,7 @@ public class FileWatcherService : BackgroundService
     /// <summary>
     /// Auto-discover and start watching existing indexed workspaces on startup
     /// </summary>
-    private async Task AutoStartExistingWorkspacesAsync(CancellationToken cancellationToken)
+    private void AutoStartExistingWorkspaces(CancellationToken cancellationToken)
     {
         try
         {
@@ -564,7 +564,7 @@ public class FileWatcherService : BackgroundService
                     if (File.Exists(segmentsFile))
                     {
                         // Try to resolve workspace path from the hash directory name
-                        var workspacePath = await TryResolveWorkspaceFromHashAsync(workspaceDir);
+                        var workspacePath = TryResolveWorkspaceFromHash(workspaceDir);
                         if (workspacePath != null && Directory.Exists(workspacePath))
                         {
                             _logger.LogInformation("Auto-starting FileWatcher for existing workspace: {WorkspacePath}", workspacePath);
@@ -603,7 +603,7 @@ public class FileWatcherService : BackgroundService
     /// Attempt to resolve the original workspace path from a hash directory
     /// This is a best-effort approach since we store hash-based directory names
     /// </summary>
-    private async Task<string?> TryResolveWorkspaceFromHashAsync(string indexDirectory)
+    private string? TryResolveWorkspaceFromHash(string indexDirectory)
     {
         try
         {
