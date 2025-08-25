@@ -322,14 +322,18 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
             if (hit.HighlightedFragments?.Count == 0)
                 hit.HighlightedFragments = null;
             
-            // Use cleaner hit structure
+            // Use cleaner hit structure - PRESERVE line numbers (2 tokens, high value)
             return new SearchHit
             {
                 FilePath = hit.FilePath,
                 Score = hit.Score,
                 Fields = minimalFields, // Minimal fields only
                 HighlightedFragments = hit.HighlightedFragments,
-                LastModified = hit.LastModified
+                LastModified = hit.LastModified,
+                LineNumber = hit.LineNumber, // PRESERVE: Essential for VS Code navigation
+                ContextLines = hit.ContextLines, // PRESERVE: Context for AI analysis
+                StartLine = hit.StartLine, // PRESERVE: Context bounds
+                EndLine = hit.EndLine // PRESERVE: Context bounds
             };
         }).ToList();
     }
