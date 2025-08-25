@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace COA.CodeSearch.McpServer.Services.Lucene;
@@ -23,6 +24,24 @@ public class LineData
     public Dictionary<string, List<int>> TermLineMap { get; set; } = new();
     public Dictionary<string, LineContext> FirstMatches { get; set; } = new();
     public int LineCount => Lines.Length;
+    
+    /// <summary>
+    /// Deserialize LineData from JSON (replacement for LineIndexer.DeserializeLineData)
+    /// </summary>
+    public static LineData? DeserializeLineData(string json)
+    {
+        if (string.IsNullOrEmpty(json))
+            return null;
+            
+        try
+        {
+            return JsonSerializer.Deserialize<LineData>(json);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
 
 /// <summary>

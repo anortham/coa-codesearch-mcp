@@ -217,11 +217,32 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
 
         try
         {
-            // Read file content to get all occurrences
-            if (!_pathResolutionService.FileExists(hit.FilePath))
+            // Get content from index, NOT from disk!
+            string[] lines = null;
+            
+            // Option 1: Try content field
+            if (hit.Fields.TryGetValue("content", out var content) && !string.IsNullOrEmpty(content))
+            {
+                // Handle both Unix (\n) and Windows (\r\n) line endings
+                lines = content.Replace("\r\n", "\n").Split('\n');
+            }
+            // Option 2: Try line_data field (while it still exists)
+            else if (hit.Fields.TryGetValue("line_data", out var lineDataJson) && !string.IsNullOrEmpty(lineDataJson))
+            {
+                var lineData = LineData.DeserializeLineData(lineDataJson);
+                if (lineData?.Lines != null)
+                {
+                    lines = lineData.Lines;
+                }
+            }
+            
+            if (lines == null)
+            {
+                // No indexed content - this should never happen
+                _logger.LogError("No indexed content for {FilePath} - index may be corrupted", hit.FilePath);
                 return matches;
+            }
 
-            var lines = await File.ReadAllLinesAsync(hit.FilePath);
             var pattern = parameters.CaseSensitive ? parameters.Pattern : parameters.Pattern.ToLowerInvariant();
 
             // Find ALL matching lines (not just first occurrence)

@@ -105,7 +105,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             LuceneIndexServiceMock
                 .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexStatistics
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
                 {
                     DocumentCount = 50,
                     DeletedDocumentCount = 0,
@@ -159,7 +159,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             LuceneIndexServiceMock
                 .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexStatistics
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
                 {
                     DocumentCount = 100,
                     DeletedDocumentCount = 0,
@@ -224,7 +224,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             LuceneIndexServiceMock
                 .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexStatistics
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
                 {
                     DocumentCount = 75,
                     DeletedDocumentCount = 0,
@@ -286,7 +286,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             LuceneIndexServiceMock
                 .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new Services.Lucene.IndexStatistics
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
                 {
                     DocumentCount = 50,
                     DeletedDocumentCount = 0,
@@ -473,7 +473,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     Duration = TimeSpan.FromSeconds(2)
                 });
             
-            var stats = new Services.Lucene.IndexStatistics
+            var stats = new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
             {
                 DocumentCount = 50,
                 DeletedDocumentCount = 2,

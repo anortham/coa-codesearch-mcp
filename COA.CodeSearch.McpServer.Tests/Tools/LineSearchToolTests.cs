@@ -29,11 +29,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         protected override LineSearchTool CreateTool()
         {
             var lineAwareSearchLoggerMock = new Mock<ILogger<LineAwareSearchService>>();
-            var lineNumberServiceLoggerMock = new Mock<ILogger<LineNumberService>>();
-            var lineNumberService = new LineNumberService(lineNumberServiceLoggerMock.Object);
             _lineSearchServiceMock = new Mock<LineAwareSearchService>(
-                lineAwareSearchLoggerMock.Object, 
-                lineNumberService);
+                lineAwareSearchLoggerMock.Object);
 
             var queryPreprocessorMock = new Mock<QueryPreprocessor>(Mock.Of<ILogger<QueryPreprocessor>>());
             var resourceStorageServiceMock = new Mock<IResourceStorageService>();
