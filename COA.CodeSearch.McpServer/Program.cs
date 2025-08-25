@@ -50,13 +50,12 @@ public class Program
         // Register support services
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
-        services.AddSingleton<LineNumberService>();
         services.AddSingleton<SmartSnippetService>();
         
-        // NEW: Line-aware indexing services
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.Lucene.LineIndexingOptions>();
-        services.AddSingleton<LineIndexer>();
-        services.AddSingleton<LineAwareIndexingService>();
+        // API services for HTTP mode
+        services.AddSingleton<ConfidenceCalculatorService>();
+        
+        // Simplified line-aware search service
         services.AddSingleton<LineAwareSearchService>();
         
         // Query preprocessing for code-aware search
@@ -258,6 +257,38 @@ public class Program
                 webBuilder.Services.AddControllers();
                 webBuilder.Services.AddEndpointsApiExplorer();
                 
+                // Add response caching
+                webBuilder.Services.AddResponseCaching();
+                
+                // Add CORS support
+                webBuilder.Services.AddCors(options =>
+                {
+                    options.AddPolicy("CodeNavPolicy", builder =>
+                        builder.WithOrigins("http://localhost:*")
+                               .AllowAnyMethod()
+                               .AllowAnyHeader()
+                               .AllowCredentials());
+                });
+                
+                // Add Swagger for API documentation
+                webBuilder.Services.AddSwaggerGen(c =>
+                {
+                    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
+                    {
+                        Title = "CodeSearch API",
+                        Version = "v1",
+                        Description = "HTTP API for CodeSearch MCP Server - enables other MCP servers to leverage search capabilities"
+                    });
+                    
+                    // Include XML documentation if available
+                    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
+                    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
+                    if (File.Exists(xmlPath))
+                    {
+                        c.IncludeXmlComments(xmlPath);
+                    }
+                });
+                
                 // Configure Kestrel
                 webBuilder.WebHost.ConfigureKestrel(options =>
                 {
@@ -268,16 +299,46 @@ public class Program
                 var app = webBuilder.Build();
                 
                 // Configure pipeline
+                app.UseCors("CodeNavPolicy");
+                app.UseResponseCaching();
+                
+                // Enable Swagger in development
+                if (app.Environment.IsDevelopment())
+                {
+                    app.UseSwagger();
+                    app.UseSwaggerUI(c =>
+                    {
+                        c.SwaggerEndpoint("/swagger/v1/swagger.json", "CodeSearch API v1");
+                        c.RoutePrefix = "swagger"; // Swagger UI at /swagger
+                    });
+                }
+                
                 app.UseRouting();
                 app.MapControllers();
                 
-                // Health check endpoint
+                // Keep the legacy health endpoint for backward compatibility
                 app.MapGet("/health", () => Results.Ok(new 
                 { 
                     Status = "Healthy", 
                     Service = "CodeSearch",
                     Version = "2.0.0",
-                    Mode = "HTTP"
+                    Mode = "HTTP",
+                    Timestamp = DateTimeOffset.UtcNow
+                }));
+                
+                // API info endpoint
+                app.MapGet("/api", () => Results.Ok(new
+                {
+                    Name = "CodeSearch API",
+                    Version = "1.0.0",
+                    Description = "HTTP API for CodeSearch MCP Server",
+                    Endpoints = new
+                    {
+                        Search = "/api/search",
+                        Workspaces = "/api/workspace", 
+                        Health = "/api/health",
+                        Swagger = "/swagger"
+                    }
                 }));
                 
                 await app.RunAsync();

@@ -11,47 +11,78 @@ namespace COA.CodeSearch.McpServer.Services;
 public class LineAwareSearchService
 {
     private readonly ILogger<LineAwareSearchService> _logger;
-    private readonly LineNumberService _fallbackService; // For backward compatibility
 
     public LineAwareSearchService(
-        ILogger<LineAwareSearchService> logger,
-        LineNumberService fallbackService)
+        ILogger<LineAwareSearchService> logger)
     {
         _logger = logger;
-        _fallbackService = fallbackService;
     }
 
     /// <summary>
-    /// Get line number for a search term from a document, using new line-aware data if available
+    /// Get line number for a search term from a document, using content directly
     /// </summary>
     public LineAwareResult GetLineNumber(Document document, string queryText, IndexSearcher? searcher = null, int? docId = null)
     {
-        // Try new line-aware approach first
-        var lineDataResult = GetLineNumberFromLineData(document, queryText);
-        if (lineDataResult.IsAccurate)
+        try
         {
-            return lineDataResult;
-        }
-
-        // Fallback to legacy approach for backward compatibility
-        if (searcher != null && docId.HasValue)
-        {
-            _logger.LogDebug("Falling back to legacy line number calculation for query: {Query}", queryText);
-            var legacyResult = _fallbackService.CalculateLineNumber(searcher, docId.Value, queryText);
-            
-            return new LineAwareResult
+            // Get content from document
+            var content = document.Get("content");
+            if (string.IsNullOrEmpty(content))
             {
-                LineNumber = legacyResult.LineNumber,
-                IsAccurate = legacyResult.HasPreciseLocation,
-                IsFromCache = false
-            };
+                _logger.LogWarning("No content in document for line number calculation");
+                return new LineAwareResult { IsAccurate = false };
+            }
+            
+            var lines = content.Split('\n');
+            var searchTerms = ExtractSearchTerms(queryText);
+            
+            // Find first matching line
+            for (int i = 0; i < lines.Length; i++)
+            {
+                var line = lines[i];
+                if (searchTerms.Any(term => 
+                    line.Contains(term, StringComparison.OrdinalIgnoreCase)))
+                {
+                    // Calculate context
+                    var contextStart = Math.Max(0, i - 3);
+                    var contextEnd = Math.Min(lines.Length - 1, i + 3);
+                    var contextLines = new List<string>();
+                    
+                    for (int c = contextStart; c <= contextEnd; c++)
+                    {
+                        if (c != i)
+                            contextLines.Add(lines[c]);
+                    }
+                    
+                    return new LineAwareResult
+                    {
+                        LineNumber = i + 1,
+                        Context = new LineContext
+                        {
+                            LineNumber = i + 1,
+                            LineText = line,
+                            ContextLines = contextLines,
+                            StartLine = contextStart + 1,
+                            EndLine = contextEnd + 1
+                        },
+                        IsAccurate = true,
+                        IsFromCache = false
+                    };
+                }
+            }
+            
+            // No match found
+            return new LineAwareResult { IsAccurate = false };
         }
-
-        return new LineAwareResult { IsAccurate = false };
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error calculating line number");
+            return new LineAwareResult { IsAccurate = false };
+        }
     }
 
     /// <summary>
-    /// Get line number using the new line-aware data stored in the document
+    /// Get line number using the new line-aware data stored in the document (kept for backward compatibility)
     /// </summary>
     private LineAwareResult GetLineNumberFromLineData(Document document, string queryText)
     {
@@ -59,16 +90,15 @@ public class LineAwareSearchService
         {
             // Check if document has new line data
             var lineDataJson = document.Get("line_data");
-            var lineDataVersion = document.GetField("line_data_version")?.GetInt32Value();
             
-            if (string.IsNullOrEmpty(lineDataJson) || !lineDataVersion.HasValue)
+            if (string.IsNullOrEmpty(lineDataJson))
             {
-                _logger.LogTrace("Document does not have line data, using fallback approach");
+                _logger.LogTrace("Document does not have line data");
                 return new LineAwareResult { IsAccurate = false };
             }
 
             // Deserialize line data
-            var lineData = LineIndexer.DeserializeLineData(lineDataJson);
+            var lineData = LineData.DeserializeLineData(lineDataJson);
             if (lineData == null)
             {
                 _logger.LogWarning("Failed to deserialize line data from document");
@@ -92,7 +122,7 @@ public class LineAwareSearchService
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error retrieving line number from line data, falling back");
+            _logger.LogWarning(ex, "Error retrieving line number from line data");
             return new LineAwareResult { IsAccurate = false };
         }
     }

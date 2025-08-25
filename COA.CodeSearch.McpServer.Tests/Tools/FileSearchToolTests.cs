@@ -74,11 +74,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
-            var searchResult = new Services.Lucene.SearchResult
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "*",
                 TotalHits = 3,
-                Hits = new List<Services.Lucene.SearchHit>
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
                     new() { FilePath = "/test/file1.cs", Score = 1.0f },
                     new() { FilePath = "/test/file2.cs", Score = 0.9f },
@@ -127,11 +127,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
-            var searchResult = new Services.Lucene.SearchResult
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "*",
                 TotalHits = 3,
-                Hits = new List<Services.Lucene.SearchHit>
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
                     new() { FilePath = "/test/test_file1.cs", Score = 1.0f },
                     new() { FilePath = "/test/test_file2.cs", Score = 0.9f },
@@ -173,11 +173,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
-            var searchResult = new Services.Lucene.SearchResult
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "*",
                 TotalHits = 5,
-                Hits = new List<Services.Lucene.SearchHit>
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
                     new() { FilePath = "/test/file1.cs", Score = 1.0f },
                     new() { FilePath = "/test/file2.js", Score = 0.9f },
@@ -221,11 +221,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
-            var searchResult = new Services.Lucene.SearchResult
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "*",
                 TotalHits = 3,
-                Hits = new List<Services.Lucene.SearchHit>
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
                     new() { FilePath = "/test/src/file1.cs", Score = 1.0f },
                     new() { FilePath = "/test/lib/file2.cs", Score = 0.9f },

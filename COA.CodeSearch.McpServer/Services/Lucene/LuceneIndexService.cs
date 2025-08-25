@@ -28,7 +28,6 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     private readonly IPathResolutionService _pathResolution;
     private readonly ICircuitBreakerService _circuitBreaker;
     private readonly IMemoryPressureService _memoryPressure;
-    private readonly LineNumberService _lineNumberService;
     private readonly LineAwareSearchService _lineAwareSearchService;
     private readonly SmartSnippetService _snippetService;
     private readonly CodeAnalyzer _codeAnalyzer;
@@ -48,7 +47,6 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         IPathResolutionService pathResolution,
         ICircuitBreakerService circuitBreaker,
         IMemoryPressureService memoryPressure,
-        LineNumberService lineNumberService,
         LineAwareSearchService lineAwareSearchService,
         SmartSnippetService snippetService)
     {
@@ -57,7 +55,6 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         _pathResolution = pathResolution;
         _circuitBreaker = circuitBreaker;
         _memoryPressure = memoryPressure;
-        _lineNumberService = lineNumberService;
         _lineAwareSearchService = lineAwareSearchService;
         _snippetService = snippetService;
         _codeAnalyzer = new CodeAnalyzer(LUCENE_VERSION);
@@ -279,14 +276,14 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 {
                     FilePath = doc.Get("path") ?? string.Empty,
                     Score = scoreDoc.Score,
-                    // Content removed - will be loaded on-demand if needed
+                    // Content included in Fields for LineSearchTool
                     Fields = new Dictionary<string, string>()
                 };
                 
-                // Add all stored fields except path and content (path already set above, content excluded for token optimization)
+                // Add all stored fields except path (path already set above)
                 foreach (var field in doc.Fields)
                 {
-                    if (field.Name != "path" && field.Name != "content" && field.Name != "content_tv" && field.Name != "line_breaks")
+                    if (field.Name != "path" && field.Name != "content_tv" && field.Name != "line_breaks")
                     {
                         hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
                     }
@@ -720,13 +717,15 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     context.Writer.Commit();
                     context.Writer.Dispose();
                 }
-                
-                context.Dispose();
             }
             finally
             {
+                // Release lock BEFORE disposing context (which disposes the lock itself)
                 context.Lock.Release();
             }
+            
+            // Now safe to dispose the context (which will dispose its own lock)
+            context.Dispose();
         }
         catch (Exception ex)
         {

@@ -342,7 +342,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
     }
 
     [TearDown]
-    public void TearDown()
+    public override void TearDown()
     {
         _testDirectory?.Dispose();
     }
