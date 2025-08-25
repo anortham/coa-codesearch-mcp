@@ -29,6 +29,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     private readonly ICircuitBreakerService _circuitBreaker;
     private readonly IMemoryPressureService _memoryPressure;
     private readonly LineNumberService _lineNumberService;
+    private readonly LineAwareSearchService _lineAwareSearchService;
     private readonly SmartSnippetService _snippetService;
     private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
@@ -48,6 +49,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         ICircuitBreakerService circuitBreaker,
         IMemoryPressureService memoryPressure,
         LineNumberService lineNumberService,
+        LineAwareSearchService lineAwareSearchService,
         SmartSnippetService snippetService)
     {
         _logger = logger;
@@ -56,6 +58,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         _circuitBreaker = circuitBreaker;
         _memoryPressure = memoryPressure;
         _lineNumberService = lineNumberService;
+        _lineAwareSearchService = lineAwareSearchService;
         _snippetService = snippetService;
         _codeAnalyzer = new CodeAnalyzer(LUCENE_VERSION);
         
@@ -296,7 +299,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     hit.LastModified = new DateTime(ticks, DateTimeKind.Utc);
                 }
                 
-                // NEW: Calculate line number using term vectors
+                // NEW: Calculate line number using line-aware data (with fallback to legacy approach)
                 // Extract the original query text from MultiFactorScoreQuery if wrapped
                 string queryText = query.ToString();
                 if (query is COA.CodeSearch.McpServer.Scoring.MultiFactorScoreQuery multiFactorQuery)
@@ -310,13 +313,23 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                         queryText = queryText.Substring(startIdx, endIdx - startIdx);
                     }
                 }
-                var lineResult = _lineNumberService.CalculateLineNumber(searcher, scoreDoc.Doc, queryText);
+                
+                var lineResult = _lineAwareSearchService.GetLineNumber(doc, queryText, searcher, scoreDoc.Doc);
                 hit.LineNumber = lineResult.LineNumber;
                 
-                // Add debug info to fields if line number calculation was precise
-                if (lineResult.HasPreciseLocation && lineResult.CharacterOffset.HasValue)
+                // Store line context if available for snippet generation
+                if (lineResult.Context != null)
                 {
-                    hit.Fields["character_offset"] = lineResult.CharacterOffset.Value.ToString();
+                    hit.ContextLines = lineResult.Context.ContextLines;
+                    hit.StartLine = lineResult.Context.StartLine;
+                    hit.EndLine = lineResult.Context.EndLine;
+                }
+                
+                // Add debug info to fields
+                hit.Fields["line_accurate"] = lineResult.IsAccurate.ToString().ToLowerInvariant();
+                hit.Fields["line_from_cache"] = lineResult.IsFromCache.ToString().ToLowerInvariant();
+                if (lineResult.IsAccurate)
+                {
                     hit.Fields["precise_location"] = "true";
                 }
                 

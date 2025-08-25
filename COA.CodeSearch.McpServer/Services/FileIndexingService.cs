@@ -22,6 +22,7 @@ public class FileIndexingService : IFileIndexingService
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IMemoryPressureService _memoryPressureService;
+    private readonly LineAwareIndexingService _lineAwareIndexingService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
@@ -35,6 +36,7 @@ public class FileIndexingService : IFileIndexingService
         IIndexingMetricsService metricsService,
         ICircuitBreakerService circuitBreakerService,
         IMemoryPressureService memoryPressureService,
+        LineAwareIndexingService lineAwareIndexingService,
         IOptions<MemoryLimitsConfiguration> memoryLimits)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
@@ -44,6 +46,7 @@ public class FileIndexingService : IFileIndexingService
         _metricsService = metricsService ?? throw new ArgumentNullException(nameof(metricsService));
         _circuitBreakerService = circuitBreakerService ?? throw new ArgumentNullException(nameof(circuitBreakerService));
         _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
+        _lineAwareIndexingService = lineAwareIndexingService ?? throw new ArgumentNullException(nameof(lineAwareIndexingService));
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
         
         // Initialize supported extensions from configuration or defaults
@@ -397,7 +400,10 @@ public class FileIndexingService : IFileIndexingService
             var relativeDirectoryPath = Path.GetRelativePath(workspacePath, directoryPath);
             var directoryName = Path.GetFileName(directoryPath) ?? "";
             
-            // Create field type for term vectors with positions and offsets
+            // NEW: Process content for line-aware indexing
+            var lineData = _lineAwareIndexingService.ProcessFileContent(content, filePath);
+            
+            // Create field type for term vectors with positions and offsets (keep for backward compatibility)
             var termVectorFieldType = new FieldType(TextField.TYPE_NOT_STORED)
             {
                 StoreTermVectors = true,
@@ -424,12 +430,16 @@ public class FileIndexingService : IFileIndexingService
                 new StringField("relativeDirectory", relativeDirectoryPath, Field.Store.YES),
                 new StringField("directoryName", directoryName, Field.Store.YES),
                 
-                // NEW: Content with term vectors for line number calculation
+                // LEGACY: Content with term vectors for line number calculation (keep for backward compatibility)
                 new Field("content_tv", content, termVectorFieldType),
                 
-                // NEW: Store line break positions for efficient line number lookup
+                // LEGACY: Store line break positions for efficient line number lookup (keep for backward compatibility)
                 new StoredField("line_breaks", LineNumberService.SerializeLineBreaks(content)),
-                new Int32Field("line_count", content.Count(c => c == '\n') + 1, Field.Store.YES)
+                new Int32Field("line_count", content.Count(c => c == '\n') + 1, Field.Store.YES),
+                
+                // NEW: Line-aware indexing fields for accurate line numbers
+                new StoredField("line_data", LineIndexer.SerializeLineData(lineData)),
+                new Int32Field("line_data_version", 1, Field.Store.YES) // Version for future migration
             };
 
             // Add searchable path components
