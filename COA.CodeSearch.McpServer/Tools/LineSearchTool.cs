@@ -209,7 +209,7 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
         return fileResults;
     }
 
-    private async Task<List<LineMatch>> ExtractAllLineMatches(
+    private Task<List<LineMatch>> ExtractAllLineMatches(
         SearchHit hit, 
         LineSearchParams parameters)
     {
@@ -218,7 +218,7 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
         try
         {
             // Get content from index, NOT from disk!
-            string[] lines = null;
+            string[]? lines = null;
             
             // Option 1: Try content field
             if (hit.Fields.TryGetValue("content", out var content) && !string.IsNullOrEmpty(content))
@@ -240,7 +240,7 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
             {
                 // No indexed content - this should never happen
                 _logger.LogError("No indexed content for {FilePath} - index may be corrupted", hit.FilePath);
-                return matches;
+                return Task.FromResult(matches);
             }
 
             var pattern = parameters.CaseSensitive ? parameters.Pattern : parameters.Pattern.ToLowerInvariant();
@@ -282,7 +282,7 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
             _logger.LogWarning(ex, "Error extracting line matches from {FilePath}", hit.FilePath);
         }
 
-        return matches;
+        return Task.FromResult(matches);
     }
 
     private bool ContainsPattern(string text, string pattern, string searchType)

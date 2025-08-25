@@ -384,18 +384,6 @@ public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedR
             }
         };
     }
-    
-    private static string FormatFileSize(long bytes)
-    {
-        if (bytes == 0) return "0 B";
-        
-        string[] sizes = { "B", "KB", "MB", "GB" };
-        var order = (int)Math.Floor(Math.Log(bytes, 1024));
-        order = Math.Min(order, sizes.Length - 1);
-        
-        var result = Math.Round(bytes / Math.Pow(1024, order), 1);
-        return $"{result} {sizes[order]}";
-    }
 }
 
 /// <summary>

@@ -289,23 +289,6 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         }
     }
 
-
-    private Lucene.Net.Search.Query? ParseQuery(string query)
-    {
-        try
-        {
-            var analyzer = new CodeAnalyzer(LuceneVersion.LUCENE_48);
-            var queryParser = new QueryParser(LuceneVersion.LUCENE_48, "content", analyzer);
-            queryParser.DefaultOperator = QueryParserBase.AND_OPERATOR; // More precise results
-            return queryParser.Parse(query);
-        }
-        catch (ParseException ex)
-        {
-            _logger.LogWarning(ex, "Failed to parse query: {Query}", query);
-            return null;
-        }
-    }
-
     private AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult> CreateNoIndexError(string workspacePath)
     {
         var result = new AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>

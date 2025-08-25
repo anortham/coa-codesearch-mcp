@@ -70,7 +70,7 @@ public class SearchController : ControllerBase
             using var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
             var query = _queryPreprocessor.BuildQuery(queryText, "standard", false, analyzer);
             
-            var searchResults = await _luceneService.SearchAsync(workspace, query, limit * 2);
+            var searchResults = await _luceneService.SearchAsync(workspace ?? string.Empty, query, limit * 2);
             
             var apiResults = new List<Models.Api.SearchResult>();
             
@@ -180,7 +180,7 @@ public class SearchController : ControllerBase
             using var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
             var luceneQuery = _queryPreprocessor.BuildQuery(searchQuery, "standard", false, analyzer);
             
-            var searchResults = await _luceneService.SearchAsync(workspace, luceneQuery, limit * 2);
+            var searchResults = await _luceneService.SearchAsync(workspace ?? string.Empty, luceneQuery, limit * 2);
             
             var apiResults = ProcessSearchHits(searchResults.Hits, query, null, limit);
 
@@ -222,7 +222,7 @@ public class SearchController : ControllerBase
             using var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
             var query = _queryPreprocessor.BuildQuery(name, "standard", false, analyzer);
             
-            var searchResults = await _luceneService.SearchAsync(workspace, query, 10);
+            var searchResults = await _luceneService.SearchAsync(workspace ?? string.Empty, query, 10);
             
             var symbolTypes = new List<string>();
             foreach (var hit in searchResults.Hits.Take(5))
