@@ -152,7 +152,9 @@ public class Program
     private static void ConfigureSerilog(IConfiguration configuration)
     {
         // Create a temporary path service to get the logs directory - exactly like ProjectKnowledge
-        var tempPathService = new PathResolutionService(configuration);
+        using var loggerFactory = LoggerFactory.Create(builder => { }); // Empty logger for initialization
+        var tempLogger = loggerFactory.CreateLogger<PathResolutionService>();
+        var tempPathService = new PathResolutionService(configuration, tempLogger);
         var logsPath = tempPathService.GetLogsPath();
         tempPathService.EnsureDirectoryExists(logsPath);
         

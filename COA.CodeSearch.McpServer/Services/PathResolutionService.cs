@@ -1,6 +1,7 @@
 using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using COA.CodeSearch.McpServer.Constants;
 
 namespace COA.CodeSearch.McpServer.Services;
@@ -12,11 +13,13 @@ namespace COA.CodeSearch.McpServer.Services;
 public class PathResolutionService : IPathResolutionService
 {
     private readonly IConfiguration _configuration;
+    private readonly ILogger<PathResolutionService> _logger;
     private readonly string _basePath;
     
-    public PathResolutionService(IConfiguration configuration)
+    public PathResolutionService(IConfiguration configuration, ILogger<PathResolutionService> logger)
     {
         _configuration = configuration;
+        _logger = logger;
         _basePath = InitializeBasePath();
     }
     
@@ -66,8 +69,8 @@ public class PathResolutionService : IPathResolutionService
     
     public string ComputeWorkspaceHash(string workspacePath)
     {
-        // Normalize path for consistent hashing
-        var fullPath = Path.GetFullPath(workspacePath);
+        // Normalize path for consistent hashing - use safe wrapper
+        var fullPath = GetFullPath(workspacePath);
         var normalizedPath = fullPath
             .Replace(Path.AltDirectorySeparatorChar, Path.DirectorySeparatorChar)
             .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
@@ -83,9 +86,9 @@ public class PathResolutionService : IPathResolutionService
     
     private string GetSafeWorkspaceName(string workspacePath)
     {
-        // Get the last directory name from the path
-        var fullPath = Path.GetFullPath(workspacePath);
-        var workspaceName = Path.GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+        // Get the last directory name from the path - use safe wrappers
+        var fullPath = GetFullPath(workspacePath);
+        var workspaceName = GetFileName(fullPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
         
         // If empty (e.g., root drive), use "root"
         if (string.IsNullOrWhiteSpace(workspaceName))
@@ -144,8 +147,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Directory.Exists(path);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to check directory existence for path: {Path}", path);
             return false;
         }
     }
@@ -156,8 +160,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return File.Exists(path);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to check file existence for path: {Path}", path);
             return false;
         }
     }
@@ -168,8 +173,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Path.GetFullPath(path);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to get full path for: {Path}", path);
             return path;
         }
     }
@@ -180,8 +186,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Path.GetFileName(path) ?? string.Empty;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to get file name for path: {Path}", path);
             return string.Empty;
         }
     }
@@ -192,8 +199,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Path.GetExtension(path);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to get extension for path: {Path}", path);
             return string.Empty;
         }
     }
@@ -204,8 +212,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Path.GetDirectoryName(path) ?? string.Empty;
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to get directory name for path: {Path}", path);
             return string.Empty;
         }
     }
@@ -216,8 +225,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Path.GetRelativePath(relativeTo, path);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to get relative path from '{RelativeTo}' to '{Path}'", relativeTo, path);
             return path;
         }
     }
@@ -228,8 +238,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Directory.EnumerateFiles(path, searchPattern, searchOption);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to enumerate files in path: {Path} with pattern: {Pattern}", path, searchPattern);
             return Enumerable.Empty<string>();
         }
     }
@@ -240,8 +251,9 @@ public class PathResolutionService : IPathResolutionService
         {
             return Directory.EnumerateDirectories(path, searchPattern, searchOption);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError(ex, "Failed to enumerate directories in path: {Path} with pattern: {Pattern}", path, searchPattern);
             return Enumerable.Empty<string>();
         }
     }
