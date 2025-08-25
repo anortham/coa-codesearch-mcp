@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Tools;
+using COA.CodeSearch.McpServer.Tests.Base;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -22,70 +23,44 @@ using Lucene.Net.Util;
 namespace COA.CodeSearch.McpServer.Tests.Tools;
 
 [TestFixture]
-public class SimilarFilesToolTests : IDisposable
+public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
 {
-    private SimilarFilesTool _tool;
-    private Mock<ILuceneIndexService> _luceneIndexServiceMock;
-    private Mock<IResponseCacheService> _cacheServiceMock;
-    private Mock<IResourceStorageService> _storageServiceMock;
-    private Mock<ICacheKeyGenerator> _keyGeneratorMock;
-    private Mock<IPathResolutionService> _pathResolutionServiceMock;
-    private Mock<ILogger<SimilarFilesTool>> _loggerMock;
-    private string _testWorkspacePath;
-    private string _testIndexPath;
-    private RAMDirectory _testDirectory;
+    private SimilarFilesTool _tool = null!;
+    private RAMDirectory _testDirectory = null!;
 
-    [SetUp]
-    public void SetUp()
+    protected override SimilarFilesTool CreateTool()
     {
-        _luceneIndexServiceMock = new Mock<ILuceneIndexService>();
-        _cacheServiceMock = new Mock<IResponseCacheService>();
-        _storageServiceMock = new Mock<IResourceStorageService>();
-        _keyGeneratorMock = new Mock<ICacheKeyGenerator>();
-        _pathResolutionServiceMock = new Mock<IPathResolutionService>();
-        _loggerMock = new Mock<ILogger<SimilarFilesTool>>();
-
-        _testWorkspacePath = Path.Combine(Path.GetTempPath(), "test-workspace-" + Guid.NewGuid());
-        _testIndexPath = Path.Combine(Path.GetTempPath(), "test-index-" + Guid.NewGuid());
-        System.IO.Directory.CreateDirectory(_testWorkspacePath);
-        System.IO.Directory.CreateDirectory(_testIndexPath);
-
         _testDirectory = new RAMDirectory();
-
-        _tool = new SimilarFilesTool(
-            Mock.Of<IServiceProvider>(),
-            _luceneIndexServiceMock.Object,
-            _cacheServiceMock.Object,
-            _storageServiceMock.Object,
-            _keyGeneratorMock.Object,
-            _pathResolutionServiceMock.Object,
-            new Mock<COA.VSCodeBridge.IVSCodeBridge>().Object,
-            _loggerMock.Object
-        );
-
-        // Setup default mocks
-        _keyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
-            .Returns(() => "test-cache-key-" + Guid.NewGuid());
         
-        _pathResolutionServiceMock.Setup(x => x.GetIndexPath(It.IsAny<string>()))
-            .Returns(_testIndexPath);
+        _tool = new SimilarFilesTool(
+            ServiceProvider,
+            LuceneIndexServiceMock.Object,
+            ResponseCacheServiceMock.Object,
+            ResourceStorageServiceMock.Object,
+            CacheKeyGeneratorMock.Object,
+            PathResolutionServiceMock.Object,
+            VSCodeBridgeMock.Object,
+            Mock.Of<ILogger<SimilarFilesTool>>()
+        );
+        
+        return _tool;
     }
 
     [Test]
     public async Task ExecuteAsync_ValidFilePath_ReturnsSimilarFiles()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "test.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "test.cs");
         File.WriteAllText(testFile, "public class TestClass { }");
         
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10
         };
 
-        _luceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        LuceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         SetupTestIndex();
@@ -110,7 +85,7 @@ public class SimilarFilesToolTests : IDisposable
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10
         };
 
@@ -128,17 +103,17 @@ public class SimilarFilesToolTests : IDisposable
     public async Task ExecuteAsync_NoIndexExists_ReturnsError()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "test.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "test.cs");
         File.WriteAllText(testFile, "public class TestClass { }");
         
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10
         };
 
-        _luceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        LuceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(false);
 
         // Act
@@ -155,13 +130,13 @@ public class SimilarFilesToolTests : IDisposable
     public async Task ExecuteAsync_WithCaching_ReturnsCachedResult()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "test.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "test.cs");
         File.WriteAllText(testFile, "public class TestClass { }");
         
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10,
             NoCache = false
         };
@@ -181,7 +156,7 @@ public class SimilarFilesToolTests : IDisposable
             Meta = new AIResponseMeta()
         };
 
-        _cacheServiceMock.Setup(x => x.GetAsync<AIOptimizedResponse<SimilarFilesResult>>(It.IsAny<string>()))
+        ResponseCacheServiceMock.Setup(x => x.GetAsync<AIOptimizedResponse<SimilarFilesResult>>(It.IsAny<string>()))
             .ReturnsAsync(cachedResponse);
 
         // Act
@@ -191,25 +166,25 @@ public class SimilarFilesToolTests : IDisposable
         Assert.That(result, Is.Not.Null);
         Assert.That(result.Success, Is.True);
         Assert.That((bool)result.Meta?.ExtensionData?["cacheHit"]!, Is.True);
-        _luceneIndexServiceMock.Verify(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
+        LuceneIndexServiceMock.Verify(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
     }
 
     [Test]
     public async Task ExecuteAsync_WithMinScore_FiltersResults()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "test.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "test.cs");
         File.WriteAllText(testFile, "public class TestClass { }");
         
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10,
             MinScore = 0.5f
         };
 
-        _luceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        LuceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         SetupTestIndex();
@@ -230,17 +205,17 @@ public class SimilarFilesToolTests : IDisposable
     public async Task ExecuteAsync_NoSimilarFilesFound_ReturnsEmptyResult()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "unique.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "unique.cs");
         File.WriteAllText(testFile, "// Unique content that won't match anything");
         
         var parameters = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             MaxResults = 10
         };
 
-        _luceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        LuceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         SetupEmptyIndex();
@@ -261,13 +236,13 @@ public class SimilarFilesToolTests : IDisposable
     public async Task ExecuteAsync_ResponseModes_AffectOutput()
     {
         // Arrange
-        var testFile = Path.Combine(_testWorkspacePath, "test.cs");
+        var testFile = Path.Combine(TestWorkspacePath, "test.cs");
         File.WriteAllText(testFile, "public class TestClass { }");
         
         var summaryParams = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             ResponseMode = "summary",
             MaxResults = 100
         };
@@ -275,12 +250,12 @@ public class SimilarFilesToolTests : IDisposable
         var fullParams = new SimilarFilesParameters
         {
             FilePath = testFile,
-            WorkspacePath = _testWorkspacePath,
+            WorkspacePath = TestWorkspacePath,
             ResponseMode = "full",
             MaxResults = 100
         };
 
-        _luceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+        LuceneIndexServiceMock.Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
             .ReturnsAsync(true);
 
         SetupTestIndexWithManyFiles();
@@ -366,16 +341,14 @@ public class SimilarFilesToolTests : IDisposable
         return doc;
     }
 
-    public void Dispose()
+    [TearDown]
+    public void TearDown()
     {
         _testDirectory?.Dispose();
-        if (System.IO.Directory.Exists(_testWorkspacePath))
-        {
-            System.IO.Directory.Delete(_testWorkspacePath, true);
-        }
-        if (System.IO.Directory.Exists(_testIndexPath))
-        {
-            System.IO.Directory.Delete(_testIndexPath, true);
-        }
+    }
+
+    protected override void OnTearDown()
+    {
+        base.OnTearDown();
     }
 }
