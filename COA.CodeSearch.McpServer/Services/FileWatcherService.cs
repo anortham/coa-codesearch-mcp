@@ -232,6 +232,9 @@ public class FileWatcherService : BackgroundService
         {
             try
             {
+                // Auto-discover and start watching existing indexed workspaces
+                await AutoStartExistingWorkspacesAsync(stoppingToken);
+                
                 await ProcessFileChangesAsync(stoppingToken);
             }
             catch (OperationCanceledException)
@@ -530,5 +533,120 @@ public class FileWatcherService : BackgroundService
         
         _changeQueue?.Dispose();
         base.Dispose();
+    }
+
+    /// <summary>
+    /// Auto-discover and start watching existing indexed workspaces on startup
+    /// </summary>
+    private async Task AutoStartExistingWorkspacesAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            var indexRoot = _pathResolution.GetIndexRootPath();
+            if (!Directory.Exists(indexRoot))
+            {
+                _logger.LogDebug("Index root directory does not exist: {IndexRoot}", indexRoot);
+                return;
+            }
+
+            var workspaceDirectories = Directory.GetDirectories(indexRoot);
+            var discoveredWorkspaces = new List<string>();
+
+            foreach (var workspaceDir in workspaceDirectories)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                try
+                {
+                    // Each directory represents a workspace hash - we need to resolve it back to a workspace path
+                    // Look for index files to confirm this is a valid indexed workspace
+                    var segmentsFile = Path.Combine(workspaceDir, "segments.gen");
+                    if (File.Exists(segmentsFile))
+                    {
+                        // Try to resolve workspace path from the hash directory name
+                        var workspacePath = await TryResolveWorkspaceFromHashAsync(workspaceDir);
+                        if (workspacePath != null && Directory.Exists(workspacePath))
+                        {
+                            _logger.LogInformation("Auto-starting FileWatcher for existing workspace: {WorkspacePath}", workspacePath);
+                            StartWatching(workspacePath);
+                            discoveredWorkspaces.Add(workspacePath);
+                        }
+                        else
+                        {
+                            _logger.LogDebug("Could not resolve workspace path for indexed directory: {IndexDir}", workspaceDir);
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to auto-start watcher for indexed workspace: {IndexDir}", workspaceDir);
+                }
+            }
+
+            if (discoveredWorkspaces.Count > 0)
+            {
+                _logger.LogInformation("Auto-started FileWatcher for {Count} existing workspaces: {Workspaces}", 
+                    discoveredWorkspaces.Count, string.Join(", ", discoveredWorkspaces.Select(Path.GetFileName)));
+            }
+            else
+            {
+                _logger.LogDebug("No existing indexed workspaces found to auto-start");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to auto-discover existing workspaces");
+        }
+    }
+
+    /// <summary>
+    /// Attempt to resolve the original workspace path from a hash directory
+    /// This is a best-effort approach since we store hash-based directory names
+    /// </summary>
+    private async Task<string?> TryResolveWorkspaceFromHashAsync(string indexDirectory)
+    {
+        try
+        {
+            // The directory name format is typically "workspacename_hash"
+            var directoryName = Path.GetFileName(indexDirectory);
+            var parts = directoryName.Split('_');
+            
+            if (parts.Length >= 2)
+            {
+                // Try to reconstruct the workspace name and look for common workspace locations
+                var workspaceName = string.Join("_", parts.Take(parts.Length - 1));
+                
+                // Common workspace locations to check
+                var possibleLocations = new[]
+                {
+                    Path.Combine("C:\\source", workspaceName.Replace('_', ' ')),
+                    Path.Combine("C:\\source", workspaceName),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "source", workspaceName),
+                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), workspaceName),
+                    // Add more common locations as needed
+                };
+
+                foreach (var location in possibleLocations)
+                {
+                    if (Directory.Exists(location))
+                    {
+                        // Verify this is the correct workspace by computing its hash
+                        var expectedHash = _pathResolution.ComputeWorkspaceHash(location);
+                        if (directoryName.EndsWith(expectedHash, StringComparison.OrdinalIgnoreCase))
+                        {
+                            return location;
+                        }
+                    }
+                }
+            }
+
+            _logger.LogDebug("Could not resolve workspace path from index directory: {IndexDir}", indexDirectory);
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error resolving workspace path from: {IndexDir}", indexDirectory);
+            return null;
+        }
     }
 }

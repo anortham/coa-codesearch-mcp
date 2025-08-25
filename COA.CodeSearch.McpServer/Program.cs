@@ -53,6 +53,12 @@ public class Program
         services.AddSingleton<LineNumberService>();
         services.AddSingleton<SmartSnippetService>();
         
+        // NEW: Line-aware indexing services
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Lucene.LineIndexingOptions>();
+        services.AddSingleton<LineIndexer>();
+        services.AddSingleton<LineAwareIndexingService>();
+        services.AddSingleton<LineAwareSearchService>();
+        
         // Query preprocessing for code-aware search
         services.AddSingleton<QueryPreprocessor>();
         
@@ -71,7 +77,7 @@ public class Program
         services.Configure<COA.VSCodeBridge.VSCodeBridgeOptions>(options =>
         {
             options.Url = "ws://localhost:7823/mcp";
-            options.AutoConnect = true;
+            options.AutoConnect = false; // Disabled to prevent log flooding when bridge not running
             options.ThrowOnConnectionFailure = false; // Graceful degradation
             options.ThrowOnDisplayFailure = false;
         });
@@ -208,6 +214,8 @@ public class Program
             builder.Services.AddScoped<ResponseBuilders.RecentFilesResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.DirectorySearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.SimilarFilesResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.LineSearchResponseBuilder>();
+            builder.Services.AddScoped<ResponseBuilders.SearchAndReplaceResponseBuilder>();
             
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
@@ -218,6 +226,8 @@ public class Program
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
             builder.Services.AddScoped<SimilarFilesTool>(); // New! Find similar files using MoreLikeThis
+            builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
+            builder.Services.AddScoped<SearchAndReplaceTool>(); // New! Consolidates Search→Read→Edit workflow
             
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
