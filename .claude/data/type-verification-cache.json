@@ -1,6 +1,6 @@
 {
   "session_verifications": {},
-  "last_updated": "2025-08-25T15:29:08.0193566-05:00",
+  "last_updated": "2025-08-25T18:14:56.2185505-05:00",
   "types": {
     "searches": {
       "constructors": [],
@@ -58,26 +58,26 @@
       "constructors": []
     },
     "for": {
-      "kind": "interface",
       "properties": {},
-      "constructors": [],
       "extractedFrom": "source_file",
-      "methods": {},
+      "constructors": [],
       "ttl_days": 7,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\ILuceneIndexService.cs",
-      "mtime": 133997713192658552,
-      "verified_at": "2025-08-25T15:16:36.4738766-05:00"
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Base\\CodeSearchToolTestBase.cs",
+      "mtime": 134006155964490025,
+      "kind": "class",
+      "methods": {},
+      "verified_at": "2025-08-25T15:32:52.0281902-05:00"
     },
     "CodeSearchToolTestBase": {
-      "kind": "class",
-      "verified_at": "2025-08-25T12:10:37.1833849-05:00",
-      "mtime": 134005982626329470,
-      "constructors": [],
-      "methods": {},
-      "ttl_days": 7,
+      "properties": {},
       "extractedFrom": "source_file",
+      "constructors": [],
+      "ttl_days": 7,
       "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Base\\CodeSearchToolTestBase.cs",
-      "properties": {}
+      "mtime": 134006155964490025,
+      "kind": "class",
+      "methods": {},
+      "verified_at": "2025-08-25T15:32:52.0407994-05:00"
     },
     "LineNumberService": {
       "mtime": 134004606580199066,
@@ -135,92 +135,92 @@
       "mtime": 133999956667733675
     },
     "IndexInitResult": {
-      "constructors": [],
-      "kind": "class",
-      "verified_at": "2025-08-25T10:20:29.7321461-05:00",
-      "mtime": 133997694066860746,
       "methods": {},
-      "extractedFrom": "source_file",
       "properties": {},
+      "verified_at": "2025-08-25T15:52:48.364367-05:00",
       "ttl_days": 7,
+      "kind": "class",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "mtime": 133997694066860746,
       "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "SearchResult": {
-      "kind": "class",
       "methods": {},
       "properties": {},
-      "verified_at": "2025-08-25T12:09:15.9724094-05:00",
-      "mtime": 134006084283503890,
-      "extractedFrom": "source_file",
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Models\\Api\\ApiModels.cs",
+      "verified_at": "2025-08-25T15:52:48.3710427-05:00",
       "ttl_days": 7,
-      "constructors": []
+      "kind": "class",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "SearchHit": {
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "properties": {},
-      "kind": "class",
       "methods": {},
-      "mtime": 133997694066860746,
-      "verified_at": "2025-08-25T11:03:59.1391271-05:00",
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.3715332-05:00",
+      "ttl_days": 7,
+      "kind": "class",
       "extractedFrom": "source_file",
       "constructors": [],
-      "ttl_days": 7
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "IndexHealthStatus": {
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "properties": {},
-      "kind": "class",
       "methods": {},
-      "mtime": 133997694066860746,
-      "verified_at": "2025-08-25T11:03:59.1468824-05:00",
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.3719858-05:00",
+      "ttl_days": 7,
+      "kind": "class",
       "extractedFrom": "source_file",
       "constructors": [],
-      "ttl_days": 7
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "IndexStatistics": {
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "properties": {},
-      "kind": "class",
       "methods": {},
-      "mtime": 133997694066860746,
-      "verified_at": "2025-08-25T11:03:59.1475169-05:00",
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.372384-05:00",
+      "ttl_days": 7,
+      "kind": "class",
       "extractedFrom": "source_file",
       "constructors": [],
-      "ttl_days": 7
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "IndexRepairOptions": {
-      "verified_at": "2025-08-24T17:12:57.5822397-05:00",
-      "constructors": [],
-      "ttl_days": 7,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "extractedFrom": "source_file",
-      "mtime": 133997694066860746,
-      "properties": {},
       "methods": {},
-      "kind": "class"
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.3736643-05:00",
+      "ttl_days": 7,
+      "kind": "class",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "IndexRepairResult": {
-      "verified_at": "2025-08-24T17:12:57.5827686-05:00",
-      "constructors": [],
-      "ttl_days": 7,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "extractedFrom": "source_file",
-      "mtime": 133997694066860746,
-      "properties": {},
       "methods": {},
-      "kind": "class"
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.3746912-05:00",
+      "ttl_days": 7,
+      "kind": "class",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "ReaderDiagnostics": {
-      "verified_at": "2025-08-24T17:12:57.5832898-05:00",
-      "constructors": [],
-      "ttl_days": 7,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs",
-      "extractedFrom": "source_file",
-      "mtime": 133997694066860746,
-      "properties": {},
       "methods": {},
-      "kind": "class"
+      "properties": {},
+      "verified_at": "2025-08-25T15:52:48.3759062-05:00",
+      "ttl_days": 7,
+      "kind": "class",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "mtime": 133997694066860746,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\Lucene\\IndexModels.cs"
     },
     "FileIndexingService": {
       "kind": "class",
@@ -278,15 +278,15 @@
       "methods": {}
     },
     "LineAwareSearchService": {
-      "extractedFrom": "source_file",
-      "constructors": [],
-      "mtime": 134006120268715300,
-      "ttl_days": 7,
-      "properties": {},
       "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\LineAwareSearchService.cs",
-      "verified_at": "2025-08-25T12:07:18.8956943-05:00",
+      "constructors": [],
+      "extractedFrom": "source_file",
+      "properties": {},
       "methods": {},
-      "kind": "class"
+      "mtime": 134006120268715300,
+      "kind": "class",
+      "ttl_days": 7,
+      "verified_at": "2025-08-25T15:36:12.6114737-05:00"
     },
     "ILuceneIndexService": {
       "kind": "interface",
@@ -300,14 +300,14 @@
       "verified_at": "2025-08-25T15:16:36.4919038-05:00"
     },
     "IPathResolutionService": {
-      "methods": {},
-      "extractedFrom": "source_file",
-      "kind": "interface",
-      "verified_at": "2025-08-25T15:27:38.8012531-05:00",
       "properties": {},
-      "mtime": 133994849883643981,
+      "extractedFrom": "source_file",
       "ttl_days": 7,
+      "mtime": 133994849883643981,
+      "kind": "interface",
+      "methods": {},
       "constructors": [],
+      "verified_at": "2025-08-25T18:11:14.2426896-05:00",
       "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\IPathResolutionService.cs"
     },
     "TextSearchToolTests": {
@@ -377,26 +377,26 @@
       "verified_at": "2025-08-25T07:21:27.0634447-05:00"
     },
     "LineSearchTool": {
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\LineSearchTool.cs",
       "constructors": [],
       "mtime": 134006141054914355,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\LineSearchTool.cs",
       "ttl_days": 7,
-      "kind": "class",
       "methods": {},
+      "kind": "class",
       "properties": {},
       "extractedFrom": "source_file",
-      "verified_at": "2025-08-25T12:07:45.1865048-05:00"
+      "verified_at": "2025-08-25T15:48:20.3475716-05:00"
     },
     "PathResolutionService": {
-      "constructors": [],
-      "kind": "class",
-      "verified_at": "2025-08-25T15:27:23.1688212-05:00",
-      "extractedFrom": "source_file",
       "ttl_days": 7,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\PathResolutionService.cs",
+      "verified_at": "2025-08-25T18:11:08.5932132-05:00",
       "methods": {},
       "properties": {},
-      "mtime": 133994849883801454,
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\PathResolutionService.cs"
+      "kind": "class",
+      "constructors": [],
+      "mtime": 134006363148492665,
+      "extractedFrom": "source_file"
     },
     "SimilarFilesResult": {
       "properties": {},
@@ -476,15 +476,15 @@
       "properties": {}
     },
     "SimilarFilesToolTests": {
-      "methods": {},
-      "ttl_days": 7,
-      "mtime": 134006153007460125,
-      "kind": "class",
-      "verified_at": "2025-08-25T15:14:40.1315973-05:00",
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
-      "constructors": [],
       "properties": {},
-      "extractedFrom": "source_file"
+      "verified_at": "2025-08-25T16:03:37.3628366-05:00",
+      "constructors": [],
+      "mtime": 134006153007460125,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
+      "extractedFrom": "source_file",
+      "ttl_days": 7,
+      "kind": "class",
+      "methods": {}
     },
     "LineContext": {
       "mtime": 134005484420474227,
@@ -542,14 +542,14 @@
       "methods": {}
     },
     "SearchController": {
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Controllers\\SearchController.cs",
-      "verified_at": "2025-08-25T12:09:29.3708424-05:00",
-      "methods": {},
       "mtime": 134006116931570800,
-      "extractedFrom": "source_file",
       "properties": {},
-      "constructors": [],
       "kind": "class",
+      "methods": {},
+      "constructors": [],
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Controllers\\SearchController.cs",
+      "extractedFrom": "source_file",
+      "verified_at": "2025-08-25T16:02:01.6998081-05:00",
       "ttl_days": 7
     },
     "ReaderStats": {
@@ -696,37 +696,37 @@
       "constructors": []
     },
     "WorkspaceController": {
-      "constructors": [],
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Controllers\\WorkspaceController.cs",
       "properties": {},
-      "ttl_days": 7,
-      "extractedFrom": "source_file",
       "kind": "class",
-      "mtime": 134006087672841818,
+      "verified_at": "2025-08-25T16:00:41.8693614-05:00",
+      "extractedFrom": "source_file",
       "methods": {},
-      "verified_at": "2025-08-25T12:09:23.7963172-05:00",
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Controllers\\WorkspaceController.cs"
+      "ttl_days": 7,
+      "mtime": 134006087672841818,
+      "constructors": []
     },
     "WriteLockManager": {
-      "verified_at": "2025-08-25T15:13:38.2418356-05:00",
-      "mtime": 133994849883801454,
       "ttl_days": 7,
-      "methods": {},
-      "extractedFrom": "source_file",
-      "constructors": [],
+      "verified_at": "2025-08-25T17:59:05.0966252-05:00",
       "properties": {},
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\WriteLockManager.cs",
+      "methods": {},
       "kind": "class",
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\WriteLockManager.cs"
+      "mtime": 133994849883801454,
+      "extractedFrom": "source_file",
+      "constructors": []
     },
     "TestClass": {
-      "methods": {},
-      "ttl_days": 7,
-      "mtime": 134006153007460125,
-      "kind": "class",
-      "verified_at": "2025-08-25T15:14:40.1403521-05:00",
-      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
-      "constructors": [],
       "properties": {},
-      "extractedFrom": "source_file"
+      "verified_at": "2025-08-25T16:03:37.3730134-05:00",
+      "constructors": [],
+      "mtime": 134006153007460125,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
+      "extractedFrom": "source_file",
+      "ttl_days": 7,
+      "kind": "class",
+      "methods": {}
     },
     "IndexContext": {
       "constructors": [],
@@ -749,6 +749,138 @@
       "methods": {},
       "ttl_days": 7,
       "mtime": 134006271272206127
+    },
+    "RecentFilesToolTests": {
+      "constructors": [],
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\RecentFilesToolTests.cs",
+      "extractedFrom": "source_file",
+      "methods": {},
+      "kind": "class",
+      "ttl_days": 7,
+      "mtime": 134005440063591284,
+      "verified_at": "2025-08-25T15:32:56.9742877-05:00",
+      "properties": {}
+    },
+    "FieldSelectorService": {
+      "properties": {},
+      "kind": "class",
+      "ttl_days": 7,
+      "verified_at": "2025-08-25T15:35:11.1632333-05:00",
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\FieldSelectorService.cs",
+      "extractedFrom": "source_file",
+      "constructors": [],
+      "methods": {},
+      "mtime": 133994849883487727
+    },
+    "FileSearchTool": {
+      "verified_at": "2025-08-25T15:41:28.3099364-05:00",
+      "kind": "class",
+      "properties": {},
+      "ttl_days": 7,
+      "extractedFrom": "source_file",
+      "methods": {},
+      "mtime": 134005437410689949,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\FileSearchTool.cs",
+      "constructors": []
+    },
+    "FileSearchParameters": {
+      "verified_at": "2025-08-25T15:41:28.316538-05:00",
+      "kind": "class",
+      "properties": {},
+      "ttl_days": 7,
+      "extractedFrom": "source_file",
+      "methods": {},
+      "mtime": 134005437410689949,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\FileSearchTool.cs",
+      "constructors": []
+    },
+    "FileSearchResult": {
+      "verified_at": "2025-08-25T15:41:28.3170294-05:00",
+      "kind": "class",
+      "properties": {},
+      "ttl_days": 7,
+      "extractedFrom": "source_file",
+      "methods": {},
+      "mtime": 134005437410689949,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\FileSearchTool.cs",
+      "constructors": []
+    },
+    "FileSearchMatch": {
+      "verified_at": "2025-08-25T15:41:28.317411-05:00",
+      "kind": "class",
+      "properties": {},
+      "ttl_days": 7,
+      "extractedFrom": "source_file",
+      "methods": {},
+      "mtime": 134005437410689949,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Tools\\FileSearchTool.cs",
+      "constructors": []
+    },
+    "SimilarClass": {
+      "properties": {},
+      "verified_at": "2025-08-25T16:03:37.3733784-05:00",
+      "constructors": [],
+      "mtime": 134006153007460125,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
+      "extractedFrom": "source_file",
+      "ttl_days": 7,
+      "kind": "class",
+      "methods": {}
+    },
+    "AnotherClass": {
+      "properties": {},
+      "verified_at": "2025-08-25T16:03:37.3726292-05:00",
+      "constructors": [],
+      "mtime": 134006153007460125,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
+      "extractedFrom": "source_file",
+      "ttl_days": 7,
+      "kind": "class",
+      "methods": {}
+    },
+    "LockDiagnostics": {
+      "ttl_days": 7,
+      "verified_at": "2025-08-25T17:59:05.1038224-05:00",
+      "properties": {},
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\WriteLockManager.cs",
+      "methods": {},
+      "kind": "class",
+      "mtime": 133994849883801454,
+      "extractedFrom": "source_file",
+      "constructors": []
+    },
+    "WriteLockCleanupResult": {
+      "ttl_days": 7,
+      "verified_at": "2025-08-25T17:59:05.1043638-05:00",
+      "properties": {},
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\WriteLockManager.cs",
+      "methods": {},
+      "kind": "class",
+      "mtime": 133994849883801454,
+      "extractedFrom": "source_file",
+      "constructors": []
+    },
+    "StuckLockInfo": {
+      "ttl_days": 7,
+      "verified_at": "2025-08-25T17:59:05.1048103-05:00",
+      "properties": {},
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer\\Services\\WriteLockManager.cs",
+      "methods": {},
+      "kind": "class",
+      "mtime": 133994849883801454,
+      "extractedFrom": "source_file",
+      "constructors": []
+    },
+    "UnusedCodeValidationTests": {
+      "verified_at": "2025-08-25T18:14:56.2106086-05:00",
+      "kind": "class",
+      "methods": {},
+      "extractedFrom": "source_file",
+      "ttl_days": 7,
+      "properties": {},
+      "constructors": [],
+      "mtime": 134006279236878826,
+      "file": "C:\\source\\COA CodeSearch MCP\\COA.CodeSearch.McpServer.Tests\\Services\\UnusedCodeValidationTests.cs"
     }
   },
   "version": 3,

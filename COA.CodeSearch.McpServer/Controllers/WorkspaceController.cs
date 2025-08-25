@@ -37,7 +37,7 @@ public class WorkspaceController : ControllerBase
     /// </summary>
     /// <returns>List of workspace information</returns>
     [HttpGet]
-    public async Task<ActionResult<WorkspacesResponse>> ListWorkspaces()
+    public Task<ActionResult<WorkspacesResponse>> ListWorkspaces()
     {
         try
         {
@@ -49,11 +49,11 @@ public class WorkspaceController : ControllerBase
             var indexRootPath = _pathResolver.GetIndexRootPath();
             if (!Directory.Exists(indexRootPath))
             {
-                return Ok(new WorkspacesResponse
+                return Task.FromResult<ActionResult<WorkspacesResponse>>(Ok(new WorkspacesResponse
                 {
                     Workspaces = workspaces,
                     TotalCount = 0
-                });
+                }));
             }
 
             var indexDirectories = Directory.GetDirectories(indexRootPath);
@@ -95,12 +95,12 @@ public class WorkspaceController : ControllerBase
                 TotalCount = workspaces.Count
             };
 
-            return Ok(response);
+            return Task.FromResult<ActionResult<WorkspacesResponse>>(Ok(response));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing workspaces");
-            return StatusCode(500, new { error = "Internal server error while listing workspaces" });
+            return Task.FromResult<ActionResult<WorkspacesResponse>>(StatusCode(500, new { error = "Internal server error while listing workspaces" }));
         }
     }
 
@@ -161,7 +161,7 @@ public class WorkspaceController : ControllerBase
     /// <param name="force">Whether to force re-indexing if already indexed</param>
     /// <returns>Indexing operation result</returns>
     [HttpPost("index")]
-    public async Task<ActionResult> IndexWorkspace(
+    public Task<ActionResult> IndexWorkspace(
         [FromQuery, Required] string workspacePath,
         [FromQuery] bool force = false)
     {
@@ -174,14 +174,14 @@ public class WorkspaceController : ControllerBase
             
             if (!Directory.Exists(normalizedPath))
             {
-                return BadRequest(new { error = $"Workspace path does not exist: {normalizedPath}" });
+                return Task.FromResult<ActionResult>(BadRequest(new { error = $"Workspace path does not exist: {normalizedPath}" }));
             }
 
             // Check if already indexed
             var indexPath = _pathResolver.GetIndexPath(normalizedPath);
             if (!force && Directory.Exists(indexPath))
             {
-                return Conflict(new { error = "Workspace is already indexed. Use force=true to re-index." });
+                return Task.FromResult<ActionResult>(Conflict(new { error = "Workspace is already indexed. Use force=true to re-index." }));
             }
 
             // Start indexing operation
@@ -202,17 +202,17 @@ public class WorkspaceController : ControllerBase
                 }
             });
 
-            return Accepted(new 
+            return Task.FromResult<ActionResult>(Accepted(new 
             { 
                 message = "Indexing started", 
                 workspace = normalizedPath,
                 indexPath = indexPath
-            });
+            }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error starting workspace indexing: {WorkspacePath}", workspacePath);
-            return StatusCode(500, new { error = "Internal server error while starting workspace indexing" });
+            return Task.FromResult<ActionResult>(StatusCode(500, new { error = "Internal server error while starting workspace indexing" }));
         }
     }
 
@@ -222,7 +222,7 @@ public class WorkspaceController : ControllerBase
     /// <param name="workspacePath">Path to the workspace to refresh</param>
     /// <returns>Refresh operation result</returns>
     [HttpPost("refresh")]
-    public async Task<ActionResult> RefreshWorkspace(
+    public Task<ActionResult> RefreshWorkspace(
         [FromQuery, Required] string workspacePath)
     {
         try
@@ -233,13 +233,13 @@ public class WorkspaceController : ControllerBase
             
             if (!Directory.Exists(normalizedPath))
             {
-                return BadRequest(new { error = $"Workspace path does not exist: {normalizedPath}" });
+                return Task.FromResult<ActionResult>(BadRequest(new { error = $"Workspace path does not exist: {normalizedPath}" }));
             }
 
             var indexPath = _pathResolver.GetIndexPath(normalizedPath);
             if (!Directory.Exists(indexPath))
             {
-                return BadRequest(new { error = "Workspace is not indexed. Use POST /index to create initial index." });
+                return Task.FromResult<ActionResult>(BadRequest(new { error = "Workspace is not indexed. Use POST /index to create initial index." }));
             }
 
             // For now, treat refresh as a re-index
@@ -259,16 +259,16 @@ public class WorkspaceController : ControllerBase
                 }
             });
 
-            return Accepted(new 
+            return Task.FromResult<ActionResult>(Accepted(new 
             { 
                 message = "Workspace refresh started", 
                 workspace = normalizedPath 
-            });
+            }));
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error refreshing workspace: {WorkspacePath}", workspacePath);
-            return StatusCode(500, new { error = "Internal server error while refreshing workspace" });
+            return Task.FromResult<ActionResult>(StatusCode(500, new { error = "Internal server error while refreshing workspace" }));
         }
     }
 

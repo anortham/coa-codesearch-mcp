@@ -143,117 +143,135 @@ public class PathResolutionService : IPathResolutionService
     
     public bool DirectoryExists(string path)
     {
-        try
-        {
-            return Directory.Exists(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to check directory existence for path: {Path}", path);
-            return false;
-        }
+        return ExecuteExistenceCheck(nameof(DirectoryExists), path, () => Directory.Exists(path));
     }
     
     public bool FileExists(string path)
     {
-        try
-        {
-            return File.Exists(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to check file existence for path: {Path}", path);
-            return false;
-        }
+        return ExecuteExistenceCheck(nameof(FileExists), path, () => File.Exists(path));
     }
     
     public string GetFullPath(string path)
     {
-        try
-        {
-            return Path.GetFullPath(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get full path for: {Path}", path);
-            return path;
-        }
+        return ExecutePathOperation(nameof(GetFullPath), path, () => Path.GetFullPath(path), path);
     }
     
     public string GetFileName(string path)
     {
-        try
-        {
-            return Path.GetFileName(path) ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get file name for path: {Path}", path);
-            return string.Empty;
-        }
+        return ExecutePathOperation(nameof(GetFileName), path, () => Path.GetFileName(path) ?? string.Empty, string.Empty);
     }
     
     public string GetExtension(string path)
     {
-        try
-        {
-            return Path.GetExtension(path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get extension for path: {Path}", path);
-            return string.Empty;
-        }
+        return ExecutePathOperation(nameof(GetExtension), path, () => Path.GetExtension(path) ?? string.Empty, string.Empty);
     }
     
     public string GetDirectoryName(string path)
     {
-        try
-        {
-            return Path.GetDirectoryName(path) ?? string.Empty;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get directory name for path: {Path}", path);
-            return string.Empty;
-        }
+        return ExecutePathOperation(nameof(GetDirectoryName), path, () => Path.GetDirectoryName(path) ?? string.Empty, string.Empty);
     }
     
     public string GetRelativePath(string relativeTo, string path)
     {
-        try
-        {
-            return Path.GetRelativePath(relativeTo, path);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to get relative path from '{RelativeTo}' to '{Path}'", relativeTo, path);
-            return path;
-        }
+        return ExecutePathOperation(nameof(GetRelativePath), relativeTo, path, () => Path.GetRelativePath(relativeTo, path), path);
     }
     
     public IEnumerable<string> EnumerateFiles(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
-        try
-        {
-            return Directory.EnumerateFiles(path, searchPattern, searchOption);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to enumerate files in path: {Path} with pattern: {Pattern}", path, searchPattern);
-            return Enumerable.Empty<string>();
-        }
+        return ExecuteEnumerationOperation(nameof(EnumerateFiles), path, searchPattern, () => Directory.EnumerateFiles(path, searchPattern, searchOption));
     }
     
     public IEnumerable<string> EnumerateDirectories(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly)
     {
+        return ExecuteEnumerationOperation(nameof(EnumerateDirectories), path, searchPattern, () => Directory.EnumerateDirectories(path, searchPattern, searchOption));
+    }
+    
+    // Error handling helper methods
+    
+    /// <summary>
+    /// Executes a file system existence check safely, returning a boolean result with consistent error handling
+    /// </summary>
+    private bool ExecuteExistenceCheck(string operationName, string path, Func<bool> operation)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _logger.LogWarning("{Operation} called with null or empty path", operationName);
+            return false;
+        }
+
         try
         {
-            return Directory.EnumerateDirectories(path, searchPattern, searchOption);
+            return operation();
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to enumerate directories in path: {Path} with pattern: {Pattern}", path, searchPattern);
+            _logger.LogError(ex, "Failed to {Operation} for path: {Path}", operationName.ToLowerInvariant(), path);
+            return false;
+        }
+    }
+    
+    /// <summary>
+    /// Executes a path manipulation operation safely, returning string result with consistent error handling
+    /// </summary>
+    private string ExecutePathOperation(string operationName, string path, Func<string> operation, string fallbackValue)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _logger.LogWarning("{Operation} called with null or empty path", operationName);
+            return fallbackValue;
+        }
+
+        try
+        {
+            return operation() ?? fallbackValue;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to {Operation} for path: {Path}", operationName.ToLowerInvariant(), path);
+            return fallbackValue;
+        }
+    }
+    
+    /// <summary>
+    /// Executes a path operation with two parameters safely
+    /// </summary>
+    private string ExecutePathOperation(string operationName, string path1, string path2, Func<string> operation, string fallbackValue)
+    {
+        if (string.IsNullOrWhiteSpace(path1) || string.IsNullOrWhiteSpace(path2))
+        {
+            _logger.LogWarning("{Operation} called with null or empty path - Path1: {Path1}, Path2: {Path2}", operationName, path1, path2);
+            return fallbackValue;
+        }
+
+        try
+        {
+            return operation() ?? fallbackValue;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to {Operation} from '{Path1}' to '{Path2}'", operationName.ToLowerInvariant(), path1, path2);
+            return fallbackValue;
+        }
+    }
+    
+    /// <summary>
+    /// Executes an enumeration operation safely
+    /// </summary>
+    private IEnumerable<string> ExecuteEnumerationOperation(string operationName, string path, string pattern, Func<IEnumerable<string>> operation)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+        {
+            _logger.LogWarning("{Operation} called with null or empty path", operationName);
+            return Enumerable.Empty<string>();
+        }
+
+        try
+        {
+            return operation();
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to {Operation} in path: {Path} with pattern: {Pattern}", operationName.ToLowerInvariant(), path, pattern);
             return Enumerable.Empty<string>();
         }
     }

@@ -382,28 +382,6 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
         };
     }
     
-    private AIOptimizedResponse<DirectorySearchResult> CreateInvalidPatternError(string pattern, string details)
-    {
-        return new AIOptimizedResponse<DirectorySearchResult>
-        {
-            Success = false,
-            Error = new FrameworkErrorInfo
-            {
-                Code = "INVALID_PATTERN",
-                Message = $"Invalid search pattern: {pattern} - {details}",
-                Recovery = new FrameworkRecoveryInfo
-                {
-                    Steps = new[]
-                    {
-                        "Check regex syntax if using regex mode",
-                        "Escape special characters properly",
-                        "Use simpler glob patterns like '*test*'"
-                    }
-                }
-            }
-        };
-    }
-    
     private AIOptimizedResponse<DirectorySearchResult> CreateErrorResponse(Exception ex)
     {
         return new AIOptimizedResponse<DirectorySearchResult>
