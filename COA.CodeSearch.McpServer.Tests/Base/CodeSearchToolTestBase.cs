@@ -5,6 +5,7 @@ using COA.CodeSearch.McpServer.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization;
+using COA.Mcp.Framework.Pipeline;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Caching.Memory;
@@ -14,6 +15,7 @@ using COA.VSCodeBridge;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
+using System.Collections.Generic;
 using Lucene.Net.Search;
 
 namespace COA.CodeSearch.McpServer.Tests.Base
@@ -59,6 +61,10 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             // Add real services that don't need mocking
             services.AddMemoryCache();
             services.AddSingleton<IConfiguration>(new ConfigurationBuilder().Build());
+            
+            // Add empty middleware collection for tools that need it
+            services.AddSingleton<IEnumerable<COA.Mcp.Framework.Pipeline.ISimpleMiddleware>>(
+                new List<COA.Mcp.Framework.Pipeline.ISimpleMiddleware>());
             
             // Setup default mock behaviors
             SetupDefaultMockBehaviors();
