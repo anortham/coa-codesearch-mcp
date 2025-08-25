@@ -414,29 +414,6 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
         }
     }
     
-    private static string FormatFileSize(long bytes)
-    {
-        if (bytes == 0) return "0 B";
-        
-        string[] sizes = { "B", "KB", "MB", "GB" };
-        var order = (int)Math.Floor(Math.Log(bytes, 1024));
-        order = Math.Min(order, sizes.Length - 1);
-        
-        var result = Math.Round(bytes / Math.Pow(1024, order), 1);
-        return $"{result} {sizes[order]}";
-    }
-    
-    private static string FormatTimeAgo(TimeSpan timeAgo)
-    {
-        if (timeAgo.TotalMinutes < 1)
-            return "Just now";
-        if (timeAgo.TotalHours < 1)
-            return $"{(int)timeAgo.TotalMinutes}m ago";
-        if (timeAgo.TotalDays < 1)
-            return $"{(int)timeAgo.TotalHours}h ago";
-        return $"{(int)timeAgo.TotalDays}d ago";
-    }
-    
     private static string FormatTimeSpan(TimeSpan timeSpan)
     {
         if (timeSpan.TotalMinutes < 60)
