@@ -89,8 +89,8 @@ public class SearchAndReplaceResponseBuilder : BaseResponseBuilder<SearchAndRepl
             TotalReplacements = data.TotalReplacements, // Keep original count
             SearchTime = data.SearchTime,
             ApplyTime = data.ApplyTime,
-            SearchPattern = data.SearchPattern,
-            ReplacePattern = data.ReplacePattern,
+            SearchPattern = data.SearchPattern ?? "",
+            ReplacePattern = data.ReplacePattern ?? "",
             Truncated = wasTruncated,
             Insights = null // Will be handled by framework
         };
@@ -110,7 +110,7 @@ public class SearchAndReplaceResponseBuilder : BaseResponseBuilder<SearchAndRepl
                     ["replacePattern"] = data.ReplacePattern ?? "",
                     ["preview"] = data.Preview,
                     ["searchTime"] = (int)data.SearchTime.TotalMilliseconds,
-                    ["applyTime"] = data.ApplyTime?.TotalMilliseconds
+                    ["applyTime"] = data.ApplyTime?.TotalMilliseconds ?? 0
                 }
             },
             Insights = ReduceInsights(insights, insightsBudget),
