@@ -116,19 +116,19 @@ public class WorkspaceControllerTests
                 
                 var response = okResult?.Value as WorkspacesResponse;
                 Assert.That(response, Is.Not.Null, "Response should not be null");
-                Assert.That(response.Workspaces.Count, Is.EqualTo(2), "Should return 2 workspaces");
+                Assert.That(response!.Workspaces.Count, Is.EqualTo(2), "Should return 2 workspaces");
                 
                 // CRITICAL: Verify that API returns actual workspace paths, not hashed directory names
-                var workspace1 = response.Workspaces.FirstOrDefault(w => w.Path == originalPath1);
-                var workspace2 = response.Workspaces.FirstOrDefault(w => w.Path == originalPath2);
+                var workspace1 = response!.Workspaces.FirstOrDefault(w => w.Path == originalPath1);
+                var workspace2 = response!.Workspaces.FirstOrDefault(w => w.Path == originalPath2);
                 
                 Assert.That(workspace1, Is.Not.Null, $"Should contain workspace with path {originalPath1}");
                 Assert.That(workspace2, Is.Not.Null, $"Should contain workspace with path {originalPath2}");
                 
                 // Verify no hashed directory names are returned
-                Assert.That(response.Workspaces.Any(w => w.Path == hashedDirName1), Is.False, 
+                Assert.That(response!.Workspaces.Any(w => w.Path == hashedDirName1), Is.False, 
                     "Should not return hashed directory name as workspace path");
-                Assert.That(response.Workspaces.Any(w => w.Path == hashedDirName2), Is.False, 
+                Assert.That(response!.Workspaces.Any(w => w.Path == hashedDirName2), Is.False, 
                     "Should not return hashed directory name as workspace path");
                 
                 // Verify metadata was used correctly
@@ -177,9 +177,9 @@ public class WorkspaceControllerTests
                 var response = okResult?.Value as WorkspacesResponse;
                 
                 Assert.That(response, Is.Not.Null, "Should return valid response");
-                Assert.That(response.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
+                Assert.That(response!.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
                 
-                var workspace = response.Workspaces.First();
+                var workspace = response!.Workspaces.First();
                 Assert.That(workspace.Path, Is.EqualTo($"[Unresolved: {hashedDirName}]"), 
                     "Should fallback to clearly marked unresolved path when path resolution fails");
             });
@@ -224,9 +224,9 @@ public class WorkspaceControllerTests
                 var response = okResult?.Value as WorkspacesResponse;
                 
                 Assert.That(response, Is.Not.Null, "Should return valid response");
-                Assert.That(response.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
+                Assert.That(response!.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
                 
-                var workspace = response.Workspaces.First();
+                var workspace = response!.Workspaces.First();
                 Assert.That(workspace.Path, Is.EqualTo(resolvedPath), 
                     "Should use resolved path even without metadata file");
                 Assert.That(workspace.IsIndexed, Is.True, "Should mark as indexed");
@@ -271,9 +271,9 @@ public class WorkspaceControllerTests
                 var response = okResult?.Value as WorkspacesResponse;
                 
                 Assert.That(response, Is.Not.Null, "Should return valid response despite corrupted metadata");
-                Assert.That(response.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
+                Assert.That(response!.Workspaces.Count, Is.EqualTo(1), "Should return 1 workspace");
                 
-                var workspace = response.Workspaces.First();
+                var workspace = response!.Workspaces.First();
                 Assert.That(workspace.Path, Is.EqualTo(resolvedPath), 
                     "Should use resolved path when metadata is corrupted");
                 
@@ -313,8 +313,8 @@ public class WorkspaceControllerTests
                 var response = okResult?.Value as WorkspacesResponse;
                 
                 Assert.That(response, Is.Not.Null, "Should return valid response");
-                Assert.That(response.Workspaces, Is.Empty, "Should return empty workspace list");
-                Assert.That(response.TotalCount, Is.EqualTo(0), "Should have total count of 0");
+                Assert.That(response!.Workspaces, Is.Empty, "Should return empty workspace list");
+                Assert.That(response!.TotalCount, Is.EqualTo(0), "Should have total count of 0");
             });
         }
         finally
@@ -343,8 +343,8 @@ public class WorkspaceControllerTests
             var response = okResult?.Value as WorkspacesResponse;
             
             Assert.That(response, Is.Not.Null, "Should return valid response");
-            Assert.That(response.Workspaces, Is.Empty, "Should return empty workspace list");
-            Assert.That(response.TotalCount, Is.EqualTo(0), "Should have total count of 0");
+            Assert.That(response!.Workspaces, Is.Empty, "Should return empty workspace list");
+            Assert.That(response!.TotalCount, Is.EqualTo(0), "Should have total count of 0");
         });
     }
 
@@ -426,11 +426,11 @@ public class WorkspaceControllerTests
                 var response = okResult?.Value as WorkspacesResponse;
                 
                 Assert.That(response, Is.Not.Null, "API should return valid response");
-                Assert.That(response.Workspaces.Count, Is.EqualTo(2), "Should return 2 indexed workspaces");
-                Assert.That(response.TotalCount, Is.EqualTo(2), "Total count should match workspace count");
+                Assert.That(response!.Workspaces.Count, Is.EqualTo(2), "Should return 2 indexed workspaces");
+                Assert.That(response!.TotalCount, Is.EqualTo(2), "Total count should match workspace count");
 
                 // CRITICAL ASSERTION: API must return actual workspace paths
-                var paths = response.Workspaces.Select(w => w.Path).ToList();
+                var paths = response!.Workspaces.Select(w => w.Path).ToList();
                 Assert.That(paths, Contains.Item(originalWorkspace1), 
                     "API must return the original workspace path, not hashed directory name");
                 Assert.That(paths, Contains.Item(originalWorkspace2), 
@@ -443,8 +443,8 @@ public class WorkspaceControllerTests
                     "API must NOT return hashed directory names to users");
 
                 // Verify metadata was correctly used
-                var workspace1 = response.Workspaces.First(w => w.Path == originalWorkspace1);
-                var workspace2 = response.Workspaces.First(w => w.Path == originalWorkspace2);
+                var workspace1 = response!.Workspaces.First(w => w.Path == originalWorkspace1);
+                var workspace2 = response!.Workspaces.First(w => w.Path == originalWorkspace2);
                 
                 Assert.That(workspace1.FileCount, Is.EqualTo(1250), "Should use document count from metadata");
                 Assert.That(workspace2.FileCount, Is.EqualTo(890), "Should use document count from metadata");

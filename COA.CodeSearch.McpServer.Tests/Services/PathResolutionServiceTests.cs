@@ -751,11 +751,11 @@ public class PathResolutionServiceTests
                 // Deserialize and verify structure
                 var metadata = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.WorkspaceIndexInfo>(jsonContent);
                 Assert.That(metadata, Is.Not.Null, "Should deserialize to WorkspaceIndexInfo object");
-                Assert.That(metadata.OriginalPath, Is.EqualTo(_service.GetFullPath(testWorkspacePath)), 
+                Assert.That(metadata!.OriginalPath, Is.EqualTo(_service.GetFullPath(testWorkspacePath)), 
                     "Should store the full workspace path");
-                Assert.That(metadata.HashPath, Is.EqualTo(_service.ComputeWorkspaceHash(testWorkspacePath)), 
+                Assert.That(metadata!.HashPath, Is.EqualTo(_service.ComputeWorkspaceHash(testWorkspacePath)), 
                     "Should store the computed workspace hash");
-                Assert.That(metadata.CreatedAt, Is.GreaterThan(DateTime.UtcNow.AddMinutes(-1)), 
+                Assert.That(metadata!.CreatedAt, Is.GreaterThan(DateTime.UtcNow.AddMinutes(-1)), 
                     "Should set CreatedAt to recent timestamp");
             });
         }
@@ -796,9 +796,9 @@ public class PathResolutionServiceTests
                 var metadata = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.WorkspaceIndexInfo>(jsonContent);
                 
                 Assert.That(metadata, Is.Not.Null, "Should deserialize metadata");
-                Assert.That(metadata.OriginalPath, Is.EqualTo(expectedFullPath), 
+                Assert.That(metadata!.OriginalPath, Is.EqualTo(expectedFullPath), 
                     "Should store full path, not relative path");
-                Assert.That(Path.IsPathFullyQualified(metadata.OriginalPath), Is.True, 
+                Assert.That(Path.IsPathFullyQualified(metadata!.OriginalPath), Is.True, 
                     "Stored path should be fully qualified");
             });
         }
