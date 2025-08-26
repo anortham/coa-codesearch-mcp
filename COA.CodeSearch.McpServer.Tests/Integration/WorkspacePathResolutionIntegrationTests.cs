@@ -79,7 +79,6 @@ public class WorkspacePathResolutionIntegrationTests
     public void CompleteWorkflow_IndexToPathResolution_ShouldMaintainWorkspacePathIntegrity()
     {
         // Arrange - Simulate a complete workflow from indexing to API response
-        var originalWorkspacePath = "C:\\source\\IntegrationTestProject";
         var testWorkspaceDir = Path.Combine(Path.GetTempPath(), "IntegrationTestWorkspace");
         
         try
@@ -122,7 +121,7 @@ public class WorkspacePathResolutionIntegrationTests
             });
 
             // STEP 3: Simulate API call - Path resolution from hashed directory back to original
-            var resolvedPath = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(expectedMetadataPath));
+            var resolvedPath = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(expectedMetadataPath)!);
             Assert.That(resolvedPath, Is.EqualTo(_pathResolutionService.GetFullPath(testWorkspaceDir)), 
                 "Path resolution should return original workspace path");
 
@@ -187,9 +186,9 @@ public class WorkspacePathResolutionIntegrationTests
             _pathResolutionService.StoreWorkspaceMetadata(workspace3);
 
             // STEP 3: Verify each workspace resolves to its correct original path
-            var resolved1 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace1)));
-            var resolved2 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace2)));
-            var resolved3 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace3)));
+            var resolved1 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace1))!);
+            var resolved2 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace2))!);
+            var resolved3 = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspace3))!);
 
             Assert.Multiple(() =>
             {
@@ -234,7 +233,7 @@ public class WorkspacePathResolutionIntegrationTests
             var metadataPath = _pathResolutionService.GetWorkspaceMetadataPath(testWorkspace);
             
             // Verify normal operation
-            var initialResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var initialResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             Assert.That(initialResolution, Is.EqualTo(_pathResolutionService.GetFullPath(testWorkspace)), 
                 "Initial resolution should work with valid metadata");
 
@@ -242,7 +241,7 @@ public class WorkspacePathResolutionIntegrationTests
             File.WriteAllText(metadataPath, "{invalid json content}");
 
             // STEP 3: Path resolution should handle corruption gracefully
-            var resolvedAfterCorruption = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var resolvedAfterCorruption = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             
             // Should fallback to directory-based reconstruction or return null
             Assert.That(resolvedAfterCorruption, Is.Null.Or.Not.Null, 
@@ -250,7 +249,7 @@ public class WorkspacePathResolutionIntegrationTests
 
             // STEP 4: Re-storing metadata should recover the workspace
             _pathResolutionService.StoreWorkspaceMetadata(testWorkspace);
-            var recoveredResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var recoveredResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             
             Assert.That(recoveredResolution, Is.EqualTo(_pathResolutionService.GetFullPath(testWorkspace)), 
                 "Should recover after metadata is re-stored");
@@ -276,7 +275,7 @@ public class WorkspacePathResolutionIntegrationTests
             var metadataPath = _pathResolutionService.GetWorkspaceMetadataPath(testWorkspace);
             
             // Verify initial state
-            var initialResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var initialResolution = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             Assert.That(initialResolution, Is.EqualTo(_pathResolutionService.GetFullPath(testWorkspace)), 
                 "Should resolve correctly when workspace exists");
 
@@ -284,7 +283,7 @@ public class WorkspacePathResolutionIntegrationTests
             Directory.Delete(testWorkspace, true);
 
             // STEP 3: Path resolution should return null for non-existent workspace
-            var resolvedAfterDeletion = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var resolvedAfterDeletion = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             
             Assert.That(resolvedAfterDeletion, Is.Null, 
                 "Should return null when original workspace no longer exists");
@@ -328,7 +327,7 @@ public class WorkspacePathResolutionIntegrationTests
             var metadataPath = _pathResolutionService.GetWorkspaceMetadataPath(specialWorkspace);
             
             // STEP 3: Verify resolution works with special characters
-            var resolved = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath));
+            var resolved = _pathResolutionService.TryResolveWorkspacePath(Path.GetDirectoryName(metadataPath)!);
             
             Assert.That(resolved, Is.EqualTo(_pathResolutionService.GetFullPath(specialWorkspace)), 
                 "Should correctly resolve workspace paths with special characters");
@@ -375,7 +374,7 @@ public class WorkspacePathResolutionIntegrationTests
             for (int i = 0; i < workspaceCount; i++)
             {
                 var metadataDir = Path.GetDirectoryName(_pathResolutionService.GetWorkspaceMetadataPath(workspaces[i]));
-                var resolved = _pathResolutionService.TryResolveWorkspacePath(metadataDir);
+                var resolved = _pathResolutionService.TryResolveWorkspacePath(metadataDir!);
                 
                 Assert.That(resolved, Is.EqualTo(_pathResolutionService.GetFullPath(workspaces[i])), 
                     $"Workspace {i} should resolve correctly");
