@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using System.ComponentModel.DataAnnotations;
 using COA.CodeSearch.McpServer.Models.Api;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 
@@ -62,12 +63,23 @@ public class WorkspaceController : ControllerBase
             {
                 try
                 {
-                    var workspaceName = Path.GetFileName(indexDir);
+                    // Try to resolve the original workspace path from the index directory
+                    var originalPath = _pathResolver.TryResolveWorkspacePath(indexDir);
+                    if (string.IsNullOrEmpty(originalPath))
+                    {
+                        // Fall back to directory name if resolution fails, but mark it as unresolved
+                        var dirName = Path.GetFileName(indexDir);
+                        originalPath = dirName?.Contains('_') == true 
+                            ? $"[Unresolved: {dirName}]" // Clearly mark hashed names as unresolved
+                            : dirName ?? "[Unknown]";
+                        _logger.LogWarning("Could not resolve original workspace path for index directory: {IndexDir}", indexDir);
+                    }
+                    
                     var metadataFile = Path.Combine(indexDir, "workspace_metadata.json");
                     
                     var workspaceInfo = new WorkspaceInfo
                     {
-                        Path = workspaceName, // This should be decoded from the directory name
+                        Path = originalPath, // Now returns the actual workspace path
                         IsIndexed = true,
                         FileCount = 0,
                         LastIndexed = Directory.GetLastWriteTime(indexDir),
@@ -77,8 +89,24 @@ public class WorkspaceController : ControllerBase
                     // Try to get more detailed info from metadata if available
                     if (System.IO.File.Exists(metadataFile))
                     {
-                        // TODO: Parse metadata file for more accurate information
-                        workspaceInfo.FileCount = Directory.GetFiles(indexDir, "*", SearchOption.AllDirectories).Length;
+                        try
+                        {
+                            var json = System.IO.File.ReadAllText(metadataFile);
+                            var metadata = System.Text.Json.JsonSerializer.Deserialize<Models.WorkspaceIndexInfo>(json);
+                            if (metadata != null)
+                            {
+                                workspaceInfo.Path = metadata.OriginalPath; // Use metadata path if available
+                                workspaceInfo.FileCount = (int)metadata.DocumentCount;
+                                workspaceInfo.LastIndexed = metadata.LastModified;
+                                workspaceInfo.IndexSizeBytes = metadata.IndexSizeBytes; // Use metadata index size if available
+                            }
+                        }
+                        catch (Exception metadataEx)
+                        {
+                            _logger.LogWarning(metadataEx, "Failed to parse metadata for workspace: {IndexDir}", indexDir);
+                            // Continue with directory-based info
+                            workspaceInfo.FileCount = Directory.GetFiles(indexDir, "*", SearchOption.AllDirectories).Length;
+                        }
                     }
 
                     workspaces.Add(workspaceInfo);

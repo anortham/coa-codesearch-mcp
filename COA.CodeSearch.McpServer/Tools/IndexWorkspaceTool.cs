@@ -162,6 +162,10 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                     watcherEnabled = true;
                 }
                 
+                // Store workspace metadata for path resolution
+                _pathResolutionService.StoreWorkspaceMetadata(workspacePath);
+                _logger.LogDebug("Stored workspace metadata for: {WorkspacePath}", workspacePath);
+                
                 // Get statistics if available
                 var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
                 
@@ -210,6 +214,9 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 // Index already exists and no force rebuild requested
                 var documentCount = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
                 var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
+                
+                // Store/update workspace metadata
+                _pathResolutionService.StoreWorkspaceMetadata(workspacePath);
                 
                 // Start watching this workspace for changes (if not already watching)
                 bool watcherEnabled = false;

@@ -192,6 +192,89 @@ Claude will find .json, .yaml, .config files
 
 **"Show me files that import React but don't use hooks"**
 
+## 🌐 HTTP API (Auto-Started)
+
+CodeSearch automatically starts an HTTP API on port **5020** when running in STDIO mode (default for Claude Code). This provides REST API access alongside the MCP functionality.
+
+### Available Endpoints
+
+#### Health & Info
+- `GET /health` - Service health check
+- `GET /api/health` - Detailed health status  
+- `GET /api` - API information and endpoints
+
+#### Workspace Management
+- `GET /api/workspace` - List all indexed workspaces
+- `GET /api/workspace/status?workspacePath={path}` - Get workspace status
+- `POST /api/workspace/index?workspacePath={path}&force={bool}` - Index workspace
+- `POST /api/workspace/refresh?workspacePath={path}` - Refresh workspace index
+- `DELETE /api/workspace/index?workspacePath={path}` - Remove workspace index
+
+#### Search Operations  
+- `GET /api/search/symbol?name={name}&type={type}&workspace={path}&limit={n}` - Search for symbols
+- `GET /api/search/text?query={text}&exact={bool}&workspace={path}&limit={n}` - Search text content
+- `GET /api/check/exists?name={name}&workspace={path}` - Check if symbol exists
+- `POST /api/search/batch` - Perform multiple searches in one request
+
+#### Documentation
+- `GET /swagger` - Interactive API documentation (development mode)
+
+### Example Usage
+
+```bash
+# Check service health
+curl http://localhost:5020/health
+
+# List workspaces (returns actual workspace paths)
+curl http://localhost:5020/api/workspace
+# Example response:
+# {
+#   "workspaces": [
+#     {
+#       "path": "C:\\source\\COA CodeSearch MCP",
+#       "isIndexed": true,
+#       "fileCount": 127,
+#       "lastIndexed": "2025-01-26T14:30:15Z"
+#     }
+#   ]
+# }
+
+# Search for a class (use actual workspace path from list above)
+curl "http://localhost:5020/api/search/symbol?name=UserService&type=class&workspace=C%3A%5Csource%5CCOA%20CodeSearch%20MCP"
+
+# Search for text (workspace path is properly URL-encoded)
+curl "http://localhost:5020/api/search/text?query=async%20Task&workspace=C%3A%5Csource%5CCOA%20CodeSearch%20MCP&limit=10"
+
+# Get workspace status (query parameter requires proper encoding)
+curl "http://localhost:5020/api/workspace/status?workspacePath=C%3A%5Csource%5CCOA%20CodeSearch%20MCP"
+
+# Index a new workspace
+curl -X POST "http://localhost:5020/api/workspace/index?workspacePath=C%3A%5Csource%5CMyProject&force=false"
+```
+
+The HTTP API is automatically managed by the MCP framework's auto-service feature and will restart if it crashes.
+
+## 🔒 Security & Thread Safety
+
+### Path Validation
+The PathResolutionService implements comprehensive path validation:
+- **Directory traversal protection**: Blocks paths containing ".." sequences
+- **Path length validation**: Prevents excessively long paths (240+ characters)
+- **Input sanitization**: Validates and normalizes all workspace paths
+- **Cross-platform compatibility**: Handles path separators and special folders
+
+### Thread Safety
+- **Concurrent metadata access**: Semaphore locks protect workspace metadata files
+- **Atomic file operations**: Metadata updates use temporary files with atomic replacement
+- **Lock management**: Per-file locking prevents corruption during concurrent access
+- **Safe file system operations**: All I/O operations include error handling and fallbacks
+
+### API Security
+- **Path resolution**: Internal hash directories never exposed via HTTP API
+- **Real path validation**: Only existing, accessible workspace paths are returned
+- **URL encoding support**: Handles special characters in workspace paths
+- **Fallback handling**: Gracefully handles unresolvable or corrupted metadata
+
 ## ⚙️ Configuration
 
 Configuration via `appsettings.json`:
@@ -200,7 +283,11 @@ Configuration via `appsettings.json`:
 {
   "CodeSearch": {
     "BasePath": "~/.coa/codesearch",
-    "LogsPath": "~/.coa/codesearch/logs", 
+    "LogsPath": "~/.coa/codesearch/logs",
+    "HttpPort": 5020,
+    "HttpApi": {
+      "Enabled": true
+    },
     "Lucene": {
       "IndexRootPath": "~/.coa/codesearch/indexes",
       "MaxIndexingConcurrency": 8,
@@ -223,7 +310,10 @@ Configuration via `appsettings.json`:
 ## 🏗️ Architecture
 
 ### Centralized Storage
-- **Indexes**: `~/.coa/codesearch/indexes/[workspace-hash]/`
+- **Indexes**: `~/.coa/codesearch/indexes/[workspace-name_hash]/`
+  - Uses descriptive names with hash suffixes for uniqueness
+  - Metadata files enable resolution of original workspace paths
+  - HTTP API returns actual workspace paths, not internal hash names
 - **Logs**: `~/.coa/codesearch/logs/`
 - **Configuration**: Workspace-specific settings
 

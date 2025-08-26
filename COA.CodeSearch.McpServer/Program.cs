@@ -350,6 +350,28 @@ public class Program
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
                 
+                // Use STDIO transport
+                builder.UseStdioTransport();
+
+                // Auto-start HTTP service for API access
+                if (configuration.GetValue<bool>("CodeSearch:HttpApi:Enabled", true))
+                {
+                    var port = configuration.GetValue<int>("CodeSearch:HttpPort", 5020);
+                    builder.UseAutoService(config =>
+                    {
+                        config.ServiceId = "codesearch-http";
+                        // Use dotnet to execute the DLL with quoted path for spaces
+                        config.ExecutablePath = "dotnet";
+                        var dllPath = Assembly.GetExecutingAssembly().Location;
+                        config.Arguments = new[] { $"\"{dllPath}\"", "--mode", "http" };
+                        config.Port = port;
+                        config.HealthEndpoint = $"http://localhost:{port}/health";
+                        config.AutoRestart = true;
+                        config.MaxRestartAttempts = 3;
+                        config.HealthCheckIntervalSeconds = 60;
+                    });
+                }
+                
                 // FileWatcherService will self-start when StartWatching is called
                 // This ensures the same instance receives and processes events
                 await builder.RunAsync();

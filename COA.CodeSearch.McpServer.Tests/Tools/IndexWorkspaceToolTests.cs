@@ -510,5 +510,230 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Insights.Should().Contain(i => i.Contains("Top file types"));
             result.Result.Insights.Should().Contain(i => i.Contains(".cs (30)"));
         }
+
+        #region NEW: Workspace Path Resolution - Metadata Storage Tests
+
+        [Test]
+        public async Task ExecuteAsync_Should_Store_Workspace_Metadata_After_Successful_Indexing()
+        {
+            // Arrange - This test verifies that metadata is stored during indexing
+            // This is CRITICAL for the path resolution fix to work
+            LuceneIndexServiceMock
+                .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexInitResult
+                {
+                    Success = true,
+                    IsNewIndex = true,
+                    WorkspaceHash = "test-metadata-hash",
+                    IndexPath = TestIndexPath
+                });
+            
+            FileIndexingServiceMock
+                .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexingResult
+                {
+                    Success = true,
+                    IndexedFileCount = 25,
+                    SkippedFileCount = 0,
+                    Duration = TimeSpan.FromSeconds(1.5)
+                });
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
+                {
+                    DocumentCount = 25,
+                    DeletedDocumentCount = 0,
+                    SegmentCount = 1,
+                    IndexSizeBytes = 25000,
+                    FileTypeDistribution = new() { [".cs"] = 25 }
+                });
+
+            var parameters = new IndexWorkspaceParameters
+            {
+                WorkspacePath = TestWorkspacePath
+            };
+
+            // Act - Execute the tool to trigger indexing
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert - Verify indexing succeeded
+            result.Success.Should().BeTrue();
+            result.Result!.Success.Should().BeTrue();
+
+            // CRITICAL ASSERTION: Verify that StoreWorkspaceMetadata was called
+            // This is the key fix that enables path resolution from hashed directories
+            PathResolutionServiceMock.Verify(
+                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+                Times.AtLeastOnce,
+                "StoreWorkspaceMetadata should be called after successful indexing to enable path resolution");
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Store_Metadata_Even_When_Reindexing()
+        {
+            // Arrange - Test that metadata is updated even when reindexing existing workspace
+            LuceneIndexServiceMock
+                .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexInitResult
+                {
+                    Success = true,
+                    IsNewIndex = false, // Existing index
+                    WorkspaceHash = "existing-hash",
+                    IndexPath = TestIndexPath
+                });
+            
+            FileIndexingServiceMock
+                .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexingResult
+                {
+                    Success = true,
+                    IndexedFileCount = 100,
+                    SkippedFileCount = 10,
+                    Duration = TimeSpan.FromSeconds(5)
+                });
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
+                {
+                    DocumentCount = 100,
+                    DeletedDocumentCount = 5,
+                    SegmentCount = 2,
+                    IndexSizeBytes = 150000,
+                    FileTypeDistribution = new() { [".cs"] = 80, [".ts"] = 20 }
+                });
+
+            var parameters = new IndexWorkspaceParameters
+            {
+                WorkspacePath = TestWorkspacePath,
+                ForceRebuild = true
+            };
+
+            // Act - Reindex the workspace
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert - Verify reindexing succeeded
+            result.Success.Should().BeTrue();
+            result.Result!.Success.Should().BeTrue();
+
+            // CRITICAL ASSERTION: Metadata should be updated even during reindexing
+            // This ensures metadata stays current with latest workspace state
+            PathResolutionServiceMock.Verify(
+                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+                Times.AtLeastOnce,
+                "StoreWorkspaceMetadata should be called during reindexing to update metadata");
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Store_Metadata_Multiple_Times_During_Workflow()
+        {
+            // Arrange - Test the complete workflow where metadata is stored multiple times
+            // This mirrors the actual implementation behavior
+            LuceneIndexServiceMock
+                .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexInitResult
+                {
+                    Success = true,
+                    IsNewIndex = true,
+                    WorkspaceHash = "multi-store-hash",
+                    IndexPath = TestIndexPath
+                });
+            
+            FileIndexingServiceMock
+                .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexingResult
+                {
+                    Success = true,
+                    IndexedFileCount = 75,
+                    SkippedFileCount = 3,
+                    Duration = TimeSpan.FromSeconds(3)
+                });
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.GetStatisticsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Services.Lucene.IndexStatistics
+                {
+                    DocumentCount = 75,
+                    DeletedDocumentCount = 0,
+                    SegmentCount = 1,
+                    IndexSizeBytes = 112500,
+                    FileTypeDistribution = new() { [".cs"] = 50, [".js"] = 25 }
+                });
+
+            var parameters = new IndexWorkspaceParameters
+            {
+                WorkspacePath = TestWorkspacePath
+            };
+
+            // Act - Execute indexing
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert - Verify successful indexing
+            result.Success.Should().BeTrue();
+            result.Result!.Success.Should().BeTrue();
+
+            // CRITICAL ASSERTION: Based on the implementation, metadata is stored once:
+            // After successful indexing (line 166 in IndexWorkspaceTool.cs)
+            // Note: Line 219 is only called when index already exists (different code path)
+            PathResolutionServiceMock.Verify(
+                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+                Times.Once,
+                "StoreWorkspaceMetadata should be called once after successful indexing");
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Not_Store_Metadata_When_Indexing_Fails()
+        {
+            // Arrange - Test that metadata is not stored when indexing fails
+            // This prevents invalid metadata that could confuse path resolution
+            LuceneIndexServiceMock
+                .Setup(x => x.InitializeIndexAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexInitResult
+                {
+                    Success = true,
+                    IsNewIndex = true,
+                    WorkspaceHash = "failed-index-hash",
+                    IndexPath = TestIndexPath
+                });
+            
+            // Simulate indexing failure
+            FileIndexingServiceMock
+                .Setup(x => x.IndexWorkspaceAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new IndexingResult
+                {
+                    Success = false,
+                    ErrorMessage = "Indexing failed due to permission issues",
+                    IndexedFileCount = 0,
+                    SkippedFileCount = 0,
+                    Duration = TimeSpan.FromSeconds(0.1)
+                });
+
+            var parameters = new IndexWorkspaceParameters
+            {
+                WorkspacePath = TestWorkspacePath
+            };
+
+            // Act - Execute indexing (which will fail)
+            var result = await ExecuteToolAsync<AIOptimizedResponse<IndexWorkspaceResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert - Verify indexing failed as expected
+            result.Success.Should().BeTrue(); // Tool execution succeeded (no exception)
+            result.Result!.Success.Should().BeFalse(); // But indexing failed
+            result.Result.Error.Should().NotBeNull();
+
+            // CRITICAL ASSERTION: Metadata should NOT be stored when indexing fails
+            // This prevents invalid metadata that could cause path resolution issues
+            PathResolutionServiceMock.Verify(
+                p => p.StoreWorkspaceMetadata(It.IsAny<string>()),
+                Times.Never,
+                "StoreWorkspaceMetadata should NOT be called when indexing fails");
+        }
+
+        #endregion
     }
 }

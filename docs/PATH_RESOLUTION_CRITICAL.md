@@ -49,20 +49,45 @@ string GetIndexPath(string workspacePath)
 string GetLogsPath()
 // Example: "C:\source\project\.codesearch\logs"
 
-// Get memory paths
-string GetProjectMemoryPath()  // ".codesearch\project-memory"
-string GetLocalMemoryPath()    // ".codesearch\local-memory"
-
-// Get metadata file path
+// Get workspace metadata file path
 string GetWorkspaceMetadataPath()
 // Example: ".codesearch\index\workspace_metadata.json"
 
-// Check if path is protected
-bool IsProtectedPath(string indexPath)
+// Get workspace-specific metadata file path
+string GetWorkspaceMetadataPath(string workspacePath)
+// Example: ".codesearch\index\myproject_a1b2c3d4\workspace_metadata.json"
 
-// Get backup directory
-string GetBackupPath(string? timestamp = null)
-// Example: ".codesearch\backups\backup_20240121_143052"
+// Resolve original workspace path from index directory (THREAD-SAFE)
+string? TryResolveWorkspacePath(string indexDirectory)
+// Returns actual workspace path, not hashed name
+
+// Store workspace metadata during indexing (THREAD-SAFE)
+void StoreWorkspaceMetadata(string workspacePath)
+// Creates metadata for path resolution
+
+// Compute hash for workspace directory naming
+string ComputeWorkspaceHash(string workspacePath)
+// Returns 8-character hash for uniqueness
+```
+
+### Thread-Safe File System Operations
+
+```csharp
+// Safe directory operations
+bool DirectoryExists(string path)
+void EnsureDirectoryExists(string path)
+IEnumerable<string> EnumerateDirectories(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly)
+
+// Safe file operations  
+bool FileExists(string path)
+IEnumerable<string> EnumerateFiles(string path, string searchPattern = "*", SearchOption searchOption = SearchOption.TopDirectoryOnly)
+
+// Safe path operations
+string GetFullPath(string path)
+string GetFileName(string path)
+string GetExtension(string path)
+string GetDirectoryName(string path)
+string GetRelativePath(string relativeTo, string path)
 ```
 
 ## Implementation Details
@@ -77,9 +102,54 @@ string GetBackupPath(string? timestamp = null)
 - Paths are normalized for the current OS
 - Hash-based paths ensure uniqueness across workspaces
 
-### Protected Paths
-- `project-memory` and `local-memory` directories are protected
-- These cannot be deleted through normal index cleanup operations
+### Path Validation & Security
+- **Directory traversal protection**: Blocks ".." sequences in paths
+- **Path length validation**: Prevents paths over 240 characters
+- **Input sanitization**: All workspace paths validated before use
+- **Cross-platform support**: Handles tilde expansion and path separators
+
+### Thread Safety & Concurrency
+- **Metadata locking**: Per-file semaphores prevent concurrent access corruption
+- **Atomic operations**: Metadata updates use temp files with atomic replacement
+- **Lock management**: Concurrent dictionary manages semaphores per metadata file
+- **Safe I/O operations**: All file system operations include proper error handling
+
+### Workspace Path Resolution
+- **Metadata-first approach**: Reads `workspace_metadata.json` for original paths
+- **Fallback reconstruction**: Attempts path reconstruction from directory names
+- **Hash verification**: Confirms reconstructed paths match expected workspace hash
+- **Common location search**: Checks standard workspace locations during fallback
+
+#### Metadata Fallback Process
+
+1. **Primary Resolution**: Attempt to read `workspace_metadata.json`
+   ```json
+   {
+     "originalPath": "C:\\source\\COA CodeSearch MCP",
+     "hashPath": "4785ab0f",
+     "createdAt": "2025-01-26T14:30:15Z",
+     "lastAccessed": "2025-01-26T15:45:22Z"
+   }
+   ```
+
+2. **Fallback Strategy**: If metadata is missing or corrupted
+   - Parse directory name format: `workspacename_hash`
+   - Extract workspace name and hash components
+   - Search common workspace locations:
+     - `C:\source\{workspacename}` (with spaces and underscores)
+     - `%USERPROFILE%\source\{workspacename}`
+     - `%USERPROFILE%\Desktop\{workspacename}`
+     - Current directory relative paths
+
+3. **Hash Verification**: For each potential path
+   - Compute expected hash using `ComputeWorkspaceHash()`
+   - Compare with hash from directory name
+   - Only return path if hashes match exactly
+
+4. **Graceful Degradation**: If resolution fails
+   - Return `null` to indicate unresolvable path
+   - Log warning with index directory details
+   - HTTP API marks as `[Unresolved: {dirname}]`
 
 ## Common Mistakes to Avoid
 
