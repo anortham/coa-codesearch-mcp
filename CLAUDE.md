@@ -22,6 +22,7 @@ Creates orphaned processes that lock Lucene indexes. User must restart Claude Co
 2. Build the project: `dotnet build -c Release`
 3. Restart Claude Code to load new version
 4. **Testing before restart shows OLD CODE - not your changes!**
+5. **HTTP API testing also requires restart** - port 5020 serves cached old code until restart
 
 ### ⚠️ Path Resolution
 ```csharp
@@ -52,6 +53,54 @@ dotnet format --verify-no-changes
 - Uses `McpToolBase<TParams, TResult>` for all tools
 - Lucene.NET 4.8.0-beta00017 for indexing
 - Memory management handled by ProjectKnowledge MCP
+
+## HTTP API Auto-Service
+
+**NEW**: CodeSearch automatically starts an HTTP API on port 5020 when running in STDIO mode (default for Claude Code).
+
+### Auto-Service Configuration
+```csharp
+builder.UseAutoService(config =>
+{
+    config.ServiceId = "codesearch-http";
+    config.ExecutablePath = "dotnet";
+    config.Arguments = new[] { dllPath, "--mode", "http" };
+    config.Port = 5020;
+    config.HealthEndpoint = "http://localhost:5020/health";
+    config.AutoRestart = true;
+    config.MaxRestartAttempts = 3;
+    config.HealthCheckIntervalSeconds = 60;
+});
+```
+
+### Available Endpoints
+- Health: `GET /health`, `GET /api/health`
+- Workspaces: `GET /api/workspace`, `POST /api/workspace/index`
+- Search: `GET /api/search/symbol`, `GET /api/search/text`
+- Documentation: `GET /swagger` (dev mode)
+
+### Workspace Path Resolution Fix
+
+**FIXED**: HTTP API now returns actual workspace paths instead of hashed directory names.
+
+**Before:**
+```json
+{"path": "coa_codesearch_mcp_4785ab0febeec6c7"}  // ❌ Hashed name
+```
+
+**After:**
+```json
+{"path": "C:\\source\\COA CodeSearch MCP"}  // ✅ Real path
+```
+
+**Implementation:**
+- `PathResolutionService.TryResolveWorkspacePath()` - Resolves hashed names to original paths
+- `PathResolutionService.StoreWorkspaceMetadata()` - Stores metadata during indexing  
+- `WorkspaceController.ListWorkspaces()` - Uses path resolution for API responses
+- Workspace metadata stored in `workspace_metadata.json` per index directory
+- Fallback path reconstruction for workspaces without metadata files
+
+**Result:** API listing and search endpoints now use consistent workspace paths.
 
 ## Troubleshooting
 

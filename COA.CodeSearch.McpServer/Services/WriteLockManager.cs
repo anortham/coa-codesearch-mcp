@@ -244,11 +244,11 @@ public class WriteLockManager : IWriteLockManager
                         IsAccessible = diagnostics.IsAccessible
                     });
                     
-                    // Extract workspace name from descriptive directory name
-                    var dirName = Path.GetFileName(indexDir);
-                    var workspaceName = dirName.Contains('_') 
-                        ? dirName.Substring(0, dirName.LastIndexOf('_'))
-                        : "unknown";
+                    // Try to resolve actual workspace path, fall back to directory analysis
+                    var actualWorkspacePath = _pathResolution.TryResolveWorkspacePath(indexDir);
+                    var workspaceName = !string.IsNullOrEmpty(actualWorkspacePath)
+                        ? actualWorkspacePath
+                        : ExtractWorkspaceNameFromHashedDir(indexDir);
                     
                     _logger.LogError(
                         "CRITICAL: Found stuck lock for workspace '{Workspace}' at {Path}. " +
@@ -397,6 +397,35 @@ public class WriteLockManager : IWriteLockManager
         {
             _logger.LogError(ex, "FORCE REMOVAL: Unexpected error removing lock at {Path}", lockPath);
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Extract workspace name from hashed directory format (workspacename_hash)
+    /// </summary>
+    /// <param name="indexDir">The index directory path</param>
+    /// <returns>Best-effort workspace name</returns>
+    private string ExtractWorkspaceNameFromHashedDir(string indexDir)
+    {
+        try
+        {
+            var dirName = Path.GetFileName(indexDir);
+            if (string.IsNullOrEmpty(dirName))
+                return "[Unknown Directory]";
+                
+            if (dirName.Contains('_'))
+            {
+                // Format should be "workspacename_hash" - extract everything before last underscore
+                var lastUnderscoreIndex = dirName.LastIndexOf('_');
+                var workspaceName = dirName.Substring(0, lastUnderscoreIndex);
+                return $"[Hashed: {workspaceName}]"; // Clearly mark as hashed to avoid confusion
+            }
+            
+            return $"[Directory: {dirName}]";
+        }
+        catch
+        {
+            return "[Unknown]";
         }
     }
 
