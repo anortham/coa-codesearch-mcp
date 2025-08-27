@@ -107,41 +107,51 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 // Create context
                 var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
                 
-                // Initialize writer with configuration
-                var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
-                var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
-                var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
-                
-                var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
+                try
                 {
-                    OpenMode = OpenMode.CREATE_OR_APPEND,
-                    RAMBufferSizeMB = ramBuffer,
-                    MaxBufferedDocs = maxBufferedDocs
-                };
-                
-                // Configure merge policy
-                var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
-                if (mergePolicyType == "TieredMergePolicy")
-                {
-                    var mergePolicy = new TieredMergePolicy
+                    // Initialize writer with configuration
+                    var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
+                    var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
+                    var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
+                    
+                    var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
                     {
-                        MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
-                        SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
-                        MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                        OpenMode = OpenMode.CREATE_OR_APPEND,
+                        RAMBufferSizeMB = ramBuffer,
+                        MaxBufferedDocs = maxBufferedDocs
                     };
-                    config.MergePolicy = mergePolicy;
+                    
+                    // Configure merge policy
+                    var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
+                    if (mergePolicyType == "TieredMergePolicy")
+                    {
+                        var mergePolicy = new TieredMergePolicy
+                        {
+                            MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
+                            SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
+                            MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                        };
+                        config.MergePolicy = mergePolicy;
+                    }
+                    
+                    // Configure merge scheduler
+                    config.MaxThreadStates = maxThreadStates;
+                    
+                    context.Writer = new IndexWriter(directory, config);
+                    
+                    // Add to dictionary
+                    if (!_indexes.TryAdd(workspaceHash, context))
+                    {
+                        context.Dispose();
+                        throw new InvalidOperationException($"Failed to add index context for workspace {workspaceHash}");
+                    }
                 }
-                
-                // Configure merge scheduler
-                config.MaxThreadStates = maxThreadStates;
-                
-                context.Writer = new IndexWriter(directory, config);
-                
-                // Add to dictionary
-                if (!_indexes.TryAdd(workspaceHash, context))
+                catch
                 {
+                    // Critical: Ensure context is disposed if IndexWriter creation fails
+                    // This prevents lock files from being left orphaned
                     context.Dispose();
-                    throw new InvalidOperationException($"Failed to add index context for workspace {workspaceHash}");
+                    throw;
                 }
                 
                 var docCount = context.Writer.NumDocs;
@@ -430,42 +440,52 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             // Create new context
             var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
             
-            // Configure IndexWriter for complete rebuild
-            var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
-            var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
-            var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
-            
-            var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
+            try
             {
-                // CRITICAL: Use CREATE mode to rebuild schema completely
-                OpenMode = OpenMode.CREATE,
-                RAMBufferSizeMB = ramBuffer,
-                MaxBufferedDocs = maxBufferedDocs
-            };
-            
-            // Configure merge policy
-            var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
-            if (mergePolicyType == "TieredMergePolicy")
-            {
-                var mergePolicy = new TieredMergePolicy
+                // Configure IndexWriter for complete rebuild
+                var ramBuffer = _configuration.GetValue("CodeSearch:Lucene:RAMBufferSizeMB", 256.0);
+                var maxBufferedDocs = _configuration.GetValue("CodeSearch:Lucene:MaxBufferedDocs", 1000);
+                var maxThreadStates = _configuration.GetValue("CodeSearch:Lucene:MaxThreadStates", 8);
+                
+                var config = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
                 {
-                    MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
-                    SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
-                    MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                    // CRITICAL: Use CREATE mode to rebuild schema completely
+                    OpenMode = OpenMode.CREATE,
+                    RAMBufferSizeMB = ramBuffer,
+                    MaxBufferedDocs = maxBufferedDocs
                 };
-                config.MergePolicy = mergePolicy;
+                
+                // Configure merge policy
+                var mergePolicyType = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:Type", "TieredMergePolicy");
+                if (mergePolicyType == "TieredMergePolicy")
+                {
+                    var mergePolicy = new TieredMergePolicy
+                    {
+                        MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
+                        SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
+                        MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                    };
+                    config.MergePolicy = mergePolicy;
+                }
+                
+                config.MaxThreadStates = maxThreadStates;
+                
+                // Create new IndexWriter with CREATE mode
+                context.Writer = new IndexWriter(directory, config);
+                
+                // Step 3: Register the new context
+                if (!_indexes.TryAdd(workspaceHash, context))
+                {
+                    context.Dispose();
+                    throw new InvalidOperationException($"Failed to add rebuilt index context for workspace {workspaceHash}");
+                }
             }
-            
-            config.MaxThreadStates = maxThreadStates;
-            
-            // Create new IndexWriter with CREATE mode
-            context.Writer = new IndexWriter(directory, config);
-            
-            // Step 3: Register the new context
-            if (!_indexes.TryAdd(workspaceHash, context))
+            catch
             {
+                // Critical: Ensure context is disposed if IndexWriter creation fails
+                // This prevents lock files from being left orphaned
                 context.Dispose();
-                throw new InvalidOperationException($"Failed to add rebuilt index context for workspace {workspaceHash}");
+                throw;
             }
             
             _logger.LogInformation("Force rebuild completed for workspace {Path} - new schema ready", workspacePath);
