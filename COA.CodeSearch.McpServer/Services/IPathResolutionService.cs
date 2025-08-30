@@ -23,31 +23,6 @@ public interface IPathResolutionService
     /// <returns>The full path to the logs directory</returns>
     string GetLogsPath();
     
-    /// <summary>
-    /// Gets the workspace metadata file path
-    /// </summary>
-    /// <returns>The full path to the workspace metadata file</returns>
-    string GetWorkspaceMetadataPath();
-    
-    /// <summary>
-    /// Gets the metadata file path for a specific workspace
-    /// </summary>
-    /// <param name="workspacePath">The workspace path</param>
-    /// <returns>Path to the workspace-specific metadata file</returns>
-    string GetWorkspaceMetadataPath(string workspacePath);
-    
-    /// <summary>
-    /// Attempts to resolve the original workspace path from an index directory
-    /// </summary>
-    /// <param name="indexDirectory">The index directory path</param>
-    /// <returns>The original workspace path if found, null otherwise</returns>
-    string? TryResolveWorkspacePath(string indexDirectory);
-    
-    /// <summary>
-    /// Stores workspace metadata for future resolution
-    /// </summary>
-    /// <param name="workspacePath">The original workspace path</param>
-    void StoreWorkspaceMetadata(string workspacePath);
     
     /// <summary>
     /// Gets the root index directory path (without workspace-specific subdirectory)

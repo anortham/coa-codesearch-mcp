@@ -29,6 +29,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
         // Service mocks
         protected Mock<ILuceneIndexService> LuceneIndexServiceMock { get; private set; } = null!;
         protected Mock<IPathResolutionService> PathResolutionServiceMock { get; private set; } = null!;
+        protected Mock<IWorkspaceRegistryService> WorkspaceRegistryServiceMock { get; private set; } = null!;
         protected Mock<IResponseCacheService> ResponseCacheServiceMock { get; private set; } = null!;
         protected Mock<IResourceStorageService> ResourceStorageServiceMock { get; private set; } = null!;
         protected Mock<ICacheKeyGenerator> CacheKeyGeneratorMock { get; private set; } = null!;
@@ -49,6 +50,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             // Create service mocks
             LuceneIndexServiceMock = CreateMock<ILuceneIndexService>();
             PathResolutionServiceMock = CreateMock<IPathResolutionService>();
+            WorkspaceRegistryServiceMock = CreateMock<IWorkspaceRegistryService>();
             ResponseCacheServiceMock = CreateMock<IResponseCacheService>();
             ResourceStorageServiceMock = CreateMock<IResourceStorageService>();
             CacheKeyGeneratorMock = CreateMock<ICacheKeyGenerator>();

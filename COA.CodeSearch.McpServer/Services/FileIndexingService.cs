@@ -4,8 +4,10 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using System.Collections.Concurrent;
 using System.Text;
+using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Services;
 
@@ -22,6 +24,7 @@ public class FileIndexingService : IFileIndexingService
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IMemoryPressureService _memoryPressureService;
+    private readonly ITypeExtractionService? _typeExtractionService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _supportedExtensions;
     private readonly HashSet<string> _excludedDirectories;
@@ -35,7 +38,8 @@ public class FileIndexingService : IFileIndexingService
         IIndexingMetricsService metricsService,
         ICircuitBreakerService circuitBreakerService,
         IMemoryPressureService memoryPressureService,
-        IOptions<MemoryLimitsConfiguration> memoryLimits)
+        IOptions<MemoryLimitsConfiguration> memoryLimits,
+        ITypeExtractionService? typeExtractionService = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -45,6 +49,7 @@ public class FileIndexingService : IFileIndexingService
         _circuitBreakerService = circuitBreakerService ?? throw new ArgumentNullException(nameof(circuitBreakerService));
         _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
+        _typeExtractionService = typeExtractionService;
         
         // Initialize supported extensions from configuration or defaults
         var extensions = configuration.GetSection("CodeSearch:Lucene:SupportedExtensions").Get<string[]>() 
@@ -391,6 +396,20 @@ public class FileIndexingService : IFileIndexingService
                 _logger.LogDebug(ex, "Could not read file as UTF-8, skipping: {FilePath}", filePath);
                 return null;
             }
+            
+            // Extract type information if service is available and enabled
+            TypeExtractionResult? typeData = null;
+            if (_typeExtractionService != null && _configuration.GetValue("CodeSearch:TypeExtraction:Enabled", true))
+            {
+                try
+                {
+                    typeData = _typeExtractionService.ExtractTypes(content, filePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Failed to extract types from {FilePath}", filePath);
+                }
+            }
 
             // Get directory information
             var directoryPath = Path.GetDirectoryName(filePath) ?? "";
@@ -419,13 +438,36 @@ public class FileIndexingService : IFileIndexingService
                 
                 // Simple line count for statistics
                 new Int32Field("line_count", content.Count(c => c == '\n') + 1, Field.Store.YES)
-                
-                // REMOVED all of these:
-                // - content_tv (term vectors)
-                // - line_breaks (position array)
-                // - line_data (JSON with all lines)
-                // - line_data_version (no longer needed)
             };
+            
+            // Add type-specific fields if extraction succeeded
+            if (typeData?.Success == true && (typeData.Types.Any() || typeData.Methods.Any()))
+            {
+                // Searchable field with all type names
+                var allTypeNames = typeData.Types.Select(t => t.Name)
+                    .Concat(typeData.Methods.Select(m => m.Name))
+                    .Distinct();
+                document.Add(new TextField("type_names", string.Join(" ", allTypeNames), Field.Store.NO));
+                
+                // Stored field with full type information (JSON)
+                var typeJson = JsonSerializer.Serialize(new
+                {
+                    types = typeData.Types,
+                    methods = typeData.Methods,
+                    language = typeData.Language
+                });
+                document.Add(new StoredField("type_info", typeJson));
+                
+                // Add individual type definition fields for boosting
+                foreach (var type in typeData.Types)
+                {
+                    document.Add(new TextField("type_def", $"{type.Kind} {type.Name}", Field.Store.NO));
+                }
+                
+                // Count fields for statistics
+                document.Add(new Int32Field("type_count", typeData.Types.Count, Field.Store.YES));
+                document.Add(new Int32Field("method_count", typeData.Methods.Count, Field.Store.YES));
+            }
 
             // Add searchable path components
             var pathParts = Path.GetRelativePath(workspacePath, filePath).Split(Path.DirectorySeparatorChar);

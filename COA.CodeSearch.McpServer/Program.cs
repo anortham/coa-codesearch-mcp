@@ -34,6 +34,7 @@ public class Program
         
         // Register core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
@@ -60,6 +61,12 @@ public class Program
         
         // Query preprocessing for code-aware search
         services.AddSingleton<QueryPreprocessor>();
+        
+        // Type extraction services (optional - graceful fallback if not available)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService, 
+                              COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector, 
+                              COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>();
         
         // ProjectKnowledge integration services
         services.AddHttpClient<IProjectKnowledgeService, ProjectKnowledgeService>();
@@ -117,14 +124,42 @@ public class Program
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
+        services.AddMemoryCache(); // Required by WorkspaceRegistryService
         services.AddLogging(logging => logging.AddSerilog());
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
         
         var serviceProvider = services.BuildServiceProvider();
         var lockManager = serviceProvider.GetRequiredService<IWriteLockManager>();
+        var registryService = serviceProvider.GetRequiredService<IWorkspaceRegistryService>();
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
         
-        logger.LogInformation("Running startup write.lock cleanup");
+        logger.LogInformation("Running startup cleanup and migration");
+        
+        // Check and run migration first
+        if (await registryService.IsMigrationNeededAsync())
+        {
+            logger.LogInformation("Global registry not found - running migration from individual metadata files");
+            var migrationResult = await registryService.MigrateFromIndividualMetadataAsync();
+            
+            if (migrationResult.Success)
+            {
+                logger.LogInformation("Migration completed - Workspaces: {WorkspaceCount}, Orphans: {OrphanCount}", 
+                    migrationResult.WorkspacesMigrated, migrationResult.OrphansDiscovered);
+                
+                if (migrationResult.Errors.Any())
+                {
+                    logger.LogWarning("Migration completed with {ErrorCount} errors: {Errors}", 
+                        migrationResult.Errors.Count, string.Join("; ", migrationResult.Errors));
+                }
+            }
+            else
+            {
+                logger.LogError("Migration failed: {Errors}", string.Join("; ", migrationResult.Errors));
+            }
+        }
+        
+        logger.LogInformation("Running write.lock cleanup");
         
         try
         {
@@ -148,8 +183,9 @@ public class Program
     
     /// <summary>
     /// Configure Serilog with file logging only (no console to avoid breaking STDIO)
+    /// Uses a shared log file for both STDIO and HTTP processes to consolidate logging
     /// </summary>
-    private static void ConfigureSerilog(IConfiguration configuration)
+    private static void ConfigureSerilog(IConfiguration configuration, string[]? args = null)
     {
         // Create a temporary path service to get the logs directory - exactly like ProjectKnowledge
         using var loggerFactory = LoggerFactory.Create(builder => { }); // Empty logger for initialization
@@ -158,17 +194,31 @@ public class Program
         var logsPath = tempPathService.GetLogsPath();
         tempPathService.EnsureDirectoryExists(logsPath);
         
+        // Use a shared log file name (no process-specific suffix)
         var logFile = Path.Combine(logsPath, "codesearch-.log");
+        
+        // Determine process mode for logging context
+        var processMode = "STDIO";
+        if (args?.Contains("--mode") == true && args?.Contains("http") == true)
+        {
+            processMode = "HTTP";
+        }
+        else if (args?.Contains("--service") == true)
+        {
+            processMode = "SERVICE";
+        }
 
         Log.Logger = new LoggerConfiguration()
             .ReadFrom.Configuration(configuration)
+            .Enrich.WithProperty("ProcessMode", processMode) // Add process mode to all log entries
             .WriteTo.File(
                 logFile,
                 rollingInterval: RollingInterval.Day,
                 rollOnFileSizeLimit: true,
                 fileSizeLimitBytes: 10 * 1024 * 1024, // 10MB
                 retainedFileCountLimit: 7, // Keep 7 days of logs
-                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] {SourceContext} {Message:lj}{NewLine}{Exception}"
+                shared: true, // CRITICAL: Allow multiple processes to write to same file
+                outputTemplate: "{Timestamp:yyyy-MM-dd HH:mm:ss.fff zzz} [{Level:u3}] [{ProcessMode}] {SourceContext} {Message:lj}{NewLine}{Exception}"
             )
             .CreateLogger();
     }
@@ -186,7 +236,7 @@ public class Program
             .Build();
 
         // Configure Serilog early - FILE ONLY (no console to avoid breaking STDIO)
-        ConfigureSerilog(configuration);
+        ConfigureSerilog(configuration, args);
 
         try
         {
@@ -349,6 +399,9 @@ public class Program
             {
                 // Run in STDIO mode (default for Claude Code)
                 Log.Information("Starting CodeSearch in STDIO mode");
+                
+                // Register startup indexing service only for STDIO mode to avoid conflicts
+                builder.Services.AddHostedService<StartupIndexingService>();
                 
                 // Use STDIO transport
                 builder.UseStdioTransport();

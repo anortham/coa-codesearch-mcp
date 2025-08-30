@@ -37,6 +37,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
+                WorkspaceRegistryServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
@@ -303,6 +304,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
+                WorkspaceRegistryServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
@@ -562,12 +564,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Verify that StoreWorkspaceMetadata was called
+            // CRITICAL ASSERTION: Verify that workspace was registered
             // This is the key fix that enables path resolution from hashed directories
-            PathResolutionServiceMock.Verify(
-                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+            WorkspaceRegistryServiceMock.Verify(
+                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
                 Times.AtLeastOnce,
-                "StoreWorkspaceMetadata should be called after successful indexing to enable path resolution");
+                "RegisterWorkspaceAsync should be called after successful indexing to enable path resolution");
         }
 
         [Test]
@@ -619,12 +621,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Metadata should be updated even during reindexing
-            // This ensures metadata stays current with latest workspace state
-            PathResolutionServiceMock.Verify(
-                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+            // CRITICAL ASSERTION: Workspace should be registered even during reindexing
+            // This ensures registry stays current with latest workspace state
+            WorkspaceRegistryServiceMock.Verify(
+                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
                 Times.AtLeastOnce,
-                "StoreWorkspaceMetadata should be called during reindexing to update metadata");
+                "RegisterWorkspaceAsync should be called during reindexing to update registry");
         }
 
         [Test]
@@ -676,13 +678,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Based on the implementation, metadata is stored once:
+            // CRITICAL ASSERTION: Based on the implementation, workspace is registered once:
             // After successful indexing (line 166 in IndexWorkspaceTool.cs)
             // Note: Line 219 is only called when index already exists (different code path)
-            PathResolutionServiceMock.Verify(
-                p => p.StoreWorkspaceMetadata(TestWorkspacePath),
+            WorkspaceRegistryServiceMock.Verify(
+                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
                 Times.Once,
-                "StoreWorkspaceMetadata should be called once after successful indexing");
+                "RegisterWorkspaceAsync should be called once after successful indexing");
         }
 
         [Test]
@@ -726,12 +728,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result!.Success.Should().BeFalse(); // But indexing failed
             result.Result.Error.Should().NotBeNull();
 
-            // CRITICAL ASSERTION: Metadata should NOT be stored when indexing fails
-            // This prevents invalid metadata that could cause path resolution issues
-            PathResolutionServiceMock.Verify(
-                p => p.StoreWorkspaceMetadata(It.IsAny<string>()),
+            // CRITICAL ASSERTION: Workspace should NOT be registered when indexing fails
+            // This prevents invalid registry entries that could cause path resolution issues
+            WorkspaceRegistryServiceMock.Verify(
+                r => r.RegisterWorkspaceAsync(It.IsAny<string>()),
                 Times.Never,
-                "StoreWorkspaceMetadata should NOT be called when indexing fails");
+                "RegisterWorkspaceAsync should NOT be called when indexing fails");
         }
 
         #endregion
