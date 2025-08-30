@@ -1,5 +1,19 @@
 # CodeSearch MCP Server - AI Development Context
 
+## 🔍 Key Code Locations
+
+### Tree-sitter Bindings Source
+- **Location:** `C:\source\tree-sitter-dotnet-bindings`
+- Contains the C# grammar and bindings for type extraction
+- Reference when debugging parsing issues
+
+### Response Token Optimization
+- **SearchResponseBuilder.CleanupHits()** (`ResponseBuilders/SearchResponseBuilder.cs:307-339`)
+  - This method strips fields from search results to minimize tokens
+  - When adding new properties to SearchHit, they MUST be preserved here
+  - Located after `ReduceSearchHits()` processing
+  - Creates new SearchHit objects with only essential fields
+
 ## 🚨 Critical Development Constraints
 
 ### Code Changes Require Complete Restart

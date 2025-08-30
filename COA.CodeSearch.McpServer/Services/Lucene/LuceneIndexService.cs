@@ -10,6 +10,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using System.Text.Json;
 
 namespace COA.CodeSearch.McpServer.Services.Lucene;
 
@@ -295,7 +296,14 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 {
                     if (field.Name != "path" && field.Name != "content_tv" && field.Name != "line_breaks")
                     {
-                        hit.Fields[field.Name] = field.GetStringValue() ?? string.Empty;
+                        // For stored fields, we need to get the value differently
+                        var value = field.GetStringValue();
+                        if (value == null && field.Name == "type_info")
+                        {
+                            // StoredField might need special handling
+                            value = doc.Get(field.Name);
+                        }
+                        hit.Fields[field.Name] = value ?? string.Empty;
                     }
                 }
                 
@@ -338,6 +346,63 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 if (lineResult.IsAccurate)
                 {
                     hit.Fields["precise_location"] = "true";
+                }
+                
+                // Deserialize type_info JSON into TypeContext if available
+                if (hit.Fields.TryGetValue("type_info", out var typeInfoJson) && !string.IsNullOrEmpty(typeInfoJson))
+                {
+                    try
+                    {
+                        _logger.LogDebug("Attempting to deserialize type_info for {FilePath}, JSON length: {Length}", 
+                            hit.FilePath, typeInfoJson.Length);
+                        
+                        var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(typeInfoJson);
+                        if (typeData != null)
+                        {
+                            _logger.LogDebug("Deserialized type_info: {TypeCount} types, {MethodCount} methods, Language: {Language}", 
+                                typeData.types?.Count ?? 0, typeData.methods?.Count ?? 0, typeData.language);
+                            
+                            hit.TypeContext = new COA.CodeSearch.McpServer.Models.TypeContext
+                            {
+                                Language = typeData.language,
+                                NearbyTypes = typeData.types ?? new List<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeInfo>(),
+                                NearbyMethods = typeData.methods ?? new List<COA.CodeSearch.McpServer.Services.TypeExtraction.MethodInfo>()
+                            };
+                            
+                            _logger.LogDebug("Created TypeContext with {TypeCount} types, {MethodCount} methods", 
+                                hit.TypeContext.NearbyTypes.Count, hit.TypeContext.NearbyMethods.Count);
+                            
+                            // Determine containing type based on line number
+                            if (hit.LineNumber > 0 && typeData.types != null)
+                            {
+                                // Find the type that contains this line
+                                // Since we only have start line, we'll use proximity
+                                var nearestType = typeData.types
+                                    .Where(t => t.Line <= hit.LineNumber)
+                                    .OrderBy(t => hit.LineNumber - t.Line)
+                                    .FirstOrDefault();
+                                    
+                                if (nearestType != null)
+                                {
+                                    hit.TypeContext.ContainingType = $"{nearestType.Kind} {nearestType.Name}";
+                                    _logger.LogDebug("Set ContainingType to: {ContainingType}", hit.TypeContext.ContainingType);
+                                }
+                            }
+                        }
+                        else
+                        {
+                            _logger.LogWarning("Deserialized type_info was null for {FilePath}", hit.FilePath);
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogError(ex, "Failed to deserialize type_info for {FilePath}, JSON: {Json}", 
+                            hit.FilePath, typeInfoJson.Substring(0, Math.Min(500, typeInfoJson.Length)));
+                    }
+                }
+                else
+                {
+                    _logger.LogDebug("No type_info field found for {FilePath}", hit.FilePath);
                 }
                 
                 hits.Add(hit);
@@ -924,5 +989,13 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         
         _disposed = true;
         _logger.LogInformation("LuceneIndexService disposed");
+    }
+    
+    // Helper class for deserializing type_info JSON from stored format
+    private class StoredTypeInfo
+    {
+        public List<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeInfo> types { get; set; } = new();
+        public List<COA.CodeSearch.McpServer.Services.TypeExtraction.MethodInfo> methods { get; set; } = new();
+        public string? language { get; set; }
     }
 }

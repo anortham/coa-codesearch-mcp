@@ -32,13 +32,16 @@
     <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.0.1" />
     
     <!-- VS Code Bridge integration -->
-    <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.0.0" />
+    <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.1.0" />
     
     <!-- Lucene.NET for search functionality -->
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
+    
+    <!-- Tree-sitter for type extraction -->
+    <PackageReference Include="TreeSitter.DotNet" Version="1.0.1" />
     
     <!-- Logging -->
     <PackageReference Include="Serilog" Version="4.2.0" />

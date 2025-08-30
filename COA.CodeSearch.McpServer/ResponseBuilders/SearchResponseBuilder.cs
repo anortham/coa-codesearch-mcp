@@ -314,6 +314,10 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
             // Keep only non-duplicated essential fields
             if (hit.Fields.ContainsKey("size"))
                 minimalFields["size"] = hit.Fields["size"];
+            
+            // PRESERVE type_info field for type extraction enhancement
+            if (hit.Fields.ContainsKey("type_info"))
+                minimalFields["type_info"] = hit.Fields["type_info"];
                 
             // Round score to 2 decimal places
             hit.Score = (float)Math.Round(hit.Score, 2);
@@ -333,7 +337,9 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
                 LineNumber = hit.LineNumber, // PRESERVE: Essential for VS Code navigation
                 ContextLines = hit.ContextLines, // PRESERVE: Context for AI analysis
                 StartLine = hit.StartLine, // PRESERVE: Context bounds
-                EndLine = hit.EndLine // PRESERVE: Context bounds
+                EndLine = hit.EndLine, // PRESERVE: Context bounds
+                TypeContext = hit.TypeContext, // PRESERVE: Type information for enhanced understanding
+                EnhancedSnippet = hit.EnhancedSnippet // PRESERVE: Type-enhanced snippet
             };
         }).ToList();
     }

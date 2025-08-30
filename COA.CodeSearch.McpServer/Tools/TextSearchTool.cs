@@ -14,8 +14,11 @@ using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using COA.CodeSearch.McpServer.Scoring;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Analysis.Standard;
+using System.Text;
+using System.Text.Json;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Search.Highlight;
@@ -38,6 +41,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
+    private readonly IQueryTypeDetector? _queryTypeDetector;
     private readonly IProjectKnowledgeService _projectKnowledgeService;
     private readonly SmartDocumentationService _smartDocumentationService;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
@@ -50,6 +54,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
+        IQueryTypeDetector? queryTypeDetector,
         IProjectKnowledgeService projectKnowledgeService,
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
@@ -60,6 +65,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
+        _queryTypeDetector = queryTypeDetector;
         _projectKnowledgeService = projectKnowledgeService;
         _smartDocumentationService = smartDocumentationService;
         _vscode = vscode;
@@ -139,6 +145,12 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             multiFactorQuery.AddScoringFactor(new RecencyBoostFactor());         // Boost recently modified
             multiFactorQuery.AddScoringFactor(new ExactMatchBoostFactor(parameters.CaseSensitive)); // Exact phrase matches
             multiFactorQuery.AddScoringFactor(new InterfaceImplementationFactor(_logger)); // Reduce mock/test noise for interface searches
+            
+            // Add type definition boost if this looks like a type query
+            if (_queryTypeDetector?.IsLikelyTypeQuery(query) ?? false)
+            {
+                multiFactorQuery.AddScoringFactor(new TypeDefinitionBoostFactor());
+            }
 
             // Implement aggressive token-aware limiting like the old system
             // The old system targeted ~1500 tokens with ~5 results for maximum relevance
@@ -178,6 +190,12 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
             
             // Add query to result for insights
             searchResult.Query = query;
+            
+            // Enhance results with type information if relevant
+            if (_queryTypeDetector?.IsLikelyTypeQuery(query) ?? false)
+            {
+                await EnhanceWithTypeInformation(searchResult, workspacePath, cancellationToken);
+            }
 
             // Build response context
             var context = new ResponseContext
@@ -370,6 +388,139 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         return result;
     }
 
+    /// <summary>
+    /// Enhance search results with type information from stored metadata
+    /// </summary>
+    private Task EnhanceWithTypeInformation(COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string workspacePath, CancellationToken cancellationToken)
+    {
+        if (searchResult.Hits == null || !searchResult.Hits.Any())
+            return Task.CompletedTask;
+            
+        foreach (var hit in searchResult.Hits)
+        {
+            try
+            {
+                var typeInfoJson = hit.Fields.GetValueOrDefault("type_info");
+                if (string.IsNullOrEmpty(typeInfoJson))
+                    continue;
+                    
+                var options = new JsonSerializerOptions 
+                { 
+                    PropertyNameCaseInsensitive = true 
+                };
+                var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(typeInfoJson, options);
+                if (typeData == null)
+                    continue;
+                    
+                var relevantTypes = FindRelevantTypes(typeData, hit.LineNumber ?? 0);
+                
+                hit.TypeContext = new TypeContext
+                {
+                    NearbyTypes = relevantTypes.Types,
+                    NearbyMethods = relevantTypes.Methods,
+                    ContainingType = DetermineContainingType(typeData, hit.LineNumber ?? 0),
+                    Language = typeData.Language
+                };
+                
+                // Make type information UNMISSABLE for Claude
+                hit.EnhancedSnippet = BuildProminentTypeSnippet(hit.TypeContext, hit.Snippet);
+                
+                _logger.LogDebug("Enhanced hit {FilePath} with type context: {TypeCount} types, {MethodCount} methods", 
+                    hit.FilePath, relevantTypes.Types.Count, relevantTypes.Methods.Count);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to enhance hit with type information for {FilePath}", hit.FilePath);
+            }
+        }
+        
+        return Task.CompletedTask;
+    }
+    
+    private (List<Services.TypeExtraction.TypeInfo> Types, List<Services.TypeExtraction.MethodInfo> Methods) FindRelevantTypes(StoredTypeInfo typeData, int lineNumber)
+    {
+        var contextRadius = 50;
+        var types = typeData.Types?.Where(t => Math.Abs(t.Line - lineNumber) <= contextRadius)
+                                   .OrderBy(t => Math.Abs(t.Line - lineNumber))
+                                   .Take(3)
+                                   .ToList() ?? new List<Services.TypeExtraction.TypeInfo>();
+                                   
+        var methods = typeData.Methods?.Where(m => Math.Abs(m.Line - lineNumber) <= contextRadius)
+                                       .OrderBy(m => Math.Abs(m.Line - lineNumber))
+                                       .Take(5)
+                                       .ToList() ?? new List<Services.TypeExtraction.MethodInfo>();
+                                       
+        return (types, methods);
+    }
+    
+    private string? DetermineContainingType(StoredTypeInfo typeData, int lineNumber)
+    {
+        var containingType = typeData.Types?
+            .Where(t => t.Line <= lineNumber)
+            .OrderByDescending(t => t.Line)
+            .FirstOrDefault();
+            
+        if (containingType != null)
+        {
+            return $"{containingType.Kind} {containingType.Name}";
+        }
+        
+        return null;
+    }
+    
+    /// <summary>
+    /// Build a prominent type snippet that Claude cannot miss
+    /// </summary>
+    private string BuildProminentTypeSnippet(TypeContext typeContext, string? originalSnippet)
+    {
+        var sb = new StringBuilder();
+        
+        if (typeContext?.ContainingType != null)
+        {
+            // Add prominent type banner that's impossible to miss
+            sb.AppendLine($"╔══ 📦 {typeContext.ContainingType} ══╗");
+            
+            // Add method signatures if available (most valuable for Claude)
+            if (typeContext.NearbyMethods?.Any() == true)
+            {
+                sb.AppendLine("🔧 Available Methods:");
+                foreach (var method in typeContext.NearbyMethods.Take(5))
+                {
+                    var signature = method.Signature?.Replace("public ", "").Replace("private ", "").Replace("protected ", "").Trim();
+                    if (!string.IsNullOrEmpty(signature))
+                    {
+                        sb.AppendLine($"  • {signature}");
+                    }
+                }
+            }
+            
+            // Add type definitions if available
+            if (typeContext.NearbyTypes?.Any() == true)
+            {
+                var relevantTypes = typeContext.NearbyTypes.Take(3);
+                if (relevantTypes.Count() > 1) // Only show if there are additional types
+                {
+                    sb.AppendLine("📋 Related Types:");
+                    foreach (var type in relevantTypes.Skip(1)) // Skip the containing type
+                    {
+                        sb.AppendLine($"  • {type.Kind} {type.Name}");
+                    }
+                }
+            }
+            
+            sb.AppendLine("╚══════════════════════════╝");
+            sb.AppendLine();
+        }
+        
+        // Append original snippet
+        if (!string.IsNullOrEmpty(originalSnippet))
+        {
+            sb.Append(originalSnippet);
+        }
+        
+        return sb.ToString();
+    }
+    
     /// <summary>
     /// Document search findings in ProjectKnowledge based on intelligent pattern detection
     /// </summary>

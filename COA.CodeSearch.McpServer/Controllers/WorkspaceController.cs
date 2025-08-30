@@ -19,17 +19,20 @@ public class WorkspaceController : ControllerBase
     private readonly ILuceneIndexService _luceneService;
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IPathResolutionService _pathResolver;
+    private readonly IWorkspaceRegistryService _workspaceRegistry;
     private readonly ILogger<WorkspaceController> _logger;
 
     public WorkspaceController(
         ILuceneIndexService luceneService,
         IFileIndexingService fileIndexingService,
         IPathResolutionService pathResolver,
+        IWorkspaceRegistryService workspaceRegistry,
         ILogger<WorkspaceController> logger)
     {
         _luceneService = luceneService;
         _fileIndexingService = fileIndexingService;
         _pathResolver = pathResolver;
+        _workspaceRegistry = workspaceRegistry;
         _logger = logger;
     }
 
@@ -38,7 +41,7 @@ public class WorkspaceController : ControllerBase
     /// </summary>
     /// <returns>List of workspace information</returns>
     [HttpGet]
-    public Task<ActionResult<WorkspacesResponse>> ListWorkspaces()
+    public async Task<ActionResult<WorkspacesResponse>> ListWorkspaces()
     {
         try
         {
@@ -50,11 +53,11 @@ public class WorkspaceController : ControllerBase
             var indexRootPath = _pathResolver.GetIndexRootPath();
             if (!Directory.Exists(indexRootPath))
             {
-                return Task.FromResult<ActionResult<WorkspacesResponse>>(Ok(new WorkspacesResponse
+                return Ok(new WorkspacesResponse
                 {
                     Workspaces = workspaces,
                     TotalCount = 0
-                }));
+                });
             }
 
             var indexDirectories = Directory.GetDirectories(indexRootPath);
@@ -63,12 +66,14 @@ public class WorkspaceController : ControllerBase
             {
                 try
                 {
-                    // Try to resolve the original workspace path from the index directory
-                    var originalPath = _pathResolver.TryResolveWorkspacePath(indexDir);
+                    // Try to resolve the original workspace path from the registry
+                    var dirName = Path.GetFileName(indexDir);
+                    var workspace = await _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(dirName);
+                    var originalPath = workspace?.OriginalPath;
+                    
                     if (string.IsNullOrEmpty(originalPath))
                     {
                         // Fall back to directory name if resolution fails, but mark it as unresolved
-                        var dirName = Path.GetFileName(indexDir);
                         originalPath = dirName?.Contains('_') == true 
                             ? $"[Unresolved: {dirName}]" // Clearly mark hashed names as unresolved
                             : dirName ?? "[Unknown]";
@@ -123,12 +128,12 @@ public class WorkspaceController : ControllerBase
                 TotalCount = workspaces.Count
             };
 
-            return Task.FromResult<ActionResult<WorkspacesResponse>>(Ok(response));
+            return Ok(response);
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing workspaces");
-            return Task.FromResult<ActionResult<WorkspacesResponse>>(StatusCode(500, new { error = "Internal server error while listing workspaces" }));
+            return StatusCode(500, new { error = "Internal server error while listing workspaces" });
         }
     }
 

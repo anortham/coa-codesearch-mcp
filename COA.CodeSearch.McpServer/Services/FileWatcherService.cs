@@ -16,6 +16,7 @@ public class FileWatcherService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IPathResolutionService _pathResolution;
+    private readonly IWorkspaceRegistryService _workspaceRegistry;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
@@ -39,12 +40,14 @@ public class FileWatcherService : BackgroundService
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
         IFileIndexingService fileIndexingService,
-        IPathResolutionService pathResolution)
+        IPathResolutionService pathResolution,
+        IWorkspaceRegistryService workspaceRegistry)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
         _pathResolution = pathResolution;
+        _workspaceRegistry = workspaceRegistry;
         
         // Configure timing based on lessons learned
         _debounceInterval = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:DebounceMilliseconds", 500));
@@ -607,45 +610,44 @@ public class FileWatcherService : BackgroundService
     {
         try
         {
-            // The directory name format is typically "workspacename_hash"
             var directoryName = Path.GetFileName(indexDirectory);
-            var parts = directoryName.Split('_');
             
+            // First, try to resolve using the workspace registry
+            var workspace = _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(directoryName).GetAwaiter().GetResult();
+            if (workspace != null && Directory.Exists(workspace.OriginalPath))
+            {
+                return workspace.OriginalPath;
+            }
+            
+            // Fallback: Try to extract hash from directory name and look up by hash
+            var parts = directoryName.Split('_');
             if (parts.Length >= 2)
             {
-                // Try to reconstruct the workspace name and look for common workspace locations
-                var workspaceName = string.Join("_", parts.Take(parts.Length - 1));
-                
-                // Common workspace locations to check
-                var possibleLocations = new[]
+                var hash = parts.Last();
+                var workspaceByHash = _workspaceRegistry.GetWorkspaceByHashAsync(hash).GetAwaiter().GetResult();
+                if (workspaceByHash != null && Directory.Exists(workspaceByHash.OriginalPath))
                 {
-                    Path.Combine("C:\\source", workspaceName.Replace('_', ' ')),
-                    Path.Combine("C:\\source", workspaceName),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "source", workspaceName),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), workspaceName),
-                    // Add more common locations as needed
-                };
-
-                foreach (var location in possibleLocations)
-                {
-                    if (Directory.Exists(location))
-                    {
-                        // Verify this is the correct workspace by computing its hash
-                        var expectedHash = _pathResolution.ComputeWorkspaceHash(location);
-                        if (directoryName.EndsWith(expectedHash, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return location;
-                        }
-                    }
+                    return workspaceByHash.OriginalPath;
                 }
             }
-
-            _logger.LogDebug("Could not resolve workspace path from index directory: {IndexDir}", indexDirectory);
+            
+            // If we reach here, the workspace is orphaned - mark it as such
+            _logger.LogWarning("Could not resolve workspace path from index directory: {IndexDir} - marking as orphaned", indexDirectory);
+            try
+            {
+                _workspaceRegistry.MarkAsOrphanedAsync(directoryName, Models.OrphanReason.UnresolvablePath).GetAwaiter().GetResult();
+                _logger.LogInformation("Marked orphaned index directory: {DirectoryName}", directoryName);
+            }
+            catch (Exception orphanEx)
+            {
+                _logger.LogError(orphanEx, "Failed to mark index directory as orphaned: {DirectoryName}", directoryName);
+            }
+            
             return null;
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "Error resolving workspace path from: {IndexDir}", indexDirectory);
+            _logger.LogError(ex, "Error resolving workspace path from: {IndexDir}", indexDirectory);
             return null;
         }
     }

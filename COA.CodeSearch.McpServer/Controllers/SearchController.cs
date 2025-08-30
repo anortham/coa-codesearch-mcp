@@ -378,20 +378,6 @@ public class SearchController : ControllerBase
         return null;
     }
 
-    private string GetLineFromContent(string content, int lineNumber)
-    {
-        if (string.IsNullOrEmpty(content))
-            return "";
-            
-        var lines = content.Split('\n');
-        if (lineNumber > 0 && lineNumber <= lines.Length)
-        {
-            return lines[lineNumber - 1]; // Convert to 0-based indexing
-        }
-        
-        return "";
-    }
-
     private List<Models.Api.SearchResult> ProcessSearchHits(IEnumerable<SearchHit> hits, string searchTerm, string? symbolType, int limit)
     {
         var results = new List<Models.Api.SearchResult>();

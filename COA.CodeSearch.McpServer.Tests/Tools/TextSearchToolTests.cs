@@ -39,6 +39,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
+                null, // IQueryTypeDetector is optional
                 projectKnowledgeServiceMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
@@ -484,5 +485,184 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Insights.Should().NotBeNullOrEmpty();
             result.Result.Actions.Should().NotBeNullOrEmpty();
         }
+        
+        #region Type-First Workflow Tests - Critical for preventing Claude's rewrite cycles
+        
+        [Test]
+        public async Task WhenSearchingForClassName_TypeDefinitionShouldBeFirst()
+        {
+            // This test ensures Claude sees type definitions FIRST, preventing rewrites
+            
+            // Arrange
+            SetupExistingIndex();
+            
+            // Create mock search results with type definition boosting
+            var typeDefHit = new SearchHit
+            {
+                FilePath = @"C:\test\Services\LuceneIndexService.cs",
+                Score = 10.0f, // High score due to TypeDefinitionBoostFactor
+                LineNumber = 21,
+                Fields = new Dictionary<string, string>
+                {
+                    ["type_info"] = "{\"types\":[{\"Name\":\"LuceneIndexService\",\"Kind\":\"class\",\"Signature\":\"public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable\",\"Line\":21,\"Column\":1,\"Modifiers\":[\"public\"]}],\"methods\":[{\"Name\":\"SearchAsync\",\"Signature\":\"Task<SearchResult> SearchAsync(string workspacePath, Query query)\",\"Line\":257}],\"language\":\"c-sharp\"}"
+                },
+                ContextLines = new List<string>
+                {
+                    "/// <summary>",
+                    "/// Thread-safe Lucene index service", 
+                    "/// </summary>",
+                    "public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable",
+                    "{"
+                },
+                Snippet = "public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable",
+                EnhancedSnippet = "📦 LuceneIndexService - public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable",
+                TypeContext = new TypeContext 
+                { 
+                    ContainingType = "LuceneIndexService",
+                    Language = "c-sharp"
+                }
+            };
+            
+            var regularHit = new SearchHit
+            {
+                FilePath = @"C:\test\SomeOtherFile.cs",
+                Score = 0.5f, // Lower score
+                LineNumber = 10,
+                Fields = new Dictionary<string, string>(),
+                Snippet = "// Some reference to LuceneIndexService"
+            };
+            
+            var searchResult = new SearchResult
+            {
+                TotalHits = 2,
+                Hits = new List<SearchHit> { typeDefHit, regularHit }, // Type definition should be FIRST
+                Query = "LuceneIndexService"
+            };
+            searchResult.SearchTime = TimeSpan.FromMilliseconds(10);
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new TextSearchParameters
+            {
+                Query = "LuceneIndexService",
+                WorkspacePath = TestWorkspacePath
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert - Critical for Claude's workflow
+            result.Success.Should().BeTrue();
+            result.Result!.Data.Should().NotBeNull();
+            result.Result!.Data.Results.Hits.Should().NotBeEmpty();
+            
+            var firstHit = result.Result!.Data.Results.Hits!.First();
+            firstHit.Score.Should().Be(10.0f, "Type definitions must have highest score to appear first");
+            firstHit.EnhancedSnippet.Should().NotBeNullOrEmpty("Enhanced snippet should show prominent type info");
+            firstHit.EnhancedSnippet.Should().Contain("📦", "Type information must be visually prominent");
+            firstHit.TypeContext.Should().NotBeNull("Type context must be populated for type queries");
+            firstHit.TypeContext!.ContainingType.Should().NotBeNullOrEmpty("Containing type must be identified");
+        }
+        
+        [Test]
+        public async Task TypeContext_ShouldAlwaysBePopulated_ForTypeQueries()
+        {
+            // Ensures Claude gets type info even for method searches
+            
+            // Arrange
+            SetupExistingIndex();
+            
+            var methodSearchHit = new SearchHit
+            {
+                FilePath = @"C:\test\Services\LuceneIndexService.cs",
+                Score = 1.0f,
+                LineNumber = 257, // Inside SearchAsync method
+                Fields = new Dictionary<string, string>
+                {
+                    ["type_info"] = "{\"types\":[{\"Name\":\"LuceneIndexService\",\"Kind\":\"class\",\"Line\":21}],\"methods\":[{\"Name\":\"SearchAsync\",\"Signature\":\"Task<SearchResult> SearchAsync(string workspacePath, Query query)\",\"Line\":257,\"ContainingType\":\"LuceneIndexService\"}],\"language\":\"c-sharp\"}"
+                },
+                Snippet = "public async Task<SearchResult> SearchAsync(string workspacePath, Query query)",
+                EnhancedSnippet = "🔧 SearchAsync - public async Task<SearchResult> SearchAsync(string workspacePath, Query query)",
+                TypeContext = new TypeContext 
+                { 
+                    ContainingType = "LuceneIndexService",
+                    Language = "c-sharp",
+                    NearbyMethods = new List<COA.CodeSearch.McpServer.Services.TypeExtraction.MethodInfo>
+                    {
+                        new() { Name = "SearchAsync", Signature = "Task<SearchResult> SearchAsync(string workspacePath, Query query)" }
+                    }
+                }
+            };
+            
+            var searchResult = new SearchResult
+            {
+                TotalHits = 1,
+                Hits = new List<SearchHit> { methodSearchHit },
+                Query = "SearchAsync"
+            };
+            searchResult.SearchTime = TimeSpan.FromMilliseconds(5);
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new TextSearchParameters
+            {
+                Query = "SearchAsync",
+                WorkspacePath = TestWorkspacePath
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert - Critical for preventing Claude guessing
+            result.Success.Should().BeTrue();
+            result.Result!.Data.Results.Hits.Should().NotBeEmpty();
+            
+            var hit = result.Result!.Data.Results.Hits!.First();
+            hit.TypeContext.Should().NotBeNull("Type context must ALWAYS be populated when type_info exists");
+            hit.TypeContext!.ContainingType.Should().NotBeNullOrEmpty("Claude needs to know which class contains the method");
+            hit.TypeContext!.NearbyMethods.Should().NotBeEmpty("Claude needs to see available methods");
+            hit.EnhancedSnippet.Should().Contain("🔧", "Method signatures must be prominently displayed");
+        }
+        
+        [Test]
+        public Task QueryTypeDetector_ShouldCatchClaudePatterns()
+        {
+            // Ensures our expanded patterns catch Claude's common searches
+            
+            // Arrange - Create tool with real QueryTypeDetector
+            var queryDetectorLogger = new Mock<ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>>();
+            var queryTypeDetector = new COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector(queryDetectorLogger.Object);
+            
+            // Test patterns Claude commonly uses before writing code
+            var claudePatterns = new[]
+            {
+                "new LuceneIndexService", // About to instantiate
+                "Task<SearchResult>", // Return type
+                "List<string>", // Collection type
+                "ILuceneIndexService", // Interface reference
+                "SearchAsync(", // Method signature
+                "public async Task", // Method definition
+                ": IDisposable", // Type annotation
+                "await someService", // Async call
+                "Dictionary<string, object>" // Complex generic
+            };
+            
+            // Act & Assert
+            foreach (var pattern in claudePatterns)
+            {
+                var isTypeQuery = queryTypeDetector.IsLikelyTypeQuery(pattern);
+                isTypeQuery.Should().BeTrue($"Pattern '{pattern}' should be detected as type query");
+            }
+            
+            return Task.CompletedTask;
+        }
+        
+        #endregion Type-First Workflow Tests
     }
 }

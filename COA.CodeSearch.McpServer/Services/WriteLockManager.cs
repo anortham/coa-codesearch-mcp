@@ -11,13 +11,16 @@ public class WriteLockManager : IWriteLockManager
     private const string WRITE_LOCK_FILENAME = "write.lock";
     private const string SEGMENTS_FILENAME = "segments.gen";
     private readonly IPathResolutionService _pathResolution;
+    private readonly IWorkspaceRegistryService _workspaceRegistry;
     private readonly ILogger<WriteLockManager> _logger;
 
     public WriteLockManager(
         IPathResolutionService pathResolution,
+        IWorkspaceRegistryService workspaceRegistry,
         ILogger<WriteLockManager> logger)
     {
         _pathResolution = pathResolution;
+        _workspaceRegistry = workspaceRegistry;
         _logger = logger;
     }
 
@@ -244,8 +247,10 @@ public class WriteLockManager : IWriteLockManager
                         IsAccessible = diagnostics.IsAccessible
                     });
                     
-                    // Try to resolve actual workspace path, fall back to directory analysis
-                    var actualWorkspacePath = _pathResolution.TryResolveWorkspacePath(indexDir);
+                    // Try to resolve actual workspace path from registry, fall back to directory analysis
+                    var dirName = Path.GetFileName(indexDir);
+                    var workspace = await _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(dirName);
+                    var actualWorkspacePath = workspace?.OriginalPath;
                     var workspaceName = !string.IsNullOrEmpty(actualWorkspacePath)
                         ? actualWorkspacePath
                         : ExtractWorkspaceNameFromHashedDir(indexDir);
@@ -280,6 +285,31 @@ public class WriteLockManager : IWriteLockManager
     {
         try
         {
+            // Check 0: Registry check - is this workspace active?
+            var indexDirectory = Path.GetDirectoryName(lockPath);
+            if (!string.IsNullOrEmpty(indexDirectory))
+            {
+                var directoryName = Path.GetFileName(indexDirectory);
+                var workspace = await _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(directoryName);
+                
+                if (workspace != null)
+                {
+                    // Check if workspace has any lock holder (was checking if locked, but we removed that feature)
+                    // Since we removed the locking mechanism, we can't check if it's locked
+                    // Just log that the workspace exists
+                    _logger.LogDebug("SAFETY CHECK: Lock file {Path} belongs to registered workspace {WorkspacePath}", 
+                        lockPath, workspace.OriginalPath);
+                    
+                    _logger.LogDebug("SAFETY CHECK: Workspace {WorkspacePath} is registered but not locked - proceeding with file-level checks", 
+                        workspace.OriginalPath);
+                }
+                else
+                {
+                    // Workspace not in registry - likely orphaned, continue with file-level checks
+                    _logger.LogDebug("SAFETY CHECK: Index directory {DirectoryName} not found in registry - likely orphaned", directoryName);
+                }
+            }
+            
             // Check 1: File is not currently being written to
             var initialSize = new FileInfo(lockPath).Length;
             await Task.Delay(100); // Brief pause

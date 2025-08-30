@@ -25,6 +25,7 @@ public class WorkspaceControllerTests
     private Mock<ILuceneIndexService> _mockLuceneService;
     private Mock<IFileIndexingService> _mockFileIndexingService;
     private Mock<IPathResolutionService> _mockPathResolver;
+    private Mock<IWorkspaceRegistryService> _mockWorkspaceRegistry;
     private Mock<ILogger<WorkspaceController>> _mockLogger;
     private WorkspaceController _controller;
 
@@ -34,14 +35,57 @@ public class WorkspaceControllerTests
         _mockLuceneService = new Mock<ILuceneIndexService>();
         _mockFileIndexingService = new Mock<IFileIndexingService>();
         _mockPathResolver = new Mock<IPathResolutionService>();
+        _mockWorkspaceRegistry = new Mock<IWorkspaceRegistryService>();
         _mockLogger = new Mock<ILogger<WorkspaceController>>();
 
         _controller = new WorkspaceController(
             _mockLuceneService.Object,
             _mockFileIndexingService.Object,
             _mockPathResolver.Object,
+            _mockWorkspaceRegistry.Object,
             _mockLogger.Object);
     }
+    
+    #region Helper Methods
+    
+    private static WorkspaceEntry CreateWorkspaceEntry(
+        string hash, 
+        string originalPath, 
+        string directoryName, 
+        int documentCount = 0, 
+        long indexSizeBytes = 0)
+    {
+        return new WorkspaceEntry
+        {
+            Hash = hash,
+            OriginalPath = originalPath,
+            DirectoryName = directoryName,
+            DocumentCount = documentCount,
+            IndexSizeBytes = indexSizeBytes,
+            CreatedAt = DateTime.UtcNow,
+            LastAccessed = DateTime.UtcNow
+        };
+    }
+    
+    private static WorkspaceIndexInfo CreateWorkspaceIndexInfo(
+        string originalPath,
+        string hashPath,
+        long documentCount = 0,
+        long indexSizeBytes = 0)
+    {
+        return new WorkspaceIndexInfo
+        {
+            OriginalPath = originalPath,
+            HashPath = hashPath,
+            CreatedAt = DateTime.UtcNow,
+            LastAccessed = DateTime.UtcNow,
+            LastModified = DateTime.UtcNow,
+            DocumentCount = documentCount,
+            IndexSizeBytes = indexSizeBytes
+        };
+    }
+    
+    #endregion
 
     #region NEW: Path Resolution Tests for ListWorkspaces API
 
@@ -66,27 +110,8 @@ public class WorkspaceControllerTests
             Directory.CreateDirectory(indexDir2);
 
             // Create metadata files
-            var metadata1 = new WorkspaceIndexInfo
-            {
-                OriginalPath = originalPath1,
-                HashPath = "abcd1234",
-                CreatedAt = DateTime.UtcNow,
-                LastAccessed = DateTime.UtcNow,
-                LastModified = DateTime.UtcNow,
-                DocumentCount = 150,
-                IndexSizeBytes = 2048000
-            };
-
-            var metadata2 = new WorkspaceIndexInfo
-            {
-                OriginalPath = originalPath2,
-                HashPath = "5678efgh",
-                CreatedAt = DateTime.UtcNow,
-                LastAccessed = DateTime.UtcNow,
-                LastModified = DateTime.UtcNow,
-                DocumentCount = 200,
-                IndexSizeBytes = 1024000
-            };
+            var metadata1 = CreateWorkspaceIndexInfo(originalPath1, "abcd1234", 150, 2048000);
+            var metadata2 = CreateWorkspaceIndexInfo(originalPath2, "5678efgh", 200, 1024000);
 
             var metadataFile1 = Path.Combine(indexDir1, "workspace_metadata.json");
             var metadataFile2 = Path.Combine(indexDir2, "workspace_metadata.json");
@@ -99,8 +124,15 @@ public class WorkspaceControllerTests
 
             // Setup mocks
             _mockPathResolver.Setup(p => p.GetIndexRootPath()).Returns(indexRootPath);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir1)).Returns(originalPath1);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir2)).Returns(originalPath2);
+            
+            // Setup workspace registry to return workspace entries
+            var workspace1 = CreateWorkspaceEntry("abcd1234", originalPath1, hashedDirName1, 150, 2048000);
+            var workspace2 = CreateWorkspaceEntry("5678efgh", originalPath2, hashedDirName2, 200, 1024000);
+            
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName1))
+                .ReturnsAsync(workspace1);
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName2))
+                .ReturnsAsync(workspace2);
 
             // Act - Call ListWorkspaces API
             var result = await _controller.ListWorkspaces();
@@ -136,10 +168,10 @@ public class WorkspaceControllerTests
                 Assert.That(workspace2?.FileCount, Is.EqualTo(200), "Should use file count from metadata");
             });
 
-            // Verify path resolution was called for each directory
-            _mockPathResolver.Verify(p => p.TryResolveWorkspacePath(indexDir1), Times.Once, 
+            // Verify workspace registry was queried for each directory
+            _mockWorkspaceRegistry.Verify(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName1), Times.Once, 
                 "Should attempt to resolve path for first index directory");
-            _mockPathResolver.Verify(p => p.TryResolveWorkspacePath(indexDir2), Times.Once, 
+            _mockWorkspaceRegistry.Verify(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName2), Times.Once, 
                 "Should attempt to resolve path for second index directory");
         }
         finally
@@ -163,9 +195,10 @@ public class WorkspaceControllerTests
             Directory.CreateDirectory(indexRootPath);
             Directory.CreateDirectory(indexDir);
 
-            // Setup mocks - path resolution returns null (failed to resolve)
+            // Setup mocks - workspace registry returns null (failed to resolve)
             _mockPathResolver.Setup(p => p.GetIndexRootPath()).Returns(indexRootPath);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir)).Returns((string?)null);
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName))
+                .ReturnsAsync((WorkspaceEntry?)null);
 
             // Act - Call ListWorkspaces API
             var result = await _controller.ListWorkspaces();
@@ -184,8 +217,8 @@ public class WorkspaceControllerTests
                     "Should fallback to clearly marked unresolved path when path resolution fails");
             });
 
-            // Verify path resolution was attempted
-            _mockPathResolver.Verify(p => p.TryResolveWorkspacePath(indexDir), Times.Once, 
+            // Verify workspace registry was queried
+            _mockWorkspaceRegistry.Verify(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName), Times.Once, 
                 "Should attempt to resolve workspace path");
         }
         finally
@@ -210,9 +243,11 @@ public class WorkspaceControllerTests
             Directory.CreateDirectory(indexDir);
             // No metadata file created
 
-            // Setup mocks - path resolution succeeds despite missing metadata
+            // Setup mocks - workspace registry returns entry despite missing metadata
             _mockPathResolver.Setup(p => p.GetIndexRootPath()).Returns(indexRootPath);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir)).Returns(resolvedPath);
+            var workspace = CreateWorkspaceEntry("1234abcd", resolvedPath, hashedDirName);
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName))
+                .ReturnsAsync(workspace);
 
             // Act - Call ListWorkspaces API
             var result = await _controller.ListWorkspaces();
@@ -259,7 +294,9 @@ public class WorkspaceControllerTests
 
             // Setup mocks
             _mockPathResolver.Setup(p => p.GetIndexRootPath()).Returns(indexRootPath);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir)).Returns(resolvedPath);
+            var workspace = CreateWorkspaceEntry("abcd1234", resolvedPath, hashedDirName);
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDirName))
+                .ReturnsAsync(workspace);
 
             // Act - Call ListWorkspaces API
             var result = await _controller.ListWorkspaces();
@@ -411,10 +448,16 @@ public class WorkspaceControllerTests
                 Path.Combine(indexDir2, "workspace_metadata.json"), 
                 System.Text.Json.JsonSerializer.Serialize(metadata2, new System.Text.Json.JsonSerializerOptions { WriteIndented = true }));
 
-            // Step 3: Setup mocks to simulate PathResolutionService behavior
+            // Step 3: Setup mocks to simulate WorkspaceRegistryService behavior
             _mockPathResolver.Setup(p => p.GetIndexRootPath()).Returns(indexRootPath);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir1)).Returns(originalWorkspace1);
-            _mockPathResolver.Setup(p => p.TryResolveWorkspacePath(indexDir2)).Returns(originalWorkspace2);
+            
+            var workspace1Entry = CreateWorkspaceEntry("ab12cd34", originalWorkspace1, hashedDir1, 1250, 15728640);
+            var workspace2Entry = CreateWorkspaceEntry("ef56gh78", originalWorkspace2, hashedDir2, 890, 9437184);
+            
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDir1))
+                .ReturnsAsync(workspace1Entry);
+            _mockWorkspaceRegistry.Setup(r => r.GetWorkspaceByDirectoryNameAsync(hashedDir2))
+                .ReturnsAsync(workspace2Entry);
 
             // Step 4: Call API to list workspaces
             var result = await _controller.ListWorkspaces();
@@ -455,7 +498,7 @@ public class WorkspaceControllerTests
             // Verify the complete path resolution workflow was executed
             _mockPathResolver.Verify(p => p.GetIndexRootPath(), Times.Once, 
                 "Should get index root path to find workspace directories");
-            _mockPathResolver.Verify(p => p.TryResolveWorkspacePath(It.IsAny<string>()), Times.Exactly(2), 
+            _mockWorkspaceRegistry.Verify(r => r.GetWorkspaceByDirectoryNameAsync(It.IsAny<string>()), Times.Exactly(2), 
                 "Should attempt path resolution for each indexed workspace");
         }
         finally
@@ -484,7 +527,7 @@ public class WorkspaceControllerTests
     /// WORKFLOW TESTED:
     /// 1. Workspace indexing creates hashed directory name for uniqueness
     /// 2. Metadata file stores original workspace path for resolution
-    /// 3. API calls TryResolveWorkspacePath() to get original path from hashed directory
+    /// 3. API calls GetWorkspaceByDirectoryNameAsync() to get original path from hashed directory
     /// 4. API returns human-readable workspace paths to users
     /// 
     /// CRITICAL REQUIREMENTS VERIFIED:
