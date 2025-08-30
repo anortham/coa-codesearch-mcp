@@ -134,7 +134,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                 workspacePath,
                 query,
                 maxResults * 10,  // Get more results since we might filter
-                false, // No snippets needed for file search
+                true, // Enable snippets to ensure all fields (including type_info) are populated
                 cancellationToken
             );
             
@@ -170,7 +170,8 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
                             FileName = fileName,
                             Directory = Path.GetDirectoryName(filePath) ?? "",
                             Extension = Path.GetExtension(filePath),
-                            Score = CalculateFileMatchScore(fileName, pattern, useRegex)
+                            Score = CalculateFileMatchScore(fileName, pattern, useRegex),
+                            TypeSummary = ExtractTypeSummaryFromHit(hit)
                         });
                     }
                 }
@@ -356,6 +357,63 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
         return new Regex(regexPattern, RegexOptions.IgnoreCase);
     }
     
+    /// <summary>
+    /// Extract type summary from search hit to help Claude understand what's in the file
+    /// </summary>
+    private string? ExtractTypeSummaryFromHit(SearchHit hit)
+    {
+        try
+        {
+            var typeInfoJson = hit.Fields?.GetValueOrDefault("type_info");
+            
+            if (!string.IsNullOrEmpty(typeInfoJson))
+            {
+                try
+                {
+                    var options = new System.Text.Json.JsonSerializerOptions 
+                    { 
+                        PropertyNameCaseInsensitive = true 
+                    };
+                    var typeData = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.StoredTypeInfo>(typeInfoJson, options);
+                    
+                    if (typeData != null)
+                    {
+                        var summary = new List<string>();
+                        
+                        // Add primary types (classes, interfaces, etc.)
+                        if (typeData.Types?.Any() == true)
+                        {
+                            var primaryTypes = typeData.Types.Take(3).Select(t => $"{t.Kind} {t.Name}");
+                            summary.Add(string.Join(", ", primaryTypes));
+                        }
+                        
+                        // Add method count if significant
+                        if (typeData.Methods?.Count > 0)
+                        {
+                            summary.Add($"{typeData.Methods.Count} methods");
+                        }
+                        
+                        if (summary.Any())
+                        {
+                            return string.Join(" - ", summary);
+                        }
+                    }
+                }
+                catch (System.Text.Json.JsonException ex)
+                {
+                    _logger.LogDebug(ex, "Failed to parse type info for {FilePath}", hit.FilePath);
+                }
+            }
+            
+            return null;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to extract type summary for {FilePath}", hit.FilePath);
+            return null;
+        }
+    }
+    
     private AIOptimizedResponse<FileSearchResult> CreateNoIndexError(string workspacePath)
     {
         var result = new AIOptimizedResponse<FileSearchResult>
@@ -515,4 +573,9 @@ public class FileSearchMatch
     /// Lucene relevance score
     /// </summary>
     public float Score { get; set; }
+    
+    /// <summary>
+    /// Summary of primary types defined in this file (helps Claude understand what's in the file)
+    /// </summary>
+    public string? TypeSummary { get; set; }
 }

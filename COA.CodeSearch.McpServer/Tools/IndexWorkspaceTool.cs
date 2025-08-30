@@ -26,6 +26,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
@@ -39,6 +40,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolutionService,
+        IWorkspaceRegistryService workspaceRegistryService,
         IFileIndexingService fileIndexingService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
@@ -48,6 +50,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
+        _workspaceRegistryService = workspaceRegistryService;
         _fileIndexingService = fileIndexingService;
         _cacheService = cacheService;
         _storageService = storageService;
@@ -162,9 +165,17 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                     watcherEnabled = true;
                 }
                 
-                // Store workspace metadata for path resolution
-                _pathResolutionService.StoreWorkspaceMetadata(workspacePath);
-                _logger.LogDebug("Stored workspace metadata for: {WorkspacePath}", workspacePath);
+                // Register workspace in the global registry
+                var workspaceEntry = await _workspaceRegistryService.RegisterWorkspaceAsync(workspacePath);
+                if (workspaceEntry != null)
+                {
+                    _logger.LogInformation("Registered workspace in global registry: {WorkspacePath} -> {Hash}", 
+                        workspacePath, workspaceEntry.Hash);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to register workspace in global registry: {WorkspacePath}", workspacePath);
+                }
                 
                 // Get statistics if available
                 var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
@@ -215,8 +226,20 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
                 var documentCount = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
                 var stats = await _luceneIndexService.GetStatisticsAsync(workspacePath, cancellationToken);
                 
-                // Store/update workspace metadata
-                _pathResolutionService.StoreWorkspaceMetadata(workspacePath);
+                // Register workspace in the global registry (essential for all operations)
+                var workspaceEntry = await _workspaceRegistryService.RegisterWorkspaceAsync(workspacePath);
+                if (workspaceEntry != null)
+                {
+                    // Update workspace statistics in registry
+                    var docCount = documentCount > int.MaxValue ? int.MaxValue : (int)documentCount;
+                    await _workspaceRegistryService.UpdateWorkspaceStatisticsAsync(workspaceEntry.Hash, docCount, stats.IndexSizeBytes);
+                    await _workspaceRegistryService.UpdateLastAccessedAsync(workspaceEntry.Hash);
+                    _logger.LogDebug("Updated workspace registry: {WorkspacePath} -> {Hash}", workspacePath, workspaceEntry.Hash);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to register existing workspace in global registry: {WorkspacePath}", workspacePath);
+                }
                 
                 // Start watching this workspace for changes (if not already watching)
                 bool watcherEnabled = false;

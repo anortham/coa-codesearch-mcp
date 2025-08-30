@@ -2,7 +2,6 @@ using System.Security.Cryptography;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using COA.CodeSearch.McpServer.Constants;
 using System.Collections.Concurrent;
 
 namespace COA.CodeSearch.McpServer.Services;
@@ -148,149 +147,9 @@ public class PathResolutionService : IPathResolutionService
         return Path.Combine(_basePath, PathConstants.LogsDirectoryName);
     }
     
-    public string GetWorkspaceMetadataPath()
-    {
-        var indexRoot = GetIndexRootPath();
-        return Path.Combine(indexRoot, PathConstants.WorkspaceMetadataFileName);
-    }
     
-    /// <summary>
-    /// Gets the metadata file path for a specific workspace
-    /// </summary>
-    /// <param name="workspacePath">The workspace path</param>
-    /// <returns>Path to the workspace-specific metadata file</returns>
-    public string GetWorkspaceMetadataPath(string workspacePath)
-    {
-        var indexPath = GetIndexPath(workspacePath);
-        return Path.Combine(indexPath, "workspace_metadata.json");
-    }
     
-    /// <summary>
-    /// Attempts to resolve the original workspace path from an index directory
-    /// </summary>
-    /// <param name="indexDirectory">The index directory path</param>
-    /// <returns>The original workspace path if found, null otherwise</returns>
-    public string? TryResolveWorkspacePath(string indexDirectory)
-    {
-        var metadataFile = Path.Combine(indexDirectory, "workspace_metadata.json");
-        var semaphore = GetMetadataLock(metadataFile);
-        
-        try
-        {
-            // First, try to read from metadata file with thread safety
-            if (File.Exists(metadataFile))
-            {
-                semaphore.Wait();
-                try
-                {
-                    var json = File.ReadAllText(metadataFile);
-                    var metadata = System.Text.Json.JsonSerializer.Deserialize<Models.WorkspaceIndexInfo>(json);
-                    if (!string.IsNullOrEmpty(metadata?.OriginalPath) && Directory.Exists(metadata.OriginalPath))
-                    {
-                        return metadata.OriginalPath;
-                    }
-                }
-                finally
-                {
-                    semaphore.Release();
-                }
-            }
-            
-            // Fallback: Try to reconstruct from directory name
-            var directoryName = Path.GetFileName(indexDirectory);
-            var parts = directoryName.Split('_');
-            
-            if (parts.Length >= 2)
-            {
-                // The directory name format is "workspacename_hash"
-                var workspaceName = string.Join("_", parts.Take(parts.Length - 1));
-                var hash = parts.Last();
-                
-                // Common workspace locations to check
-                var possibleLocations = new[]
-                {
-                    Path.Combine("C:\\source", workspaceName.Replace('_', ' ')),
-                    Path.Combine("C:\\source", workspaceName),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "source", workspaceName),
-                    Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.Desktop), workspaceName),
-                    // Add current directory as well
-                    Path.Combine(Directory.GetCurrentDirectory(), workspaceName)
-                };
-
-                foreach (var location in possibleLocations)
-                {
-                    if (Directory.Exists(location))
-                    {
-                        // Verify this is the correct workspace by computing its hash
-                        var expectedHash = ComputeWorkspaceHash(location);
-                        if (expectedHash.Equals(hash, StringComparison.OrdinalIgnoreCase))
-                        {
-                            return location;
-                        }
-                    }
-                }
-            }
-            
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to resolve workspace path for index directory: {IndexDirectory}", indexDirectory);
-            return null;
-        }
-    }
     
-    /// <summary>
-    /// Stores workspace metadata for future resolution
-    /// </summary>
-    /// <param name="workspacePath">The original workspace path</param>
-    public void StoreWorkspaceMetadata(string workspacePath)
-    {
-        var metadataPath = GetWorkspaceMetadataPath(workspacePath);
-        var semaphore = GetMetadataLock(metadataPath);
-        
-        try
-        {
-            semaphore.Wait();
-            
-            var metadata = new Models.WorkspaceIndexInfo
-            {
-                OriginalPath = GetFullPath(workspacePath),
-                HashPath = ComputeWorkspaceHash(workspacePath),
-                CreatedAt = DateTime.UtcNow,
-                LastAccessed = DateTime.UtcNow,
-                LastModified = DateTime.UtcNow,
-                DocumentCount = 0, // Will be updated during indexing
-                IndexSizeBytes = 0 // Will be updated during indexing
-            };
-            
-            var directory = Path.GetDirectoryName(metadataPath);
-            if (!string.IsNullOrEmpty(directory))
-            {
-                EnsureDirectoryExists(directory);
-            }
-            
-            var json = System.Text.Json.JsonSerializer.Serialize(metadata, new System.Text.Json.JsonSerializerOptions 
-            { 
-                WriteIndented = true 
-            });
-            
-            // Use atomic write operation for better reliability
-            var tempPath = metadataPath + ".tmp";
-            File.WriteAllText(tempPath, json);
-            File.Move(tempPath, metadataPath, true); // Atomic replacement
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to store metadata for workspace: {WorkspacePath}, Path: {MetadataPath}", 
-                workspacePath, metadataPath);
-            // Don't throw - metadata storage is optional
-        }
-        finally
-        {
-            semaphore.Release();
-        }
-    }
     
     public string GetIndexRootPath()
     {
