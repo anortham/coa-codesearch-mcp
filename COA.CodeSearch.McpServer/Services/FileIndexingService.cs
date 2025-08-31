@@ -56,7 +56,8 @@ public class FileIndexingService : IFileIndexingService
             ?? new[] { 
                 ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".sql",
                 ".html", ".css", ".json", ".xml", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini",
-                ".sh", ".bat", ".ps1", ".dockerfile", ".makefile", ".gradle", ".csproj", ".sln", ".config"
+                ".sh", ".bat", ".ps1", ".dockerfile", ".makefile", ".gradle", ".csproj", ".sln", ".config",
+                ".vue", ".cshtml", ".razor"
             };
         _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
         

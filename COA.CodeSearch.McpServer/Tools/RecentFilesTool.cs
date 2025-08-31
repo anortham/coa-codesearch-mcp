@@ -57,7 +57,7 @@ public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedRes
     }
 
     public override string Name => ToolNames.RecentFiles;
-    public override string Description => "See what files changed recently. Perfect for 'What did I work on yesterday?' or finding recently updated code.";
+    public override string Description => "CHECK FIRST when resuming - See what changed since last session. IMMEDIATELY use after breaks, new sessions, or asking 'what was I working on?' Shows temporal context.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<RecentFilesResult>> ExecuteInternalAsync(

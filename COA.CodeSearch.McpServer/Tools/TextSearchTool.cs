@@ -76,7 +76,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
     }
 
     public override string Name => ToolNames.TextSearch;
-    public override string Description => "Search for text in code files. Perfect for finding function definitions, error messages, or specific implementations across your codebase.";
+    public override string Description => "SEARCH BEFORE CODING - Find existing implementations to avoid duplicates. PROACTIVELY use before writing ANY new feature. Discovers: function definitions, error patterns, similar code.";
     public override ToolCategory Category => ToolCategory.Query;
 
 
