@@ -62,7 +62,7 @@ public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimi
     }
 
     public override string Name => ToolNames.IndexWorkspace;
-    public override string Description => "Build a searchable index of your codebase. Required first step before searching. Shows real-time progress for large projects.";
+    public override string Description => "REQUIRED FIRST - Initialize search index before ANY search operation. ALWAYS run when: starting new session, switching projects, or if searches return no results. Without this, all searches fail.";
     public override ToolCategory Category => ToolCategory.Resources;
 
     protected override async Task<AIOptimizedResponse<IndexWorkspaceResult>> ExecuteInternalAsync(

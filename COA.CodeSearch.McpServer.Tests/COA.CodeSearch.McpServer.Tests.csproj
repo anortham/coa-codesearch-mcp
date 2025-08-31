@@ -25,4 +25,12 @@
     <ProjectReference Include="..\COA.CodeSearch.McpServer\COA.CodeSearch.McpServer.csproj" />
   </ItemGroup>
 
+  <!-- Copy tree-sitter DLLs from main project to test output -->
+  <Target Name="CopyTreeSitterDlls" AfterTargets="Build">
+    <ItemGroup>
+      <TreeSitterFiles Include="$(OutDir)..\..\..\..\COA.CodeSearch.McpServer\bin\$(Configuration)\$(TargetFramework)\tree-sitter*.dll" />
+    </ItemGroup>
+    <Copy SourceFiles="@(TreeSitterFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+  </Target>
+
 </Project>

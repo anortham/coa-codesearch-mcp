@@ -58,7 +58,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
     }
 
     public override string Name => ToolNames.FileSearch;
-    public override string Description => "Find files by name or pattern. Great for locating specific files like 'UserService.cs' or all test files '*.test.cs'.";
+    public override string Description => "USE BEFORE Read - Locate files by name/pattern instead of guessing paths. FASTER than manual navigation. Essential for finding: UserService.cs, *.test.js, configuration files.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<FileSearchResult>> ExecuteInternalAsync(
