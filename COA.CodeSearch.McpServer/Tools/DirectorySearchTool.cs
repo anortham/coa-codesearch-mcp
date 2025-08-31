@@ -74,7 +74,7 @@ public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOpti
     }
 
     public override string Name => ToolNames.DirectorySearch;
-    public override string Description => "Find directories and folders by name. Useful for navigating large project structures or finding specific modules.";
+    public override string Description => "EXPLORE project structure - Navigate folders without manual traversal. BETTER than ls/find commands. Locate: modules, packages, nested components.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<DirectorySearchResult>> ExecuteInternalAsync(

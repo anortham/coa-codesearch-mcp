@@ -72,10 +72,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Act & Assert
             var description = _tool.Description;
-            description.Should().Contain("search-read-edit workflow");
-            description.Should().Contain("Preview mode by default");
-            description.Should().Contain("single operation");
-            description.Should().Contain("multiple files");
+            description.Should().Contain("search→read→edit workflow");
+            description.Should().Contain("preview mode by default");
+            description.Should().Contain("BULK updates");
+            description.Should().Contain("across files");
         }
 
         [Test]

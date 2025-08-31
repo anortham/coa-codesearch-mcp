@@ -284,7 +284,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
     public void Description_ReturnsCorrectDescription()
     {
         Assert.That(_tool.Description.ToLower(), Does.Contain("similar"));
-        Assert.That(_tool.Description.ToLower(), Does.Contain("content"));
+        Assert.That(_tool.Description.ToLower(), Does.Contain("existing"));
     }
 
     [Test]

@@ -8,6 +8,7 @@ namespace COA.CodeSearch.McpServer.Services.TypeExtraction;
 public class TypeExtractionService : ITypeExtractionService
 {
     private readonly ILogger<TypeExtractionService> _logger;
+    private readonly Dictionary<string, ILanguageFileAnalyzer> _specializedAnalyzers;
     
     private static readonly Dictionary<string, string> ExtensionToLanguage = new()
     {
@@ -45,14 +46,34 @@ public class TypeExtractionService : ITypeExtractionService
         { ".vh", "verilog" },
         { ".sv", "verilog" },
         { ".bash", "bash" },
-        { ".sh", "bash" }
+        { ".sh", "bash" },
+        { ".vue", "vue" },
+        { ".cshtml", "razor" },
+        { ".razor", "razor" }
         // Note: Kotlin, R, Objective-C, Lua, Dart, Zig, Elm, Clojure, Elixir 
         // don't have tree-sitter DLLs available in the current build
+        // Note: Vue and Razor use specialized multi-language extractors
     };
     
     public TypeExtractionService(ILogger<TypeExtractionService> logger)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        
+        // Initialize specialized analyzers - they will use this service for embedded parsing
+        _specializedAnalyzers = new Dictionary<string, ILanguageFileAnalyzer>();
+        InitializeSpecializedAnalyzers();
+    }
+    
+    private void InitializeSpecializedAnalyzers()
+    {
+        // Create analyzers that will delegate back to this service for embedded language parsing
+        var vueLogger = _logger as ILogger<VueFileAnalyzer> ?? 
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<VueFileAnalyzer>.Instance;
+        var razorLogger = _logger as ILogger<RazorFileAnalyzer> ?? 
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<RazorFileAnalyzer>.Instance;
+            
+        _specializedAnalyzers["vue"] = new VueFileAnalyzer(vueLogger, this);
+        _specializedAnalyzers["razor"] = new RazorFileAnalyzer(razorLogger, this);
     }
     
     public TypeExtractionResult ExtractTypes(string content, string filePath)
@@ -62,6 +83,21 @@ public class TypeExtractionService : ITypeExtractionService
         if (!ExtensionToLanguage.TryGetValue(extension, out var languageName))
         {
             return new TypeExtractionResult { Success = false };
+        }
+        
+        // Check if we have a specialized analyzer for this language (but avoid recursion for embedded files)
+        if (_specializedAnalyzers.TryGetValue(languageName, out var analyzer) && 
+            !filePath.Contains(".ts") && !filePath.Contains(".js") && !filePath.Contains(".cs"))
+        {
+            try
+            {
+                return analyzer.ExtractTypes(content, filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Specialized analyzer failed for {Language} file {FilePath}, falling back to tree-sitter", languageName, filePath);
+                // Fall through to tree-sitter parsing
+            }
         }
         
         try

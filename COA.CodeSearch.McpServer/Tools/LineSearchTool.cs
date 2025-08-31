@@ -50,10 +50,8 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
 
     public override string Name => "line_search";
     public override string Description => 
-        "Search for text patterns returning ALL line occurrences with structured results. " +
-        "Faster than bash grep with AI-optimized context management and token limits. " +
-        "Perfect for finding all instances of a term across files with precise line numbers. " +
-        "Supports searchType: standard, code, literal, phrase, regex, wildcard, fuzzy for specialized patterns.";
+        "REPLACE grep/bash - Get ALL occurrences with line numbers. BETTER than Bash grep - returns structured JSON. " +
+        "Perfect for: counting usages, refactoring prep, finding all instances. Use when you need EVERY match, not just examples.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<LineSearchResult>> ExecuteInternalAsync(LineSearchParams parameters, CancellationToken cancellationToken)

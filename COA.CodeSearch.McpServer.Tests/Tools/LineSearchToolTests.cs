@@ -72,10 +72,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Act & Assert
             var description = _tool.Description;
-            description.Should().Contain("ALL line occurrences");
-            description.Should().Contain("Faster than bash grep");
-            description.Should().Contain("AI-optimized");
-            description.Should().Contain("precise line numbers");
+            description.Should().Contain("REPLACE grep");
+            description.Should().Contain("BETTER than Bash grep");
+            description.Should().Contain("ALL occurrences");
+            description.Should().Contain("line numbers");
         }
 
         [Test]

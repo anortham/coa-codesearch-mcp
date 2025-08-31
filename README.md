@@ -8,7 +8,8 @@ Built with .NET 9.0 and COA MCP Framework 1.7.19, featuring Lucene-powered searc
 
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
-- **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching  
+- **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
+- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 25+ languages including C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, Vue, Razor, and more
 - **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
 - **🔗 Similar Files**: Content-based similarity detection
@@ -28,6 +29,24 @@ Built with .NET 9.0 and COA MCP Framework 1.7.19, featuring Lucene-powered searc
 - **Progressive disclosure**: Essential results first, full data via resource URIs
 - **Smart context handling**: Fewer results when context lines included
 - **Standardized responses**: Consistent format across all tools
+
+### 🧬 Supported Languages for Type Extraction
+
+The type extraction system supports **25+ programming languages** using Tree-sitter parsers:
+
+**Systems Languages**: C, C++, Rust, Go  
+**Object-Oriented**: C#, Java, Swift, Scala  
+**Scripting**: Python, Ruby, PHP, JavaScript, TypeScript  
+**Web**: Vue.js (SFC), Razor/Blazor, HTML, CSS  
+**Functional**: Haskell, OCaml, Julia  
+**Hardware**: Verilog  
+**Shell**: Bash  
+**Data**: JSON, TOML  
+
+**Special Support**:
+- **Vue Single File Components**: Extracts types from `<script>` blocks (TS/JS)
+- **Razor/Blazor**: Extracts types from `@code` and `@functions` blocks
+- **Mixed Languages**: Handles embedded code in templating systems
 
 ## 📋 Prerequisites
 
@@ -163,6 +182,33 @@ Claude will use content analysis to find structurally similar files
 **"Search for all database queries in my project"**
 ```
 Claude will look for SQL patterns, ORM calls, etc.
+```
+
+### Type and Code Analysis
+
+**"Find all classes and interfaces in my project"**
+```
+Claude will extract types from C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, and more
+```
+
+**"Show me all functions and methods in my codebase"**
+```
+Claude will parse multiple languages and extract function/method definitions with signatures
+```
+
+**"Find all Vue component methods"**
+```
+Claude will parse Vue files and extract methods from JavaScript/TypeScript script blocks
+```
+
+**"Show me all Python classes with their methods"**
+```
+Claude will analyze Python files and extract class definitions and methods
+```
+
+**"Find all Rust structs and impl blocks"**
+```
+Claude will parse Rust code and extract struct definitions and implementations
 ```
 
 ### Development Workflow
