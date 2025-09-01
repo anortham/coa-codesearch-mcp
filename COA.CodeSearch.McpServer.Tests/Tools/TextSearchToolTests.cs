@@ -556,10 +556,16 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert - Critical for Claude's workflow
             result.Success.Should().BeTrue();
-            result.Result!.Data.Should().NotBeNull();
-            result.Result!.Data.Results.Hits.Should().NotBeEmpty();
+            result.Result.Should().NotBeNull();
             
-            var firstHit = result.Result!.Data.Results.Hits!.First();
+            var data = result.Result!.Data;
+            data.Should().NotBeNull();
+#pragma warning disable CS8602 // Dereference of a possibly null reference - data is asserted not null above
+            var hits = data!.Results.Hits;
+#pragma warning restore CS8602
+            hits.Should().NotBeNull().And.NotBeEmpty();
+            
+            var firstHit = hits!.First();
             firstHit.Score.Should().Be(10.0f, "Type definitions must have highest score to appear first");
             firstHit.EnhancedSnippet.Should().NotBeNullOrEmpty("Enhanced snippet should show prominent type info");
             firstHit.EnhancedSnippet.Should().Contain("📦", "Type information must be visually prominent");
@@ -621,9 +627,16 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             // Assert - Critical for preventing Claude guessing
             result.Success.Should().BeTrue();
-            result.Result!.Data.Results.Hits.Should().NotBeEmpty();
+            result.Result.Should().NotBeNull();
             
-            var hit = result.Result!.Data.Results.Hits!.First();
+            var data = result.Result!.Data;
+            data.Should().NotBeNull();
+#pragma warning disable CS8602 // Dereference of a possibly null reference - data is asserted not null above
+            var hits = data!.Results.Hits;
+#pragma warning restore CS8602
+            hits.Should().NotBeNull().And.NotBeEmpty();
+            
+            var hit = hits!.First();
             hit.TypeContext.Should().NotBeNull("Type context must ALWAYS be populated when type_info exists");
             hit.TypeContext!.ContainingType.Should().NotBeNullOrEmpty("Claude needs to know which class contains the method");
             hit.TypeContext!.NearbyMethods.Should().NotBeEmpty("Claude needs to see available methods");
