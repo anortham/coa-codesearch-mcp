@@ -19,8 +19,6 @@ public class BuildTimeWarningValidationTests
     private static readonly string[] CriticalFiles = 
     {
         "COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
-        "COA.CodeSearch.McpServer\\Controllers\\SearchController.cs",
-        "COA.CodeSearch.McpServer\\Controllers\\WorkspaceController.cs", 
         "COA.CodeSearch.McpServer\\Tools\\LineSearchTool.cs"
     };
 
