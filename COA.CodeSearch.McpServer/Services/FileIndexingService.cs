@@ -447,8 +447,14 @@ public class FileIndexingService : IFileIndexingService
                 // Searchable field with all type names
                 var allTypeNames = typeData.Types.Select(t => t.Name)
                     .Concat(typeData.Methods.Select(m => m.Name))
-                    .Distinct();
-                document.Add(new TextField("type_names", string.Join(" ", allTypeNames), Field.Store.NO));
+                    .Distinct()
+                    .ToList();
+                
+                var typeNamesField = string.Join(" ", allTypeNames);
+                _logger.LogInformation("Adding type_names field for {FilePath}: {TypeNames} (Count: {Count})", 
+                    filePath, typeNamesField, allTypeNames.Count);
+                    
+                document.Add(new TextField("type_names", typeNamesField, Field.Store.NO));
                 
                 // Stored field with full type information (JSON)
                 var typeJson = JsonSerializer.Serialize(new

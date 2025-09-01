@@ -225,9 +225,7 @@ public class Program
 
     public static async Task Main(string[] args)
     {
-        // Determine mode from args early
-        bool isHttpMode = args.Contains("--mode") && args.Contains("http");
-        bool isServiceMode = args.Contains("--service") || isHttpMode;
+        // CodeSearch now runs in STDIO mode only (HTTP API removed)
 
         // Load configuration early for logging setup
         var configuration = new ConfigurationBuilder()
@@ -280,6 +278,13 @@ public class Program
             builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
             builder.Services.AddScoped<SearchAndReplaceTool>(); // New! Consolidates Search→Read→Edit workflow
             
+            // Navigation tools (from CodeNav consolidation)
+            // TODO: All tools should follow the response builder pattern for consistency
+            // These tools use dedicated response builders for token optimization and consistent behavior
+            builder.Services.AddScoped<SymbolSearchTool>(); // Find symbol definitions using Tree-sitter data
+            builder.Services.AddScoped<FindReferencesTool>(); // Find all usages of a symbol
+            builder.Services.AddScoped<GoToDefinitionTool>(); // Jump to symbol definition
+            
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
 
@@ -291,139 +296,15 @@ public class Program
             builder.RegisterPrompt(new Prompts.BugHunterPrompt());
             builder.RegisterPrompt(new Prompts.RefactoringAssistantPrompt());
 
-            // Check if running as HTTP service
-            if (isServiceMode)
+            // Run in STDIO mode (the only mode now)
             {
-                Log.Information("Starting CodeSearch in HTTP service mode");
+                Log.Information("Starting CodeSearch MCP Server");
                 
-                // Configure HTTP mode with ASP.NET Core
-                var webBuilder = WebApplication.CreateBuilder(args);
-                
-                // Add services from MCP builder
-                foreach (var service in builder.Services)
-                {
-                    webBuilder.Services.Add(service);
-                }
-                
-                // Add ASP.NET Core services
-                webBuilder.Services.AddControllers();
-                webBuilder.Services.AddEndpointsApiExplorer();
-                
-                // Add response caching
-                webBuilder.Services.AddResponseCaching();
-                
-                // Add CORS support
-                webBuilder.Services.AddCors(options =>
-                {
-                    options.AddPolicy("CodeNavPolicy", builder =>
-                        builder.WithOrigins("http://localhost:*")
-                               .AllowAnyMethod()
-                               .AllowAnyHeader()
-                               .AllowCredentials());
-                });
-                
-                // Add Swagger for API documentation
-                webBuilder.Services.AddSwaggerGen(c =>
-                {
-                    c.SwaggerDoc("v1", new Microsoft.OpenApi.Models.OpenApiInfo
-                    {
-                        Title = "CodeSearch API",
-                        Version = "v1",
-                        Description = "HTTP API for CodeSearch MCP Server - enables other MCP servers to leverage search capabilities"
-                    });
-                    
-                    // Include XML documentation if available
-                    var xmlFile = $"{System.Reflection.Assembly.GetExecutingAssembly().GetName().Name}.xml";
-                    var xmlPath = Path.Combine(AppContext.BaseDirectory, xmlFile);
-                    if (File.Exists(xmlPath))
-                    {
-                        c.IncludeXmlComments(xmlPath);
-                    }
-                });
-                
-                // Configure Kestrel
-                webBuilder.WebHost.ConfigureKestrel(options =>
-                {
-                    var port = configuration.GetValue<int>("CodeSearch:HttpPort", 5020);
-                    options.ListenLocalhost(port);
-                });
-                
-                var app = webBuilder.Build();
-                
-                // Configure pipeline
-                app.UseCors("CodeNavPolicy");
-                app.UseResponseCaching();
-                
-                // Enable Swagger in development
-                if (app.Environment.IsDevelopment())
-                {
-                    app.UseSwagger();
-                    app.UseSwaggerUI(c =>
-                    {
-                        c.SwaggerEndpoint("/swagger/v1/swagger.json", "CodeSearch API v1");
-                        c.RoutePrefix = "swagger"; // Swagger UI at /swagger
-                    });
-                }
-                
-                app.UseRouting();
-                app.MapControllers();
-                
-                // Keep the legacy health endpoint for backward compatibility
-                app.MapGet("/health", () => Results.Ok(new 
-                { 
-                    Status = "Healthy", 
-                    Service = "CodeSearch",
-                    Version = "2.0.0",
-                    Mode = "HTTP",
-                    Timestamp = DateTimeOffset.UtcNow
-                }));
-                
-                // API info endpoint
-                app.MapGet("/api", () => Results.Ok(new
-                {
-                    Name = "CodeSearch API",
-                    Version = "1.0.0",
-                    Description = "HTTP API for CodeSearch MCP Server",
-                    Endpoints = new
-                    {
-                        Search = "/api/search",
-                        Workspaces = "/api/workspace", 
-                        Health = "/api/health",
-                        Swagger = "/swagger"
-                    }
-                }));
-                
-                await app.RunAsync();
-            }
-            else
-            {
-                // Run in STDIO mode (default for Claude Code)
-                Log.Information("Starting CodeSearch in STDIO mode");
-                
-                // Register startup indexing service only for STDIO mode to avoid conflicts
+                // Register startup indexing service
                 builder.Services.AddHostedService<StartupIndexingService>();
                 
                 // Use STDIO transport
                 builder.UseStdioTransport();
-
-                // Auto-start HTTP service for API access
-                if (configuration.GetValue<bool>("CodeSearch:HttpApi:Enabled", true))
-                {
-                    var port = configuration.GetValue<int>("CodeSearch:HttpPort", 5020);
-                    builder.UseAutoService(config =>
-                    {
-                        config.ServiceId = "codesearch-http";
-                        // Use dotnet to execute the DLL with quoted path for spaces
-                        config.ExecutablePath = "dotnet";
-                        var dllPath = Assembly.GetExecutingAssembly().Location;
-                        config.Arguments = new[] { $"\"{dllPath}\"", "--mode", "http" };
-                        config.Port = port;
-                        config.HealthEndpoint = $"http://localhost:{port}/health";
-                        config.AutoRestart = true;
-                        config.MaxRestartAttempts = 3;
-                        config.HealthCheckIntervalSeconds = 60;
-                    });
-                }
                 
                 // FileWatcherService will self-start when StartWatching is called
                 // This ensures the same instance receives and processes events
