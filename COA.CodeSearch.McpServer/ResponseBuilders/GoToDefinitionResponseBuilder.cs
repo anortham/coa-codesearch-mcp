@@ -24,7 +24,7 @@ public class GoToDefinitionResponseBuilder : BaseResponseBuilder<SymbolDefinitio
         _storageService = storageService;
     }
     
-    public override async Task<AIOptimizedResponse<SymbolDefinition>> BuildResponseAsync(SymbolDefinition? data, ResponseContext context)
+    public override Task<AIOptimizedResponse<SymbolDefinition>> BuildResponseAsync(SymbolDefinition? data, ResponseContext context)
     {
         var startTime = DateTime.UtcNow;
         var tokenBudget = CalculateTokenBudget(context);
@@ -35,7 +35,7 @@ public class GoToDefinitionResponseBuilder : BaseResponseBuilder<SymbolDefinitio
         // For go-to-definition, we typically have a single result or none
         if (data == null)
         {
-            return BuildNoDefinitionResponse(context);
+            return Task.FromResult(BuildNoDefinitionResponse(context));
         }
         
         // Allocate token budget
@@ -81,7 +81,7 @@ public class GoToDefinitionResponseBuilder : BaseResponseBuilder<SymbolDefinitio
             }
         };
         
-        return response;
+        return Task.FromResult(response);
     }
     
     protected override List<string> GenerateInsights(SymbolDefinition? data, string responseMode)
