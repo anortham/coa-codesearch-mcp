@@ -177,12 +177,39 @@ internal class IndexContext : IDisposable
     public void Dispose()
     {
         if (_disposed) return;
+        
+        // First, dispose the reader and searcher
         lock (_readerLock)
         {
             _reader?.Dispose();
+            _reader = null;
             _searcher = null;
         }
-        _writer?.Dispose();
+        
+        // Then, properly close the writer with commit
+        if (_writer != null)
+        {
+            try
+            {
+                // Ensure all pending changes are committed
+                if (_writer.HasUncommittedChanges())
+                {
+                    _writer.Commit();
+                }
+                _writer.Dispose();
+            }
+            catch (Exception ex)
+            {
+                // Log but don't throw - we're in Dispose
+                System.Diagnostics.Debug.WriteLine($"Error disposing IndexWriter: {ex.Message}");
+            }
+            finally
+            {
+                _writer = null;
+            }
+        }
+        
+        // Finally, dispose the directory and lock
         Directory?.Dispose();
         _lock.Dispose();
         _disposed = true;

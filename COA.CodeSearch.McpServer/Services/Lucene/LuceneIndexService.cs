@@ -22,7 +22,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
 {
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
     private const int DEFAULT_MAX_RESULTS = 100;
-    private const int LOCK_TIMEOUT_SECONDS = 30;
+    private const int LOCK_TIMEOUT_SECONDS = 60; // Increased from 30 for better reliability
     
     private readonly ILogger<LuceneIndexService> _logger;
     private readonly IConfiguration _configuration;
@@ -32,6 +32,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     private readonly LineAwareSearchService _lineAwareSearchService;
     private readonly SmartSnippetService _snippetService;
     private readonly CodeAnalyzer _codeAnalyzer;
+    private readonly IWriteLockManager _writeLockManager;
     private readonly ConcurrentDictionary<string, IndexContext> _indexes = new();
     private readonly SemaphoreSlim _globalLock = new(1, 1);
     private readonly Timer _cleanupTimer;
@@ -49,7 +50,8 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         ICircuitBreakerService circuitBreaker,
         IMemoryPressureService memoryPressure,
         LineAwareSearchService lineAwareSearchService,
-        SmartSnippetService snippetService)
+        SmartSnippetService snippetService,
+        IWriteLockManager writeLockManager)
     {
         _logger = logger;
         _configuration = configuration;
@@ -58,6 +60,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         _memoryPressure = memoryPressure;
         _lineAwareSearchService = lineAwareSearchService;
         _snippetService = snippetService;
+        _writeLockManager = writeLockManager;
         _codeAnalyzer = new CodeAnalyzer(LUCENE_VERSION);
         
         // Load configuration
@@ -95,7 +98,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         
         try
         {
-            return await _circuitBreaker.ExecuteAsync($"init-index-{workspaceHash}", () =>
+            return await _circuitBreaker.ExecuteAsync($"init-index-{workspaceHash}", async () =>
             {
                 var indexPath = _pathResolution.GetIndexPath(workspacePath);
                 var isNewIndex = !System.IO.Directory.Exists(indexPath) || !System.IO.Directory.GetFiles(indexPath).Any();
@@ -138,7 +141,27 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     // Configure merge scheduler
                     config.MaxThreadStates = maxThreadStates;
                     
-                    context.Writer = new IndexWriter(directory, config);
+                    // Try to create IndexWriter with lock recovery
+                    try
+                    {
+                        context.Writer = new IndexWriter(directory, config);
+                    }
+                    catch (global::Lucene.Net.Store.LockObtainFailedException lockEx)
+                    {
+                        _logger.LogWarning(lockEx, "Lock obtain failed for {WorkspacePath}, attempting recovery", workspacePath);
+                        
+                        // Try to force remove the lock and retry once
+                        var removed = await _writeLockManager.ForceRemoveLockAsync(indexPath);
+                        if (removed)
+                        {
+                            _logger.LogInformation("Successfully removed stale lock, retrying IndexWriter creation");
+                            context.Writer = new IndexWriter(directory, config);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Could not obtain write lock for {workspacePath}", lockEx);
+                        }
+                    }
                     
                     // Add to dictionary
                     if (!_indexes.TryAdd(workspaceHash, context))
@@ -160,14 +183,14 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 _logger.LogInformation("Initialized index for workspace {Hash} - New: {IsNew}, Docs: {DocCount}", 
                     workspaceHash, isNewIndex, docCount);
                 
-                return Task.FromResult(new IndexInitResult
+                return new IndexInitResult
                 {
                     Success = true,
                     WorkspaceHash = workspaceHash,
                     IndexPath = indexPath,
                     IsNewIndex = isNewIndex,
                     ExistingDocumentCount = docCount
-                });
+                };
             }, cancellationToken);
         }
         catch (Exception ex)
@@ -535,8 +558,27 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 
                 config.MaxThreadStates = maxThreadStates;
                 
-                // Create new IndexWriter with CREATE mode
-                context.Writer = new IndexWriter(directory, config);
+                // Create new IndexWriter with CREATE mode and lock recovery
+                try
+                {
+                    context.Writer = new IndexWriter(directory, config);
+                }
+                catch (global::Lucene.Net.Store.LockObtainFailedException lockEx)
+                {
+                    _logger.LogWarning(lockEx, "Lock obtain failed during force rebuild for {WorkspacePath}, attempting recovery", workspacePath);
+                    
+                    // Force remove the lock for rebuild
+                    var removed = await _writeLockManager.ForceRemoveLockAsync(indexPath);
+                    if (removed)
+                    {
+                        _logger.LogInformation("Successfully removed lock during force rebuild, retrying");
+                        context.Writer = new IndexWriter(directory, config);
+                    }
+                    else
+                    {
+                        throw new InvalidOperationException($"Could not obtain write lock for force rebuild of {workspacePath}", lockEx);
+                    }
+                }
                 
                 // Step 3: Register the new context
                 if (!_indexes.TryAdd(workspaceHash, context))
@@ -794,27 +836,54 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     {
         try
         {
-            await context.Lock.WaitAsync(TimeSpan.FromSeconds(LOCK_TIMEOUT_SECONDS));
+            // Use a shorter timeout for disposal to avoid hanging
+            var lockAcquired = await context.Lock.WaitAsync(TimeSpan.FromSeconds(5));
+            
+            if (!lockAcquired)
+            {
+                _logger.LogWarning("Could not acquire lock for disposal of context {Hash}, forcing disposal", context.WorkspaceHash);
+            }
+            
             try
             {
                 if (context.Writer != null)
                 {
-                    context.Writer.Commit();
-                    context.Writer.Dispose();
+                    try
+                    {
+                        // Check for uncommitted changes before disposal
+                        if (context.Writer.HasUncommittedChanges())
+                        {
+                            context.Writer.Commit();
+                        }
+                        context.Writer.Dispose();
+                    }
+                    catch (global::Lucene.Net.Store.LockObtainFailedException lockEx)
+                    {
+                        _logger.LogWarning(lockEx, "Lock exception during writer disposal for {Hash}", context.WorkspaceHash);
+                    }
+                    catch (Exception writerEx)
+                    {
+                        _logger.LogError(writerEx, "Error disposing writer for {Hash}", context.WorkspaceHash);
+                    }
                 }
             }
             finally
             {
-                // Release lock BEFORE disposing context (which disposes the lock itself)
-                context.Lock.Release();
+                // Always release the lock if we acquired it
+                if (lockAcquired)
+                {
+                    context.Lock.Release();
+                }
             }
             
-            // Now safe to dispose the context (which will dispose its own lock)
+            // Dispose the context (which handles its own cleanup)
             context.Dispose();
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error disposing index context for {Hash}", context.WorkspaceHash);
+            // Force dispose even on error
+            try { context.Dispose(); } catch { }
         }
     }
     

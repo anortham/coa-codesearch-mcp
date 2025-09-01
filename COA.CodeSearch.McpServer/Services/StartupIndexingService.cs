@@ -115,11 +115,22 @@ public class StartupIndexingService : BackgroundService
                     }
                 }
 
-                // Initialize the index
-                var initResult = await _luceneIndexService.InitializeIndexAsync(workspacePath, stoppingToken);
-                if (!initResult.Success)
+                // Initialize the index with timeout to prevent hanging
+                using var initCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                initCts.CancelAfter(TimeSpan.FromSeconds(30)); // 30 second timeout for initialization
+                
+                try
                 {
-                    _logger.LogWarning("Failed to initialize index for {Path}", workspacePath);
+                    var initResult = await _luceneIndexService.InitializeIndexAsync(workspacePath, initCts.Token);
+                    if (!initResult.Success)
+                    {
+                        _logger.LogWarning("Failed to initialize index for {Path}: {Error}", workspacePath, initResult.ErrorMessage);
+                        return;
+                    }
+                }
+                catch (OperationCanceledException) when (initCts.IsCancellationRequested && !stoppingToken.IsCancellationRequested)
+                {
+                    _logger.LogWarning("Index initialization timed out for {Path} - possible lock issue", workspacePath);
                     return;
                 }
 
