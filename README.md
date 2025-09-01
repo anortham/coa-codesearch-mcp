@@ -1,8 +1,8 @@
 # CodeSearch MCP Server
 
-A lightning-fast code search tool for Claude Code that helps you find files, search code, and understand your projects instantly. Just ask Claude to "find all my React components" or "show me recent changes" and get results in milliseconds.
+A lightning-fast code search and navigation tool for Claude Code that helps you find files, search code, navigate symbols, and understand your projects instantly. Just ask Claude to "find all my React components", "show me recent changes", or "find the definition of UserService" and get results in milliseconds.
 
-Built with .NET 9.0 and COA MCP Framework 1.7.19, featuring Lucene-powered search with AI-optimized responses.
+Built with .NET 9.0 and COA MCP Framework 2.0.1, featuring Lucene-powered search with AI-optimized responses.
 
 ## 🚀 Features
 
@@ -10,6 +10,9 @@ Built with .NET 9.0 and COA MCP Framework 1.7.19, featuring Lucene-powered searc
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
 - **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 25+ languages including C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, Vue, Razor, and more
+- **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
+- **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
+- **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety
 - **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
 - **🔗 Similar Files**: Content-based similarity detection
@@ -108,12 +111,16 @@ Add to your Claude Code MCP configuration file:
 Unlike basic file search, CodeSearch understands your code:
 
 - **Smart Pattern Recognition**: Finds `async Task`, `[Fact]`, `interface IService` patterns
-- **Context-Aware**: Knows the difference between C# classes and JavaScript functions  
+- **Context-Aware**: Knows the difference between C# classes and JavaScript functions using Tree-sitter parsing
 - **Instant Results**: Millisecond search across millions of lines of code
 - **Fuzzy Matching**: Finds files even with typos in names
 - **Content Similarity**: "Find files like this one" using advanced analysis
 - **Recent Activity**: Tracks what you've been working on lately
 - **Cross-Project**: Search across multiple workspaces from one place
+- **Code Navigation**: Symbol search, find references, and goto definition without compilation
+- **Structured Line Search**: Better than grep - returns JSON with exact line numbers and context
+- **Safe Bulk Edits**: Preview mode for search/replace prevents accidental changes
+- **Type-Aware**: Extracts and indexes types from 25+ languages for accurate navigation
 
 ## 🛠️ Available Tools
 
@@ -128,6 +135,21 @@ Unlike basic file search, CodeSearch understands your code:
 | `batch_operations` | Execute multiple searches in batch | `workspacePath`, `operations`, `maxTokens` |
 | `recent_files` | Get recently modified files | `workspacePath`, `timeFrame` |
 | `similar_files` | Find content-similar files | `filePath`, `workspacePath`, `minScore` |
+
+### Navigation Tools
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `symbol_search` | Find classes, interfaces, methods by name | `symbol`, `workspacePath`, `includeReferences`, `maxResults` |
+| `find_references` | Find all usages of a symbol | `symbol`, `workspacePath`, `groupByFile`, `contextLines` |
+| `goto_definition` | Jump to symbol definition | `symbol`, `workspacePath`, `includeFullContext`, `contextLines` |
+
+### Advanced Search Tools
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `line_search` | Get ALL occurrences with line numbers | `pattern`, `workspacePath`, `contextLines`, `maxResultsPerFile` |
+| `search_and_replace` | Replace patterns across files with preview | `searchPattern`, `replacePattern`, `workspacePath`, `preview` |
 
 ### System Tools
 
@@ -184,6 +206,32 @@ Claude will use content analysis to find structurally similar files
 Claude will look for SQL patterns, ORM calls, etc.
 ```
 
+### Code Navigation
+
+**"Find the definition of UserService"**
+```
+Claude will jump directly to where UserService class is defined
+Shows exact line and column, with optional context snippet
+```
+
+**"Show me all references to the UpdateUser method"**
+```
+Claude will find all places where UpdateUser is called
+Groups results by file for easy scanning
+```
+
+**"Search for all classes ending with Controller"**
+```
+Claude will find all classes matching the pattern like UserController, OrderController
+Uses Tree-sitter type extraction for accurate results
+```
+
+**"Find where IRepository interface is implemented"**
+```
+Claude will locate all implementations of the IRepository interface
+Shows inheritance relationships and usage counts
+```
+
 ### Type and Code Analysis
 
 **"Find all classes and interfaces in my project"**
@@ -231,74 +279,53 @@ Claude will find .json, .yaml, .config files
 ### Advanced Examples
 
 **"Find all files in the Services directory that haven't been touched in 30 days"**
-
-**"Search for error handling patterns in my C# code"**
-
-**"Find all API endpoints in my project"**
-
-**"Show me files that import React but don't use hooks"**
-
-## 🌐 HTTP API (Auto-Started)
-
-CodeSearch automatically starts an HTTP API on port **5020** when running in STDIO mode (default for Claude Code). This provides REST API access alongside the MCP functionality.
-
-### Available Endpoints
-
-#### Health & Info
-- `GET /health` - Service health check
-- `GET /api/health` - Detailed health status  
-- `GET /api` - API information and endpoints
-
-#### Workspace Management
-- `GET /api/workspace` - List all indexed workspaces
-- `GET /api/workspace/status?workspacePath={path}` - Get workspace status
-- `POST /api/workspace/index?workspacePath={path}&force={bool}` - Index workspace
-- `POST /api/workspace/refresh?workspacePath={path}` - Refresh workspace index
-- `DELETE /api/workspace/index?workspacePath={path}` - Remove workspace index
-
-#### Search Operations  
-- `GET /api/search/symbol?name={name}&type={type}&workspace={path}&limit={n}` - Search for symbols
-- `GET /api/search/text?query={text}&exact={bool}&workspace={path}&limit={n}` - Search text content
-- `GET /api/check/exists?name={name}&workspace={path}` - Check if symbol exists
-- `POST /api/search/batch` - Perform multiple searches in one request
-
-#### Documentation
-- `GET /swagger` - Interactive API documentation (development mode)
-
-### Example Usage
-
-```bash
-# Check service health
-curl http://localhost:5020/health
-
-# List workspaces (returns actual workspace paths)
-curl http://localhost:5020/api/workspace
-# Example response:
-# {
-#   "workspaces": [
-#     {
-#       "path": "C:\\source\\COA CodeSearch MCP",
-#       "isIndexed": true,
-#       "fileCount": 127,
-#       "lastIndexed": "2025-01-26T14:30:15Z"
-#     }
-#   ]
-# }
-
-# Search for a class (use actual workspace path from list above)
-curl "http://localhost:5020/api/search/symbol?name=UserService&type=class&workspace=C%3A%5Csource%5CCOA%20CodeSearch%20MCP"
-
-# Search for text (workspace path is properly URL-encoded)
-curl "http://localhost:5020/api/search/text?query=async%20Task&workspace=C%3A%5Csource%5CCOA%20CodeSearch%20MCP&limit=10"
-
-# Get workspace status (query parameter requires proper encoding)
-curl "http://localhost:5020/api/workspace/status?workspacePath=C%3A%5Csource%5CCOA%20CodeSearch%20MCP"
-
-# Index a new workspace
-curl -X POST "http://localhost:5020/api/workspace/index?workspacePath=C%3A%5Csource%5CMyProject&force=false"
+```
+Claude will use recent_files with a time filter to find stale code
 ```
 
-The HTTP API is automatically managed by the MCP framework's auto-service feature and will restart if it crashes.
+**"Search for error handling patterns in my C# code"**
+```
+Claude will use text_search to find try-catch blocks and exception handling
+```
+
+**"Find all API endpoints in my project"**
+```
+Claude will search for route decorators and endpoint definitions
+```
+
+**"Show me files that import React but don't use hooks"**
+```
+Claude will combine multiple searches to find React imports without useState/useEffect
+```
+
+### Line-Level Search Examples
+
+**"Show me every line that contains 'Thread.Sleep'"**
+```
+Claude will use line_search to find ALL occurrences with exact line numbers
+Returns structured JSON instead of plain text grep output
+```
+
+**"Find all console.log statements with their line numbers"**
+```
+Claude will return every console.log with file path and line number
+Perfect for cleanup tasks before production deployment
+```
+
+### Search and Replace Examples
+
+**"Replace all 'var' declarations with 'let' in my JavaScript files"**
+```
+Claude will use search_and_replace with preview mode first
+Shows what will change before applying modifications
+```
+
+**"Update all copyright headers to 2025"**
+```
+Claude will find and replace copyright patterns across all files
+Supports regex patterns for complex replacements
+```
+
 
 ## 🔒 Security & Thread Safety
 
@@ -330,10 +357,6 @@ Configuration via `appsettings.json`:
   "CodeSearch": {
     "BasePath": "~/.coa/codesearch",
     "LogsPath": "~/.coa/codesearch/logs",
-    "HttpPort": 5020,
-    "HttpApi": {
-      "Enabled": true
-    },
     "Lucene": {
       "IndexRootPath": "~/.coa/codesearch/indexes",
       "MaxIndexingConcurrency": 8,
@@ -364,7 +387,7 @@ Configuration via `appsettings.json`:
 - **Configuration**: Workspace-specific settings
 
 ### Framework Integration
-Built on **COA MCP Framework 1.7.19**:
+Built on **COA MCP Framework 2.0.1**:
 - Automatic tool discovery
 - Token optimization
 - Progressive response disclosure
@@ -447,25 +470,24 @@ Set log levels in `appsettings.json`:
 
 ## 📚 Integration
 
-### With ProjectKnowledge MCP
+### With Other MCP Servers
 
-CodeSearch complements ProjectKnowledge MCP when both are configured in Claude Code. They work as separate MCP servers:
+CodeSearch works seamlessly with other MCP servers configured in Claude Code:
 
-- **CodeSearch**: Provides fast search and code analysis capabilities
-- **ProjectKnowledge**: Handles knowledge storage, checkpoints, and technical debt tracking
+- **CodeNav MCP**: Provides advanced code navigation and refactoring capabilities
+- **Goldfish MCP**: Handles session management, checkpoints, and task tracking
 
 **Example workflow:**
 ```bash
 # 1. Search for code patterns using CodeSearch
-mcp__codesearch__text_search --query "Thread.Sleep"
+mcp__codesearch__text_search --query "async Task"
 
-# 2. Store findings using ProjectKnowledge (separate tool)
-mcp__projectknowledge__store_knowledge \
-  --content "Found Thread.Sleep anti-pattern in 5 files" \
-  --type "TechnicalDebt"
+# 2. Navigate to specific definitions
+mcp__codesearch__goto_definition --symbol "UserService"
+
+# 3. Find all references to a method
+mcp__codesearch__find_references --symbol "UpdateUser"
 ```
-
-See [Integration Guide](docs/INTEGRATION_WITH_PROJECTKNOWLEDGE.md) for complete workflows.
 
 ## 📄 License
 
@@ -483,9 +505,9 @@ MIT License - see [LICENSE](LICENSE) file.
 
 - **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
 - **Documentation**: [docs/](docs/) folder
-- **Framework**: [COA MCP Framework 1.7.19](https://www.nuget.org/packages/COA.Mcp.Framework)
+- **Framework**: [COA MCP Framework 2.0.1](https://www.nuget.org/packages/COA.Mcp.Framework)
 - **NuGet Package**: [COA.CodeSearch](https://www.nuget.org/packages/COA.CodeSearch)
 
 ---
 
-**Built with** [COA MCP Framework 1.7.19](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
+**Built with** [COA MCP Framework 2.0.1](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)

@@ -428,6 +428,15 @@ public class TypeExtractionResult
     public List<TypeInfo> Types { get; set; } = new();
     public List<MethodInfo> Methods { get; set; } = new();
     public string? Language { get; set; }
+    
+    /// <summary>
+    /// Shared JSON deserialization options for TypeExtractionResult.
+    /// Uses case-insensitive property matching to handle varying JSON casing from different sources.
+    /// </summary>
+    public static readonly JsonSerializerOptions DeserializationOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 }
 
 public class TypeInfo

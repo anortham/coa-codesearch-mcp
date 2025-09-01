@@ -72,7 +72,7 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
         _logger = logger;
         
         // Create response builder with dependencies
-        _responseBuilder = new SearchResponseBuilder(null, storageService);
+        _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
     }
 
     public override string Name => ToolNames.TextSearch;
@@ -404,11 +404,10 @@ public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedRespo
                 if (string.IsNullOrEmpty(typeInfoJson))
                     continue;
                     
-                var options = new JsonSerializerOptions 
-                { 
-                    PropertyNameCaseInsensitive = true 
-                };
-                var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(typeInfoJson, options);
+                // Deserialize using shared options from StoredTypeInfo
+                var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(
+                    typeInfoJson, 
+                    StoredTypeInfo.DeserializationOptions);
                 if (typeData == null)
                     continue;
                     

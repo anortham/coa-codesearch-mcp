@@ -48,7 +48,7 @@ public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<
         _logger = logger;
     }
 
-    public override string Name => "line_search";
+    public override string Name => ToolNames.LineSearch;
     public override string Description => 
         "REPLACE grep/bash - Get ALL occurrences with line numbers. BETTER than Bash grep - returns structured JSON. " +
         "Perfect for: counting usages, refactoring prep, finding all instances. Use when you need EVERY match, not just examples.";

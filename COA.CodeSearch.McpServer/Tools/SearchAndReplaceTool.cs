@@ -46,7 +46,7 @@ public class SearchAndReplaceTool : McpToolBase<SearchAndReplaceParams, AIOptimi
         _logger = logger;
     }
 
-    public override string Name => "search_and_replace";
+    public override string Name => ToolNames.SearchAndReplace;
     public override string Description => 
         "BULK updates across files - Replace patterns everywhere at once. SAFER than manual edits - preview mode by default. " +
         "Perfect for: renaming, refactoring, fixing patterns. Consolidates search→read→edit workflow.";

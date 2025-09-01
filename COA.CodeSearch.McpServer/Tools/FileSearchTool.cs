@@ -52,7 +52,7 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
-        _responseBuilder = new FileSearchResponseBuilder(null, storageService);
+        _responseBuilder = new FileSearchResponseBuilder(logger as ILogger<FileSearchResponseBuilder>, storageService);
         _vscode = vscode;
         _logger = logger;
     }
@@ -370,11 +370,10 @@ public class FileSearchTool : McpToolBase<FileSearchParameters, AIOptimizedRespo
             {
                 try
                 {
-                    var options = new System.Text.Json.JsonSerializerOptions 
-                    { 
-                        PropertyNameCaseInsensitive = true 
-                    };
-                    var typeData = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.StoredTypeInfo>(typeInfoJson, options);
+                    // Deserialize using shared options from StoredTypeInfo
+                    var typeData = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.StoredTypeInfo>(
+                        typeInfoJson, 
+                        COA.CodeSearch.McpServer.Models.StoredTypeInfo.DeserializationOptions);
                     
                     if (typeData != null)
                     {
