@@ -417,6 +417,7 @@ test-mcp.sh
 
 # Lucene indexes and local data
 .codesearch/
+.coa/
 COA.CodeSearch.McpServer/.codesearch/
 
 # Claude Memory System - Exception for project memories
@@ -438,3 +439,6 @@ COA.CodeSearch.McpServer/.codesearch/
 
 # Local NuGet configuration (contains private feed info)
 NuGet.config.local
+
+# Tree-sitter grammar vendor directory (git submodules)
+vendor/

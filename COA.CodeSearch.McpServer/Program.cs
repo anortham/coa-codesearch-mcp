@@ -12,6 +12,8 @@ using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using Serilog;
 using System.Reflection;
+using System.Runtime.InteropServices;
+using TreeSitter;
 
 namespace COA.CodeSearch.McpServer;
 
@@ -34,7 +36,7 @@ public class Program
         
         // Register core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
-        services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
+        // WorkspaceRegistry removed - using hybrid local indexing model
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
         services.AddSingleton<IQueryCacheService, QueryCacheService>();
@@ -124,40 +126,18 @@ public class Program
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
-        services.AddSingleton<IWorkspaceRegistryService, WorkspaceRegistryService>();
-        services.AddMemoryCache(); // Required by WorkspaceRegistryService
+        // WorkspaceRegistry removed - using hybrid local indexing model
+        services.AddMemoryCache(); // Still useful for other caching needs
         services.AddLogging(logging => logging.AddSerilog());
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
         
         var serviceProvider = services.BuildServiceProvider();
         var lockManager = serviceProvider.GetRequiredService<IWriteLockManager>();
-        var registryService = serviceProvider.GetRequiredService<IWorkspaceRegistryService>();
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
         
-        logger.LogInformation("Running startup cleanup and migration");
+        logger.LogInformation("Running startup cleanup");
         
-        // Check and run migration first
-        if (await registryService.IsMigrationNeededAsync())
-        {
-            logger.LogInformation("Global registry not found - running migration from individual metadata files");
-            var migrationResult = await registryService.MigrateFromIndividualMetadataAsync();
-            
-            if (migrationResult.Success)
-            {
-                logger.LogInformation("Migration completed - Workspaces: {WorkspaceCount}, Orphans: {OrphanCount}", 
-                    migrationResult.WorkspacesMigrated, migrationResult.OrphansDiscovered);
-                
-                if (migrationResult.Errors.Any())
-                {
-                    logger.LogWarning("Migration completed with {ErrorCount} errors: {Errors}", 
-                        migrationResult.Errors.Count, string.Join("; ", migrationResult.Errors));
-                }
-            }
-            else
-            {
-                logger.LogError("Migration failed: {Errors}", string.Join("; ", migrationResult.Errors));
-            }
-        }
+        // Migration and registry no longer needed with hybrid local indexing model
         
         logger.LogInformation("Running write.lock cleanup");
         
@@ -235,6 +215,9 @@ public class Program
 
         // Configure Serilog early - FILE ONLY (no console to avoid breaking STDIO)
         ConfigureSerilog(configuration, args);
+
+        // Configure native resolver for Tree-sitter on macOS (Homebrew/system installs)
+        ConfigureTreeSitterNativeResolver();
 
         try
         {
@@ -320,5 +303,92 @@ public class Program
         {
             Log.CloseAndFlush();
         }
+    }
+
+    /// <summary>
+    /// On macOS, resolve Tree-sitter native libraries from common system locations (Homebrew/MacPorts)
+    /// so we don't need to bundle dylibs. No-ops on non-macOS platforms.
+    /// </summary>
+    private static void ConfigureTreeSitterNativeResolver()
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+
+        try
+        {
+            var tsAssembly = typeof(Parser).Assembly;
+            NativeLibrary.SetDllImportResolver(tsAssembly, ResolveTreeSitterNative);
+
+            // Also attach resolver for our own assembly so any custom P/Invoke bindings can resolve dylibs
+            NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), ResolveTreeSitterNative);
+        }
+        catch
+        {
+            // Silent fallback; type extraction will gracefully degrade if loading fails
+        }
+    }
+
+    private static IntPtr ResolveTreeSitterNative(string libraryName, Assembly assembly, DllImportSearchPath? _)
+    {
+        if (!OperatingSystem.IsMacOS()) return IntPtr.Zero;
+
+        // Tree-sitter grammars are installed as libtree-sitter-<lang>.dylib (and core as libtree-sitter*.dylib)
+        // Some managed calls may request plain language IDs (e.g., "typescript").
+        // Resolve both patterns: lib<name>.dylib and libtree-sitter-<name>.dylib.
+        var fileNames = new List<string>();
+        fileNames.Add($"lib{libraryName}.dylib");
+        if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
+        {
+            fileNames.Add($"libtree-sitter-{libraryName}.dylib");
+        }
+
+        // Probe common Homebrew/MacPorts install locations
+        var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
+
+        // Common subpaths under the prefixes
+        var commonSubpaths = new Func<string, IEnumerable<string>>(fn => new[]
+        {
+            Path.Combine("lib", fn),
+            Path.Combine("opt", "tree-sitter", "lib", fn)
+        });
+
+        Log.Debug("Tree-sitter resolver: resolving '{LibraryName}'", libraryName);
+
+        foreach (var prefix in prefixes)
+        {
+            foreach (var fn in fileNames)
+            {
+                foreach (var sub in commonSubpaths(fn))
+                {
+                    var candidate = Path.Combine(prefix, sub);
+                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
+                    {
+                        Log.Debug("Tree-sitter resolver: loaded '{LibraryName}' from '{Path}'", libraryName, candidate);
+                        return handle;
+                    }
+                }
+            }
+        }
+
+        // Allow env override with a list of directories (PATH-like)
+        var extra = Environment.GetEnvironmentVariable("TREE_SITTER_NATIVE_PATHS");
+        if (!string.IsNullOrWhiteSpace(extra))
+        {
+            Log.Debug("Tree-sitter resolver: probing TREE_SITTER_NATIVE_PATHS={Paths}", extra);
+            foreach (var dir in extra.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+            {
+                foreach (var fn in fileNames)
+                {
+                    var candidate = Path.Combine(dir, fn);
+                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
+                    {
+                        Log.Debug("Tree-sitter resolver: loaded '{LibraryName}' from '{Path}' via TREE_SITTER_NATIVE_PATHS", libraryName, candidate);
+                        return handle;
+                    }
+                }
+            }
+        }
+
+        Log.Debug("Tree-sitter resolver: failed to resolve '{LibraryName}', deferring to default", libraryName);
+        return IntPtr.Zero; // Defer to default resolution if we didn't find it
     }
 }

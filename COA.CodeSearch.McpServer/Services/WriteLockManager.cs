@@ -4,54 +4,36 @@ namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
 /// Manages write.lock files for Lucene indexes to prevent corruption
-/// Provides tiered cleanup strategies based on risk level
+/// Simplified for hybrid local indexing model
 /// </summary>
 public class WriteLockManager : IWriteLockManager
 {
     private const string WRITE_LOCK_FILENAME = "write.lock";
     private const string SEGMENTS_FILENAME = "segments.gen";
     private readonly IPathResolutionService _pathResolution;
-    private readonly IWorkspaceRegistryService _workspaceRegistry;
     private readonly ILogger<WriteLockManager> _logger;
 
     public WriteLockManager(
         IPathResolutionService pathResolution,
-        IWorkspaceRegistryService workspaceRegistry,
         ILogger<WriteLockManager> logger)
     {
         _pathResolution = pathResolution;
-        _workspaceRegistry = workspaceRegistry;
         _logger = logger;
     }
 
     /// <summary>
-    /// Smart startup cleanup with tiered approach based on risk
-    /// TIER 1: Auto-clean test artifacts (very low risk)
-    /// TIER 2: Auto-clean workspace locks with safety checks (low risk)
-    /// TIER 3: Diagnose-only for production indexes (report but don't clean)
+    /// Simplified startup cleanup for local indexes
+    /// Only cleans up stale locks in the primary workspace
     /// </summary>
     public async Task<WriteLockCleanupResult> SmartStartupCleanupAsync()
     {
-        var testArtifactMinAge = TimeSpan.FromMinutes(1);
         var workspaceMinAge = TimeSpan.FromMinutes(5);
         
-        _logger.LogInformation("STARTUP: Smart cleanup - Tiered approach based on risk level");
+        _logger.LogInformation("STARTUP: Checking for stale write locks in local indexes");
         
         var result = new WriteLockCleanupResult();
         
-        // TIER 1: SAFE AUTO-CLEANUP - Test artifacts
-        try
-        {
-            var testCleanupCount = await CleanupTestArtifactsAsync(testArtifactMinAge);
-            result.TestArtifactsRemoved = testCleanupCount;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "TIER 1 CLEANUP: Failed to clean test artifacts");
-            result.Errors.Add($"Test artifacts: {ex.Message}");
-        }
-        
-        // TIER 2: CONSERVATIVE AUTO-CLEANUP - Workspace indexes with safety checks
+        // Clean up workspace locks with safety checks
         try
         {
             var workspaceCleanupCount = await CleanupWorkspaceIndexesAsync(workspaceMinAge);
@@ -59,21 +41,8 @@ public class WriteLockManager : IWriteLockManager
         }
         catch (Exception ex)
         {
-            _logger.LogWarning(ex, "TIER 2 CLEANUP: Failed to clean workspace locks");
+            _logger.LogWarning(ex, "Failed to clean workspace locks");
             result.Errors.Add($"Workspace locks: {ex.Message}");
-        }
-        
-        // TIER 3: DIAGNOSE-ONLY - Report stuck locks but don't remove
-        try
-        {
-            var stuckLocks = await DiagnoseStuckIndexesAsync();
-            result.StuckLocksFound = stuckLocks.Count;
-            result.StuckLocks = stuckLocks;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "TIER 3 DIAGNOSE: Failed to diagnose stuck locks");
-            result.Errors.Add($"Diagnosis: {ex.Message}");
         }
         
         // Log summary
@@ -247,13 +216,8 @@ public class WriteLockManager : IWriteLockManager
                         IsAccessible = diagnostics.IsAccessible
                     });
                     
-                    // Try to resolve actual workspace path from registry, fall back to directory analysis
-                    var dirName = Path.GetFileName(indexDir);
-                    var workspace = await _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(dirName);
-                    var actualWorkspacePath = workspace?.OriginalPath;
-                    var workspaceName = !string.IsNullOrEmpty(actualWorkspacePath)
-                        ? actualWorkspacePath
-                        : ExtractWorkspaceNameFromHashedDir(indexDir);
+                    // Try to extract workspace name from directory
+                    var workspaceName = ExtractWorkspaceNameFromHashedDir(indexDir);
                     
                     _logger.LogError(
                         "CRITICAL: Found stuck lock for workspace '{Workspace}' at {Path}. " +
@@ -285,29 +249,12 @@ public class WriteLockManager : IWriteLockManager
     {
         try
         {
-            // Check 0: Registry check - is this workspace active?
+            // Check 0: Basic safety checks
             var indexDirectory = Path.GetDirectoryName(lockPath);
             if (!string.IsNullOrEmpty(indexDirectory))
             {
                 var directoryName = Path.GetFileName(indexDirectory);
-                var workspace = await _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(directoryName);
-                
-                if (workspace != null)
-                {
-                    // Check if workspace has any lock holder (was checking if locked, but we removed that feature)
-                    // Since we removed the locking mechanism, we can't check if it's locked
-                    // Just log that the workspace exists
-                    _logger.LogDebug("SAFETY CHECK: Lock file {Path} belongs to registered workspace {WorkspacePath}", 
-                        lockPath, workspace.OriginalPath);
-                    
-                    _logger.LogDebug("SAFETY CHECK: Workspace {WorkspacePath} is registered but not locked - proceeding with file-level checks", 
-                        workspace.OriginalPath);
-                }
-                else
-                {
-                    // Workspace not in registry - likely orphaned, continue with file-level checks
-                    _logger.LogDebug("SAFETY CHECK: Index directory {DirectoryName} not found in registry - likely orphaned", directoryName);
-                }
+                _logger.LogDebug("SAFETY CHECK: Checking lock file {Path} in directory {DirectoryName}", lockPath, directoryName);
             }
             
             // Check 1: File is not currently being written to

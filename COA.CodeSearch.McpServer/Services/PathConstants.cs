@@ -31,6 +31,6 @@ public static class PathConstants
     };
     
     // Hash settings
-    public const int WorkspaceHashLength = 16;
+    public const int WorkspaceHashLength = 8; // Reduced from 16 for readability
     public const int MaxSafeWorkspaceName = 30;
 }

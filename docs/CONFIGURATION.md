@@ -105,12 +105,27 @@ Configure the confidence-based result limiting for 60-85% token reduction:
 - Low confidence: Show 5-8 results with refinement suggestions
 - Context lines reduce result count to save tokens
 
+### Hybrid Local Indexing Model
+
+CodeSearch now uses a hybrid local indexing model where indexes are stored directly within the workspace:
+
+- **Index Storage**: `.coa/codesearch/indexes/{workspace-name_hash}/` within the primary workspace
+- **Global Logging**: `~/.coa/codesearch/logs/` for centralized log management
+- **Multi-Workspace Support**: Each workspace gets its own isolated index
+- **Cross-Platform Compatibility**: SimpleFSLockFactory ensures consistent lock behavior
+
+**Benefits**:
+- Fast access with indexes co-located with source code
+- Perfect isolation between workspace search indexes
+- Multi-project support from single CodeSearch session
+- Version control friendly (`.coa/` can be gitignored)
+
 ### Lucene Index Settings
 
 ```json
 {
   "Lucene": {
-    "IndexBasePath": ".codesearch",   // Base path for all indexes and data
+    "IndexBasePath": ".coa/codesearch/indexes",   // Local workspace indexes (hybrid model)
     "StuckLockTimeoutMinutes": 15,    // Timeout for stuck index locks
     "MaintenanceIntervalMinutes": 30, // Index maintenance interval
     "EnablePeriodicMaintenance": true, // Enable automatic maintenance
@@ -121,11 +136,11 @@ Configure the confidence-based result limiting for 60-85% token reduction:
     ],
     "ExcludePatterns": [              // Patterns to exclude from indexing
       "bin", "obj", "node_modules", ".git", ".vs", "packages", 
-      "TestResults", ".codesearch", ".codenav"
+      "TestResults", ".coa", ".codesearch", ".codenav"
     ],
     "ExcludedDirectories": [          // Directories to skip
       "bin", "obj", "node_modules", ".git", ".vs", "packages", 
-      "TestResults", ".codesearch", ".codenav"
+      "TestResults", ".coa", ".codesearch", ".codenav"
     ],
     "IndexSettings": {
       "MaxFieldLength": 1000000,      // Maximum field length
@@ -142,7 +157,7 @@ Configure the confidence-based result limiting for 60-85% token reduction:
 ```json
 {
   "Memory": {
-    "BasePath": ".codesearch",        // Base directory for memory storage
+    "BasePath": ".coa/codesearch",    // Local workspace memory storage
     "ProjectMemoryPath": "project-memory", // Shared memory location
     "LocalMemoryPath": "local-memory",     // Personal memory location
     "MaxSearchResults": 50,           // Maximum memory search results
@@ -170,7 +185,7 @@ Configure the confidence-based result limiting for 60-85% token reduction:
     "BatchSize": 50,                  // Batch size for updates
     "ExcludePatterns": [              // Patterns to ignore
       "bin", "obj", "node_modules", ".git", ".vs", 
-      "packages", "TestResults", ".codesearch"
+      "packages", "TestResults", ".coa", ".codesearch"
     ]
   }
 }
