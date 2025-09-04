@@ -7,14 +7,15 @@ using System.Collections.Concurrent;
 namespace COA.CodeSearch.McpServer.Services;
 
 /// <summary>
-/// Centralized path resolution service for all CodeSearch directory operations
-/// Manages paths in ~/.coa/codesearch for centralized multi-workspace support
+/// Hybrid path resolution service for CodeSearch directory operations
+/// Manages indexes in primary workspace's .coa/codesearch/indexes/ directory
+/// Supports multiple project indexes within a single workspace session
 /// </summary>
 public class PathResolutionService : IPathResolutionService
 {
     private readonly IConfiguration _configuration;
     private readonly ILogger<PathResolutionService> _logger;
-    private readonly string _basePath;
+    private readonly string _primaryWorkspacePath;
     private static readonly ConcurrentDictionary<string, SemaphoreSlim> _metadataLocks = new();
     private static readonly SemaphoreSlim _lockCreationSemaphore = new(1, 1);
     
@@ -22,48 +23,38 @@ public class PathResolutionService : IPathResolutionService
     {
         _configuration = configuration;
         _logger = logger;
-        _basePath = InitializeBasePath();
+        _primaryWorkspacePath = InitializePrimaryWorkspace();
     }
     
-    private string InitializeBasePath()
+    private string InitializePrimaryWorkspace()
     {
-        var configuredPath = _configuration[PathConstants.BasePathConfigKey] ?? PathConstants.DefaultBasePath;
+        // First check if explicitly configured
+        var configuredWorkspace = _configuration["CodeSearch:PrimaryWorkspace"];
         
-        // Validate configuration value
-        if (string.IsNullOrWhiteSpace(configuredPath))
+        if (!string.IsNullOrWhiteSpace(configuredWorkspace))
         {
-            _logger.LogWarning("Base path configuration is null or empty, using default: {DefaultPath}", PathConstants.DefaultBasePath);
-            configuredPath = PathConstants.DefaultBasePath;
-        }
-        
-        // Handle tilde expansion for cross-platform support
-        if (configuredPath.StartsWith("~/"))
-        {
-            var homeDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrEmpty(homeDirectory))
+            try
             {
-                _logger.LogError("Unable to determine user profile directory for tilde expansion");
-                throw new InvalidOperationException("Unable to determine user profile directory for tilde expansion");
+                var fullPath = Path.GetFullPath(configuredWorkspace);
+                _logger.LogInformation("Using configured primary workspace: {Workspace}", fullPath);
+                return fullPath;
             }
-            configuredPath = Path.Combine(homeDirectory, configuredPath.Substring(2));
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to resolve configured primary workspace: {Workspace}", configuredWorkspace);
+            }
         }
         
-        try
-        {
-            var fullPath = Path.GetFullPath(configuredPath);
-            _logger.LogInformation("Initialized base path: {BasePath}", fullPath);
-            return fullPath;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to resolve full path for configured base path: {ConfiguredPath}", configuredPath);
-            throw new InvalidOperationException($"Invalid base path configuration: {configuredPath}", ex);
-        }
+        // Fall back to current directory
+        var currentDir = Environment.CurrentDirectory;
+        _logger.LogInformation("Using current directory as primary workspace: {Workspace}", currentDir);
+        return currentDir;
     }
     
     public string GetBasePath()
     {
-        return _basePath;
+        // Return the .coa/codesearch directory in the primary workspace
+        return Path.Combine(_primaryWorkspacePath, PathConstants.BaseDirectoryName, PathConstants.CodeSearchDirectoryName);
     }
     
     public string GetIndexPath(string workspacePath)
@@ -71,14 +62,10 @@ public class PathResolutionService : IPathResolutionService
         // Validate input path for security
         ValidateWorkspacePath(workspacePath);
         
-        // Normalize the workspace path
-        var normalizedPath = workspacePath.Replace('/', Path.DirectorySeparatorChar)
-                                        .Replace('\\', Path.DirectorySeparatorChar);
-        
-        // Get the index root directory
+        // Get the indexes root directory in primary workspace
         var indexRoot = GetIndexRootPath();
         
-        // Compute workspace hash
+        // Compute workspace hash for uniqueness
         var hash = ComputeWorkspaceHash(workspacePath);
         
         // Create a descriptive directory name: "workspacename_hash"
@@ -90,6 +77,8 @@ public class PathResolutionService : IPathResolutionService
         
         // DO NOT create directory here - only compute the path
         // Directory creation should happen only when actually creating an index
+        
+        _logger.LogDebug("Resolved index path for {Workspace}: {IndexPath}", workspacePath, indexPath);
         
         return indexPath;
     }
@@ -144,7 +133,7 @@ public class PathResolutionService : IPathResolutionService
     
     public string GetLogsPath()
     {
-        return Path.Combine(_basePath, PathConstants.LogsDirectoryName);
+        return Path.Combine(GetBasePath(), PathConstants.LogsDirectoryName);
     }
     
     
@@ -153,7 +142,7 @@ public class PathResolutionService : IPathResolutionService
     
     public string GetIndexRootPath()
     {
-        return Path.Combine(_basePath, PathConstants.IndexDirectoryName);
+        return Path.Combine(GetBasePath(), PathConstants.IndexDirectoryName);
     }
     
     public void EnsureDirectoryExists(string path)

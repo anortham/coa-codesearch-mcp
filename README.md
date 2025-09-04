@@ -18,7 +18,7 @@ Built with .NET 9.0 and COA MCP Framework 2.0.1, featuring Lucene-powered search
 - **🔗 Similar Files**: Content-based similarity detection
 - **🎯 Real-time Updates**: File watchers automatically update indexes on changes
 - **📊 AI-Optimized**: Token-efficient responses with confidence-based result limiting
-- **🌐 Centralized Storage**: All indexes in `~/.coa/codesearch` for cross-session sharing
+- **🏠 Hybrid Local Indexing**: Indexes stored in workspace `.coa/codesearch/indexes/` with multi-workspace support
 
 ### Performance
 - Startup: < 500ms 
@@ -106,6 +106,12 @@ Add to your Claude Code MCP configuration file:
 1. Restart Claude Code completely
 2. Claude will now have powerful search capabilities - just ask naturally!
 
+**Optional: Add to .gitignore**
+```
+# CodeSearch local indexes (can be regenerated)
+.coa/
+```
+
 ## 🌟 What Makes This Special
 
 Unlike basic file search, CodeSearch understands your code:
@@ -116,7 +122,8 @@ Unlike basic file search, CodeSearch understands your code:
 - **Fuzzy Matching**: Finds files even with typos in names
 - **Content Similarity**: "Find files like this one" using advanced analysis
 - **Recent Activity**: Tracks what you've been working on lately
-- **Cross-Project**: Search across multiple workspaces from one place
+- **Multi-Workspace Support**: Index and search multiple projects simultaneously with perfect isolation
+- **Local Storage**: Fast access with indexes stored directly in your workspace
 - **Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **Structured Line Search**: Better than grep - returns JSON with exact line numbers and context
 - **Safe Bulk Edits**: Preview mode for search/replace prevents accidental changes
@@ -358,7 +365,7 @@ Configuration via `appsettings.json`:
     "BasePath": "~/.coa/codesearch",
     "LogsPath": "~/.coa/codesearch/logs",
     "Lucene": {
-      "IndexRootPath": "~/.coa/codesearch/indexes",
+      "IndexRootPath": ".coa/codesearch/indexes",
       "MaxIndexingConcurrency": 8,
       "RAMBufferSizeMB": 256,
       "SupportedExtensions": [".cs", ".js", ".ts", ".py", ".java", ...]
@@ -378,13 +385,14 @@ Configuration via `appsettings.json`:
 
 ## 🏗️ Architecture
 
-### Centralized Storage
-- **Indexes**: `~/.coa/codesearch/indexes/[workspace-name_hash]/`
-  - Uses descriptive names with hash suffixes for uniqueness
-  - Metadata files enable resolution of original workspace paths
-  - HTTP API returns actual workspace paths, not internal hash names
-- **Logs**: `~/.coa/codesearch/logs/`
-- **Configuration**: Workspace-specific settings
+### Hybrid Local Indexing Storage
+- **Primary Workspace Indexes**: `.coa/codesearch/indexes/[workspace-name_hash]/` 
+  - Indexes stored locally within the primary workspace directory
+  - Each workspace gets its own isolated index for fast, context-aware search
+  - Supports multiple workspace projects from single CodeSearch session
+- **Cross-Platform Lock Management**: SimpleFSLockFactory ensures compatibility across macOS, Windows, and Linux
+- **Logs**: `~/.coa/codesearch/logs/` (global logging location)
+- **Configuration**: Per-workspace settings with workspace-specific isolation
 
 ### Framework Integration
 Built on **COA MCP Framework 2.0.1**:

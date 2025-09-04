@@ -2,6 +2,10 @@ using Microsoft.Extensions.Logging;
 using TreeSitter;
 using System.Text.Json;
 using System.Linq;
+using System.Runtime.InteropServices;
+using System.Runtime.CompilerServices;
+using System.Text;
+using COA.CodeSearch.McpServer.Services.TypeExtraction.Interop;
 
 namespace COA.CodeSearch.McpServer.Services.TypeExtraction;
 
@@ -102,34 +106,39 @@ public class TypeExtractionService : ITypeExtractionService
         
         try
         {
-            // Special handling for C# due to library/function name mismatch
+            // On macOS, use a direct P/Invoke path to the Tree-sitter C API to avoid NuGet loader limitations
+            if (OperatingSystem.IsMacOS())
+            {
+                return ExtractTypesWithNativeApiMac(content, filePath, languageName);
+            }
+
+            // Non-macOS path: use TreeSitter.DotNet
             Language language;
             if (languageName == "c-sharp")
             {
-                // Library: tree-sitter-c-sharp.dll, Function: tree_sitter_c_sharp
                 language = new Language("tree-sitter-c-sharp", "tree_sitter_c_sharp");
             }
             else
             {
                 language = new Language(languageName);
             }
-            
+
             using (language)
             {
                 using var parser = new Parser(language);
                 using var tree = parser.Parse(content);
-                
+
                 if (tree == null)
                 {
                     _logger.LogDebug("Failed to parse file {FilePath}", filePath);
                     return new TypeExtractionResult { Success = false };
                 }
-                
+
                 var types = new List<TypeInfo>();
                 var methods = new List<MethodInfo>();
-                
+
                 ExtractFromNode(tree.RootNode, types, methods);
-                
+
                 return new TypeExtractionResult
                 {
                     Success = true,
@@ -143,6 +152,210 @@ public class TypeExtractionService : ITypeExtractionService
         {
             _logger.LogDebug(ex, "Failed to extract types from {FilePath}", filePath);
             return new TypeExtractionResult { Success = false };
+        }
+    }
+
+    private TypeExtractionResult ExtractTypesWithNativeApiMac(string content, string filePath, string languageName)
+    {
+        // Ensure core and grammar libraries are preloaded
+        string libName = languageName == "c-sharp" ? "tree-sitter-c-sharp" : $"tree-sitter-{languageName}";
+        TryPreloadMacNativeLibrary("tree-sitter");
+        TryPreloadMacNativeLibrary(libName);
+
+        // Load TSLanguage* from grammar dylib by resolving the exported symbol tree_sitter_<lang>
+        var exportName = languageName == "c-sharp" ? "tree_sitter_c_sharp" : $"tree_sitter_{languageName.Replace('-', '_')}";
+
+        IntPtr langLibHandle = IntPtr.Zero;
+        IntPtr langFuncPtr = IntPtr.Zero;
+        IntPtr languagePtr = IntPtr.Zero;
+
+        // Probe common names for the grammar library
+        var dllBaseNames = new[]
+        {
+            libName,
+            libName.Replace("tree-sitter-", string.Empty),
+            languageName
+        };
+
+        foreach (var baseName in dllBaseNames)
+        {
+            // Try load by name; our DllImportResolver should help map to lib*.dylib in common locations
+            if (NativeLibrary.TryLoad(baseName, out langLibHandle))
+            {
+                break;
+            }
+        }
+
+        if (langLibHandle == IntPtr.Zero)
+        {
+            // Last resort: try direct dylib path probing
+            string dylibFile = $"lib{libName}.dylib";
+            var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
+            foreach (var prefix in prefixes)
+            {
+                var candidate = Path.Combine(prefix, "lib", dylibFile);
+                if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out langLibHandle))
+                {
+                    break;
+                }
+                var optCandidate = Path.Combine(prefix, "opt", "tree-sitter", "lib", dylibFile);
+                if (File.Exists(optCandidate) && NativeLibrary.TryLoad(optCandidate, out langLibHandle))
+                {
+                    break;
+                }
+            }
+        }
+
+        if (langLibHandle == IntPtr.Zero)
+        {
+            throw new PlatformNotSupportedException($"Could not load Tree-sitter grammar library '{libName}' on macOS.");
+        }
+
+        try
+        {
+            langFuncPtr = NativeLibrary.GetExport(langLibHandle, exportName);
+        }
+        catch (Exception ex)
+        {
+            throw new DllNotFoundException($"Missing export '{exportName}' in grammar library '{libName}'.", ex);
+        }
+
+        // Create delegate and obtain TSLanguage*
+        var del = Marshal.GetDelegateForFunctionPointer<LanguageFactory>(langFuncPtr);
+        languagePtr = del();
+        if (languagePtr == IntPtr.Zero)
+        {
+            throw new InvalidOperationException($"Failed to obtain TSLanguage* from '{exportName}'.");
+        }
+
+        // Prepare UTF8 input
+        var bytes = Encoding.UTF8.GetBytes(content);
+
+        IntPtr parser = IntPtr.Zero;
+        IntPtr tree = IntPtr.Zero;
+
+        try
+        {
+            parser = TreeSitterNative.ts_parser_new();
+            if (parser == IntPtr.Zero) throw new InvalidOperationException("ts_parser_new returned null");
+
+            TreeSitterNative.ts_parser_set_language(parser, languagePtr);
+            tree = TreeSitterNative.ts_parser_parse_string_encoding(parser, IntPtr.Zero, bytes, (uint)bytes.Length, TreeSitterNative.TSInputEncoding.UTF8);
+            if (tree == IntPtr.Zero)
+            {
+                _logger.LogDebug("Failed to parse file {FilePath}", filePath);
+                return new TypeExtractionResult { Success = false };
+            }
+
+            var root = TreeSitterNative.ts_tree_root_node(tree);
+            var types = new List<TypeInfo>();
+            var methods = new List<MethodInfo>();
+
+            var adapter = new NativeNodeAdapter(root, bytes);
+            ExtractFromNodeNative(adapter, types, methods);
+
+            return new TypeExtractionResult
+            {
+                Success = true,
+                Types = types,
+                Methods = methods,
+                Language = languageName
+            };
+        }
+        finally
+        {
+            if (tree != IntPtr.Zero) TreeSitterNative.ts_tree_delete(tree);
+            if (parser != IntPtr.Zero) TreeSitterNative.ts_parser_delete(parser);
+            if (langLibHandle != IntPtr.Zero) NativeLibrary.Free(langLibHandle);
+        }
+    }
+
+    [UnmanagedFunctionPointer(CallingConvention.Cdecl)]
+    private delegate IntPtr LanguageFactory();
+
+    private sealed class NativeNodeAdapter
+    {
+        private readonly TreeSitterNative.TSNode _node;
+        private readonly byte[] _bytes;
+
+        public NativeNodeAdapter(TreeSitterNative.TSNode node, byte[] bytes)
+        {
+            _node = node;
+            _bytes = bytes;
+        }
+
+        public string Type
+        {
+            get
+            {
+                var ptr = TreeSitterNative.ts_node_type(_node);
+                return Marshal.PtrToStringUTF8(ptr) ?? string.Empty;
+            }
+        }
+
+        public (int Row, int Column) StartPosition
+        {
+            get
+            {
+                var p = TreeSitterNative.ts_node_start_point(_node);
+                return ((int)p.row, (int)p.column);
+            }
+        }
+
+        public string Text
+        {
+            get
+            {
+                var start = (int)TreeSitterNative.ts_node_start_byte(_node);
+                var end = (int)TreeSitterNative.ts_node_end_byte(_node);
+                if (start < 0 || end < 0 || start > end || end > _bytes.Length) return string.Empty;
+                return Encoding.UTF8.GetString(_bytes, start, end - start);
+            }
+        }
+
+        public IEnumerable<NativeNodeAdapter> Children
+        {
+            get
+            {
+                var count = TreeSitterNative.ts_node_child_count(_node);
+                for (uint i = 0; i < count; i++)
+                {
+                    var child = TreeSitterNative.ts_node_child(_node, i);
+                    yield return new NativeNodeAdapter(child, _bytes);
+                }
+            }
+        }
+    }
+
+    private static void TryPreloadMacNativeLibrary(string libraryName)
+    {
+        if (!OperatingSystem.IsMacOS()) return;
+        try
+        {
+            // If already loaded, this will be quick. Otherwise, probe system locations.
+            var fileName = $"lib{libraryName}.dylib";
+            var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
+            foreach (var prefix in prefixes)
+            {
+                var candidate = Path.Combine(prefix, "lib", fileName);
+                if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out _)) return;
+                var optCandidate = Path.Combine(prefix, "opt", "tree-sitter", "lib", fileName);
+                if (File.Exists(optCandidate) && NativeLibrary.TryLoad(optCandidate, out _)) return;
+            }
+
+            var extra = Environment.GetEnvironmentVariable("TREE_SITTER_NATIVE_PATHS");
+            if (!string.IsNullOrWhiteSpace(extra))
+            {
+                foreach (var dir in extra.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    var candidate = Path.Combine(dir, fileName);
+                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out _)) return;
+                }
+            }
+        }
+        catch
+        {
+            // Best-effort only; fallback to default loading behavior if this fails
         }
     }
     
@@ -179,6 +392,103 @@ public class TypeExtractionService : ITypeExtractionService
         {
             ExtractFromNode(child, types, methods);
         }
+    }
+
+    // Native traversal path (macOS)
+    private void ExtractFromNodeNative(NativeNodeAdapter node, List<TypeInfo> types, List<MethodInfo> methods)
+    {
+        var nodeType = node.Type;
+
+        switch (nodeType)
+        {
+            case "class_declaration":
+            case "interface_declaration":
+            case "struct_declaration":
+            case "enum_declaration":
+                ExtractTypeDeclarationNative(node, types);
+                break;
+
+            case "method_declaration":
+            case "function_declaration":
+            case "function_definition":
+            case "arrow_function":
+                ExtractMethodDeclarationNative(node, methods);
+                break;
+
+            case "type_alias_declaration":
+            case "type_definition":
+                ExtractTypeAliasNative(node, types);
+                break;
+        }
+
+        foreach (var child in node.Children)
+        {
+            ExtractFromNodeNative(child, types, methods);
+        }
+    }
+
+    private void ExtractTypeDeclarationNative(NativeNodeAdapter node, List<TypeInfo> types)
+    {
+        var nameNode = FindChildByTypeNative(node, "identifier") ?? FindChildByTypeNative(node, "type_identifier");
+        if (nameNode == null) return;
+
+        var name = nameNode.Text;
+        var startPos = node.StartPosition;
+
+        var typeInfo = new TypeInfo
+        {
+            Name = name,
+            Kind = node.Type.Replace("_declaration", "").Replace("_", " "),
+            Line = startPos.Row + 1,
+            Column = startPos.Column + 1,
+            Signature = GetFirstLine(nameNode.Text),
+            Modifiers = new List<string>()
+        };
+
+        types.Add(typeInfo);
+    }
+
+    private void ExtractMethodDeclarationNative(NativeNodeAdapter node, List<MethodInfo> methods)
+    {
+        var nameNode = FindChildByTypeNative(node, "identifier") ?? FindChildByTypeNative(node, "property_identifier");
+        if (nameNode == null) return;
+
+        var startPos = node.StartPosition;
+        var methodInfo = new MethodInfo
+        {
+            Name = nameNode.Text,
+            Line = startPos.Row + 1,
+            Column = startPos.Column + 1,
+            Signature = GetFirstLine(node.Text)
+        };
+
+        methods.Add(methodInfo);
+    }
+
+    private void ExtractTypeAliasNative(NativeNodeAdapter node, List<TypeInfo> types)
+    {
+        var nameNode = FindChildByTypeNative(node, "identifier") ?? FindChildByTypeNative(node, "type_identifier");
+        if (nameNode == null) return;
+
+        var startPos = node.StartPosition;
+        types.Add(new TypeInfo
+        {
+            Name = nameNode.Text,
+            Kind = "type",
+            Line = startPos.Row + 1,
+            Column = startPos.Column + 1,
+            Signature = GetFirstLine(node.Text),
+            Modifiers = new List<string>()
+        });
+    }
+
+    private NativeNodeAdapter? FindChildByTypeNative(NativeNodeAdapter node, string type)
+    {
+        foreach (var child in node.Children)
+        {
+            if (child.Type == type) return child;
+        }
+        return null;
     }
     
     private void ExtractTypeDeclaration(Node node, List<TypeInfo> types)

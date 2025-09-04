@@ -37,7 +37,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
-                WorkspaceRegistryServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
@@ -304,7 +303,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 PathResolutionServiceMock.Object,
-                WorkspaceRegistryServiceMock.Object,
                 FileIndexingServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
@@ -564,12 +562,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Verify that workspace was registered
-            // This is the key fix that enables path resolution from hashed directories
-            WorkspaceRegistryServiceMock.Verify(
-                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
-                Times.AtLeastOnce,
-                "RegisterWorkspaceAsync should be called after successful indexing to enable path resolution");
+            // Registry verification no longer needed in hybrid local model
+            // Workspaces are tracked locally
         }
 
         [Test]
@@ -621,12 +615,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Workspace should be registered even during reindexing
-            // This ensures registry stays current with latest workspace state
-            WorkspaceRegistryServiceMock.Verify(
-                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
-                Times.AtLeastOnce,
-                "RegisterWorkspaceAsync should be called during reindexing to update registry");
+            // Registry verification no longer needed in hybrid local model
+            // Workspaces are tracked locally
         }
 
         [Test]
@@ -678,13 +668,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Success.Should().BeTrue();
             result.Result!.Success.Should().BeTrue();
 
-            // CRITICAL ASSERTION: Based on the implementation, workspace is registered once:
-            // After successful indexing (line 166 in IndexWorkspaceTool.cs)
-            // Note: Line 219 is only called when index already exists (different code path)
-            WorkspaceRegistryServiceMock.Verify(
-                r => r.RegisterWorkspaceAsync(TestWorkspacePath),
-                Times.Once,
-                "RegisterWorkspaceAsync should be called once after successful indexing");
+            // Registry verification no longer needed in hybrid local model
         }
 
         [Test]
@@ -728,12 +712,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result!.Success.Should().BeFalse(); // But indexing failed
             result.Result.Error.Should().NotBeNull();
 
-            // CRITICAL ASSERTION: Workspace should NOT be registered when indexing fails
-            // This prevents invalid registry entries that could cause path resolution issues
-            WorkspaceRegistryServiceMock.Verify(
-                r => r.RegisterWorkspaceAsync(It.IsAny<string>()),
-                Times.Never,
-                "RegisterWorkspaceAsync should NOT be called when indexing fails");
+            // Registry verification no longer needed in hybrid local model
         }
 
         #endregion

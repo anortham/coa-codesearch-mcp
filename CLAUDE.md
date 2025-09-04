@@ -2,7 +2,7 @@
 
 ## 🎯 Quick Start for AI Assistants
 
-This server provides powerful code search and navigation capabilities via Lucene.NET indexing and Tree-sitter type extraction.
+This server provides powerful code search and navigation capabilities via Lucene.NET indexing and Tree-sitter type extraction. Features hybrid local indexing model with multi-workspace support and cross-platform compatibility.
 
 ### Core Tools Available (12 total)
 ```csharp
@@ -108,9 +108,9 @@ Path.Combine("~/.coa", "indexes")
 Path.Combine(Environment.GetFolderPath(...), ".coa")
 Directory.Exists(path)
 
-// ✅ CORRECT - Use service
-_pathResolver.GetIndexPath(workspacePath)
-_pathResolver.GetBasePath()
+// ✅ CORRECT - Use service (Hybrid Local Model)
+_pathResolver.GetIndexPath(workspacePath)        // Returns {workspace}/.coa/codesearch/indexes/{workspace-name_hash}/
+_pathResolver.GetBasePath()                       // Returns ~/.coa/codesearch (global logs, config)
 _pathResolver.DirectoryExists(path)
 ```
 
@@ -142,6 +142,27 @@ new BooleanQuery.Builder()
 // ✅ CORRECT instantiation
 new BooleanQuery()
 ```
+
+## 🏠 Hybrid Local Indexing Architecture
+
+### Storage Model
+- **Local Workspace Indexes**: `.coa/codesearch/indexes/{workspace-name_hash}/` within primary workspace
+- **Global Components**: `~/.coa/codesearch/logs/` for centralized logging
+- **Multi-Workspace Support**: Each workspace gets isolated index, searchable from single CodeSearch session
+- **Cross-Platform Compatibility**: SimpleFSLockFactory ensures consistent behavior across macOS, Windows, Linux
+
+### Key Benefits
+1. **Fast Access**: Indexes co-located with source code for optimal I/O performance
+2. **Perfect Isolation**: Each workspace maintains its own search index with zero cross-contamination
+3. **Lock Reliability**: SimpleFSLockFactory eliminates cross-platform lock issues
+4. **Multi-Project Support**: Index multiple workspaces simultaneously without conflicts
+5. **Version Control Friendly**: `.coa/` directories can be gitignored safely
+
+### Architecture Changes
+- **Removed**: WorkspaceRegistryService (no more orphaned workspace tracking)
+- **Enhanced**: PathResolutionService with hybrid local/global path resolution
+- **Fixed**: Lock management with explicit SimpleFSLockFactory configuration
+- **Improved**: Multi-workspace session support with isolated indexes
 
 ## 🔧 Token Optimization
 
@@ -197,4 +218,4 @@ dotnet test --filter "SymbolSearchToolTests|GoToDefinitionToolTests|FindReferenc
 - **CodeNav MCP:** Advanced C#/TypeScript navigation (being consolidated)
 
 ---
-*Last updated: 2025-09-01 - All navigation tools integrated, JSON deserialization centralized*
+*Last updated: 2025-09-04 - Hybrid local indexing model implemented with multi-workspace support*

@@ -16,7 +16,6 @@ public class FileWatcherService : BackgroundService
     private readonly IConfiguration _configuration;
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IPathResolutionService _pathResolution;
-    private readonly IWorkspaceRegistryService _workspaceRegistry;
     private readonly ConcurrentDictionary<string, FileSystemWatcher> _watchers = new();
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
@@ -40,14 +39,12 @@ public class FileWatcherService : BackgroundService
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
         IFileIndexingService fileIndexingService,
-        IPathResolutionService pathResolution,
-        IWorkspaceRegistryService workspaceRegistry)
+        IPathResolutionService pathResolution)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
         _pathResolution = pathResolution;
-        _workspaceRegistry = workspaceRegistry;
         
         // Configure timing based on lessons learned
         _debounceInterval = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:DebounceMilliseconds", 500));
@@ -236,6 +233,7 @@ public class FileWatcherService : BackgroundService
             try
             {
                 // Auto-discover and start watching existing indexed workspaces
+                // Start watching primary workspace
                 AutoStartExistingWorkspaces(stoppingToken);
                 
                 await ProcessFileChangesAsync(stoppingToken);
@@ -540,6 +538,7 @@ public class FileWatcherService : BackgroundService
 
     /// <summary>
     /// Auto-discover and start watching existing indexed workspaces on startup
+    /// In hybrid model, we only watch workspaces that have indexes in the primary workspace
     /// </summary>
     private void AutoStartExistingWorkspaces(CancellationToken cancellationToken)
     {
@@ -552,97 +551,34 @@ public class FileWatcherService : BackgroundService
                 return;
             }
 
-            var workspaceDirectories = Directory.GetDirectories(indexRoot);
-            var discoveredWorkspaces = new List<string>();
-
-            foreach (var workspaceDir in workspaceDirectories)
+            // In hybrid model, just start watching the current primary workspace
+            var primaryWorkspace = Environment.CurrentDirectory;
+            if (Directory.Exists(primaryWorkspace))
             {
-                cancellationToken.ThrowIfCancellationRequested();
-
-                try
-                {
-                    // Each directory represents a workspace hash - we need to resolve it back to a workspace path
-                    // Look for index files to confirm this is a valid indexed workspace
-                    var segmentsFile = Path.Combine(workspaceDir, "segments.gen");
-                    if (File.Exists(segmentsFile))
-                    {
-                        // Try to resolve workspace path from the hash directory name
-                        var workspacePath = TryResolveWorkspaceFromHash(workspaceDir);
-                        if (workspacePath != null && Directory.Exists(workspacePath))
-                        {
-                            _logger.LogInformation("Auto-starting FileWatcher for existing workspace: {WorkspacePath}", workspacePath);
-                            StartWatching(workspacePath);
-                            discoveredWorkspaces.Add(workspacePath);
-                        }
-                        else
-                        {
-                            _logger.LogDebug("Could not resolve workspace path for indexed directory: {IndexDir}", workspaceDir);
-                        }
-                    }
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to auto-start watcher for indexed workspace: {IndexDir}", workspaceDir);
-                }
-            }
-
-            if (discoveredWorkspaces.Count > 0)
-            {
-                _logger.LogInformation("Auto-started FileWatcher for {Count} existing workspaces: {Workspaces}", 
-                    discoveredWorkspaces.Count, string.Join(", ", discoveredWorkspaces.Select(Path.GetFileName)));
-            }
-            else
-            {
-                _logger.LogDebug("No existing indexed workspaces found to auto-start");
+                _logger.LogInformation("Auto-starting FileWatcher for primary workspace: {WorkspacePath}", primaryWorkspace);
+                StartWatching(primaryWorkspace);
             }
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to auto-discover existing workspaces");
+            _logger.LogError(ex, "Failed to auto-start FileWatcher for primary workspace");
         }
     }
 
     /// <summary>
     /// Attempt to resolve the original workspace path from a hash directory
-    /// This is a best-effort approach since we store hash-based directory names
+    /// Not needed in hybrid model since we don't use registry
     /// </summary>
     private string? TryResolveWorkspaceFromHash(string indexDirectory)
     {
+        // In hybrid model, we don't maintain a registry
+        // This method is no longer needed but kept for compatibility
         try
         {
             var directoryName = Path.GetFileName(indexDirectory);
             
-            // First, try to resolve using the workspace registry
-            var workspace = _workspaceRegistry.GetWorkspaceByDirectoryNameAsync(directoryName).GetAwaiter().GetResult();
-            if (workspace != null && Directory.Exists(workspace.OriginalPath))
-            {
-                return workspace.OriginalPath;
-            }
-            
-            // Fallback: Try to extract hash from directory name and look up by hash
-            var parts = directoryName.Split('_');
-            if (parts.Length >= 2)
-            {
-                var hash = parts.Last();
-                var workspaceByHash = _workspaceRegistry.GetWorkspaceByHashAsync(hash).GetAwaiter().GetResult();
-                if (workspaceByHash != null && Directory.Exists(workspaceByHash.OriginalPath))
-                {
-                    return workspaceByHash.OriginalPath;
-                }
-            }
-            
-            // If we reach here, the workspace is orphaned - mark it as such
-            _logger.LogWarning("Could not resolve workspace path from index directory: {IndexDir} - marking as orphaned", indexDirectory);
-            try
-            {
-                _workspaceRegistry.MarkAsOrphanedAsync(directoryName, Models.OrphanReason.UnresolvablePath).GetAwaiter().GetResult();
-                _logger.LogInformation("Marked orphaned index directory: {DirectoryName}", directoryName);
-            }
-            catch (Exception orphanEx)
-            {
-                _logger.LogError(orphanEx, "Failed to mark index directory as orphaned: {DirectoryName}", directoryName);
-            }
-            
+            // Simply return null - we don't resolve hashes anymore
+            // Each workspace manages its own indexes
             return null;
         }
         catch (Exception ex)
