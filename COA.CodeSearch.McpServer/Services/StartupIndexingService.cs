@@ -16,7 +16,6 @@ public class StartupIndexingService : BackgroundService
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IFileIndexingService _fileIndexingService;
     private readonly IPathResolutionService _pathResolutionService;
-    private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly IConfiguration _configuration;
     private readonly ILogger<StartupIndexingService> _logger;
     private readonly bool _enabled;
@@ -27,14 +26,12 @@ public class StartupIndexingService : BackgroundService
         ILuceneIndexService luceneIndexService,
         IFileIndexingService fileIndexingService,
         IPathResolutionService pathResolutionService,
-        IWorkspaceRegistryService workspaceRegistryService,
         IConfiguration configuration,
         ILogger<StartupIndexingService> logger)
     {
         _luceneIndexService = luceneIndexService;
         _fileIndexingService = fileIndexingService;
         _pathResolutionService = pathResolutionService;
-        _workspaceRegistryService = workspaceRegistryService;
         _configuration = configuration;
         _logger = logger;
         
@@ -134,8 +131,7 @@ public class StartupIndexingService : BackgroundService
                     return;
                 }
 
-                // Register workspace
-                await _workspaceRegistryService.RegisterWorkspaceAsync(workspacePath);
+                // No need to register workspace in hybrid model - indexes are local
 
                 // Index all files
                 var indexingResult = await _fileIndexingService.IndexWorkspaceAsync(

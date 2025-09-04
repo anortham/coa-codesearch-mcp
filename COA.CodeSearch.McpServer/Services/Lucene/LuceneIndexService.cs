@@ -5,6 +5,7 @@ using Lucene.Net.Index;
 using Lucene.Net.Index.Extensions;
 using Lucene.Net.Search;
 using Lucene.Net.Store;
+using LockFactory = Lucene.Net.Store.LockFactory;
 using Lucene.Net.Util;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -103,10 +104,20 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 var indexPath = _pathResolution.GetIndexPath(workspacePath);
                 var isNewIndex = !System.IO.Directory.Exists(indexPath) || !System.IO.Directory.GetFiles(indexPath).Any();
                 
-                // Create directory
-                var directory = _useRamDirectory
-                    ? new RAMDirectory() as global::Lucene.Net.Store.Directory
-                    : FSDirectory.Open(indexPath);
+                // Create directory with explicit SimpleFSLockFactory for cross-platform consistency
+                global::Lucene.Net.Store.Directory directory;
+                if (_useRamDirectory)
+                {
+                    directory = new RAMDirectory();
+                }
+                else
+                {
+                    // Use SimpleFSLockFactory for consistent cross-platform behavior
+                    // This avoids platform-specific issues with NativeFSLockFactory
+                    var lockFactory = new SimpleFSLockFactory(indexPath);
+                    directory = FSDirectory.Open(indexPath, lockFactory);
+                    _logger.LogDebug("Created FSDirectory with SimpleFSLockFactory for {Path}", indexPath);
+                }
                 
                 // Create context
                 var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
