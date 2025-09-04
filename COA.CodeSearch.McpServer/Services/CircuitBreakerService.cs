@@ -33,12 +33,12 @@ public class CircuitBreakerService : ICircuitBreakerService, IDisposable
         {
             // Start periodic cleanup of unused circuit breakers
             _cleanupTimer = new Timer(CleanupUnusedBreakers, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
-            _logger.LogInformation("CircuitBreakerService started - failure threshold: {Threshold}, timeout: {Timeout}s", 
+            _logger.LogDebug("CircuitBreakerService started - failure threshold: {Threshold}, timeout: {Timeout}s", 
                 _failureThreshold, _timeout.TotalSeconds);
         }
         else
         {
-            _logger.LogInformation("CircuitBreakerService started - circuit breaker disabled");
+            _logger.LogDebug("CircuitBreakerService started - circuit breaker disabled");
         }
     }
 

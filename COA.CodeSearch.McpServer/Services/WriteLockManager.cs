@@ -29,7 +29,7 @@ public class WriteLockManager : IWriteLockManager
     {
         var workspaceMinAge = TimeSpan.FromMinutes(5);
         
-        _logger.LogInformation("STARTUP: Checking for stale write locks in local indexes");
+        _logger.LogDebug("STARTUP: Checking for stale write locks in local indexes");
         
         var result = new WriteLockCleanupResult();
         

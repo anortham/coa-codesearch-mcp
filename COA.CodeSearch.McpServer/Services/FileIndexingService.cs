@@ -214,7 +214,7 @@ public class FileIndexingService : IFileIndexingService
                 
                 // Verify the commit worked by checking document count
                 var count = await _luceneIndexService.GetDocumentCountAsync(workspacePath, cancellationToken);
-                _logger.LogInformation("After indexing {FilePath}, document count is: {Count}", filePath, count);
+                _logger.LogDebug("After indexing {FilePath}, document count is: {Count}", filePath, count);
                 
                 return true;
             }
@@ -451,7 +451,7 @@ public class FileIndexingService : IFileIndexingService
                     .ToList();
                 
                 var typeNamesField = string.Join(" ", allTypeNames);
-                _logger.LogInformation("Adding type_names field for {FilePath}: {TypeNames} (Count: {Count})", 
+                _logger.LogDebug("Adding type_names field for {FilePath}: {TypeNames} (Count: {Count})", 
                     filePath, typeNamesField, allTypeNames.Count);
                     
                 document.Add(new TextField("type_names", typeNamesField, Field.Store.NO));
