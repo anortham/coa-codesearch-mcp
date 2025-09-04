@@ -24,7 +24,11 @@ public class PathResolutionServiceTests
         _mockLogger = new Mock<ILogger<PathResolutionService>>();
         _testBasePath = Path.Combine(Path.GetTempPath(), "codesearch-test", Guid.NewGuid().ToString());
         
-        // Setup configuration to return test base path
+        // Setup configuration for hybrid model - configure primary workspace
+        _mockConfiguration.Setup(c => c["CodeSearch:PrimaryWorkspace"])
+            .Returns(_testBasePath);
+        
+        // Also setup base path config for any legacy paths
         _mockConfiguration.Setup(c => c[PathConstants.BasePathConfigKey])
             .Returns(_testBasePath);
         
@@ -60,15 +64,17 @@ public class PathResolutionServiceTests
         // Assert
         Assert.That(path1, Is.Not.Null.And.Not.Empty);
         Assert.That(path2, Is.EqualTo(path1), "Path should be consistent across calls");
-        // The path is now configurable via IConfiguration, so we check for our test path
+        // In hybrid model, GetBasePath returns {primaryWorkspace}/.coa/codesearch
         Assert.That(path1, Does.Contain("codesearch-test"), "Path should contain our test directory");
+        Assert.That(path1, Does.Contain(".coa"), "Path should contain .coa directory");
+        Assert.That(path1, Does.EndWith("codesearch"), "Path should end with codesearch");
     }
 
     [Test]
     public void GetIndexPath_Should_Return_Hashed_Directory_Name()
     {
-        // Arrange
-        var workspace = @"C:\source\MyProject";
+        // Arrange - Use platform-appropriate path
+        var workspace = Path.Combine(Path.GetTempPath(), "source", "MyProject");
 
         // Act
         var indexPath = _service.GetIndexPath(workspace);
@@ -77,8 +83,8 @@ public class PathResolutionServiceTests
         Assert.That(indexPath, Is.Not.Null.And.Not.Empty);
         Assert.That(indexPath, Does.Contain("indexes"), "Should be in indexes directory");
         Assert.That(indexPath, Does.Not.Contain("MyProject"), "Should not contain original workspace name");
-        Assert.That(Path.GetFileName(indexPath), Does.Match(@"^myproject_[a-f0-9]{16}$"), 
-            "Should follow pattern: projectname_hash with 16-char hash");
+        Assert.That(Path.GetFileName(indexPath), Does.Match(@"^myproject_[a-f0-9]{8}$"), 
+            "Should follow pattern: projectname_hash with 8-char hash");
     }
 
     [Test]
@@ -96,27 +102,25 @@ public class PathResolutionServiceTests
     }
 
     [Test]
-    public void GetIndexPath_Should_Handle_Different_Cases_As_Different_Workspaces()
+    public void GetIndexPath_Should_Handle_Different_Cases_As_Same_Workspace()
     {
-        // Arrange
-        var workspace1 = @"C:\source\MyProject";
-        var workspace2 = @"C:\source\myproject";
+        // Arrange - Use platform-appropriate paths with case differences
+        var workspace1 = Path.Combine(Path.GetTempPath(), "source", "MyProject");
+        var workspace2 = Path.Combine(Path.GetTempPath(), "source", "myproject");
 
         // Act
         var path1 = _service.GetIndexPath(workspace1);
         var path2 = _service.GetIndexPath(workspace2);
 
         // Assert
-        // On Windows, paths are case-insensitive, so they should be the same
-        // On Linux/Mac, they would be different
-        if (Environment.OSVersion.Platform == PlatformID.Win32NT)
-        {
-            Assert.That(path2, Is.EqualTo(path1), "On Windows, paths should be case-insensitive");
-        }
-        else
-        {
-            Assert.That(path2, Is.Not.EqualTo(path1), "On Unix, paths should be case-sensitive");
-        }
+        // In hybrid model, GetSafeWorkspaceName normalizes to lowercase,
+        // so case variations should produce the same index path
+        Assert.That(path2, Is.EqualTo(path1), "Case variations should produce same index path due to normalization");
+        
+        // Both should end with the same normalized directory name
+        var dir1 = Path.GetFileName(path1);
+        var dir2 = Path.GetFileName(path2);
+        Assert.That(dir2, Is.EqualTo(dir1), "Directory names should be identical after normalization");
     }
 
     [Test]
@@ -130,9 +134,9 @@ public class PathResolutionServiceTests
 
         // Assert
         Assert.That(hash, Is.Not.Null);
-        // The hash is now 16 characters based on PathConstants.WorkspaceHashLength
-        Assert.That(hash.Length, Is.EqualTo(PathConstants.WorkspaceHashLength), "Hash should be 16 characters");
-        Assert.That(hash, Does.Match("^[a-f0-9]{16}$"), "Hash should be lowercase hexadecimal");
+        // The hash is now 8 characters based on PathConstants.WorkspaceHashLength
+        Assert.That(hash.Length, Is.EqualTo(PathConstants.WorkspaceHashLength), "Hash should be 8 characters");
+        Assert.That(hash, Does.Match("^[a-f0-9]{8}$"), "Hash should be lowercase hexadecimal");
     }
 
     [Test]
@@ -171,6 +175,7 @@ public class PathResolutionServiceTests
         Assert.That(indexRoot, Is.Not.Null.And.Not.Empty);
         Assert.That(indexRoot, Does.EndWith("indexes"), "Should end with 'indexes' directory");
         Assert.That(indexRoot, Does.Contain("codesearch-test"), "Should be under our test directory");
+        Assert.That(indexRoot, Does.Contain(".coa"), "Should contain .coa directory");
     }
 
     #endregion
@@ -319,8 +324,8 @@ public class PathResolutionServiceTests
     [Test]
     public void GetFileName_Should_Extract_File_Name()
     {
-        // Arrange
-        var filePath = @"C:\some\directory\file.txt";
+        // Arrange - Use platform-appropriate path
+        var filePath = Path.Combine("some", "directory", "file.txt");
 
         // Act
         var fileName = _service.GetFileName(filePath);
@@ -371,28 +376,30 @@ public class PathResolutionServiceTests
     [Test]
     public void GetDirectoryName_Should_Extract_Directory_Path()
     {
-        // Arrange
-        var filePath = @"C:\some\directory\file.txt";
+        // Arrange - Use platform-appropriate path
+        var filePath = Path.Combine("some", "directory", "file.txt");
+        var expectedDir = Path.Combine("some", "directory");
 
         // Act
         var dirName = _service.GetDirectoryName(filePath);
 
         // Assert
-        Assert.That(dirName, Is.EqualTo(@"C:\some\directory"));
+        Assert.That(dirName, Is.EqualTo(expectedDir));
     }
 
     [Test]
     public void GetRelativePath_Should_Calculate_Relative_Path()
     {
-        // Arrange
-        var basePath = @"C:\source\project";
-        var targetPath = @"C:\source\project\src\file.cs";
+        // Arrange - Use platform-appropriate paths
+        var basePath = Path.Combine(Path.GetTempPath(), "source", "project");
+        var targetPath = Path.Combine(basePath, "src", "file.cs");
+        var expectedRelative = Path.Combine("src", "file.cs");
 
         // Act
         var relativePath = _service.GetRelativePath(basePath, targetPath);
 
         // Assert
-        Assert.That(relativePath, Is.EqualTo(@"src\file.cs").Or.EqualTo(@"src/file.cs"));
+        Assert.That(relativePath, Is.EqualTo(expectedRelative));
     }
 
     [Test]

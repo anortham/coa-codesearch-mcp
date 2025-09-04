@@ -18,8 +18,8 @@ public class BuildTimeWarningValidationTests
     private static readonly string ProjectRoot = GetProjectRoot();
     private static readonly string[] CriticalFiles = 
     {
-        "COA.CodeSearch.McpServer.Tests\\Tools\\SimilarFilesToolTests.cs",
-        "COA.CodeSearch.McpServer\\Tools\\LineSearchTool.cs"
+        "COA.CodeSearch.McpServer.Tests/Tools/SimilarFilesToolTests.cs",
+        "COA.CodeSearch.McpServer/Tools/LineSearchTool.cs"
     };
 
     [Test]

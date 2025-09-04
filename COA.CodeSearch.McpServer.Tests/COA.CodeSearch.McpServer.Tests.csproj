@@ -11,7 +11,7 @@
 
   <ItemGroup>
     <!-- Framework testing package will be added when template is instantiated -->
-    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.0.1" />
+    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.0.18" />
     <PackageReference Include="FluentAssertions" Version="7.2.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
     <PackageReference Include="Moq" Version="4.20.72" />

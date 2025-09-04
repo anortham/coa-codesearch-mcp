@@ -82,6 +82,18 @@ public class TypeExtractionService : ITypeExtractionService
     
     public TypeExtractionResult ExtractTypes(string content, string filePath)
     {
+        // Handle empty content case - this is considered successful with no types/methods
+        if (string.IsNullOrWhiteSpace(content))
+        {
+            return new TypeExtractionResult
+            {
+                Success = true,
+                Types = new List<TypeInfo>(),
+                Methods = new List<MethodInfo>(),
+                Language = Path.GetExtension(filePath).ToLowerInvariant().TrimStart('.')
+            };
+        }
+
         var extension = Path.GetExtension(filePath).ToLowerInvariant();
         
         if (!ExtensionToLanguage.TryGetValue(extension, out var languageName))
