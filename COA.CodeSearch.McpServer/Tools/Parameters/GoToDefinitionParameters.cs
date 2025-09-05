@@ -17,10 +17,9 @@ public class GoToDefinitionParameters : VisualizableParameters
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search
+    /// Path to the workspace directory to search (defaults to current workspace)
     /// </summary>
-    [Required]
-    [Description("Path to the workspace directory to search")]
+    [Description("Path to the workspace directory to search (defaults to current workspace)")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>

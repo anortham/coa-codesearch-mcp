@@ -51,7 +51,7 @@ public class SymbolSearchResponseBuilder : BaseResponseBuilder<SymbolSearchResul
                     data.Symbols,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "symbol-search-results",
                         Metadata = new Dictionary<string, string>

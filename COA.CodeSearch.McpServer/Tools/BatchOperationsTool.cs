@@ -122,7 +122,7 @@ public class BatchSummary
 /// <summary>
 /// Tool for executing multiple search operations in batch
 /// </summary>
-public class BatchOperationsTool : McpToolBase<BatchOperationsParameters, BatchOperationsResult>
+public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters, BatchOperationsResult>
 {
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly TextSearchTool _textSearchTool;

@@ -25,7 +25,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Go to definition tool that jumps directly to where a symbol is defined
 /// </summary>
-public class GoToDefinitionTool : McpToolBase<GoToDefinitionParameters, AIOptimizedResponse<SymbolDefinition>>
+public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, AIOptimizedResponse<SymbolDefinition>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;

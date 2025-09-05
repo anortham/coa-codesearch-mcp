@@ -462,7 +462,34 @@ public class TypeExtractionService : ITypeExtractionService
 
     private void ExtractMethodDeclarationNative(NativeNodeAdapter node, List<MethodInfo> methods)
     {
-        var nameNode = FindChildByTypeNative(node, "identifier") ?? FindChildByTypeNative(node, "property_identifier");
+        // For C# methods, we need to find the right identifier
+        // Pattern: [modifiers] return_type METHOD_NAME(parameters)
+        // We want METHOD_NAME, not the return type identifier
+        
+        NativeNodeAdapter? nameNode = null;
+        var identifiers = node.Children.Where(c => c.Type == "identifier").ToList();
+        
+        if (identifiers.Count > 1)
+        {
+            // If there are multiple identifiers, the last one before the parameter list is likely the method name
+            var paramList = FindChildByTypeNative(node, "parameter_list");
+            if (paramList != null)
+            {
+                // Find the identifier that comes right before the parameter list
+                nameNode = identifiers.LastOrDefault(id => id.StartPosition.Column < paramList.StartPosition.Column);
+            }
+            else
+            {
+                // Fallback: use the last identifier
+                nameNode = identifiers.LastOrDefault();
+            }
+        }
+        else
+        {
+            // Single identifier or fallback
+            nameNode = FindChildByTypeNative(node, "identifier") ?? FindChildByTypeNative(node, "property_identifier");
+        }
+        
         if (nameNode == null) return;
 
         var startPos = node.StartPosition;
@@ -471,8 +498,22 @@ public class TypeExtractionService : ITypeExtractionService
             Name = nameNode.Text,
             Line = startPos.Row + 1,
             Column = startPos.Column + 1,
-            Signature = GetFirstLine(node.Text)
+            Signature = GetFirstLine(node.Text),
+            Modifiers = ExtractModifiersNative(node),
+            Parameters = ExtractParametersNative(node),
+            ReturnType = ExtractReturnTypeNative(node)
         };
+
+        // Find containing type
+        var parentClass = FindParentTypeNative(node);
+        if (parentClass != null)
+        {
+            var parentNameNode = FindChildByTypeNative(parentClass, "identifier");
+            if (parentNameNode != null)
+            {
+                methodInfo.ContainingType = parentNameNode.Text;
+            }
+        }
 
         methods.Add(methodInfo);
     }
@@ -501,6 +542,104 @@ public class TypeExtractionService : ITypeExtractionService
             if (child.Type == type) return child;
         }
         return null;
+    }
+
+    private NativeNodeAdapter? FindParentTypeNative(NativeNodeAdapter node)
+    {
+        // Since we don't have parent navigation in NativeNodeAdapter,
+        // we can't implement this method properly. Return null for now.
+        // This is a limitation of the native approach compared to TreeSitter.DotNet
+        return null;
+    }
+
+    private List<string> ExtractModifiersNative(NativeNodeAdapter node)
+    {
+        var modifiers = new List<string>();
+        
+        foreach (var child in node.Children)
+        {
+            var childType = child.Type;
+            if (childType == "modifiers" || childType == "modifier" || 
+                childType == "public" || childType == "private" || childType == "protected" ||
+                childType == "static" || childType == "async" || childType == "abstract" ||
+                childType == "readonly" || childType == "const" || childType == "final")
+            {
+                modifiers.Add(child.Text);
+            }
+        }
+        
+        return modifiers;
+    }
+
+    private List<string> ExtractParametersNative(NativeNodeAdapter node)
+    {
+        var parameters = new List<string>();
+        
+        var parameterList = FindChildByTypeNative(node, "parameter_list");
+        if (parameterList != null)
+        {
+            foreach (var child in parameterList.Children)
+            {
+                if (child.Type == "parameter" || child.Type == "formal_parameter")
+                {
+                    parameters.Add(child.Text.Trim());
+                }
+            }
+        }
+        
+        return parameters;
+    }
+
+    private string ExtractReturnTypeNative(NativeNodeAdapter node)
+    {
+        // For C# method_declaration, the return type comes before the identifier
+        // Structure is typically: [modifiers] return_type method_name(parameters)
+        if (node.Type == "method_declaration")
+        {
+            // Find the identifier (method name)
+            var identifierNode = FindChildByTypeNative(node, "identifier");
+            if (identifierNode != null)
+            {
+                // Look for type nodes that come before the identifier
+                foreach (var child in node.Children)
+                {
+                    // Stop when we reach the identifier (comparing by position since we can't compare objects directly)
+                    if (child.StartPosition.Column >= identifierNode.StartPosition.Column &&
+                        child.StartPosition.Row >= identifierNode.StartPosition.Row) break;
+                    
+                    // Check for various type nodes
+                    if (child.Type == "predefined_type" || 
+                        child.Type == "identifier" && child.StartPosition.Column != identifierNode.StartPosition.Column ||
+                        child.Type == "generic_name" ||
+                        child.Type == "nullable_type" ||
+                        child.Type == "array_type" ||
+                        child.Type == "qualified_name")
+                    {
+                        return child.Text.Trim();
+                    }
+                }
+            }
+            
+            // For async methods that return Task (not Task<T>), check if async modifier is present
+            var modifiers = ExtractModifiersNative(node);
+            if (modifiers.Contains("async"))
+            {
+                // No return type found but it's async, so it returns Task
+                return "Task";
+            }
+        }
+        
+        // Fallback for other node types (TypeScript, etc.)
+        var returnTypeNode = FindChildByTypeNative(node, "type") ?? 
+                            FindChildByTypeNative(node, "return_type") ??
+                            FindChildByTypeNative(node, "type_annotation");
+        
+        if (returnTypeNode != null)
+        {
+            return returnTypeNode.Text.Trim();
+        }
+        
+        return "void";
     }
     
     private void ExtractTypeDeclaration(Node node, List<TypeInfo> types)
@@ -658,19 +797,34 @@ public class TypeExtractionService : ITypeExtractionService
         // Structure is typically: [modifiers] return_type method_name(parameters)
         if (node.Type == "method_declaration")
         {
-            // Find the identifier (method name)
-            var identifierNode = FindChildByType(node, "identifier");
-            if (identifierNode != null)
+            // Find the parameter list to help identify the method name
+            var parameterList = FindChildByType(node, "parameter_list");
+            Node? methodNameIdentifier = null;
+            
+            if (parameterList != null)
             {
-                // Look for type nodes that come before the identifier
+                // Find the identifier that comes right before the parameter list
+                var identifiers = node.Children.Where(c => c.Type == "identifier").ToList();
+                methodNameIdentifier = identifiers.LastOrDefault(id => 
+                    id.StartPosition.Column < parameterList.StartPosition.Column);
+            }
+            else
+            {
+                // Fallback: use the last identifier as method name
+                methodNameIdentifier = node.Children.Where(c => c.Type == "identifier").LastOrDefault();
+            }
+            
+            if (methodNameIdentifier != null)
+            {
+                // Look for type nodes that come before the method name identifier
                 foreach (var child in node.Children)
                 {
-                    // Stop when we reach the identifier
-                    if (child == identifierNode) break;
+                    // Stop when we reach the method name identifier
+                    if (child == methodNameIdentifier) break;
                     
                     // Check for various type nodes
                     if (child.Type == "predefined_type" || 
-                        child.Type == "identifier" && child != identifierNode ||
+                        child.Type == "identifier" && child != methodNameIdentifier ||
                         child.Type == "generic_name" ||
                         child.Type == "nullable_type" ||
                         child.Type == "array_type" ||
