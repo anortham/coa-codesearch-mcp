@@ -52,7 +52,7 @@ public class RecentFilesResponseBuilder : BaseResponseBuilder<RecentFilesResult,
                     data.Files,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "recent-files-results",
                         Metadata = new Dictionary<string, string>

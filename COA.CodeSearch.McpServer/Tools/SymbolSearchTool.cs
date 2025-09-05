@@ -25,7 +25,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Symbol search tool that finds type and method definitions using Tree-sitter extracted data
 /// </summary>
-public class SymbolSearchTool : McpToolBase<SymbolSearchParameters, AIOptimizedResponse<SymbolSearchResult>>
+public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOptimizedResponse<SymbolSearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;

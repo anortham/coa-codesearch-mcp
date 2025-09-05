@@ -30,7 +30,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for finding files similar to a given file using Lucene's MoreLikeThis functionality
 /// </summary>
-public class SimilarFilesTool : McpToolBase<SimilarFilesParameters, AIOptimizedResponse<SimilarFilesResult>>
+public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOptimizedResponse<SimilarFilesResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;

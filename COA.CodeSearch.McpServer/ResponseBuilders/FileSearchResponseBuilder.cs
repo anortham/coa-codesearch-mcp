@@ -52,7 +52,7 @@ public class FileSearchResponseBuilder : BaseResponseBuilder<FileSearchResult, A
                     data.Files,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "file-search-results",
                         Metadata = new Dictionary<string, string>

@@ -17,10 +17,9 @@ public class TextSearchParameters : VisualizableParameters
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search
+    /// Path to the workspace directory to search (defaults to current workspace)
     /// </summary>
-    [Required]
-    [Description("Path to the workspace directory to search")]
+    [Description("Path to the workspace directory to search (defaults to current workspace)")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     // MaxResults removed - controlled internally based on ResponseMode to prevent token blowouts

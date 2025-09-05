@@ -57,6 +57,11 @@ public class PathResolutionService : IPathResolutionService
         return Path.Combine(_primaryWorkspacePath, PathConstants.BaseDirectoryName, PathConstants.CodeSearchDirectoryName);
     }
     
+    public string GetPrimaryWorkspacePath()
+    {
+        return _primaryWorkspacePath;
+    }
+    
     public string GetIndexPath(string workspacePath)
     {
         // Validate input path for security

@@ -22,7 +22,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Find references tool that locates all usages of a symbol in the codebase
 /// </summary>
-public class FindReferencesTool : McpToolBase<FindReferencesParameters, AIOptimizedResponse<SearchResult>>
+public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, AIOptimizedResponse<SearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;

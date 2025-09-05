@@ -35,187 +35,122 @@ ToolNames.IndexWorkspace = "index_workspace"   // Build/update search index
 
 **Never run locally:** `dotnet run -- stdio` creates orphaned processes that lock indexes.
 
-## 🔍 Architecture Overview
+## 🔍 Essential Usage Patterns
 
-### Technology Stack
-- **Framework:** COA MCP Framework 2.0.1
-- **Search Engine:** Lucene.NET 4.8.0-beta00017
-- **Type Extraction:** Tree-sitter (C#, TypeScript, Python support)
-- **Response Optimization:** Token-aware response building
-- **Tool Base Class:** `McpToolBase<TParams, TResult>`
-
-### Core Services (via Dependency Injection)
-```csharp
-ILuceneIndexService      // Search operations
-IPathResolutionService   // Path handling
-IBatchIndexingService    // Bulk indexing
-IMemoryPressureService   // Memory management
-IFileIndexingService     // File processing
-IResponseCacheService    // Response caching
-IResourceStorageService  // Large response storage
+### Always Start With
+```bash
+# REQUIRED FIRST - Initialize search index
+mcp__codesearch__index_workspace --workspacePath "path/to/project"
 ```
 
-## 📝 Type Extraction & Navigation
+### Common Searches
+```bash
+# Find code patterns
+mcp__codesearch__text_search --query "class UserService"
 
-### How Type Information Works
-1. **Extraction:** Tree-sitter parses files during indexing
-2. **Storage:** JSON in `type_info` field, searchable names in `type_names`
-3. **Access:** Navigation tools deserialize and search this data
-4. **Deserialization:** Uses `StoredTypeInfo.DeserializationOptions`
+# Navigate to definitions  
+mcp__codesearch__goto_definition --symbol "UserService"
 
-### Accessing Type Data
-```csharp
-// ✅ Correct field access
-var typeInfo = hit.Fields["type_info"];
-var typeNames = hit.Fields["type_names"];
+# Find all usages before refactoring
+mcp__codesearch__find_references --symbol "UpdateUser" 
 
-// ❌ Wrong - Don't use Document.Get()
-var wrong = hit.Document?.Get("type_info");
+# Search files by name
+mcp__codesearch__file_search --pattern "*Controller.cs"
 ```
 
-### JSON Structure
-```json
-{
-  "Types": [{
-    "Name": "ClassName",
-    "Kind": "class",
-    "Signature": "public class ClassName",
-    "Line": 10,
-    "Column": 1,
-    "Modifiers": ["public"],
-    "BaseType": "BaseClass",
-    "Interfaces": ["IInterface1"]
-  }],
-  "Methods": [{
-    "Name": "MethodName",
-    "Signature": "public void MethodName()",
-    "ReturnType": "void",
-    "Line": 15,
-    "ContainingType": "ClassName",
-    "Parameters": [],
-    "Modifiers": ["public"]
-  }],
-  "Language": "c-sharp"
-}
+## 🔤 Enhanced Features (2025-09-05)
+
+### CamelCase Tokenization with Generic Type Support
+- **Before**: "McpToolBase" search returned 0 hits
+- **After**: Returns all `McpToolBase<TParams, TResult>` occurrences
+- **Implementation**: Enhanced `SplitCamelCase` in `CodeAnalyzer.cs:519-587`
+
+**Examples:**
+```bash
+search: "McpToolBase" → finds "McpToolBase<TParams, TResult>"
+search: "Tool" → finds "CodeSearchToolBase", "McpToolBase", etc.
+search: "Repository" → finds "IRepository<T>", "UserRepository"
 ```
 
-## 🛠️ Common Code Patterns
-
-### Path Resolution
-```csharp
-// ❌ WRONG - Direct path manipulation
-Path.Combine("~/.coa", "indexes")
-Path.Combine(Environment.GetFolderPath(...), ".coa")
-Directory.Exists(path)
-
-// ✅ CORRECT - Use service (Hybrid Local Model)
-_pathResolver.GetIndexPath(workspacePath)        // Returns {workspace}/.coa/codesearch/indexes/{workspace-name_hash}/
-_pathResolver.GetBasePath()                       // Returns ~/.coa/codesearch (global logs, config)
-_pathResolver.DirectoryExists(path)
-```
-
-### Lucene Operations
-```csharp
-// ❌ WRONG - Manual IndexWriter
-using (var writer = IndexWriter.Create(...))
-
-// ✅ CORRECT - Use service
-await _indexService.IndexDocumentAsync(...)
-await _indexService.SearchAsync(...)
-```
-
-### Response Building
-```csharp
-// ❌ WRONG type names
-Data = new AIOptimizedData<T>
-
-// ✅ CORRECT framework types
-Data = new AIResponseData<T>
-return new AIOptimizedResponse<T>
-```
-
-### Query Building
-```csharp
-// ❌ WRONG Lucene.NET syntax
-new BooleanQuery.Builder()
-
-// ✅ CORRECT instantiation
-new BooleanQuery()
-```
+### ResourceStorageProvider & MCP Resources
+- **Problem**: `mcp-resource://memory-compressed/...` URIs timing out
+- **Solution**: Implemented `ResourceStorageProvider.cs`
+- **Result**: Large search results now accessible without timeouts
 
 ## 🏠 Hybrid Local Indexing Architecture
 
 ### Storage Model
-- **Local Workspace Indexes**: `.coa/codesearch/indexes/{workspace-name_hash}/` within primary workspace
-- **Global Components**: `~/.coa/codesearch/logs/` for centralized logging
-- **Multi-Workspace Support**: Each workspace gets isolated index, searchable from single CodeSearch session
-- **Cross-Platform Compatibility**: SimpleFSLockFactory ensures consistent behavior across macOS, Windows, Linux
-
-### Key Benefits
-1. **Fast Access**: Indexes co-located with source code for optimal I/O performance
-2. **Perfect Isolation**: Each workspace maintains its own search index with zero cross-contamination
-3. **Lock Reliability**: SimpleFSLockFactory eliminates cross-platform lock issues
-4. **Multi-Project Support**: Index multiple workspaces simultaneously without conflicts
-5. **Version Control Friendly**: `.coa/` directories can be gitignored safely
-
-### Architecture Changes
-- **Removed**: WorkspaceRegistryService (no more orphaned workspace tracking)
-- **Enhanced**: PathResolutionService with hybrid local/global path resolution
-- **Fixed**: Lock management with explicit SimpleFSLockFactory configuration
-- **Improved**: Multi-workspace session support with isolated indexes
-
-## 🔧 Token Optimization
-
-### Response Builder Pattern
-All tools use response builders that:
-1. Reduce results to fit token limits
-2. Store full results in ResourceStorage
-3. Return resource URIs for large responses
-4. Clean unnecessary fields from SearchHit objects
-
-**Important:** When modifying `SearchHit`, update `SearchResponseBuilder.CleanupHits()`
+- **Local Workspace Indexes**: `.coa/codesearch/indexes/{workspace-name_hash}/` within workspace
+- **Global Logs**: `~/.coa/codesearch/logs/` for centralized logging
+- **Multi-Workspace**: Each workspace gets isolated index
+- **Cross-Platform**: SimpleFSLockFactory ensures compatibility
 
 ## ⚠️ Common Pitfalls
 
-1. **Assuming method names:** Always verify actual method signatures
+1. **Assuming method names:** Always verify actual method signatures with goto_definition
 2. **Field access:** Use `hit.Fields["name"]` not `hit.Document.Get()`
-3. **Async naming:** Not all async methods end with "Async"
-4. **Type casing:** JSON uses PascalCase (Types, Methods, Language)
+3. **Missing index:** Run `index_workspace` first, always
+4. **Type extraction:** Check `type_info` field structure in results
 5. **Testing changes:** Must restart Claude Code after building
 
-## 📊 Testing
+## 🛠️ Code Patterns
 
-### Unit Test Structure
-- Base class: `CodeSearchToolTestBase<TTool>`
-- Mock services provided via DI
-- Test files in: `COA.CodeSearch.McpServer.Tests/Tools/`
+### Path Resolution (Use Service)
+```csharp
+// ✅ CORRECT
+_pathResolver.GetIndexPath(workspacePath)
+_pathResolver.DirectoryExists(path)
 
-### Running Tests
+// ❌ WRONG
+Path.Combine("~/.coa", "indexes")
+Directory.Exists(path)
+```
+
+### Lucene Operations (Use Service)
+```csharp
+// ✅ CORRECT
+await _indexService.IndexDocumentAsync(...)
+await _indexService.SearchAsync(...)
+
+// ❌ WRONG
+using (var writer = IndexWriter.Create(...))
+```
+
+### Response Building
+```csharp
+// ✅ CORRECT
+Data = new AIResponseData<T>
+return new AIOptimizedResponse<T>
+
+// ❌ WRONG
+Data = new AIOptimizedData<T>
+```
+
+## 🧪 Testing & Debugging
+
+### Unit Tests
 ```bash
-# All tests
+# All tests (should be 206+)
 dotnet test
 
 # Specific tool tests
 dotnet test --filter "SymbolSearchToolTests"
-
-# Navigation tools only
-dotnet test --filter "SymbolSearchToolTests|GoToDefinitionToolTests|FindReferencesToolTests"
 ```
 
-## 🔍 Debugging Tips
+### Health Checks
+```bash
+# Check if indexed
+mcp__codesearch__recent_files --workspacePath "."
 
-1. **Check logs:** Look for `[WRN]` and `[ERR]` in output
-2. **Index issues:** Run `index_workspace` with `forceRebuild: true`
-3. **Type extraction:** Verify `type_info` field in search results
-4. **Memory issues:** Monitor with `IMemoryPressureService`
-5. **Performance:** Use batch operations for multiple searches
+# Force rebuild if issues
+mcp__codesearch__index_workspace --workspacePath "." --forceRebuild true
+```
 
 ## 📚 Related Projects
 
-- **Tree-sitter bindings:** `C:\source\tree-sitter-dotnet-bindings`
-- **COA MCP Framework:** Core framework for MCP tools
-- **Goldfish MCP:** Session and memory management
-- **CodeNav MCP:** Advanced C#/TypeScript navigation (being consolidated)
+- **COA MCP Framework**: Core framework for MCP tools
+- **Goldfish MCP**: Session and memory management  
+- **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
 
 ---
-*Last updated: 2025-09-04 - Hybrid local indexing model implemented with multi-workspace support*
+*Last updated: 2025-09-05 - Enhanced CamelCase tokenization with generic type support, ResourceStorageProvider for MCP resource URIs, hybrid local indexing model*

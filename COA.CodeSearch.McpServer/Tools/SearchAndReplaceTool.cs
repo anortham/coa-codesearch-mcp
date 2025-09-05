@@ -20,7 +20,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Search and replace tool that consolidates the common search-read-edit workflow.
 /// Finds all occurrences and can apply replacements in a single operation.
 /// </summary>
-public class SearchAndReplaceTool : McpToolBase<SearchAndReplaceParams, AIOptimizedResponse<SearchAndReplaceResult>>
+public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, AIOptimizedResponse<SearchAndReplaceResult>>
 {
     private readonly ILuceneIndexService _indexService;
     private readonly LineAwareSearchService _lineSearchService;

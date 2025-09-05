@@ -33,7 +33,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Text search tool using the BaseResponseBuilder pattern for consistent response building
 /// </summary>
-public class TextSearchTool : McpToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>
+public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;

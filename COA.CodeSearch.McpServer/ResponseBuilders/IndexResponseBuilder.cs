@@ -54,7 +54,7 @@ public class IndexResponseBuilder : BaseResponseBuilder<IndexResult, AIOptimized
                     data.IndexedFiles,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "index-results",
                         Metadata = new Dictionary<string, string>

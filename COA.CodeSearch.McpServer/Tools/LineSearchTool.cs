@@ -20,7 +20,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Line-level search tool that returns ALL occurrences of a pattern with structured results.
 /// Faster than bash grep with AI-optimized context management and token limits.
 /// </summary>
-public class LineSearchTool : McpToolBase<LineSearchParams, AIOptimizedResponse<LineSearchResult>>
+public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedResponse<LineSearchResult>>
 {
     private readonly ILuceneIndexService _indexService;
     private readonly LineAwareSearchService _lineSearchService;

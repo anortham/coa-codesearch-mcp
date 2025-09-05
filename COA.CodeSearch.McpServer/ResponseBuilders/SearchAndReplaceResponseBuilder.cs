@@ -51,7 +51,7 @@ public class SearchAndReplaceResponseBuilder : BaseResponseBuilder<SearchAndRepl
                     data.Changes,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "search-replace-results",
                         Metadata = new Dictionary<string, string>

@@ -22,7 +22,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for indexing a workspace directory with token-optimized responses
 /// </summary>
-public class IndexWorkspaceTool : McpToolBase<IndexWorkspaceParameters, AIOptimizedResponse<IndexWorkspaceResult>>
+public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, AIOptimizedResponse<IndexWorkspaceResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;

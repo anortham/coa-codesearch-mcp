@@ -11,6 +11,12 @@ public interface IPathResolutionService
     string GetBasePath();
     
     /// <summary>
+    /// Gets the primary workspace path (configured or current directory)
+    /// </summary>
+    /// <returns>The primary workspace path</returns>
+    string GetPrimaryWorkspacePath();
+    
+    /// <summary>
     /// Gets the index directory path for a specific workspace
     /// </summary>
     /// <param name="workspacePath">The workspace path to get the index for</param>

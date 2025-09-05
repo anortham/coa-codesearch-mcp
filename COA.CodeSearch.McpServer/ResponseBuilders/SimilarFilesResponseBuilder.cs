@@ -56,7 +56,7 @@ public class SimilarFilesResponseBuilder : BaseResponseBuilder<SimilarFilesSearc
                     data.SimilarFiles,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "similar-files",
                         Metadata = new Dictionary<string, string>
