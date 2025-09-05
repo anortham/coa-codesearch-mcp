@@ -171,9 +171,19 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         string workspacePath,
         CancellationToken cancellationToken)
     {
-        // Build Lucene query
+        // Build Lucene query - automatically use literal search for patterns with curly braces
         var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-        var query = _queryPreprocessor.BuildQuery(parameters.SearchPattern, parameters.SearchType, parameters.CaseSensitive, analyzer);
+        var searchType = parameters.SearchType;
+        
+        // Auto-detect code patterns with curly braces and force literal search
+        if ((searchType == "standard" || string.IsNullOrEmpty(searchType)) && 
+            (parameters.SearchPattern.Contains('{') || parameters.SearchPattern.Contains('}')))
+        {
+            searchType = "literal";
+            _logger.LogDebug("Auto-detected curly braces in search pattern, using literal search type");
+        }
+        
+        var query = _queryPreprocessor.BuildQuery(parameters.SearchPattern, searchType, parameters.CaseSensitive, analyzer);
 
         // Search for files containing the pattern
         var searchResults = await _indexService.SearchAsync(workspacePath, query, parameters.MaxMatches * 2, cancellationToken);
@@ -236,6 +246,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
 
                     matches.Add(new LineMatch
                     {
+                        FilePath = hit.FilePath,
                         LineNumber = i + 1, // 1-based
                         LineContent = line,
                         ContextLines = contextBefore.Concat(contextAfter).ToArray(),
@@ -250,7 +261,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             _logger.LogWarning(ex, "Error extracting line matches from {FilePath}", hit.FilePath);
         }
 
-        return matches.Select(m => { m.LineContent = hit.FilePath; return m; }).ToList(); // Store file path in LineContent for now
+        return matches;
     }
 
     private bool ContainsPattern(string line, SearchAndReplaceParams parameters)
@@ -285,7 +296,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         var changes = new List<ReplacementChange>();
         
         // Group matches by file
-        var matchesByFile = matches.GroupBy(m => m.LineContent); // FilePath stored in LineContent
+        var matchesByFile = matches.GroupBy(m => m.FilePath);
 
         foreach (var fileGroup in matchesByFile)
         {
@@ -347,7 +358,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
                 var index = line.IndexOf(parameters.SearchPattern, comparison);
                 if (index == -1) return null;
 
-                newLine = line.Replace(parameters.SearchPattern, parameters.ReplacePattern);
+                newLine = line.Replace(parameters.SearchPattern, parameters.ReplacePattern, comparison);
                 columnStart = index;
                 originalLength = parameters.SearchPattern.Length;
                 break;
@@ -361,7 +372,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             OriginalLength = originalLength,
             OriginalText = parameters.SearchPattern,
             ReplacementText = parameters.ReplacePattern,
-            ModifiedLine = newLine,
+            ModifiedLine = newLine?.TrimEnd('\r', '\n'),
             ContextBefore = match.ContextLines?.Take(parameters.ContextLines).ToArray(),
             ContextAfter = match.ContextLines?.Skip(parameters.ContextLines).ToArray()
         };
@@ -386,7 +397,9 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
                     var lineIndex = change.LineNumber - 1; // Convert to 0-based
                     if (lineIndex >= 0 && lineIndex < lines.Length)
                     {
-                        lines[lineIndex] = change.ModifiedLine ?? lines[lineIndex];
+                        // Clean up any trailing carriage returns from ModifiedLine before writing
+                        var cleanedLine = change.ModifiedLine?.TrimEnd('\r', '\n') ?? lines[lineIndex];
+                        lines[lineIndex] = cleanedLine;
                         change.Applied = true;
                     }
                     else

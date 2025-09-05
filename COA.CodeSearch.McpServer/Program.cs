@@ -124,7 +124,7 @@ public class Program
     /// </summary>
     private static async Task RunStartupCleanupAsync(IConfiguration configuration)
     {
-        // Create temporary services for cleanup
+        // Create services for cleanup using proper dependency injection pattern
         var services = new ServiceCollection();
         services.AddSingleton(configuration);
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
@@ -133,7 +133,8 @@ public class Program
         services.AddLogging(logging => logging.AddSerilog());
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
         
-        var serviceProvider = services.BuildServiceProvider();
+        // Use using statement to properly dispose of the service provider
+        using var serviceProvider = services.BuildServiceProvider();
         var lockManager = serviceProvider.GetRequiredService<IWriteLockManager>();
         var logger = serviceProvider.GetRequiredService<ILogger<Program>>();
         
@@ -292,9 +293,9 @@ public class Program
                 builder.Services.AddHostedService<StartupIndexingService>();
                 
                 // Configure resources - register ResourceStorageProvider to serve stored search results
-                builder.ConfigureResources(registry =>
+                // Using enhanced API with IServiceProvider access (no more BuildServiceProvider needed!)
+                builder.ConfigureResources((registry, serviceProvider) =>
                 {
-                    var serviceProvider = builder.Services.BuildServiceProvider();
                     var resourceProvider = serviceProvider.GetRequiredService<ResourceStorageProvider>();
                     registry.RegisterProvider(resourceProvider);
                 });

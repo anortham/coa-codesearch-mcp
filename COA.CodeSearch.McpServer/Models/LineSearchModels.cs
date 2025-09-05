@@ -17,7 +17,7 @@ public class LineSearchParams
     /// Workspace path to search in
     /// </summary>
     [JsonPropertyName("workspacePath")]
-    public required string WorkspacePath { get; set; }
+    public string? WorkspacePath { get; set; }
 
     /// <summary>
     /// File pattern filter (e.g., "*.cs", "src/**/*.ts")
@@ -73,6 +73,12 @@ public class LineSearchParams
 /// </summary>
 public class LineMatch
 {
+    /// <summary>
+    /// File path where the match occurs
+    /// </summary>
+    [JsonPropertyName("filePath")]
+    public required string FilePath { get; set; }
+
     /// <summary>
     /// Line number where match occurs
     /// </summary>

@@ -35,11 +35,11 @@ public abstract class CodeSearchToolBase<TParams, TResult> : McpToolBase<TParams
     /// <param name="parameters">The parameters to validate</param>
     protected override void ValidateParameters(TParams parameters)
     {
-        if (parameters == null)
-        {
-            base.ValidateParameters(parameters);
-            return;
-        }
+        // Let base class handle null validation first
+        base.ValidateParameters(parameters);
+        
+        // If we get here, parameters is not null (base would have thrown)
+        if (parameters == null) return;
 
         try
         {

@@ -271,6 +271,7 @@ public class LineSearchResponseBuilder : BaseResponseBuilder<LineSearchResult, A
             FilePath = file.FilePath,
             Matches = file.Matches.Select(match => new LineMatch
             {
+                FilePath = file.FilePath,
                 LineNumber = match.LineNumber,
                 LineContent = match.LineContent,
                 ContextLines = match.ContextLines?.Length > 0 ? match.ContextLines : null,

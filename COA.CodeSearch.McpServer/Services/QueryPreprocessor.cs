@@ -141,8 +141,9 @@ public class QueryPreprocessor
                 }
             }
             
-            // For brackets like [Fact], [HttpGet], use phrase query
-            if (queryText.Contains('[') || queryText.Contains(']'))
+            // For brackets like [Fact], [HttpGet] or curly braces like {registry}, use phrase query
+            if (queryText.Contains('[') || queryText.Contains(']') || 
+                queryText.Contains('{') || queryText.Contains('}'))
             {
                 var parser = new QueryParser(LUCENE_VERSION, "content", analyzer);
                 parser.DefaultOperator = Operator.AND;
