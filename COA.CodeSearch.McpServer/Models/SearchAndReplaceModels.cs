@@ -30,8 +30,7 @@ public class SearchAndReplaceParams
     /// </summary>
     [JsonPropertyName("workspacePath")]
     [Description("Workspace path to search in")]
-    [Required]
-    public required string WorkspacePath { get; set; }
+    public string? WorkspacePath { get; set; }
 
     /// <summary>
     /// File pattern filter (e.g., "*.cs", "src/**/*.ts")
