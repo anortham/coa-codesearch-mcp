@@ -55,6 +55,50 @@ The type extraction system supports **25+ programming languages** using Tree-sit
 
 - .NET 9.0 SDK or later
 
+### macOS Tree-sitter Setup
+
+**⚠️ Important for macOS users:** This project uses Tree-sitter for advanced type extraction from 25+ languages. The NuGet package doesn't ship native Darwin libraries, so you need to install them manually:
+
+#### Quick Setup (Recommended)
+```bash
+# 1. Install Tree-sitter runtime via Homebrew
+brew install tree-sitter
+
+# 2. Build grammar libraries using our automation script
+sh scripts/build-grammars-macos.sh
+```
+
+This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Go, Rust, Java, JSON, HTML, CSS, and Bash.
+
+#### Custom Installation Directory
+If you want to install in a local directory instead of Homebrew's default location:
+
+```bash
+# Build to custom directory
+DEST_DIR="$PWD/native" sh scripts/build-grammars-macos.sh
+
+# Then set the environment variable for runtime discovery
+export TREE_SITTER_NATIVE_PATHS="$PWD/native:/opt/homebrew/lib:/usr/local/lib"
+```
+
+#### Build Specific Grammars Only
+```bash
+# Build only C# and TypeScript grammars
+GRAMMARS="c-sharp typescript" sh scripts/build-grammars-macos.sh
+```
+
+#### Manual Verification
+After setup, verify the installation:
+```bash
+# Check installed libraries
+ls /opt/homebrew/lib/libtree-sitter*.dylib
+
+# For Intel Macs, check:
+ls /usr/local/lib/libtree-sitter*.dylib
+```
+
+The build script automatically detects your Mac architecture (Apple Silicon vs Intel) and adjusts paths accordingly.
+
 ## 🚀 Quick Start
 
 ### Installation as Global Tool
