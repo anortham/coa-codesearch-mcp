@@ -53,7 +53,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
                     data.Hits,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "search-results",
                         Metadata = new Dictionary<string, string>

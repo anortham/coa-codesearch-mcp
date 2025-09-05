@@ -25,7 +25,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for finding recently modified files with token optimization
 /// </summary>
-public class RecentFilesTool : McpToolBase<RecentFilesParameters, AIOptimizedResponse<RecentFilesResult>>
+public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptimizedResponse<RecentFilesResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IPathResolutionService _pathResolutionService;

@@ -34,7 +34,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for searching directories by name pattern using Lucene index
 /// </summary>
-public class DirectorySearchTool : McpToolBase<DirectorySearchParameters, AIOptimizedResponse<DirectorySearchResult>>
+public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters, AIOptimizedResponse<DirectorySearchResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
     private readonly ILuceneIndexService _luceneService;

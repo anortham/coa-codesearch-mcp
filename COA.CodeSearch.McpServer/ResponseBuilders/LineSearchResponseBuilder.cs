@@ -52,7 +52,7 @@ public class LineSearchResponseBuilder : BaseResponseBuilder<LineSearchResult, A
                     data.Files,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "line-search-results",
                         Metadata = new Dictionary<string, string>

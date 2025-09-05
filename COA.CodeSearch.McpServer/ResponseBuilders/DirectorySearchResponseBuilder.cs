@@ -52,7 +52,7 @@ public class DirectorySearchResponseBuilder : BaseResponseBuilder<DirectorySearc
                     data.Directories,
                     new ResourceStorageOptions
                     {
-                        Expiration = TimeSpan.FromHours(1),
+                        Expiration = TimeSpan.FromHours(24),
                         Compress = true,
                         Category = "directory-search-results",
                         Metadata = new Dictionary<string, string>

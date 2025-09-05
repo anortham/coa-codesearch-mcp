@@ -1,4 +1,5 @@
 using COA.Mcp.Framework.Server;
+using COA.CodeSearch.McpServer.Providers;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -36,6 +37,7 @@ public class Program
         
         // Register core services
         services.AddSingleton<IPathResolutionService, PathResolutionService>();
+        services.AddSingleton<IParameterDefaultsService, ParameterDefaultsService>();
         // WorkspaceRegistry removed - using hybrid local indexing model
         services.AddSingleton<ICircuitBreakerService, CircuitBreakerService>();
         services.AddSingleton<IMemoryPressureService, MemoryPressureService>();
@@ -249,6 +251,9 @@ public class Program
             builder.Services.AddScoped<ResponseBuilders.LineSearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.SearchAndReplaceResponseBuilder>();
             
+            // Register resource provider for serving ResourceStorage data
+            builder.Services.AddScoped<Providers.ResourceStorageProvider>();
+            
             // Register tools in DI first (required for constructor dependencies)
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
@@ -285,6 +290,14 @@ public class Program
                 
                 // Register startup indexing service
                 builder.Services.AddHostedService<StartupIndexingService>();
+                
+                // Configure resources - register ResourceStorageProvider to serve stored search results
+                builder.ConfigureResources(registry =>
+                {
+                    var serviceProvider = builder.Services.BuildServiceProvider();
+                    var resourceProvider = serviceProvider.GetRequiredService<ResourceStorageProvider>();
+                    registry.RegisterProvider(resourceProvider);
+                });
                 
                 // Use STDIO transport
                 builder.UseStdioTransport();

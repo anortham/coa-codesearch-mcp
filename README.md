@@ -7,7 +7,7 @@ Built with .NET 9.0 and COA MCP Framework 2.0.1, featuring Lucene-powered search
 ## 🚀 Features
 
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
-- **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, generic types
+- **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, and enhanced CamelCase tokenization with full generic type support (finds `McpToolBase<TParams, TResult>` when searching for "McpToolBase")
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
 - **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 25+ languages including C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, Vue, Razor, and more
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
@@ -116,7 +116,7 @@ Add to your Claude Code MCP configuration file:
 
 Unlike basic file search, CodeSearch understands your code:
 
-- **Smart Pattern Recognition**: Finds `async Task`, `[Fact]`, `interface IService` patterns
+- **Smart Pattern Recognition**: Finds `async Task`, `[Fact]`, `interface IService` patterns, plus enhanced CamelCase splitting for generic types
 - **Context-Aware**: Knows the difference between C# classes and JavaScript functions using Tree-sitter parsing
 - **Instant Results**: Millisecond search across millions of lines of code
 - **Fuzzy Matching**: Finds files even with typos in names
@@ -482,8 +482,8 @@ Set log levels in `appsettings.json`:
 
 CodeSearch works seamlessly with other MCP servers configured in Claude Code:
 
-- **CodeNav MCP**: Provides advanced code navigation and refactoring capabilities
 - **Goldfish MCP**: Handles session management, checkpoints, and task tracking
+- **Other MCP servers**: Can be combined for comprehensive development workflows
 
 **Example workflow:**
 ```bash

@@ -3,6 +3,7 @@ using Lucene.Net.Analysis.Core;
 using Lucene.Net.Analysis.TokenAttributes;
 using Lucene.Net.Util;
 using System.IO;
+using System.Text;
 using System.Text.RegularExpressions;
 
 namespace COA.CodeSearch.McpServer.Services.Analysis;
@@ -443,6 +444,7 @@ public sealed class CamelCaseFilter : TokenFilter
     private int _startOffset;
     private int _endOffset;
     private string? _tokenType;
+    private List<string>? _splitParts;
 
     public CamelCaseFilter(TokenStream input) : base(input)
     {
@@ -480,32 +482,167 @@ public sealed class CamelCaseFilter : TokenFilter
         }
         
         // Split the token
-        var parts = SplitCamelCase(_currentToken);
-        if (parts.Count > 1)
+        _splitParts = SplitCamelCase(_currentToken);
+        if (_splitParts.Count > 1)
         {
-            _subTokenCount = parts.Count;
+            _subTokenCount = _splitParts.Count;
             _tokenPosition = 0;
             EmitSubToken();
             return true;
         }
         
-        // No splitting needed
+        // No splitting needed - emit original token as-is
         return true;
     }
     
     private void EmitSubToken()
     {
-        // Implementation would split camelCase and emit sub-tokens
-        // For now, simplified implementation
+        if (_splitParts == null || _tokenPosition >= _splitParts.Count)
+            return;
+            
+        var currentPart = _splitParts[_tokenPosition];
+        
+        // Set the term to the current split part
+        _termAttr.SetEmpty();
+        _termAttr.Append(currentPart);
+        
+        // Set position increment - 1 for first token (original), 0 for subsequent split tokens
+        _posIncrAttr.PositionIncrement = _tokenPosition == 0 ? 1 : 0;
+        
+        // Keep the same offset and type for all split tokens
+        _offsetAttr.SetOffset(_startOffset, _endOffset);
+        _typeAttr.Type = _tokenType ?? "WORD";
+        
         _tokenPosition++;
-        _posIncrAttr.PositionIncrement = 0; // Sub-tokens at same position
     }
     
     private List<string> SplitCamelCase(string token)
     {
-        // Simplified implementation - would split "UserService" into ["User", "Service"]
-        // and "user_service" into ["user", "service"]
-        return new List<string> { token };
+        var parts = new List<string>();
+        
+        if (string.IsNullOrEmpty(token))
+            return parts;
+            
+        // Always include the original token first for exact searches
+        parts.Add(token);
+        
+        var splitTokens = new List<string>();
+        
+        // Handle generic types - extract the base type name first
+        if (token.Contains('<') && token.Contains('>'))
+        {
+            var angleIndex = token.IndexOf('<');
+            if (angleIndex > 0)
+            {
+                var baseTypeName = token.Substring(0, angleIndex);
+                // Split the base type name (e.g., "McpToolBase" -> ["Mcp", "Tool", "Base"])
+                var baseTypeParts = SplitCamelCasePattern(baseTypeName);
+                splitTokens.AddRange(baseTypeParts);
+                
+                // Also add the full base type name if it's not already included
+                if (!splitTokens.Contains(baseTypeName))
+                {
+                    splitTokens.Add(baseTypeName);
+                }
+                
+                // Extract and split generic parameter names (e.g., "TParams, TResult" -> ["TParams", "TResult"])
+                var genericPart = token.Substring(angleIndex + 1, token.LastIndexOf('>') - angleIndex - 1);
+                var genericParams = genericPart.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                foreach (var param in genericParams)
+                {
+                    var cleanParam = param.Trim();
+                    if (!string.IsNullOrEmpty(cleanParam))
+                    {
+                        splitTokens.Add(cleanParam);
+                        // Also split the generic parameter itself if it's CamelCase
+                        var paramParts = SplitCamelCasePattern(cleanParam);
+                        splitTokens.AddRange(paramParts);
+                    }
+                }
+            }
+        }
+        // Handle snake_case and kebab-case
+        else if (token.Contains('_') || token.Contains('-'))
+        {
+            var separators = new[] { '_', '-' };
+            var snakeParts = token.Split(separators, StringSplitOptions.RemoveEmptyEntries);
+            splitTokens.AddRange(snakeParts);
+        }
+        else
+        {
+            // Handle CamelCase and PascalCase
+            splitTokens = SplitCamelCasePattern(token);
+        }
+        
+        // Add split tokens if they differ from the original
+        foreach (var splitToken in splitTokens)
+        {
+            if (!string.IsNullOrEmpty(splitToken) && splitToken != token)
+            {
+                parts.Add(splitToken);
+            }
+        }
+        
+        return parts;
+    }
+    
+    private List<string> SplitCamelCasePattern(string token)
+    {
+        var parts = new List<string>();
+        var current = new StringBuilder();
+        
+        for (int i = 0; i < token.Length; i++)
+        {
+            char c = token[i];
+            
+            if (i > 0 && char.IsUpper(c))
+            {
+                // Split on uppercase letters, but handle sequences like "XMLParser" -> ["XML", "Parser"]
+                if (current.Length > 0)
+                {
+                    // Check if we have a sequence of uppercase letters
+                    if (i + 1 < token.Length && char.IsLower(token[i + 1]) && current.Length > 1)
+                    {
+                        // "XMLParser" case: keep "XML" separate from "Parser"
+                        var lastChar = current[current.Length - 1];
+                        current.Length--;
+                        if (current.Length > 0)
+                        {
+                            parts.Add(current.ToString());
+                        }
+                        current.Clear();
+                        current.Append(lastChar);
+                    }
+                    else
+                    {
+                        // Normal case: "UserService" -> ["User", "Service"]
+                        parts.Add(current.ToString());
+                        current.Clear();
+                    }
+                }
+            }
+            else if (char.IsDigit(c) && current.Length > 0 && !char.IsDigit(current[current.Length - 1]))
+            {
+                // Split on number boundaries: "OAuth2Provider" -> ["OAuth", "2", "Provider"]
+                parts.Add(current.ToString());
+                current.Clear();
+            }
+            else if (!char.IsDigit(c) && current.Length > 0 && char.IsDigit(current[current.Length - 1]))
+            {
+                // Split after numbers: "2Provider" -> ["2", "Provider"]  
+                parts.Add(current.ToString());
+                current.Clear();
+            }
+            
+            current.Append(c);
+        }
+        
+        if (current.Length > 0)
+        {
+            parts.Add(current.ToString());
+        }
+        
+        return parts;
     }
 }
 

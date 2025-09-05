@@ -8,8 +8,7 @@ namespace COA.CodeSearch.McpServer.Tools.Parameters;
 /// </summary>
 public class DirectorySearchParameters
 {
-    [Required]
-    [Description("Path to the workspace directory to search")]
+    [Description("Path to the workspace directory to search (defaults to current workspace)")]
     public string WorkspacePath { get; set; } = string.Empty;
     
     [Required]
