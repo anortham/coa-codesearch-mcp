@@ -54,19 +54,19 @@ public class ResourceStorageProvider : IResourceProvider
     }
 
     /// <inheritdoc />
-    public async Task<List<Resource>> ListResourcesAsync(CancellationToken cancellationToken = default)
+    public Task<List<Resource>> ListResourcesAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             // ResourceStorageService doesn't have a list method, so we return empty list
             // This is acceptable since stored resources are typically accessed directly by URI
             _logger.LogDebug("ListResourcesAsync called - returning empty list (resources accessed by direct URI)");
-            return new List<Resource>();
+            return Task.FromResult(new List<Resource>());
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Error listing resources from ResourceStorageService");
-            return new List<Resource>();
+            return Task.FromResult(new List<Resource>());
         }
     }
 

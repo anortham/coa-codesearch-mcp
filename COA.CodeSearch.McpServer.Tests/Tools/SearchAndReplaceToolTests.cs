@@ -368,5 +368,78 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Should filter to only .cs files
             // TODO: Verify file filtering when Data interface is resolved
         }
+
+        [Test]
+        public async Task ExecuteAsync_NoDuplicateLines_FixesCarriageReturnBug()
+        {
+            // Arrange - Create a test file with known content
+            var testFile = Path.Combine(TestWorkspacePath, "carriage_return_test.txt");
+            var originalContent = "Line 1: old_value here\nLine 2: another old_value\nLine 3: final old_value";
+            await File.WriteAllTextAsync(testFile, originalContent);
+
+            var parameters = new SearchAndReplaceParams
+            {
+                SearchPattern = "old_value",
+                ReplacePattern = "new_value", 
+                WorkspacePath = TestWorkspacePath,
+                Preview = false // Actually apply changes
+            };
+
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                TotalHits = 1,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new COA.CodeSearch.McpServer.Services.Lucene.SearchHit
+                    {
+                        FilePath = testFile,
+                        Score = 1.0f
+                    }
+                }
+            };
+
+            LuceneIndexServiceMock.Setup(s => s.SearchAsync(
+                    It.IsAny<string>(), 
+                    It.IsAny<Query>(), 
+                    It.IsAny<int>(), 
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+
+            try
+            {
+                // Act
+                var response = await ExecuteToolAsync<AIOptimizedResponse<SearchAndReplaceResult>>(
+                    async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+                // Assert - Verify the operation succeeded
+                response.Success.Should().BeTrue();
+                response.Result.Should().NotBeNull();
+                response.Result!.Success.Should().BeTrue();
+                response.Result.Data.Should().NotBeNull();
+
+                // Critical assertion: Verify no duplicate lines were created
+                var modifiedContent = await File.ReadAllTextAsync(testFile);
+                var lines = modifiedContent.Split('\n');
+                
+                // Should have exactly 3 lines (not 4 with an empty line)
+                lines.Length.Should().Be(3, "should not create duplicate/empty lines due to carriage returns");
+                
+                // Verify content is correctly replaced
+                lines[0].Should().Contain("new_value", "first line should be replaced");
+                lines[1].Should().Contain("new_value", "second line should be replaced"); 
+                lines[2].Should().Contain("new_value", "third line should be replaced");
+                
+                // Ensure no empty lines exist
+                lines.Should().NotContain("", "should not contain empty lines from carriage return bug");
+            }
+            finally
+            {
+                // Cleanup
+                if (File.Exists(testFile))
+                {
+                    File.Delete(testFile);
+                }
+            }
+        }
     }
 }

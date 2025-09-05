@@ -263,6 +263,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
 
                     var match = new LineMatch
                     {
+                        FilePath = hit.FilePath,
                         LineNumber = i + 1, // 1-based line numbers
                         LineContent = line,
                         ContextLines = contextLines.Count > 0 ? contextLines.ToArray() : null,
