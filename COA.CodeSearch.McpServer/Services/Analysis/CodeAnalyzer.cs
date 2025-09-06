@@ -532,7 +532,10 @@ public sealed class CamelCaseFilter : TokenFilter
         if (token.Contains('<') && token.Contains('>'))
         {
             var angleIndex = token.IndexOf('<');
-            if (angleIndex > 0)
+            var closingAngleIndex = token.LastIndexOf('>');
+            
+            // Validate that we have a proper generic type structure
+            if (angleIndex > 0 && closingAngleIndex > angleIndex)
             {
                 var baseTypeName = token.Substring(0, angleIndex);
                 // Split the base type name (e.g., "McpToolBase" -> ["Mcp", "Tool", "Base"])
@@ -546,17 +549,21 @@ public sealed class CamelCaseFilter : TokenFilter
                 }
                 
                 // Extract and split generic parameter names (e.g., "TParams, TResult" -> ["TParams", "TResult"])
-                var genericPart = token.Substring(angleIndex + 1, token.LastIndexOf('>') - angleIndex - 1);
-                var genericParams = genericPart.Split(',', StringSplitOptions.RemoveEmptyEntries);
-                foreach (var param in genericParams)
+                var length = closingAngleIndex - angleIndex - 1;
+                if (length > 0)
                 {
-                    var cleanParam = param.Trim();
-                    if (!string.IsNullOrEmpty(cleanParam))
+                    var genericPart = token.Substring(angleIndex + 1, length);
+                    var genericParams = genericPart.Split(',', StringSplitOptions.RemoveEmptyEntries);
+                    foreach (var param in genericParams)
                     {
-                        splitTokens.Add(cleanParam);
-                        // Also split the generic parameter itself if it's CamelCase
-                        var paramParts = SplitCamelCasePattern(cleanParam);
-                        splitTokens.AddRange(paramParts);
+                        var cleanParam = param.Trim();
+                        if (!string.IsNullOrEmpty(cleanParam))
+                        {
+                            splitTokens.Add(cleanParam);
+                            // Also split the generic parameter itself if it's CamelCase
+                            var paramParts = SplitCamelCasePattern(cleanParam);
+                            splitTokens.AddRange(paramParts);
+                        }
                     }
                 }
             }
