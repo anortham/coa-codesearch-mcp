@@ -63,6 +63,11 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
             _logger.LogInformation("Starting line search for pattern: {Pattern}", parameters.Pattern);
 
             // Validate workspace path
+            if (string.IsNullOrEmpty(parameters.WorkspacePath))
+            {
+                throw new ArgumentException("WorkspacePath is required for line search operations");
+            }
+            
             var normalizedPath = _pathResolutionService.GetFullPath(parameters.WorkspacePath);
             if (!_pathResolutionService.DirectoryExists(normalizedPath))
             {

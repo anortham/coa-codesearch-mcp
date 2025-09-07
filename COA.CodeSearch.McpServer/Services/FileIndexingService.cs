@@ -26,7 +26,7 @@ public class FileIndexingService : IFileIndexingService
     private readonly IMemoryPressureService _memoryPressureService;
     private readonly ITypeExtractionService? _typeExtractionService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
-    private readonly HashSet<string> _supportedExtensions;
+    private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
     private const int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB max file size
 
@@ -51,21 +51,58 @@ public class FileIndexingService : IFileIndexingService
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
         _typeExtractionService = typeExtractionService;
         
-        // Initialize supported extensions from configuration or defaults
-        var extensions = configuration.GetSection("CodeSearch:Lucene:SupportedExtensions").Get<string[]>() 
+        // Initialize blacklisted extensions from configuration or defaults
+        var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
             ?? new[] { 
-                ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs", ".rb", ".php", ".sql",
-                ".html", ".css", ".json", ".xml", ".md", ".txt", ".yml", ".yaml", ".toml", ".ini",
-                ".sh", ".bat", ".ps1", ".dockerfile", ".makefile", ".gradle", ".csproj", ".sln", ".config",
-                ".vue", ".cshtml", ".razor"
+                // Binary files
+                ".dll", ".exe", ".pdb", ".so", ".dylib", ".lib", ".a", ".o", ".obj",
+                // Media files  
+                ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".svg", ".webp",
+                ".mp3", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv",
+                // Archives
+                ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
+                // Database files
+                ".db", ".sqlite", ".mdf", ".ldf", ".bak",
+                // Temporary files
+                ".tmp", ".temp", ".cache", ".swp", ".swo",
+                // Logs (large files)
+                ".log"
             };
-        _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
+        _blacklistedExtensions = new HashSet<string>(blacklistedExts, StringComparer.OrdinalIgnoreCase);
         
         // Initialize excluded directories
         var excluded = configuration.GetSection("CodeSearch:Lucene:ExcludedDirectories").Get<string[]>() 
             ?? PathConstants.DefaultExcludedDirectories;
         _excludedDirectories = new HashSet<string>(excluded, StringComparer.OrdinalIgnoreCase);
     }
+        /// <summary>
+        /// Extract only symbol names from content and type data for symbol-only search field
+        /// </summary>
+        private string ExtractSymbolsOnly(string content, TypeExtractionResult? typeData)
+        {
+            var symbols = new List<string>();
+            
+            // Add symbols from type extraction if available
+            if (typeData?.Success == true)
+            {
+                symbols.AddRange(typeData.Types.Select(t => t.Name));
+                symbols.AddRange(typeData.Methods.Select(m => m.Name));
+            }
+            
+            // Add basic symbol extraction from content (classes, methods, variables)
+            // This handles cases where type extraction fails or isn't available
+            var symbolMatches = System.Text.RegularExpressions.Regex.Matches(content, 
+                @"\b(?:class|interface|struct|enum|function|def|func|fn|method|var|let|const)\s+([A-Za-z_][A-Za-z0-9_]*)", 
+                System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+            
+            foreach (System.Text.RegularExpressions.Match match in symbolMatches)
+            {
+                if (match.Groups.Count > 1)
+                    symbols.Add(match.Groups[1].Value);
+            }
+            
+            return string.Join(" ", symbols.Distinct());
+        }
 
     public async Task<IndexingResult> IndexWorkspaceAsync(string workspacePath, CancellationToken cancellationToken = default)
     {
@@ -308,9 +345,12 @@ public class FileIndexingService : IFileIndexingService
                 {
                     var extension = Path.GetExtension(file);
                     
-                    // Check supported extensions
-                    if (!_supportedExtensions.Contains(extension))
+                    // Skip blacklisted extensions
+                    if (_blacklistedExtensions.Contains(extension))
+                    {
+                        _logger.LogTrace("Skipping blacklisted file type {File} (extension: {Extension})", file, extension);
                         continue;
+                    }
                     
                     // Check file size
                     var fileInfo = new FileInfo(file);
@@ -424,6 +464,11 @@ public class FileIndexingService : IFileIndexingService
                 new StringField("path", filePath, Field.Store.YES),
                 new StringField("relativePath", Path.GetRelativePath(workspacePath, filePath), Field.Store.YES),
                 new TextField("content", content, Field.Store.YES), // KEEP - needed for line extraction
+                                
+                                // Multi-field indexing for different search modes
+                                new TextField("content_code", content, Field.Store.NO),        // Code-aware tokenization
+                                new TextField("content_literal", content, Field.Store.NO),     // Exact matching (uses KeywordTokenizer)
+                                new TextField("content_symbols", ExtractSymbolsOnly(content, typeData), Field.Store.NO), // Symbols only
                 
                 // Metadata fields
                 new StringField("extension", fileInfo.Extension.ToLowerInvariant(), Field.Store.YES),
