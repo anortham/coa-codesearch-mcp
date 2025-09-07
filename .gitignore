@@ -442,3 +442,4 @@ NuGet.config.local
 
 # Tree-sitter grammar vendor directory (git submodules)
 vendor/
+docs/serena-hijacking-investigation.md

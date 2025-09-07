@@ -14,6 +14,7 @@ using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
+using COA.Mcp.Framework.Interfaces;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
@@ -25,7 +26,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Symbol search tool that finds type and method definitions using Tree-sitter extracted data
 /// </summary>
-public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOptimizedResponse<SymbolSearchResult>>
+public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOptimizedResponse<SymbolSearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -54,6 +55,10 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     public override string Name => ToolNames.SymbolSearch;
     public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. Returns: signatures, documentation, inheritance, usage counts.";
     public override ToolCategory Category => ToolCategory.Query;
+    
+    // IPrioritizedTool implementation - HIGH priority for symbol discovery
+    public int Priority => 85;
+    public string[] PreferredScenarios => new[] { "symbol_discovery", "type_exploration", "api_discovery", "inheritance_analysis" };
 
     protected override async Task<AIOptimizedResponse<SymbolSearchResult>> ExecuteInternalAsync(
         SymbolSearchParameters parameters,

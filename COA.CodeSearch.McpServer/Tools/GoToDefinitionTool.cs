@@ -3,6 +3,7 @@ using System.Text.Json;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
+using COA.Mcp.Framework.Interfaces;
 using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
@@ -25,7 +26,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Go to definition tool that jumps directly to where a symbol is defined
 /// </summary>
-public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, AIOptimizedResponse<SymbolDefinition>>
+public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, AIOptimizedResponse<SymbolDefinition>>, ITypeAware, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -52,8 +53,12 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     }
 
     public override string Name => ToolNames.GoToDefinition;
-    public override string Description => "NAVIGATE INSTANTLY - Jump to exact symbol definition. FASTER than searching manually. Essential for: understanding implementations, checking signatures, exploring codebases.";
+    public override string Description => "VERIFY BEFORE CODING - Jump to exact symbol definitions in <100ms. USE BEFORE writing any code that references types. Tree-sitter powered for accurate type extraction.";
     public override ToolCategory Category => ToolCategory.Query;
+    
+    // IPrioritizedTool implementation - HIGHEST priority for type verification
+    public int Priority => 100;
+    public string[] PreferredScenarios => new[] { "type_verification", "code_exploration", "before_coding" };
 
     protected override async Task<AIOptimizedResponse<SymbolDefinition>> ExecuteInternalAsync(
         GoToDefinitionParameters parameters,

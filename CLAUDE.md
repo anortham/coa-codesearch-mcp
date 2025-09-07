@@ -93,6 +93,53 @@ search: "Repository" → finds "IRepository<T>", "UserRepository"
 4. **Type extraction:** Check `type_info` field structure in results
 5. **Testing changes:** Must restart Claude Code after building
 
+## 📋 Scriban Template Context Reference
+
+**CRITICAL**: When working with instruction templates, NEVER guess what's available.
+
+### Template Context Location
+`COA.Mcp.Framework/src/COA.Mcp.Framework/Services/InstructionTemplateProcessor.cs:131-206`
+
+### Available Variables
+- `available_tools` - String array of tool names  
+- `available_markers` - String array of capability markers
+- `tool_priorities` - Dictionary<string, int> of tool priorities
+- `workflow_suggestions` - Array of workflow suggestions
+- `server_info` - Server information object
+- `builtin_tools` - String array of built-in Claude tools
+- `tool_comparisons` - Dictionary of tool comparisons
+- `enforcement_level` - String: "strongly_urge", "recommend", "suggest"
+
+### Available Helper Functions
+- `has_tool(tools, tool)` - Check if tool exists in array
+- `has_marker(markers, marker)` - Check if marker exists  
+- `has_builtin(builtins, tool)` - Check if builtin exists
+
+### Available Scriban Built-in Functions
+With v2.1.5+, standard Scriban functions are now available:
+- `array.size` - Get array length
+- `object.default` - Provide default value for null/undefined objects
+- `string.*` - All standard string functions (upcase, downcase, etc.)
+
+### Template Pattern Examples
+```scriban
+// ✅ CORRECT - Use native Scriban functions
+{{ tool_priorities[tool] | object.default 50 }}
+
+// ✅ CORRECT - Use native array.size
+{{ available_tools.size }}
+
+// ✅ CORRECT - Use native string functions
+{{ enforcement_level | string.upcase }}
+
+// ✅ CORRECT - Check if variable exists (still works)
+{{ if tool_priorities[tool] }}{{ tool_priorities[tool] }}{{ else }}50{{ end }}
+
+// ❌ WRONG - Old custom functions (deprecated)
+{{ array_length available_tools }}
+{{ string_join available_tools ", " }}
+```
+
 ## 🛠️ Code Patterns
 
 ### Path Resolution (Use Service)

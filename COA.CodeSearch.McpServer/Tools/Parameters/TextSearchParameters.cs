@@ -52,6 +52,12 @@ public class TextSearchParameters : VisualizableParameters
     /// </summary>
     [Description("Search type: 'standard', 'literal', 'code', 'wildcard', 'fuzzy', 'phrase', 'regex' (default: standard)")]
     public string SearchType { get; set; } = "standard";
+        /// <summary>
+        /// Search mode: 'auto', 'literal', 'code', 'symbol', 'standard', 'fuzzy' (default: auto)
+        /// </summary>
+        [Description("Search mode: 'auto', 'literal', 'code', 'symbol', 'standard', 'fuzzy' (default: auto)")]
+        public string SearchMode { get; set; } = "auto";
+
 
     /// <summary>
     /// Case sensitive search

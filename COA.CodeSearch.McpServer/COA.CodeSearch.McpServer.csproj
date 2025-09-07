@@ -13,7 +13,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codesearch</ToolCommandName>
     <PackageId>COA.CodeSearch</PackageId>
-    <Version>2.1.0</Version>
+    <Version>2.1.4</Version>
     <Authors>COA Team</Authors>
     <Company>COA Team</Company>
     <Description>High-performance file search MCP server with Lucene.NET backend for Claude Code integration</Description>
@@ -27,9 +27,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- COA Framework packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="2.0.21" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.0.21" />
+    <!-- COA Framework NuGet package references -->
+    <PackageReference Include="COA.Mcp.Framework" Version="2.1.6" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.6" />
     
     <!-- VS Code Bridge integration -->
     <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.1.0" />
@@ -69,6 +69,13 @@
       <Pack>True</Pack>
       <PackagePath>\</PackagePath>
     </None>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embed template as resource -->
+    <EmbeddedResource Include="..\Templates\codesearch-instructions.scriban">
+      <LogicalName>COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
