@@ -1,5 +1,6 @@
 using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Core;
+using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Analysis.TokenAttributes;
 using Lucene.Net.Util;
 using System.IO;
@@ -28,6 +29,18 @@ public sealed class CodeAnalyzer : Analyzer
 
     protected override TokenStreamComponents CreateComponents(string fieldName, TextReader reader)
     {
+        return fieldName switch
+        {
+            "content" => CreateStandardCodeTokenization(reader),          // Current behavior
+            "content_literal" => CreateLiteralTokenization(reader),       // No tokenization - exact matching
+            "content_code" => CreateEnhancedCodeTokenization(reader),     // Better code-aware tokenization
+            "content_symbols" => CreateSymbolOnlyTokenization(reader),    // Symbols only
+            _ => CreateStandardCodeTokenization(reader)                   // Default fallback
+        };
+    }
+
+    private TokenStreamComponents CreateStandardCodeTokenization(TextReader reader)
+    {
         // Use our custom tokenizer that preserves code structure
         var tokenizer = new CodeTokenizer(_version, reader);
         
@@ -50,6 +63,63 @@ public sealed class CodeAnalyzer : Analyzer
         
         return new TokenStreamComponents(tokenizer, stream);
     }
+
+    private TokenStreamComponents CreateLiteralTokenization(TextReader reader)
+        {
+            // For exact matching - use KeywordTokenizer which doesn't break up the text
+            var tokenizer = new KeywordTokenizer(reader);
+            
+            TokenStream stream = tokenizer;
+            
+            // Only lowercase if configured (no other processing for literal matching)
+            if (!_preserveCase)
+            {
+                stream = new LowerCaseFilter(_version, stream);
+            }
+            
+            return new TokenStreamComponents(tokenizer, stream);
+        }
+
+        private TokenStreamComponents CreateEnhancedCodeTokenization(TextReader reader)
+        {
+            // Enhanced code tokenization - same as standard but with additional filters
+            var tokenizer = new CodeTokenizer(_version, reader);
+            
+            TokenStream stream = tokenizer;
+            
+            // Always split camelCase for enhanced code search
+            stream = new CamelCaseFilter(stream);
+            
+            // Preserve or lowercase based on configuration
+            if (!_preserveCase)
+            {
+                stream = new LowerCaseFilter(_version, stream);
+            }
+            
+            // Remove very short tokens (single characters except operators)
+            stream = new CodeLengthFilter(stream, minLength: 1);
+            
+            return new TokenStreamComponents(tokenizer, stream);
+        }
+
+        private TokenStreamComponents CreateSymbolOnlyTokenization(TextReader reader)
+        {
+            // For symbol search - use standard tokenizer but with minimal filtering
+            var tokenizer = new StandardTokenizer(_version, reader);
+            
+            TokenStream stream = tokenizer;
+            
+            // Always split camelCase for symbol search
+            stream = new CamelCaseFilter(stream);
+            
+            // Always lowercase for symbol search consistency
+            stream = new LowerCaseFilter(_version, stream);
+            
+            // Filter out very short tokens and non-alphanumeric
+            stream = new CodeLengthFilter(stream, minLength: 2);
+            
+            return new TokenStreamComponents(tokenizer, stream);
+        }
 }
 
 /// <summary>

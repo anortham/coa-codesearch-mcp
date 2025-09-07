@@ -12,6 +12,8 @@ using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
 using Serilog;
+using System.IO;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using TreeSitter;
@@ -56,6 +58,8 @@ public class Program
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
         services.AddSingleton<IErrorRecoveryService, ErrorRecoveryService>();
         services.AddSingleton<SmartSnippetService>();
+                        services.AddSingleton<AdvancedPatternMatcher>();
+                services.AddSingleton<SmartQueryPreprocessor>();
         
         // API services for HTTP mode
         services.AddSingleton<ConfidenceCalculatorService>();
@@ -116,6 +120,7 @@ public class Program
         services.AddSingleton<ICacheKeyGenerator, CacheKeyGenerator>();
         
         // Resource providers
+        // ResourceStorageProvider created lazily in ConfigureResources callback
         // services.AddSingleton<SearchResultResourceProvider>();
     }
 
@@ -274,11 +279,295 @@ public class Program
             builder.Services.AddScoped<FindReferencesTool>(); // Find all usages of a symbol
             builder.Services.AddScoped<GoToDefinitionTool>(); // Jump to symbol definition
             
+            // Editing tools (NEW - Enable dogfooding!)
+            builder.Services.AddScoped<InsertAtLineTool>(); // Insert content at specific line numbers
+            builder.Services.AddScoped<ReplaceLinesTool>(); // Replace line ranges with new content
+            builder.Services.AddScoped<DeleteLinesTool>(); // Delete line ranges with surgical precision
+            
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
 
             // Discover and register all tools from assembly
             builder.DiscoverTools(typeof(Program).Assembly);
+
+            // Configure behavioral adoption using Framework 2.1.1 features
+            var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
+            {
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines" },
+                ToolPriorities = new Dictionary<string, int>
+                {
+                    {"goto_definition", 100},
+                    {"find_references", 95}, 
+                    {"text_search", 90},
+                    {"symbol_search", 85},
+                    {"file_search", 80},
+                    {"line_search", 75},
+                    {"search_and_replace", 70},
+                    {"recent_files", 65},
+                    {"directory_search", 60},
+                    {"similar_files", 55},
+                    {"batch_operations", 85},
+                    {"index_workspace", 100},
+                    {"insert_at_line", 90},
+                    {"replace_lines", 90},
+                    {"delete_lines", 90}
+                },
+                EnforcementLevel = COA.Mcp.Framework.Configuration.WorkflowEnforcement.StronglyUrge,
+                ToolComparisons = new Dictionary<string, COA.Mcp.Framework.Configuration.ToolComparison>
+                {
+                    ["Finding code patterns"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Finding code patterns",
+                        ServerTool = "mcp__codesearch__text_search",
+                        Advantage = "Lucene.NET indexing with 100x faster searches",
+                        BuiltInTool = "Grep",
+                        Limitation = "Manual filesystem traversal, no type awareness",
+                        PerformanceMetric = "500ms vs 30+ seconds for large codebases"
+                    },
+                    ["Type verification"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Type verification",
+                        ServerTool = "mcp__codesearch__goto_definition",
+                        Advantage = "Tree-sitter powered exact definitions in <100ms",
+                        BuiltInTool = "Read",
+                        Limitation = "Requires guessing file paths, no type extraction",
+                        PerformanceMetric = "Instant navigation vs manual file hunting"
+                    },
+                    ["Refactoring preparation"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Refactoring preparation",
+                        ServerTool = "mcp__codesearch__find_references",
+                        Advantage = "Complete usage analysis with context",
+                        BuiltInTool = "Manual searching",
+                        Limitation = "Easy to miss references, causes breaking changes",
+                        PerformanceMetric = "100% reference coverage vs manual error-prone search"
+                    },
+                    ["File discovery"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "File discovery",
+                        ServerTool = "mcp__codesearch__file_search",
+                        Advantage = "Pre-indexed instant results with glob patterns",
+                        BuiltInTool = "bash find",
+                        Limitation = "Filesystem traversal, no caching",
+                        PerformanceMetric = "Instant vs seconds of directory scanning"
+                    },
+                    ["Surgical code insertion"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Surgical code insertion",
+                        ServerTool = "mcp__codesearch__insert_at_line",
+                        Advantage = "INSERT CODE WITHOUT READ - Line-precise positioning with automatic indentation",
+                        BuiltInTool = "Read + Edit",
+                        Limitation = "Requires full file read, manual line counting, indentation errors",
+                        PerformanceMetric = "Direct line insertion vs read-modify-write cycle"
+                    },
+                    ["Line range replacement"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Line range replacement",
+                        ServerTool = "mcp__codesearch__replace_lines",
+                        Advantage = "REPLACE LINES WITHOUT READ - Surgical line range replacement with context verification",
+                        BuiltInTool = "Read + Edit",
+                        Limitation = "Must read entire file, manually identify line ranges, error-prone",
+                        PerformanceMetric = "Precision editing vs full file manipulation"
+                    },
+                    ["Line deletion"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Line deletion",
+                        ServerTool = "mcp__codesearch__delete_lines",
+                        Advantage = "DELETE LINES WITHOUT READ - Surgical line deletion with context verification",
+                        BuiltInTool = "Read + Edit",
+                        Limitation = "Full file read required, manual line identification, risk of corruption",
+                        PerformanceMetric = "Precise deletion vs read-modify-write operations"
+                    },
+                    ["Symbol navigation"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Symbol navigation",
+                        ServerTool = "mcp__codesearch__symbol_search",
+                        Advantage = "FIND SYMBOLS FAST - Locate any class/interface/method by name with signatures and documentation",
+                        BuiltInTool = "Grep",
+                        Limitation = "Text-based search, no type awareness, misses symbol context",
+                        PerformanceMetric = "Instant symbol resolution vs manual text searching"
+                    },
+                    ["Line-by-line search"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Line-by-line search", 
+                        ServerTool = "mcp__codesearch__line_search",
+                        Advantage = "REPLACE grep/bash - Get ALL occurrences with line numbers in structured JSON",
+                        BuiltInTool = "Grep",
+                        Limitation = "Manual filesystem traversal, no type awareness, unstructured output",
+                        PerformanceMetric = "100% match coverage with context vs command-line grep"
+                    },
+                    ["Bulk find and replace"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Bulk find and replace",
+                        ServerTool = "mcp__codesearch__search_and_replace", 
+                        Advantage = "BULK updates across files - Replace patterns everywhere at once with preview mode",
+                        BuiltInTool = "Manual Edit operations",
+                        Limitation = "Must find and edit each file individually, error-prone, no preview",
+                        PerformanceMetric = "Atomic bulk operations vs manual file-by-file editing"
+                    },
+                    ["Multi-operation efficiency"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Multi-operation efficiency",
+                        ServerTool = "mcp__codesearch__batch_operations",
+                        Advantage = "PARALLEL search for speed - Run multiple searches simultaneously, 3-10x faster",
+                        BuiltInTool = "Sequential tool usage",
+                        Limitation = "Manual sequential operations, much slower, no parallelization", 
+                        PerformanceMetric = "Parallel execution vs sequential workflow bottlenecks"
+                    },
+                    ["Recent activity tracking"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Recent activity tracking",
+                        ServerTool = "mcp__codesearch__recent_files",
+                        Advantage = "CHECK FIRST when resuming - See what changed since last session with temporal context",
+                        BuiltInTool = "git log + manual file inspection",
+                        Limitation = "Manual git commands, no file content preview, time-consuming",
+                        PerformanceMetric = "Instant session context vs manual investigation"
+                    },
+                    ["Directory exploration"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Directory exploration",
+                        ServerTool = "mcp__codesearch__directory_search",
+                        Advantage = "EXPLORE project structure - Navigate folders without manual traversal",
+                        BuiltInTool = "ls/find commands",
+                        Limitation = "Manual filesystem navigation, no pattern matching, tedious",
+                        PerformanceMetric = "Structured directory discovery vs command-line traversal"
+                    },
+                    ["Code similarity analysis"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Code similarity analysis",
+                        ServerTool = "mcp__codesearch__similar_files",
+                        Advantage = "BEFORE implementing features - Find existing similar code to reuse or learn from",
+                        BuiltInTool = "Manual code browsing",
+                        Limitation = "Time-consuming manual exploration, miss related implementations",
+                        PerformanceMetric = "Algorithmic similarity detection vs manual code review"
+                    },
+                    ["Workspace initialization"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Workspace initialization",
+                        ServerTool = "mcp__codesearch__index_workspace",
+                        Advantage = "REQUIRED FIRST - Initialize search index before ANY search operation for optimal performance",
+                        BuiltInTool = "No equivalent",
+                        Limitation = "All searches fail without proper indexing, no built-in alternative",
+                        PerformanceMetric = "Enables all other tools vs complete search failure"
+                    }
+                },
+                CustomVariables = new Dictionary<string, object>
+                {
+                    ["has_tool"] = true,  // Enable has_tool helper in template
+                    ["enforcement_level"] = "strongly_urge",  // For template conditional logic
+                    ["editing_tools_available"] = true,  // Signal that surgical editing tools are available
+                    ["task_completion_discipline"] = "Mark tasks complete IMMEDIATELY when done - prevents TODO list orphaning"
+                }
+            };
+            
+            // Load template from embedded resource with detailed logging and fallback
+            string templateContent;
+            var assembly = typeof(Program).Assembly;
+            var resourceName = "COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban";
+            var fallbackPath = Path.Combine(AppContext.BaseDirectory, "..", "Templates", "codesearch-instructions.scriban");
+            
+            Log.Information("Attempting to load behavioral adoption template from embedded resource: {ResourceName}", resourceName);
+            
+            // List all available embedded resources for debugging
+            var availableResources = assembly.GetManifestResourceNames();
+            Log.Information("Available embedded resources: {Resources}", string.Join(", ", availableResources));
+            
+            using (var stream = assembly.GetManifestResourceStream(resourceName))
+            {
+                if (stream == null)
+                {
+                    Log.Warning("Embedded resource '{ResourceName}' not found. Attempting fallback to filesystem", resourceName);
+                    
+                    // Try fallback to filesystem
+                    if (File.Exists(fallbackPath))
+                    {
+                        Log.Information("Loading template from fallback path: {Path}", fallbackPath);
+                        templateContent = await File.ReadAllTextAsync(fallbackPath);
+                    }
+                    else
+                    {
+                        Log.Warning("Fallback template file not found at: {Path}. Using hardcoded fallback template", fallbackPath);
+                        
+                        // Hardcoded fallback template to ensure behavioral adoption works
+                        templateContent = @"# CodeSearch MCP - Optimized Code Intelligence
+
+## Working Environment Context
+
+You are working with a detail-oriented software engineer who values:
+- Type verification before writing code
+- Understanding code impact through searches  
+- Following established patterns in the codebase
+- Evidence-based development decisions
+- Quality automated tests that test real behavior, not test theater
+
+When working in this environment, please:
+- Use CodeSearch tools to verify types and signatures before coding
+- Search for existing implementations to understand patterns
+- Check references before making changes to avoid breaking code
+- Follow the principle: ""Search first, code second""
+- Write meaningful tests that verify actual business logic with realistic data
+- Avoid ""test theater"" - tests that only mock everything or use hard-coded values
+- Focus on tests that would catch real bugs and integration issues
+- Test real code paths, not just coverage numbers
+
+## Professional Tool Guidance
+
+You have access to specialized code search tools that significantly outperform built-in alternatives for code-related tasks.
+
+### STRONGLY URGE Workflow for Maximum Efficiency
+
+**CRITICAL**: You MUST use CodeSearch tools for all code-related operations. Built-in tools lack the type information and indexing required for accurate code analysis and will result in compilation errors and token waste.
+
+### Core Advantages:
+- **Lucene.NET Indexing**: Searches millions of lines in <500ms vs minutes with grep
+- **Tree-sitter Type Extraction**: Provides exact type signatures vs no type info from Read
+- **Smart Caching**: Instant repeat queries vs repeated filesystem traversal
+- **Cross-file Analysis**: Understands relationships vs isolated file views
+
+### Optimal Development Workflow
+1. **BEFORE writing any code**: Use `goto_definition` to verify exact type signatures
+2. **BEFORE refactoring**: Use `find_references` to understand complete impact  
+3. **WHEN exploring code**: Use `text_search` not grep (100x faster with type awareness)
+4. **FOR file operations**: Use `file_search` not bash find (pre-indexed, instant results)
+
+⚠️ **Performance Impact**: Using built-in tools for code tasks typically requires 3-5 error correction iterations, wasting 200-500 tokens per task. CodeSearch tools provide accurate information immediately, enabling first-time-right code generation.";
+                    }
+                }
+                else
+                {
+                    Log.Information("Successfully found embedded resource, loading template content");
+                    using (var reader = new StreamReader(stream))
+                    {
+                        templateContent = reader.ReadToEnd();
+                    }
+                }
+            }
+            
+            Log.Information("Template loaded successfully. Content length: {Length} characters", templateContent.Length);
+            Log.Debug("Template content preview: {Preview}...", templateContent.Substring(0, Math.Min(200, templateContent.Length)));
+            
+            // Use WithTemplateInstructions with the template content directly
+            builder.WithTemplateInstructions(options =>
+            {
+                options.EnableTemplateInstructions = true;
+                options.CustomTemplate = templateContent;
+                options.TemplateContext = "codesearch";
+                
+                // Merge all template variables into CustomTemplateVariables
+                options.CustomTemplateVariables = new Dictionary<string, object>
+                {
+                    ["available_tools"] = templateVariables.AvailableTools,
+                    ["tool_priorities"] = templateVariables.ToolPriorities,
+                    ["enforcement_level"] = templateVariables.EnforcementLevel.ToString().ToLower(),
+                    ["tool_comparisons"] = templateVariables.ToolComparisons.Values.ToList(),
+                    ["has_tool"] = true
+                };
+                
+                Log.Information("Template instruction configuration complete. Variables: {VariableCount}", options.CustomTemplateVariables.Count);
+                Log.Debug("Available tools for template: {Tools}", string.Join(", ", templateVariables.AvailableTools));
+                Log.Debug("Tool comparisons count: {Count}", templateVariables.ToolComparisons.Count);
+                Log.Debug("Enforcement level: {Level}", templateVariables.EnforcementLevel);
+            });
 
             // Register prompts for interactive workflows
             builder.RegisterPrompt(new Prompts.CodeExplorerPrompt());
@@ -292,8 +581,7 @@ public class Program
                 // Register startup indexing service
                 builder.Services.AddHostedService<StartupIndexingService>();
                 
-                // Configure resources - register ResourceStorageProvider to serve stored search results
-                // Using enhanced API with IServiceProvider access (no more BuildServiceProvider needed!)
+                // Configure resources using the new Framework 2.1.1 API
                 builder.ConfigureResources((registry, serviceProvider) =>
                 {
                     var resourceProvider = serviceProvider.GetRequiredService<ResourceStorageProvider>();

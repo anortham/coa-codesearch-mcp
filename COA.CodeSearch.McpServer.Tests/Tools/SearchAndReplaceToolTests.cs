@@ -34,6 +34,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
 
             var queryPreprocessorMock = new Mock<QueryPreprocessor>(Mock.Of<ILogger<QueryPreprocessor>>());
             var resourceStorageServiceMock = new Mock<IResourceStorageService>();
+            var advancedPatternMatcherMock = new Mock<AdvancedPatternMatcher>();
             _tool = new SearchAndReplaceTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
@@ -41,6 +42,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 PathResolutionServiceMock.Object,
                 queryPreprocessorMock.Object,
                 resourceStorageServiceMock.Object,
+                advancedPatternMatcherMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;

@@ -31,6 +31,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var projectKnowledgeServiceMock = CreateMock<IProjectKnowledgeService>();
             var smartDocLoggerMock = new Mock<ILogger<SmartDocumentationService>>();
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
+            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
+            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
             
             _tool = new TextSearchTool(
                 ServiceProvider,
@@ -43,6 +45,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 projectKnowledgeServiceMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
+                smartQueryPreprocessor,
                 ToolLoggerMock.Object
             );
             return _tool;

@@ -27,6 +27,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     private readonly IPathResolutionService _pathResolutionService;
     private readonly QueryPreprocessor _queryPreprocessor;
     private readonly IResourceStorageService _storageService;
+        private readonly AdvancedPatternMatcher _patternMatcher;
     private readonly ILogger<SearchAndReplaceTool> _logger;
 
     public SearchAndReplaceTool(
@@ -36,12 +37,14 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         IPathResolutionService pathResolutionService,
         QueryPreprocessor queryPreprocessor,
         IResourceStorageService storageService,
+                AdvancedPatternMatcher patternMatcher,
         ILogger<SearchAndReplaceTool> logger) : base(serviceProvider)
     {
         _indexService = indexService;
         _lineSearchService = lineSearchService;
         _pathResolutionService = pathResolutionService;
         _queryPreprocessor = queryPreprocessor;
+                _patternMatcher = patternMatcher;
         _storageService = storageService;
         _logger = logger;
     }
@@ -86,6 +89,11 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             }
 
             // Resolve workspace path
+            if (string.IsNullOrEmpty(parameters.WorkspacePath))
+            {
+                throw new ArgumentException("WorkspacePath is required for search and replace operations");
+            }
+            
             var normalizedPath = Path.GetFullPath(parameters.WorkspacePath);
 
             // Ensure index exists
@@ -336,32 +344,40 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         LineMatch match, 
         string filePath)
     {
+        // Use AdvancedPatternMatcher for enhanced matching capabilities
         string newLine;
         int columnStart = 0;
         int originalLength = 0;
+        string matchedText = parameters.SearchPattern;
 
-        switch (parameters.SearchType.ToLowerInvariant())
+        // Handle regex separately as it has different logic
+        if (parameters.SearchType.ToLowerInvariant() == "regex")
         {
-            case "regex":
-                var regex = new Regex(parameters.SearchPattern, 
-                    parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
-                var regexMatch = regex.Match(line);
-                if (!regexMatch.Success) return null;
-                
-                newLine = regex.Replace(line, parameters.ReplacePattern);
-                columnStart = regexMatch.Index;
-                originalLength = regexMatch.Length;
-                break;
+            var regex = new Regex(parameters.SearchPattern, 
+                parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
+            var regexMatch = regex.Match(line);
+            if (!regexMatch.Success) return null;
+            
+            newLine = regex.Replace(line, parameters.ReplacePattern);
+            columnStart = regexMatch.Index;
+            originalLength = regexMatch.Length;
+            matchedText = regexMatch.Value;
+        }
+        else
+        {
+            // Use AdvancedPatternMatcher for all other modes
+            var matchResult = _patternMatcher.FindMatch(line, parameters.SearchPattern, parameters);
+            if (!matchResult.Found) return null;
 
-            default: // literal, code, standard
-                var comparison = parameters.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-                var index = line.IndexOf(parameters.SearchPattern, comparison);
-                if (index == -1) return null;
+            // Perform the replacement using the advanced matcher
+            newLine = _patternMatcher.PerformReplacement(line, parameters.SearchPattern, parameters.ReplacePattern, parameters);
+            columnStart = matchResult.StartIndex;
+            originalLength = matchResult.Length;
+            matchedText = matchResult.MatchedText;
 
-                newLine = line.Replace(parameters.SearchPattern, parameters.ReplacePattern, comparison);
-                columnStart = index;
-                originalLength = parameters.SearchPattern.Length;
-                break;
+            // Log the matching mode used for debugging
+            _logger.LogDebug("Used {MatchMode} matching for pattern '{Pattern}' in {FilePath}:{LineNumber}",
+                matchResult.Mode, parameters.SearchPattern, filePath, match.LineNumber);
         }
 
         return new ReplacementChange
@@ -370,7 +386,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             LineNumber = match.LineNumber,
             ColumnStart = columnStart,
             OriginalLength = originalLength,
-            OriginalText = parameters.SearchPattern,
+            OriginalText = matchedText, // Use the actual matched text, not the pattern
             ReplacementText = parameters.ReplacePattern,
             ModifiedLine = newLine?.TrimEnd('\r', '\n'),
             ContextBefore = match.ContextLines?.Take(parameters.ContextLines).ToArray(),

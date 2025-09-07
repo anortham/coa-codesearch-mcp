@@ -45,6 +45,12 @@ public class SearchAndReplaceParams
     [JsonPropertyName("searchType")]
     [Description("Search type: standard, literal, regex, code")]
     public string SearchType { get; set; } = "literal";
+        /// <summary>
+        /// Matching mode for search and replace operations
+        /// </summary>
+        [JsonPropertyName("matchMode")]
+        [Description("Matching mode: exact, whitespace_insensitive, multiline, fuzzy (default: exact)")]
+        public string MatchMode { get; set; } = "exact";
 
     /// <summary>
     /// Case sensitive search

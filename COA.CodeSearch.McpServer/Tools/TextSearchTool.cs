@@ -19,11 +19,11 @@ using Microsoft.Extensions.Logging;
 using Lucene.Net.Analysis.Standard;
 using System.Text;
 using System.Text.Json;
-using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Search;
 using Lucene.Net.Search.Highlight;
 using Lucene.Net.Index;
 using Lucene.Net.Util;
+using Lucene.Net.QueryParsers.Classic;
 using COA.Mcp.Framework.Interfaces;
 using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
@@ -33,7 +33,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Text search tool using the BaseResponseBuilder pattern for consistent response building
 /// </summary>
-public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>
+public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -45,6 +45,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly IProjectKnowledgeService _projectKnowledgeService;
     private readonly SmartDocumentationService _smartDocumentationService;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
+        private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
@@ -58,6 +59,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         IProjectKnowledgeService projectKnowledgeService,
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
+                SmartQueryPreprocessor smartQueryPreprocessor,
         ILogger<TextSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
@@ -70,6 +72,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _smartDocumentationService = smartDocumentationService;
         _vscode = vscode;
         _logger = logger;
+                _smartQueryPreprocessor = smartQueryPreprocessor;
         
         // Create response builder with dependencies
         _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
@@ -78,6 +81,10 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     public override string Name => ToolNames.TextSearch;
     public override string Description => "SEARCH BEFORE CODING - Find existing implementations to avoid duplicates. PROACTIVELY use before writing ANY new feature. Discovers: function definitions, error patterns, similar code.";
     public override ToolCategory Category => ToolCategory.Query;
+    
+    // IPrioritizedTool implementation - HIGH priority as primary search tool
+    public int Priority => 90;
+    public string[] PreferredScenarios => new[] { "code_exploration", "before_coding", "pattern_search", "duplicate_detection" };
 
 
     protected override async Task<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>> ExecuteInternalAsync(
@@ -117,17 +124,66 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                 return CreateNoIndexError(workspacePath);
             }
 
-            // Validate and preprocess query
-            var searchType = parameters.SearchType ?? "standard";
-            if (!_queryPreprocessor.IsValidQuery(query, searchType, out var errorMessage))
-            {
-                return CreateQueryParseError(query, errorMessage);
-            }
+                        // Parse SearchMode from parameters  
+                        var searchModeString = parameters.SearchMode ?? "auto";
+                        if (!Enum.TryParse<SearchMode>(searchModeString, true, out var searchMode))
+                        {
+                            searchMode = SearchMode.Auto;
+                        }
 
-            // Build query with proper preprocessing
-            var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-            var luceneQuery = _queryPreprocessor.BuildQuery(query, searchType, parameters.CaseSensitive, analyzer);
-            
+                        // Use SmartQueryPreprocessor to determine optimal field and approach
+                        var queryResult = _smartQueryPreprocessor.Process(query, searchMode);
+                        
+                        // Log the smart query processing result for debugging
+                        _logger.LogDebug("Smart query processing: '{OriginalQuery}' -> '{ProcessedQuery}', Field: {TargetField}, Mode: {Mode}, Reason: {Reason}",
+                            query, queryResult.ProcessedQuery, queryResult.TargetField, queryResult.DetectedMode, queryResult.Reason);
+                        
+                        // Validate the processed query using the legacy validator
+                        var searchType = parameters.SearchType ?? "standard";
+                        if (!_queryPreprocessor.IsValidQuery(queryResult.ProcessedQuery, searchType, out var errorMessage))
+                        {
+                            return CreateQueryParseError(queryResult.ProcessedQuery, errorMessage);
+                        }
+
+                        // Build field-specific query using the SmartQueryPreprocessor results
+                        var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+                        Query luceneQuery;
+                        
+                        if (queryResult.TargetField == "content")
+                        {
+                            // Use existing QueryPreprocessor for standard content field
+                            luceneQuery = _queryPreprocessor.BuildQuery(queryResult.ProcessedQuery, searchType, parameters.CaseSensitive, analyzer);
+                        }
+                        else
+                        {
+                            // Create field-specific query for multi-field indexing
+                            var queryParser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+                            queryParser.AllowLeadingWildcard = true;
+                            
+                            try
+                            {
+                                luceneQuery = queryParser.Parse(queryResult.ProcessedQuery);
+                            }
+                            catch (ParseException)
+                            {
+                                // Fallback to term query for problematic queries
+                                luceneQuery = new TermQuery(new Term(queryResult.TargetField, queryResult.ProcessedQuery));
+                            }
+                        }
+
+                        // REMOVE THE OLD CODE BELOW - this new logic replaces it
+                        // OLD: // Validate and preprocess query
+                        // OLD: var searchType = parameters.SearchType ?? "standard";  
+                        // OLD: if (!_queryPreprocessor.IsValidQuery(query, searchType, out var errorMessage))
+                        // OLD: {
+                        // OLD:     return CreateQueryParseError(query, errorMessage);
+                        // OLD: }
+                        // OLD:
+                        // OLD: // Build query with proper preprocessing  
+                        // OLD: var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+                        // OLD: var luceneQuery = _queryPreprocessor.BuildQuery(query, searchType, parameters.CaseSensitive, analyzer);
+                        // [Removed: Old validation logic - now handled by SmartQueryPreprocessor above]
+                        
             // Apply scoring factors for better relevance
             var scoringContext = new ScoringContext
             {

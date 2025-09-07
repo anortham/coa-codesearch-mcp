@@ -13,6 +13,7 @@ Built with .NET 9.0 and COA MCP Framework 2.0.1, featuring Lucene-powered search
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
 - **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety
+- **✏️ Surgical Line Editing**: Insert, replace, or delete specific line ranges without reading entire files
 - **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
 - **🔗 Similar Files**: Content-based similarity detection
@@ -172,6 +173,7 @@ Unlike basic file search, CodeSearch understands your code:
 - **Structured Line Search**: Better than grep - returns JSON with exact line numbers and context
 - **Safe Bulk Edits**: Preview mode for search/replace prevents accidental changes
 - **Type-Aware**: Extracts and indexes types from 25+ languages for accurate navigation
+- **Precise Editing**: Complete line-based editing suite for surgical code modifications without full file reads
 
 ## 🛠️ Available Tools
 
@@ -201,6 +203,14 @@ Unlike basic file search, CodeSearch understands your code:
 |------|---------|------------|
 | `line_search` | Get ALL occurrences with line numbers | `pattern`, `workspacePath`, `contextLines`, `maxResultsPerFile` |
 | `search_and_replace` | Replace patterns across files with preview | `searchPattern`, `replacePattern`, `workspacePath`, `preview` |
+
+### Editing Tools
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `insert_at_line` | Insert content at specific line numbers | `filePath`, `lineNumber`, `content`, `preserveIndentation` |
+| `replace_lines` | Replace line ranges with new content | `filePath`, `startLine`, `endLine`, `content`, `preserveIndentation` |
+| `delete_lines` | Delete line ranges with surgical precision | `filePath`, `startLine`, `endLine`, `contextLines` |
 
 ### System Tools
 
@@ -506,6 +516,20 @@ Close Claude Code completely and restart it
 **Installation issues:**
 - Make sure you have .NET 9.0 installed: `dotnet --version`
 - Try reinstalling: `dotnet tool uninstall -g COA.CodeSearch && dotnet tool install -g COA.CodeSearch`
+
+### Template Embedding Fix (v2.1.4+)
+
+**Background:** Prior to v2.1.4, CodeSearch would fail to connect in workspaces other than the development workspace due to attempting to load instruction templates from a `Templates/` directory that only existed in the source repository. 
+
+**Solution:** Templates are now embedded as resources in the assembly, ensuring they're always available regardless of workspace location. The `codesearch-instructions.scriban` template is compiled into the binary as an embedded resource.
+
+**Technical Details:**
+- Template file: `Templates/codesearch-instructions.scriban`
+- Embedded resource name: `COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban`
+- Loading mechanism: Changed from file-based (`WithInstructionsFromTemplate`) to resource-based (`WithTemplateInstructions` with embedded content)
+- Framework fix: COA.Mcp.Framework v2.1.3+ includes defensive checks for missing template directories
+
+This change ensures CodeSearch works consistently across all workspaces without filesystem dependencies.
 
 ### Logging
 

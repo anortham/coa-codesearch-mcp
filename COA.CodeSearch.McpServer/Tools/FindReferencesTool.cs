@@ -11,6 +11,7 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.ResponseBuilders;
+using COA.Mcp.Framework.Interfaces;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
@@ -22,7 +23,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Find references tool that locates all usages of a symbol in the codebase
 /// </summary>
-public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, AIOptimizedResponse<SearchResult>>
+public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, AIOptimizedResponse<SearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly IResponseCacheService _cacheService;
@@ -51,6 +52,10 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     public override string Name => ToolNames.FindReferences;
     public override string Description => "CRITICAL FOR REFACTORING - Find ALL usages before making changes. PREVENTS breaking code. Shows: every reference, grouped by file, with context. Always use before renaming/deleting.";
     public override ToolCategory Category => ToolCategory.Query;
+    
+    // IPrioritizedTool implementation - VERY HIGH priority for refactoring safety
+    public int Priority => 95;
+    public string[] PreferredScenarios => new[] { "before_refactoring", "symbol_analysis", "impact_assessment", "before_deleting" };
 
     protected override async Task<AIOptimizedResponse<SearchResult>> ExecuteInternalAsync(
         FindReferencesParameters parameters,

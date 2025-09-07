@@ -24,4 +24,9 @@ public static class ToolNames
     public const string SymbolSearch = "symbol_search";
     public const string FindReferences = "find_references";
     public const string GoToDefinition = "goto_definition";
+    
+    // Editing tools
+    public const string InsertAtLine = "insert_at_line";
+    public const string ReplaceLines = "replace_lines";
+    public const string DeleteLines = "delete_lines";
 }
