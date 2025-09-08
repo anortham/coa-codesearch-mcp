@@ -234,7 +234,7 @@ public class Program
             
             // Use framework's builder
             var builder = new McpServerBuilder()
-                .WithServerInfo("CodeSearch", "2.0.0")
+                .WithServerInfo("CodeSearch", "2.1.8")
                 .ConfigureLogging(logging =>
                 {
                     logging.ClearProviders();
@@ -244,8 +244,7 @@ public class Program
             // Configure shared services
             ConfigureSharedServices(builder.Services, configuration);
             
-            // TODO: Figure out how to use token optimization with McpServerBuilder
-            // Currently AddMcpFramework conflicts with McpServerBuilder's registry
+            // Token optimization is active via response builders and DI services above
 
             // Register response builders
             builder.Services.AddScoped<ResponseBuilders.SearchResponseBuilder>();
@@ -614,19 +613,18 @@ You have access to specialized code search tools that significantly outperform b
     }
 
     /// <summary>
-    /// On macOS, resolve Tree-sitter native libraries from common system locations (Homebrew/MacPorts)
-    /// so we don't need to bundle dylibs. No-ops on non-macOS platforms.
+    /// Cross-platform Tree-sitter native library resolver for macOS (.dylib), Linux (.so), and Windows (.dll).
+    /// Probes common system locations so we don't need to bundle native libraries with the package.
     /// </summary>
     private static void ConfigureTreeSitterNativeResolver()
     {
-        if (!OperatingSystem.IsMacOS()) return;
-
+        // Configure native resolver for all platforms
         try
         {
             var tsAssembly = typeof(Parser).Assembly;
             NativeLibrary.SetDllImportResolver(tsAssembly, ResolveTreeSitterNative);
 
-            // Also attach resolver for our own assembly so any custom P/Invoke bindings can resolve dylibs
+            // Also attach resolver for our own assembly so any custom P/Invoke bindings can resolve libraries
             NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), ResolveTreeSitterNative);
         }
         catch
@@ -637,29 +635,73 @@ You have access to specialized code search tools that significantly outperform b
 
     private static IntPtr ResolveTreeSitterNative(string libraryName, Assembly assembly, DllImportSearchPath? _)
     {
-        if (!OperatingSystem.IsMacOS()) return IntPtr.Zero;
+        Log.Debug("Tree-sitter resolver: resolving '{LibraryName}' on {Platform}", libraryName, 
+            OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "Windows");
 
-        // Tree-sitter grammars are installed as libtree-sitter-<lang>.dylib (and core as libtree-sitter*.dylib)
-        // Some managed calls may request plain language IDs (e.g., "typescript").
-        // Resolve both patterns: lib<name>.dylib and libtree-sitter-<name>.dylib.
         var fileNames = new List<string>();
-        fileNames.Add($"lib{libraryName}.dylib");
-        if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
+        var prefixes = new List<string>();
+        var commonSubpaths = new Func<string, IEnumerable<string>>(fn => new[] { Path.Combine("lib", fn) });
+
+        if (OperatingSystem.IsMacOS())
         {
-            fileNames.Add($"libtree-sitter-{libraryName}.dylib");
+            // Tree-sitter grammars are installed as libtree-sitter-<lang>.dylib (and core as libtree-sitter*.dylib)
+            fileNames.Add($"lib{libraryName}.dylib");
+            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
+            {
+                fileNames.Add($"libtree-sitter-{libraryName}.dylib");
+            }
+            
+            // Probe common Homebrew/MacPorts install locations
+            prefixes.AddRange(new[] { "/opt/homebrew", "/usr/local", "/opt/local" });
+            commonSubpaths = fn => new[]
+            {
+                Path.Combine("lib", fn),
+                Path.Combine("opt", "tree-sitter", "lib", fn)
+            };
         }
-
-        // Probe common Homebrew/MacPorts install locations
-        var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
-
-        // Common subpaths under the prefixes
-        var commonSubpaths = new Func<string, IEnumerable<string>>(fn => new[]
+        else if (OperatingSystem.IsLinux())
         {
-            Path.Combine("lib", fn),
-            Path.Combine("opt", "tree-sitter", "lib", fn)
-        });
-
-        Log.Debug("Tree-sitter resolver: resolving '{LibraryName}'", libraryName);
+            // Linux: Tree-sitter libraries as .so files
+            fileNames.Add($"lib{libraryName}.so");
+            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
+            {
+                fileNames.Add($"libtree-sitter-{libraryName}.so");
+            }
+            
+            // Probe common Linux library locations
+            prefixes.AddRange(new[] { "/usr", "/usr/local", "/opt" });
+            commonSubpaths = fn => new[]
+            {
+                Path.Combine("lib", fn),
+                Path.Combine("lib", "x86_64-linux-gnu", fn),
+                Path.Combine("lib64", fn)
+            };
+        }
+        else if (OperatingSystem.IsWindows())
+        {
+            // Windows: Tree-sitter libraries as .dll files
+            fileNames.Add($"{libraryName}.dll");
+            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
+            {
+                fileNames.Add($"tree-sitter-{libraryName}.dll");
+            }
+            
+            // Probe common Windows locations
+            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
+            var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
+            prefixes.AddRange(new[] { programFiles, programFilesX86, @"C:\tools" });
+            commonSubpaths = fn => new[]
+            {
+                Path.Combine("tree-sitter", "lib", fn),
+                Path.Combine("lib", fn),
+                fn // Direct file in directory
+            };
+        }
+        else
+        {
+            Log.Debug("Tree-sitter resolver: unsupported platform, deferring to default");
+            return IntPtr.Zero;
+        }
 
         foreach (var prefix in prefixes)
         {
