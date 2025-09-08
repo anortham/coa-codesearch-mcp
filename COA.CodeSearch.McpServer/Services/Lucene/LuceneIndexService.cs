@@ -52,7 +52,8 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         IMemoryPressureService memoryPressure,
         LineAwareSearchService lineAwareSearchService,
         SmartSnippetService snippetService,
-        IWriteLockManager writeLockManager)
+        IWriteLockManager writeLockManager,
+        CodeAnalyzer codeAnalyzer)
     {
         _logger = logger;
         _configuration = configuration;
@@ -62,7 +63,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         _lineAwareSearchService = lineAwareSearchService;
         _snippetService = snippetService;
         _writeLockManager = writeLockManager;
-        _codeAnalyzer = new CodeAnalyzer(LUCENE_VERSION);
+        _codeAnalyzer = codeAnalyzer;
         
         // Load configuration
         _useRamDirectory = configuration.GetValue("CodeSearch:Lucene:UseRamDirectory", false);

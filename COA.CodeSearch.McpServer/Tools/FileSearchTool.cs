@@ -36,6 +36,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     private readonly FileSearchResponseBuilder _responseBuilder;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<FileSearchTool> _logger;
+    private readonly CodeAnalyzer _codeAnalyzer;
 
     public FileSearchTool(
         IServiceProvider serviceProvider,
@@ -45,7 +46,8 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<FileSearchTool> logger) : base(serviceProvider)
+        ILogger<FileSearchTool> logger,
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
@@ -55,6 +57,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         _responseBuilder = new FileSearchResponseBuilder(logger as ILogger<FileSearchResponseBuilder>, storageService);
         _vscode = vscode;
         _logger = logger;
+        _codeAnalyzer = codeAnalyzer;
     }
 
     public override string Name => ToolNames.FileSearch;

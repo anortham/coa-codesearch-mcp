@@ -26,8 +26,8 @@ public class FileWatcherService : BackgroundService
     private readonly TimeSpan _atomicWriteWindow;
     private readonly int _batchSize;
     
-    // Supported extensions
-    private readonly HashSet<string> _supportedExtensions;
+    // Blacklisted extensions (changed from whitelist to blacklist to match FileIndexingService)
+    private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
     
     // Self-starting background task
@@ -52,10 +52,10 @@ public class FileWatcherService : BackgroundService
         _atomicWriteWindow = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:AtomicWriteWindowMs", 100));
         _batchSize = configuration.GetValue("CodeSearch:FileWatcher:BatchSize", 50);
         
-        // Load supported extensions
-        var extensions = configuration.GetSection("CodeSearch:Lucene:SupportedExtensions").Get<string[]>() 
-            ?? new[] { ".cs", ".js", ".ts", ".py", ".java", ".cpp", ".c", ".h", ".go", ".rs" };
-        _supportedExtensions = new HashSet<string>(extensions, StringComparer.OrdinalIgnoreCase);
+        // Load blacklisted extensions (using same source as FileIndexingService)
+        var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
+            ?? PathConstants.DefaultBlacklistedExtensions;
+        _blacklistedExtensions = new HashSet<string>(blacklistedExts, StringComparer.OrdinalIgnoreCase);
         
         // Load excluded directories
         var excluded = configuration.GetSection("CodeSearch:Lucene:ExcludedDirectories").Get<string[]>()
@@ -194,6 +194,13 @@ public class FileWatcherService : BackgroundService
 
     private bool IsFileSupported(string filePath)
     {
+        // Check if the file path itself is an excluded directory
+        var fileName = Path.GetFileName(filePath);
+        if (!string.IsNullOrEmpty(fileName) && _excludedDirectories.Contains(fileName))
+        {
+            return false;
+        }
+
         // Check if file is in excluded directory
         var directory = Path.GetDirectoryName(filePath);
         if (directory != null)
@@ -210,14 +217,15 @@ public class FileWatcherService : BackgroundService
             }
         }
 
-        // Check extension
+        // Check extension - allow all extensions except blacklisted ones
         var extension = Path.GetExtension(filePath);
         if (string.IsNullOrEmpty(extension))
         {
-            return false; // Skip files without extensions
+            return true; // Include files without extensions (like Web.config, Dockerfile, etc.)
         }
         
-        return _supportedExtensions.Contains(extension);
+        // Use blacklist logic: include file unless it's blacklisted
+        return !_blacklistedExtensions.Contains(extension);
     }
 
     

@@ -38,6 +38,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
         protected Mock<IMemoryPressureService> MemoryPressureServiceMock { get; private set; } = null!;
         protected Mock<IQueryCacheService> QueryCacheServiceMock { get; private set; } = null!;
         protected Mock<COA.VSCodeBridge.IVSCodeBridge> VSCodeBridgeMock { get; private set; } = null!;
+        protected COA.CodeSearch.McpServer.Services.Analysis.CodeAnalyzer CodeAnalyzer { get; private set; } = null!;
         
         // Test workspace paths
         protected string TestWorkspacePath { get; private set; } = null!;
@@ -59,6 +60,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             MemoryPressureServiceMock = CreateMock<IMemoryPressureService>();
             QueryCacheServiceMock = CreateMock<IQueryCacheService>();
             VSCodeBridgeMock = CreateMock<COA.VSCodeBridge.IVSCodeBridge>();
+            CodeAnalyzer = new COA.CodeSearch.McpServer.Services.Analysis.CodeAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48);
             
             // Add real services that don't need mocking
             services.AddMemoryCache();

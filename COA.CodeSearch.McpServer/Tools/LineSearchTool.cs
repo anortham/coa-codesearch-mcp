@@ -1,6 +1,7 @@
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
@@ -11,7 +12,6 @@ using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using Lucene.Net.QueryParsers.Classic;
-using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Util;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -26,6 +26,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
     private readonly LineAwareSearchService _lineSearchService;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly SmartQueryPreprocessor _queryProcessor;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly IResourceStorageService _storageService;
     private readonly LineSearchResponseBuilder _responseBuilder;
     private readonly ILogger<LineSearchTool> _logger;
@@ -36,6 +37,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         LineAwareSearchService lineSearchService,
         IPathResolutionService pathResolutionService,
         SmartQueryPreprocessor queryProcessor,
+        CodeAnalyzer codeAnalyzer,
         IResourceStorageService storageService,
         ILogger<LineSearchTool> logger) : base(serviceProvider)
     {
@@ -43,6 +45,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         _lineSearchService = lineSearchService;
         _pathResolutionService = pathResolutionService;
         _queryProcessor = queryProcessor;
+        _codeAnalyzer = codeAnalyzer;
         _storageService = storageService;
         _responseBuilder = new LineSearchResponseBuilder(null, storageService);
         _logger = logger;
@@ -88,8 +91,8 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
                 parameters.Pattern, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
             
             // Build query using the processed query and target field
-            var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-            var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+            // Use CodeAnalyzer to match the analyzer used during indexing
+            var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
             var query = parser.Parse(queryResult.ProcessedQuery);
 
             var searchResults = await _indexService.SearchAsync(normalizedPath, query, parameters.MaxTotalResults, cancellationToken);
@@ -221,66 +224,18 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
 
         try
         {
-            // Get content from index, NOT from disk!
-            string[]? lines = null;
-            
-            // Option 1: Try content field
-            if (hit.Fields.TryGetValue("content", out var content) && !string.IsNullOrEmpty(content))
+            // Get content from index - Lucene already found the pattern exists!
+            if (!hit.Fields.TryGetValue("content", out var content) || string.IsNullOrEmpty(content))
             {
-                // Handle both Unix (\n) and Windows (\r\n) line endings
-                lines = content.Replace("\r\n", "\n").Split('\n');
-            }
-            // Option 2: Try line_data field (while it still exists)
-            else if (hit.Fields.TryGetValue("line_data", out var lineDataJson) && !string.IsNullOrEmpty(lineDataJson))
-            {
-                var lineData = LineData.DeserializeLineData(lineDataJson);
-                if (lineData?.Lines != null)
-                {
-                    lines = lineData.Lines;
-                }
-            }
-            
-            if (lines == null)
-            {
-                // No indexed content - this should never happen
                 _logger.LogError("No indexed content for {FilePath} - index may be corrupted", hit.FilePath);
                 return Task.FromResult(matches);
             }
 
-            var pattern = parameters.CaseSensitive ? parameters.Pattern : parameters.Pattern.ToLowerInvariant();
-
-            // Find ALL matching lines (not just first occurrence)
-            for (int i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                var searchLine = parameters.CaseSensitive ? line : line.ToLowerInvariant();
-
-                if (ContainsPattern(searchLine, pattern, parameters.SearchType))
-                {
-                    var contextStart = Math.Max(0, i - parameters.ContextLines);
-                    var contextEnd = Math.Min(lines.Length - 1, i + parameters.ContextLines);
-                    
-                    var contextLines = new List<string>();
-                    for (int ctx = contextStart; ctx <= contextEnd; ctx++)
-                    {
-                        if (ctx != i) // Don't duplicate the match line
-                            contextLines.Add(lines[ctx]);
-                    }
-
-                    var match = new LineMatch
-                    {
-                        FilePath = hit.FilePath,
-                        LineNumber = i + 1, // 1-based line numbers
-                        LineContent = line,
-                        ContextLines = contextLines.Count > 0 ? contextLines.ToArray() : null,
-                        StartLine = contextStart + 1,
-                        EndLine = contextEnd + 1,
-                        HighlightedFragments = ExtractHighlights(line, parameters.Pattern, parameters.CaseSensitive)
-                    };
-
-                    matches.Add(match);
-                }
-            }
+            // OPTIMIZATION: Trust Lucene - it found the pattern, so we just need to locate WHERE
+            matches = FindMatchingLinesEfficiently(content, parameters, hit.FilePath);
+            
+            _logger.LogTrace("Efficiently extracted {Count} line matches from {FilePath} using optimized search", 
+                matches.Count, hit.FilePath);
         }
         catch (Exception ex)
         {
@@ -288,6 +243,161 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         }
 
         return Task.FromResult(matches);
+    }
+
+    /// <summary>
+    /// Efficiently finds matching lines by trusting Lucene's search results and using targeted line extraction.
+    /// This replaces the inefficient approach of splitting entire files and doing manual pattern matching.
+    /// </summary>
+    private List<LineMatch> FindMatchingLinesEfficiently(string content, LineSearchParams parameters, string filePath)
+    {
+        var matches = new List<LineMatch>();
+        
+        // Prepare pattern for efficient searching
+        var pattern = parameters.CaseSensitive ? parameters.Pattern : parameters.Pattern.ToLowerInvariant();
+        var searchContent = parameters.CaseSensitive ? content : content.ToLowerInvariant();
+        
+        // Find all occurrences of the pattern in content
+        var patternMatches = FindPatternOccurrences(searchContent, pattern, parameters.SearchType);
+        
+        if (patternMatches.Count == 0)
+        {
+            _logger.LogDebug("Pattern '{Pattern}' not found in content for {FilePath} - possible Lucene/search mode mismatch", 
+                parameters.Pattern, filePath);
+            return matches;
+        }
+
+        // Convert content to lines only once, and only when we know we have matches
+        var lines = content.Replace("\r\n", "\n").Split('\n');
+        
+        // For each pattern occurrence, find which line it's on
+        var processedLines = new HashSet<int>(); // Avoid duplicate line matches
+        
+        foreach (var occurrence in patternMatches)
+        {
+            var lineNumber = GetLineNumberFromPosition(content, occurrence.Position);
+            
+            // Skip if we've already processed this line
+            if (processedLines.Contains(lineNumber))
+                continue;
+                
+            processedLines.Add(lineNumber);
+            
+            var lineIndex = lineNumber - 1; // Convert to 0-based
+            if (lineIndex < 0 || lineIndex >= lines.Length)
+                continue;
+                
+            // Extract context lines efficiently
+            var contextStart = Math.Max(0, lineIndex - parameters.ContextLines);
+            var contextEnd = Math.Min(lines.Length - 1, lineIndex + parameters.ContextLines);
+            
+            var contextLines = new List<string>();
+            for (int ctx = contextStart; ctx <= contextEnd; ctx++)
+            {
+                if (ctx != lineIndex) // Don't duplicate the match line
+                    contextLines.Add(lines[ctx]);
+            }
+
+            var match = new LineMatch
+            {
+                FilePath = filePath,
+                LineNumber = lineNumber,
+                LineContent = lines[lineIndex],
+                ContextLines = contextLines.Count > 0 ? contextLines.ToArray() : null,
+                StartLine = contextStart + 1,
+                EndLine = contextEnd + 1,
+                HighlightedFragments = ExtractHighlights(lines[lineIndex], parameters.Pattern, parameters.CaseSensitive)
+            };
+
+            matches.Add(match);
+        }
+        
+        return matches.OrderBy(m => m.LineNumber).ToList();
+    }
+    
+    /// <summary>
+    /// Efficiently finds all occurrences of a pattern in content without splitting into lines first.
+    /// </summary>
+    private List<(int Position, int Length)> FindPatternOccurrences(string content, string pattern, string searchType)
+    {
+        var occurrences = new List<(int, int)>();
+        var comparison = StringComparison.Ordinal;
+        
+        switch (searchType.ToLowerInvariant())
+        {
+            case "regex":
+                try
+                {
+                    var regex = new System.Text.RegularExpressions.Regex(pattern);
+                    var matches = regex.Matches(content);
+                    occurrences.AddRange(matches.Cast<System.Text.RegularExpressions.Match>()
+                        .Select(m => (m.Index, m.Length)));
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Invalid regex pattern '{Pattern}', falling back to literal search", pattern);
+                    goto case "literal";
+                }
+                break;
+                
+            case "wildcard":
+                // Convert wildcard to regex and use regex search
+                var wildcardRegex = "^" + System.Text.RegularExpressions.Regex.Escape(pattern)
+                    .Replace("\\*", ".*")
+                    .Replace("\\?", ".") + "$";
+                try
+                {
+                    var regex = new System.Text.RegularExpressions.Regex(wildcardRegex);
+                    // For wildcards, we need to check line by line since it's a line-matching pattern
+                    var lines = content.Split('\n');
+                    int position = 0;
+                    for (int i = 0; i < lines.Length; i++)
+                    {
+                        if (regex.IsMatch(lines[i]))
+                        {
+                            occurrences.Add((position, lines[i].Length));
+                        }
+                        position += lines[i].Length + 1; // +1 for newline
+                    }
+                }
+                catch
+                {
+                    goto case "literal";
+                }
+                break;
+                
+            case "literal":
+            default:
+                // Efficient string searching for literal patterns
+                int index = 0;
+                while ((index = content.IndexOf(pattern, index, comparison)) != -1)
+                {
+                    occurrences.Add((index, pattern.Length));
+                    index += pattern.Length;
+                }
+                break;
+        }
+        
+        return occurrences;
+    }
+    
+    /// <summary>
+    /// Efficiently determines which line number a character position belongs to.
+    /// </summary>
+    private int GetLineNumberFromPosition(string content, int position)
+    {
+        if (position < 0 || position >= content.Length)
+            return 1;
+            
+        // Count newlines before this position
+        int lineNumber = 1;
+        for (int i = 0; i < position && i < content.Length; i++)
+        {
+            if (content[i] == '\n')
+                lineNumber++;
+        }
+        
+        return lineNumber;
     }
 
     private bool ContainsPattern(string text, string pattern, string searchType)
@@ -413,11 +523,11 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
     {
         return searchType.ToLowerInvariant() switch
         {
-            "literal" => SearchMode.Literal,
-            "regex" => SearchMode.Code, // Regex patterns work well with code field
+            "literal" => SearchMode.Pattern, // Pattern-preserving search for special characters
+            "regex" => SearchMode.Pattern,   // Regex patterns work well with pattern field
             "wildcard" => SearchMode.Standard,
-            "code" => SearchMode.Code,
-            _ => SearchMode.Literal // Line search should default to literal for exact matching
+            "code" => SearchMode.Symbol,     // Code searches map to symbol search
+            _ => SearchMode.Pattern // Line search should default to pattern for exact matching
         };
     }
 }
