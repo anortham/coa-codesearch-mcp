@@ -8,6 +8,7 @@ using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -29,6 +30,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly ILogger<FindReferencesTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
@@ -39,12 +41,14 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        SmartQueryPreprocessor queryProcessor,
         ILogger<FindReferencesTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _queryProcessor = queryProcessor;
         _logger = logger;
         _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
     }
@@ -86,22 +90,26 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             
-            // Build query to find references in content
-            Query query;
+            // Use SmartQueryPreprocessor for multi-field reference searching
+            var searchMode = parameters.IncludePotential ? SearchMode.Standard : SearchMode.Symbol;
+            var queryResult = _queryProcessor.Process(symbolName, searchMode);
             
+            _logger.LogInformation("Find references: {Symbol} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
+                symbolName, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
+            
+            Query query;
             if (parameters.IncludePotential)
             {
-                // Broader search including partial matches
-                var parser = new QueryParser(LUCENE_VERSION, "content", new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION));
-                
-                // Build a query that looks for the symbol in various contexts
-                var queryString = BuildReferenceQueryString(symbolName);
-                query = parser.Parse(queryString);
+                // Broader search including partial matches using Standard analyzer
+                var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION);
+                var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, analyzer);
+                query = parser.Parse(queryResult.ProcessedQuery);
             }
             else
             {
-                // Stricter search for exact symbol references
-                query = BuildStrictReferenceQuery(symbolName, parameters.CaseSensitive);
+                // Stricter search for exact symbol references - combine processed query with existing logic
+                var processedQuery = BuildStrictReferenceQueryFromProcessed(queryResult.ProcessedQuery, parameters.CaseSensitive);
+                query = processedQuery;
             }
             
             // Perform the search
@@ -195,11 +203,11 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
             return new AIOptimizedResponse<SearchResult>
             {
                 Success = false,
-                Error = new ErrorInfo
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
                     Code = "FIND_REFERENCES_ERROR",
                     Message = $"Failed to find references: {ex.Message}",
-                    Recovery = new RecoveryInfo
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
                         Steps = new[]
                         {
@@ -255,6 +263,33 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         
         // Exclude definition files (those that have the symbol in type_names)
         booleanQuery.Add(new TermQuery(new Term("type_names", symbolName)), Occur.MUST_NOT);
+        
+        return booleanQuery;
+    }
+
+    private Query BuildStrictReferenceQueryFromProcessed(string processedQuery, bool caseSensitive)
+    {
+        // Adapt the strict reference logic to work with SmartQueryPreprocessor output
+        var booleanQuery = new BooleanQuery();
+        
+        // Use the processed query from SmartQueryPreprocessor 
+        if (caseSensitive)
+        {
+            // For case-sensitive, create a term query with the processed query
+            booleanQuery.Add(new TermQuery(new Term("content_symbols", processedQuery)), Occur.MUST);
+        }
+        else
+        {
+            // Use QueryParser with the processed query for case-insensitive search
+            var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION);
+            var parser = new QueryParser(LUCENE_VERSION, "content_symbols", analyzer);
+            booleanQuery.Add(parser.Parse(processedQuery.ToLowerInvariant()), Occur.MUST);
+        }
+        
+        // Exclude definition files (those that have the symbol in type_names)
+        // Use original symbol name for type_names exclusion
+        var originalSymbol = processedQuery; // For now, assume processed query is close to original
+        booleanQuery.Add(new TermQuery(new Term("type_names", originalSymbol)), Occur.MUST_NOT);
         
         return booleanQuery;
     }

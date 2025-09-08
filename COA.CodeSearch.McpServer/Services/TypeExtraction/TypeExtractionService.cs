@@ -130,6 +130,13 @@ public class TypeExtractionService : ITypeExtractionService
             {
                 language = new Language("tree-sitter-c-sharp", "tree_sitter_c_sharp");
             }
+            else if (languageName == "razor")
+            {
+                // Razor files should be handled by RazorFileAnalyzer, not tree-sitter
+                // If we reach here, the specialized analyzer failed - return failure
+                _logger.LogDebug("Razor file {FilePath} reached tree-sitter fallback - specialized analyzer should handle this", filePath);
+                return new TypeExtractionResult { Success = false };
+            }
             else
             {
                 language = new Language(languageName);
@@ -169,6 +176,14 @@ public class TypeExtractionService : ITypeExtractionService
 
     private TypeExtractionResult ExtractTypesWithNativeApiMac(string content, string filePath, string languageName)
     {
+        // Handle languages that don't have tree-sitter libraries
+        if (languageName == "razor")
+        {
+            // Razor files should be handled by RazorFileAnalyzer, not tree-sitter
+            _logger.LogDebug("Razor file {FilePath} reached macOS tree-sitter fallback - specialized analyzer should handle this", filePath);
+            return new TypeExtractionResult { Success = false };
+        }
+        
         // Ensure core and grammar libraries are preloaded
         string libName = languageName == "c-sharp" ? "tree-sitter-c-sharp" : $"tree-sitter-{languageName}";
         TryPreloadMacNativeLibrary("tree-sitter");

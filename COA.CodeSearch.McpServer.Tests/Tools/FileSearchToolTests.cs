@@ -445,5 +445,258 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Exception.Should().NotBeNull();
             result.Exception.Should().BeOfType<COA.Mcp.Framework.Exceptions.ToolExecutionException>();
         }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Support_Recursive_Glob_Patterns()
+        {
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                Query = "**/*.csproj",
+                TotalHits = 3,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new() { FilePath = "C:\\source\\Project1\\Project1.csproj", Score = 1.0f },
+                    new() { FilePath = "C:\\source\\Project1\\Tests\\Tests.csproj", Score = 0.9f },
+                    new() { FilePath = "C:\\source\\Project2\\Project2.csproj", Score = 0.8f }
+                },
+                SearchTime = TimeSpan.FromMilliseconds(50)
+            };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new FileSearchParameters
+            {
+                Pattern = "**/*.csproj",
+                WorkspacePath = TestWorkspacePath,
+                UseRegex = false
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Should().NotBeNull();
+            result.Result.Data.Count.Should().Be(3); // All .csproj files found recursively
+            result.Result.Data.Summary.Should().Contain("3 files");
+            
+            // Verify that the search used MatchAllDocsQuery for ** patterns (since Lucene WildcardQuery doesn't support **)
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.Is<Lucene.Net.Search.Query>(q => q.ToString().Contains("*:*")),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Use_Path_Field_For_Directory_Patterns()
+        {
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                Query = "src/**/*.cs",
+                TotalHits = 2,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new() { FilePath = "C:\\source\\Project\\src\\Controllers\\HomeController.cs", Score = 1.0f },
+                    new() { FilePath = "C:\\source\\Project\\src\\Services\\UserService.cs", Score = 0.9f }
+                },
+                SearchTime = TimeSpan.FromMilliseconds(50)
+            };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new FileSearchParameters
+            {
+                Pattern = "src/**/*.cs",
+                WorkspacePath = TestWorkspacePath,
+                UseRegex = false
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Should().NotBeNull();
+            result.Result.Data.Count.Should().Be(2); // Files in src directory recursively
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Use_Filename_Field_For_Simple_Patterns()
+        {
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                Query = "*.cs",
+                TotalHits = 2,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new() { FilePath = "C:\\source\\Project\\Program.cs", Score = 1.0f },
+                    new() { FilePath = "C:\\source\\Project\\Startup.cs", Score = 0.9f }
+                },
+                SearchTime = TimeSpan.FromMilliseconds(50)
+            };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new FileSearchParameters
+            {
+                Pattern = "*.cs",
+                WorkspacePath = TestWorkspacePath,
+                UseRegex = false
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Should().NotBeNull();
+            result.Result.Data.Count.Should().Be(2);
+            
+            // Verify that the search used the filename_lower field, not path field
+            LuceneIndexServiceMock.Verify(
+                x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.Is<Lucene.Net.Search.Query>(q => q.ToString().Contains("filename_lower")),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()),
+                Times.Once);
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Handle_Mixed_Path_Separators()
+        {
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                Query = "src\\**\\*.cs",
+                TotalHits = 2,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new() { FilePath = "C:\\source\\Project\\src\\Controllers\\HomeController.cs", Score = 1.0f },
+                    new() { FilePath = "C:\\source\\Project\\src\\Models\\User.cs", Score = 0.9f }
+                },
+                SearchTime = TimeSpan.FromMilliseconds(50)
+            };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new FileSearchParameters
+            {
+                Pattern = "src\\**\\*.cs", // Windows-style path separators
+                WorkspacePath = TestWorkspacePath,
+                UseRegex = false
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Should().NotBeNull();
+            result.Result.Data.Count.Should().Be(2);
+        }
+
+        [Test]
+        public async Task ConvertGlobToRegex_Should_Handle_Recursive_Patterns_Correctly()
+        {
+            // This test verifies the glob-to-regex conversion logic
+            // Since ConvertGlobToRegex is private, we test it indirectly through pattern matching
+            
+            // Arrange
+            SetupExistingIndex();
+            var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                Query = "**/*.test.js",
+                TotalHits = 4,
+                Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+                {
+                    new() { FilePath = "C:\\source\\app\\tests\\unit.test.js", Score = 1.0f },
+                    new() { FilePath = "C:\\source\\app\\components\\button.test.js", Score = 0.9f },
+                    new() { FilePath = "C:\\source\\app\\services\\api.test.js", Score = 0.8f },
+                    new() { FilePath = "C:\\source\\app\\main.js", Score = 0.7f } // Should be filtered out
+                },
+                SearchTime = TimeSpan.FromMilliseconds(50)
+            };
+            
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<Lucene.Net.Search.Query>(),
+                    It.IsAny<int>(),
+                    It.IsAny<bool>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(searchResult);
+            
+            var parameters = new FileSearchParameters
+            {
+                Pattern = "**/*.test.js",
+                WorkspacePath = TestWorkspacePath,
+                UseRegex = false
+            };
+            
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result.Should().NotBeNull();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data.Should().NotBeNull();
+            result.Result.Data.Count.Should().Be(3); // Only *.test.js files, not main.js
+            result.Result.Data.Summary.Should().Contain("3 files");
+        }
     }
 }

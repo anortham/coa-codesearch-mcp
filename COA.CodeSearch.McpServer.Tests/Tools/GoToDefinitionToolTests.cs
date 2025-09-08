@@ -27,12 +27,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override GoToDefinitionTool CreateTool()
         {
+            // Create SmartQueryPreprocessor dependency
+            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
+            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
+            
             _tool = new GoToDefinitionTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                smartQueryPreprocessor,
                 ToolLoggerMock.Object
             );
             return _tool;
