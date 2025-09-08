@@ -14,6 +14,7 @@ using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
+using COA.CodeSearch.McpServer.Models;
 using COA.Mcp.Framework.Interfaces;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Search;
@@ -33,6 +34,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SymbolSearchResponseBuilder _responseBuilder;
+    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly ILogger<SymbolSearchTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
@@ -42,12 +44,14 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        SmartQueryPreprocessor queryProcessor,
         ILogger<SymbolSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _queryProcessor = queryProcessor;
         _responseBuilder = new SymbolSearchResponseBuilder(logger as ILogger<SymbolSearchResponseBuilder>, storageService);
         _logger = logger;
     }
@@ -89,25 +93,31 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             
-            // Build Lucene query to search the type_names field
-            // Use CodeAnalyzer to match how the field was indexed
+            // Use SmartQueryPreprocessor to determine optimal field and processing
+            // Symbols benefit from SearchMode.Symbol which targets content_symbols field
+            var queryResult = _queryProcessor.Process(symbolName, SearchMode.Symbol);
+            var targetField = queryResult.TargetField;
+            var processedQuery = queryResult.ProcessedQuery;
+            
+            _logger.LogInformation("Searching for symbol: {Symbol} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
+                symbolName, targetField, processedQuery, queryResult.Reason);
+            
+            // Build Lucene query using the preprocessor's field selection
             var analyzer = new CodeAnalyzer(LUCENE_VERSION, preserveCase: false, splitCamelCase: true);
             Query query;
             
-            _logger.LogInformation("Searching for symbol: {Symbol} in type_names field", symbolName);
-            
             if (parameters.CaseSensitive)
             {
-                // For case-sensitive, we still need to use the analyzer since type_names is analyzed
+                // For case-sensitive, we still need to use the analyzer since fields are analyzed
                 // Note: CodeAnalyzer with preserveCase=false always lowercases, so true case-sensitive isn't possible
-                var parser = new QueryParser(LUCENE_VERSION, "type_names", analyzer);
-                query = parser.Parse(symbolName);
+                var parser = new QueryParser(LUCENE_VERSION, targetField, analyzer);
+                query = parser.Parse(processedQuery);
             }
             else
             {
                 // Case-insensitive search using QueryParser with CodeAnalyzer
-                var parser = new QueryParser(LUCENE_VERSION, "type_names", analyzer);
-                query = parser.Parse(symbolName);
+                var parser = new QueryParser(LUCENE_VERSION, targetField, analyzer);
+                query = parser.Parse(processedQuery);
             }
             
             _logger.LogInformation("Generated Lucene query: {Query}", query.ToString());
@@ -300,11 +310,11 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
             return new AIOptimizedResponse<SymbolSearchResult>
             {
                 Success = false,
-                Error = new ErrorInfo
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
                     Code = "SYMBOL_SEARCH_ERROR",
                     Message = $"Failed to search for symbol: {ex.Message}",
-                    Recovery = new RecoveryInfo
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
                         Steps = new[]
                         {

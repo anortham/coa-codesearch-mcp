@@ -28,12 +28,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override FindReferencesTool CreateTool()
         {
+            // Create SmartQueryPreprocessor dependency
+            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
+            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
+            
             _tool = new FindReferencesTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                smartQueryPreprocessor,
                 ToolLoggerMock.Object
             );
             return _tool;

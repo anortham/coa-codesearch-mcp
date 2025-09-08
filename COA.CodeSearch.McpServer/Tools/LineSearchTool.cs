@@ -25,7 +25,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
     private readonly ILuceneIndexService _indexService;
     private readonly LineAwareSearchService _lineSearchService;
     private readonly IPathResolutionService _pathResolutionService;
-    private readonly QueryPreprocessor _queryPreprocessor;
+    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly IResourceStorageService _storageService;
     private readonly LineSearchResponseBuilder _responseBuilder;
     private readonly ILogger<LineSearchTool> _logger;
@@ -35,14 +35,14 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         ILuceneIndexService indexService,
         LineAwareSearchService lineSearchService,
         IPathResolutionService pathResolutionService,
-        QueryPreprocessor queryPreprocessor,
+        SmartQueryPreprocessor queryProcessor,
         IResourceStorageService storageService,
         ILogger<LineSearchTool> logger) : base(serviceProvider)
     {
         _indexService = indexService;
         _lineSearchService = lineSearchService;
         _pathResolutionService = pathResolutionService;
-        _queryPreprocessor = queryPreprocessor;
+        _queryProcessor = queryProcessor;
         _storageService = storageService;
         _responseBuilder = new LineSearchResponseBuilder(null, storageService);
         _logger = logger;
@@ -80,16 +80,17 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
                 throw new InvalidOperationException($"No search index found for workspace. Run index_workspace first for: {parameters.WorkspacePath}");
             }
 
-            // Validate and preprocess query using the existing QueryPreprocessor
-            var searchType = parameters.SearchType ?? "standard";
-            if (!_queryPreprocessor.IsValidQuery(parameters.Pattern, searchType, out var errorMessage))
-            {
-                throw new ArgumentException($"Invalid query pattern: {errorMessage}");
-            }
-
-            // Build query with proper preprocessing for code patterns and special characters
+            // Use SmartQueryPreprocessor for multi-field search optimization
+            var searchMode = DetermineSearchMode(parameters.SearchType ?? "standard");
+            var queryResult = _queryProcessor.Process(parameters.Pattern, searchMode);
+            
+            _logger.LogInformation("Line search: {Pattern} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
+                parameters.Pattern, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
+            
+            // Build query using the processed query and target field
             var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-            var query = _queryPreprocessor.BuildQuery(parameters.Pattern, searchType, parameters.CaseSensitive, analyzer);
+            var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+            var query = parser.Parse(queryResult.ProcessedQuery);
 
             var searchResults = await _indexService.SearchAsync(normalizedPath, query, parameters.MaxTotalResults, cancellationToken);
 
@@ -406,5 +407,17 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
             insights.Add($"Some files truncated (limit: {parameters.MaxResultsPerFile} per file)");
 
         return insights;
+    }
+
+    private SearchMode DetermineSearchMode(string searchType)
+    {
+        return searchType.ToLowerInvariant() switch
+        {
+            "literal" => SearchMode.Literal,
+            "regex" => SearchMode.Code, // Regex patterns work well with code field
+            "wildcard" => SearchMode.Standard,
+            "code" => SearchMode.Code,
+            _ => SearchMode.Literal // Line search should default to literal for exact matching
+        };
     }
 }

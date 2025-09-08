@@ -8,6 +8,28 @@ You have access to specialized code search tools that significantly outperform b
 
 Using `goto_definition`, `find_references`, and `text_search` to verify types and explore code relationships BEFORE coding shows excellent engineering discipline and prevents compilation errors. This is the hallmark of a thoughtful developer!
 
+## Working Environment Context
+
+You are working with a detail-oriented software engineer who values:
+- **Type verification before writing code** - Understanding exact signatures and dependencies
+- **Understanding code impact through searches** - Finding all references before making changes  
+- **Following established patterns in the codebase** - Consistency and maintainability
+- **Evidence-based development decisions** - Real data over assumptions
+- **Quality automated tests that test real behavior, not test theater** - Meaningful validation
+
+### Professional Development Principles
+
+When working in this environment, please:
+- **Search first, code second** - Always understand the system before modifying it
+- **Understand the system under test before writing tests** - Use CodeSearch tools to explore existing test patterns, understand the code being tested, and identify edge cases
+- Use CodeSearch tools to verify types and signatures before coding
+- Search for existing implementations to understand patterns
+- Check references before making changes to avoid breaking code
+- Write meaningful tests that verify actual business logic with realistic data
+- **Avoid "test theater"** - tests that only mock everything or use hard-coded values
+- Focus on tests that would catch real bugs and integration issues
+- Test real code paths, not just coverage numbers
+
 ### Tool Performance Comparison
 {{ for comparison in tool_comparisons }}
 **{{ comparison.task }}**

@@ -5,6 +5,7 @@ using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.VSCodeBridge;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
@@ -12,6 +13,7 @@ using System.Threading;
 using System;
 using System.Text.Json;
 using COA.Mcp.Framework;
+using COA.Mcp.Framework.Exceptions;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
@@ -19,12 +21,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
     public class BatchOperationsToolTests : CodeSearchToolTestBase<BatchOperationsTool>
     {
         private BatchOperationsTool _tool = null!;
-        private Mock<TextSearchTool> _textSearchToolMock = null!;
-        private Mock<FileSearchTool> _fileSearchToolMock = null!;
+        private TextSearchTool _textSearchTool = null!;
+        private FileSearchTool _fileSearchTool = null!;
         private Mock<IVSCodeBridge> _vscodeBridgeMock = null!;
         
         protected override BatchOperationsTool CreateTool()
         {
+            // Create dependencies for TextSearchTool
             var queryPreprocessorLoggerMock = new Mock<ILogger<QueryPreprocessor>>();
             var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
             var projectKnowledgeServiceMock = CreateMock<IProjectKnowledgeService>();
@@ -32,37 +35,43 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
+            var queryTypeDetectorMock = CreateMock<IQueryTypeDetector>();
+            var textSearchLoggerMock = new Mock<ILogger<TextSearchTool>>();
             
-            _textSearchToolMock = new Mock<TextSearchTool>(
+            // Create actual TextSearchTool instance
+            _textSearchTool = new TextSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                null,
+                queryTypeDetectorMock.Object,
                 projectKnowledgeServiceMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
-                ToolLoggerMock.Object);
+                textSearchLoggerMock.Object);
                 
-            _fileSearchToolMock = new Mock<FileSearchTool>(
+            // Create actual FileSearchTool instance  
+            var fileSearchLoggerMock = new Mock<ILogger<FileSearchTool>>();
+            _fileSearchTool = new FileSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 VSCodeBridgeMock.Object,
-                ToolLoggerMock.Object);
+                fileSearchLoggerMock.Object);
                 
             _vscodeBridgeMock = new Mock<IVSCodeBridge>();
             
             _tool = new BatchOperationsTool(
                 ServiceProvider,
                 ToolLoggerMock.Object,
-                _textSearchToolMock.Object,
-                _fileSearchToolMock.Object,
+                _textSearchTool,
+                _fileSearchTool,
                 _vscodeBridgeMock.Object
             );
             return _tool;
@@ -114,7 +123,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         }
 
         [Test]
-        public void ValidateRequired_NullWorkspacePath_ThrowsArgumentNullException()
+        public void ValidateRequired_NullWorkspacePath_ThrowsToolExecutionException()
         {
             // Arrange
             var parameters = new BatchOperationsParameters
@@ -124,8 +133,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 MaxTokens = 8000
             };
 
-            // Act & Assert
-            Assert.ThrowsAsync<ArgumentNullException>(
+            // Act & Assert - Expect ToolExecutionException for validation failures
+            Assert.ThrowsAsync<ToolExecutionException>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
         }
 
@@ -138,6 +147,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool.Category.Should().Be(ToolCategory.Query);
         }
 
+    }
+
+    [TestFixture]
+    public class BatchOperationsModelTests
+    {
         [Test]
         public void BatchOperation_DefaultValues_AreCorrect()
         {

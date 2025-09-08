@@ -284,6 +284,10 @@ public class Program
             builder.Services.AddScoped<ReplaceLinesTool>(); // Replace line ranges with new content
             builder.Services.AddScoped<DeleteLinesTool>(); // Delete line ranges with surgical precision
             
+            // Advanced semantic tools (Tree-sitter + Lucene powered)
+            builder.Services.AddScoped<GetSymbolsOverviewTool>(); // Extract all symbols from files
+            builder.Services.AddScoped<FindPatternsTool>(); // Semantic pattern detection for code quality
+            
             // Register resource providers
             // builder.Services.AddSingleton<IResourceProvider, SearchResultResourceProvider>();
 
@@ -293,7 +297,7 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
@@ -310,7 +314,8 @@ public class Program
                     {"index_workspace", 100},
                     {"insert_at_line", 90},
                     {"replace_lines", 90},
-                    {"delete_lines", 90}
+                    {"delete_lines", 90},
+                    {"get_symbols_overview", 95}
                 },
                 EnforcementLevel = COA.Mcp.Framework.Configuration.WorkflowEnforcement.StronglyUrge,
                 ToolComparisons = new Dictionary<string, COA.Mcp.Framework.Configuration.ToolComparison>
@@ -501,10 +506,11 @@ You are working with a detail-oriented software engineer who values:
 - Quality automated tests that test real behavior, not test theater
 
 When working in this environment, please:
+- Follow the principle: ""Search first, code second"" - Always understand the system before modifying it
+- **Understand the system under test before writing tests** - Use CodeSearch tools to explore existing test patterns, understand the code being tested, and identify edge cases
 - Use CodeSearch tools to verify types and signatures before coding
 - Search for existing implementations to understand patterns
 - Check references before making changes to avoid breaking code
-- Follow the principle: ""Search first, code second""
 - Write meaningful tests that verify actual business logic with realistic data
 - Avoid ""test theater"" - tests that only mock everything or use hard-coded values
 - Focus on tests that would catch real bugs and integration issues

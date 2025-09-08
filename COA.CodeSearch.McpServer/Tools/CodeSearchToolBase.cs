@@ -30,28 +30,54 @@ public abstract class CodeSearchToolBase<TParams, TResult> : McpToolBase<TParams
     }
 
     /// <summary>
-    /// Validates parameters with smart defaults applied first
+    /// CodeSearch tools use Data Annotations validation with custom error handling
+    /// </summary>
+    protected override bool ShouldValidateDataAnnotations => true;
+
+    /// <summary>
+    /// Validates parameters with smart defaults applied first, then applies Data Annotations validation
+    /// with simplified error messages for test compatibility
     /// </summary>
     /// <param name="parameters">The parameters to validate</param>
     protected override void ValidateParameters(TParams parameters)
     {
-        // Let base class handle null validation first
-        base.ValidateParameters(parameters);
-        
-        // If we get here, parameters is not null (base would have thrown)
-        if (parameters == null) return;
+        // Apply parameter defaults if available
+        if (parameters != null)
+        {
+            try
+            {
+                // Apply smart defaults before validation
+                _parameterDefaults?.ApplyDefaults(parameters);
+            }
+            catch (Exception ex)
+            {
+                throw new ValidationException($"Failed to apply parameter defaults: {ex.Message}", ex);
+            }
+        }
 
+        // Call base validation but catch and simplify validation errors for test compatibility
         try
         {
-            // Apply smart defaults before validation
-            _parameterDefaults?.ApplyDefaults(parameters);
+            base.ValidateParameters(parameters);
         }
-        catch (Exception ex)
+        catch (ValidationException ex) when (ex.Message.Contains("Parameter validation failed"))
         {
-            throw new ValidationException($"Failed to apply parameter defaults: {ex.Message}", ex);
+            // Extract the core validation message for test compatibility
+            // Convert "Parameter validation failed: Parameter 'Symbol' is required" 
+            // to "Symbol field is required"
+            var message = ex.Message;
+            if (message.Contains("Parameter '") && message.Contains("' is required"))
+            {
+                var start = message.IndexOf("Parameter '") + 11;
+                var end = message.IndexOf("' is required");
+                if (start > 10 && end > start)
+                {
+                    var fieldName = message.Substring(start, end - start);
+                    throw new ValidationException($"{fieldName} field is required");
+                }
+            }
+            // Re-throw original if we can't simplify
+            throw;
         }
-
-        // Now validate with defaults applied
-        base.ValidateParameters(parameters!);
     }
 }

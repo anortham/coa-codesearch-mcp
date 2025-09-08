@@ -84,11 +84,12 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
             var originalLines = lines.Skip(startLine).Take(endLine - startLine + 1).ToArray();
             var originalContent = string.Join(Environment.NewLine, originalLines);
             
-            // Detect indentation from surrounding lines
+            // Detect indentation using centralized consistency-aware algorithm
             string indentation = "";
             if (parameters.PreserveIndentation)
             {
-                indentation = DetectIndentation(lines, startLine, endLine);
+                // For replacement operations, exclude the target line from analysis to avoid bias
+                indentation = FileLineUtilities.DetectIndentationForInsertion(lines, startLine, includeTargetLine: false);
             }
             
             // Prepare replacement content with proper indentation
@@ -182,39 +183,6 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         return await FileLineUtilities.ReadFileWithEncodingAsync(filePath, cancellationToken);
     }
 
-
-    private string DetectIndentation(string[] lines, int startLine, int endLine)
-    {
-        // Look at surrounding lines to detect indentation
-        var linesToCheck = new List<int>();
-        
-        // Add line before range
-        if (startLine > 0)
-            linesToCheck.Add(startLine - 1);
-            
-        // Add line after range
-        if (endLine + 1 < lines.Length)
-            linesToCheck.Add(endLine + 1);
-            
-        // Add original lines in range (for context)
-        for (int i = startLine; i <= endLine && i < lines.Length; i++)
-            linesToCheck.Add(i);
-
-        foreach (var lineIndex in linesToCheck)
-        {
-            if (lineIndex >= 0 && lineIndex < lines.Length)
-            {
-                var line = lines[lineIndex];
-                if (!string.IsNullOrWhiteSpace(line))
-                {
-                    var match = Regex.Match(line, @"^(\s*)");
-                    return match.Groups[1].Value;
-                }
-            }
-        }
-
-        return ""; // No indentation detected
-    }
 
     private string[] ApplyIndentation(string[] contentLines, string indentation)
     {

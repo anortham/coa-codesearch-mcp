@@ -29,4 +29,8 @@ public static class ToolNames
     public const string InsertAtLine = "insert_at_line";
     public const string ReplaceLines = "replace_lines";
     public const string DeleteLines = "delete_lines";
+    
+    // Advanced semantic tools
+    public const string GetSymbolsOverview = "get_symbols_overview";
+    public const string FindPatterns = "find_patterns";
 }

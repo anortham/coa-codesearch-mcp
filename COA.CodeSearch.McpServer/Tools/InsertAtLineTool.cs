@@ -63,11 +63,11 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
                     $"Valid range: 1-{lines.Length + 1}");
             }
             
-            // Detect indentation from target line or nearby lines
+            // Detect indentation using centralized consistency-aware algorithm
             string indentation = "";
             if (parameters.PreserveIndentation)
             {
-                indentation = DetectIndentation(lines, parameters.LineNumber - 1);
+                indentation = FileLineUtilities.DetectIndentationForInsertion(lines, parameters.LineNumber - 1);
             }
             
             // Prepare content with proper indentation
@@ -153,47 +153,6 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
         return await FileLineUtilities.ReadFileWithEncodingAsync(filePath, cancellationToken);
     }
 
-    private string DetectIndentation(string[] lines, int targetLineIndex)
-    {
-        // Check target line first
-        if (targetLineIndex < lines.Length && !string.IsNullOrEmpty(lines[targetLineIndex]))
-        {
-            var indentation = ExtractIndentation(lines[targetLineIndex]);
-            if (!string.IsNullOrEmpty(indentation))
-                return indentation;
-        }
-        
-        // Check nearby lines (prefer lines above)
-        var searchRadius = Math.Min(5, lines.Length);
-        
-        for (int offset = 1; offset <= searchRadius; offset++)
-        {
-            // Check line above
-            int aboveIndex = targetLineIndex - offset;
-            if (aboveIndex >= 0 && !string.IsNullOrEmpty(lines[aboveIndex]))
-            {
-                var indentation = ExtractIndentation(lines[aboveIndex]);
-                if (!string.IsNullOrEmpty(indentation))
-                    return indentation;
-            }
-            
-            // Check line below
-            int belowIndex = targetLineIndex + offset;
-            if (belowIndex < lines.Length && !string.IsNullOrEmpty(lines[belowIndex]))
-            {
-                var indentation = ExtractIndentation(lines[belowIndex]);
-                if (!string.IsNullOrEmpty(indentation))
-                    return indentation;
-            }
-        }
-        
-        return ""; // No indentation found
-    }
-
-    private string ExtractIndentation(string line)
-    {
-        return FileLineUtilities.ExtractIndentation(line);
-    }
 
     private string[] ApplyIndentation(string[] contentLines, string indentation)
     {

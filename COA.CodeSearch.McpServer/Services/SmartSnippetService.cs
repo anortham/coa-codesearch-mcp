@@ -246,6 +246,7 @@ public class SmartSnippetService
             var cleanedQuery = queryString
                 .Replace("content:", "")
                 .Replace("filename:", "")
+                .Replace("filename_lower:", "")
                 .Replace("path:", "")
                 .Replace("extension:", "")
                 .Replace("(", "")
@@ -259,11 +260,19 @@ public class SmartSnippetService
                 return originalQuery;
             }
             
+            // NEW: Validate and preprocess query to handle wildcards safely
+            var trimmedQuery = cleanedQuery.Trim();
+            if (IsInvalidWildcardQuery(trimmedQuery))
+            {
+                _logger.LogDebug("Invalid wildcard query detected: {Query}, using original query", trimmedQuery);
+                return originalQuery;
+            }
+            
             // Parse the cleaned query for the content field
             var parser = new QueryParser(LUCENE_VERSION, "content", analyzer);
             parser.DefaultOperator = QueryParserBase.AND_OPERATOR;
             
-            var contentQuery = parser.Parse(cleanedQuery.Trim());
+            var contentQuery = parser.Parse(trimmedQuery);
             _logger.LogDebug("Created content query: {ContentQuery}", contentQuery.ToString());
             
             return contentQuery;
@@ -273,5 +282,25 @@ public class SmartSnippetService
             _logger.LogWarning(ex, "Failed to create content query, using original query");
             return originalQuery;
         }
+    }
+    
+    /// <summary>
+    /// Check if a query contains invalid wildcard patterns that would cause Lucene parsing errors
+    /// </summary>
+    private bool IsInvalidWildcardQuery(string query)
+    {
+        // Leading wildcards are not allowed in standard Lucene queries
+        if (query.StartsWith("*") || query.StartsWith("?"))
+        {
+            return true;
+        }
+        
+        // Pure wildcard queries are not useful for highlighting
+        if (query == "*" || query == "?" || string.IsNullOrWhiteSpace(query.Replace("*", "").Replace("?", "")))
+        {
+            return true;
+        }
+        
+        return false;
     }
 }
