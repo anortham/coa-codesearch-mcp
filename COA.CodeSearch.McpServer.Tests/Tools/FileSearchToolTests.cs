@@ -553,14 +553,19 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupExistingIndex();
+            
+            // Mock returns ALL files from index, FileSearchTool will filter them
             var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
                 Query = "*.cs",
-                TotalHits = 2,
+                TotalHits = 5,
                 Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
-                    new() { FilePath = "C:\\source\\Project\\Program.cs", Score = 1.0f },
-                    new() { FilePath = "C:\\source\\Project\\Startup.cs", Score = 0.9f }
+                    new() { FilePath = "/source/Project/Program.cs", Score = 1.0f },
+                    new() { FilePath = "/source/Project/Startup.cs", Score = 0.9f },
+                    new() { FilePath = "/source/Project/README.md", Score = 0.8f },
+                    new() { FilePath = "/source/Project/package.json", Score = 0.7f },
+                    new() { FilePath = "/source/Project/Utils.cs", Score = 0.6f }
                 },
                 SearchTime = TimeSpan.FromMilliseconds(50)
             };
@@ -585,14 +590,28 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
-            // Assert
+            // Assert - FileSearchTool should filter to only .cs files
             result.Success.Should().BeTrue();
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(2);
             
-            // Verify that the search used the filename_lower field, not path field
+            // The tool should have filtered the results to only include .cs files
+            result.Result.Data.Count.Should().Be(3, "should return only the 3 .cs files from the 5 total files");
+            result.Result.Data.Results.Should().NotBeNull();
+            
+            // Verify all returned files match the pattern
+            var files = result.Result.Data.Results as System.Collections.IEnumerable;
+            if (files != null)
+            {
+                foreach (dynamic file in files)
+                {
+                    string path = file.Path?.ToString() ?? "";
+                    path.Should().EndWith(".cs", "all returned files should be .cs files");
+                }
+            }
+            
+            // Verify that the search used the filename_lower field for simple patterns
             LuceneIndexServiceMock.Verify(
                 x => x.SearchAsync(
                     It.IsAny<string>(),
@@ -600,7 +619,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<int>(),
                     It.IsAny<bool>(),
                     It.IsAny<CancellationToken>()),
-                Times.Once);
+                Times.Once,
+                "Simple patterns like *.cs should use filename_lower field, not path field");
         }
 
         [Test]
