@@ -11,16 +11,10 @@ public enum SearchMode
     Auto,
 
     /// <summary>
-    /// Exact string matching - handles special characters like {}, (), etc.
-    /// Uses content_literal field with KeywordTokenizer for no tokenization
+    /// Pattern-preserving search - handles special characters like {}, (), : IRepository<T>
+    /// Uses content_patterns field with WhitespaceTokenizer for pattern preservation
     /// </summary>
-    Literal,
-
-    /// <summary>
-    /// Code-aware tokenization with enhanced processing
-    /// Uses content_code field with always-on CamelCase splitting
-    /// </summary>
-    Code,
+    Pattern,
 
     /// <summary>
     /// Search only class/method/symbol names

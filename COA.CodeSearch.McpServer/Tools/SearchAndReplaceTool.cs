@@ -1,5 +1,6 @@
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using COA.Mcp.Framework;
@@ -29,6 +30,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly IResourceStorageService _storageService;
         private readonly AdvancedPatternMatcher _patternMatcher;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<SearchAndReplaceTool> _logger;
 
     public SearchAndReplaceTool(
@@ -39,6 +41,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         SmartQueryPreprocessor queryProcessor,
         IResourceStorageService storageService,
                 AdvancedPatternMatcher patternMatcher,
+        CodeAnalyzer codeAnalyzer,
         ILogger<SearchAndReplaceTool> logger) : base(serviceProvider)
     {
         _indexService = indexService;
@@ -46,6 +49,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         _pathResolutionService = pathResolutionService;
         _queryProcessor = queryProcessor;
                 _patternMatcher = patternMatcher;
+        _codeAnalyzer = codeAnalyzer;
         _storageService = storageService;
         _logger = logger;
     }
@@ -181,7 +185,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         CancellationToken cancellationToken)
     {
         // Build Lucene query - automatically use literal search for patterns with curly braces
-        var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+        // Use CodeAnalyzer for consistent tokenization with indexing
         var searchType = parameters.SearchType;
         
         // Auto-detect code patterns with curly braces and force literal search
@@ -199,7 +203,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         _logger.LogInformation("Search and Replace: {Pattern} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
             parameters.SearchPattern, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
         
-        var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+        var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
         var query = parser.Parse(queryResult.ProcessedQuery);
 
         // Search for files containing the pattern
@@ -601,10 +605,10 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     {
         return searchType?.ToLowerInvariant() switch
         {
-            "literal" => SearchMode.Literal,
-            "regex" => SearchMode.Code,
+            "literal" => SearchMode.Pattern,
+            "regex" => SearchMode.Pattern,
             "wildcard" => SearchMode.Standard,
-            "code" => SearchMode.Code,
+            "code" => SearchMode.Symbol,
             "standard" or null => SearchMode.Standard,
             _ => SearchMode.Standard // Default to standard for search & replace
         };

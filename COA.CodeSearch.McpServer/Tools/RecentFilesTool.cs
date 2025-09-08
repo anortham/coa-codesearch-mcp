@@ -10,6 +10,7 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
@@ -35,6 +36,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
     private readonly RecentFilesResponseBuilder _responseBuilder;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<RecentFilesTool> _logger;
+    private readonly CodeAnalyzer _codeAnalyzer;
 
     public RecentFilesTool(
         IServiceProvider serviceProvider,
@@ -44,7 +46,8 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<RecentFilesTool> logger) : base(serviceProvider)
+        ILogger<RecentFilesTool> logger,
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
@@ -54,6 +57,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         _responseBuilder = new RecentFilesResponseBuilder(null, storageService);
         _vscode = vscode;
         _logger = logger;
+        _codeAnalyzer = codeAnalyzer;
     }
 
     public override string Name => ToolNames.RecentFiles;

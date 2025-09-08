@@ -46,6 +46,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly SmartDocumentationService _smartDocumentationService;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
         private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<TextSearchTool> _logger;
 
     public TextSearchTool(
@@ -60,6 +61,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
                 SmartQueryPreprocessor smartQueryPreprocessor,
+        CodeAnalyzer codeAnalyzer,
         ILogger<TextSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
@@ -73,6 +75,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _vscode = vscode;
         _logger = logger;
                 _smartQueryPreprocessor = smartQueryPreprocessor;
+        _codeAnalyzer = codeAnalyzer;
         
         // Create response builder with dependencies
         _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
@@ -146,18 +149,18 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                         }
 
                         // Build field-specific query using the SmartQueryPreprocessor results
-                        var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
+                        // Use CodeAnalyzer to match the analyzer used during indexing
                         Query luceneQuery;
                         
                         if (queryResult.TargetField == "content")
                         {
                             // Use existing QueryPreprocessor for standard content field
-                            luceneQuery = _queryPreprocessor.BuildQuery(queryResult.ProcessedQuery, searchType, parameters.CaseSensitive, analyzer);
+                            luceneQuery = _queryPreprocessor.BuildQuery(queryResult.ProcessedQuery, searchType, parameters.CaseSensitive, _codeAnalyzer);
                         }
                         else
                         {
                             // Create field-specific query for multi-field indexing
-                            var queryParser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+                            var queryParser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
                             queryParser.AllowLeadingWildcard = true;
                             
                             try
@@ -167,21 +170,13 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                             catch (ParseException)
                             {
                                 // Fallback to term query for problematic queries
-                                luceneQuery = new TermQuery(new Term(queryResult.TargetField, queryResult.ProcessedQuery));
+                                luceneQuery = new TermQuery(new Term(queryResult.TargetField, queryResult.ProcessedQuery.ToLowerInvariant()));
                             }
                         }
 
                         // REMOVE THE OLD CODE BELOW - this new logic replaces it
                         // OLD: // Validate and preprocess query
                         // OLD: var searchType = parameters.SearchType ?? "standard";  
-                        // OLD: if (!_queryPreprocessor.IsValidQuery(query, searchType, out var errorMessage))
-                        // OLD: {
-                        // OLD:     return CreateQueryParseError(query, errorMessage);
-                        // OLD: }
-                        // OLD:
-                        // OLD: // Build query with proper preprocessing  
-                        // OLD: var analyzer = new StandardAnalyzer(LuceneVersion.LUCENE_48);
-                        // OLD: var luceneQuery = _queryPreprocessor.BuildQuery(query, searchType, parameters.CaseSensitive, analyzer);
                         // [Removed: Old validation logic - now handled by SmartQueryPreprocessor above]
                         
             // Apply scoring factors for better relevance
@@ -246,6 +241,38 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             
             // Add query to result for insights
             searchResult.Query = query;
+            
+            // Fallback mechanism: If symbol search returns 0 results, retry with content field
+            if (searchResult.TotalHits == 0 && queryResult.TargetField == "content_symbols")
+            {
+                _logger.LogDebug("Symbol search for '{Query}' returned 0 results, falling back to content field", query);
+                
+                // Retry with content field
+                var fallbackQuery = _queryPreprocessor.BuildQuery(query, searchType, parameters.CaseSensitive, _codeAnalyzer);
+                var fallbackMultiFactorQuery = new MultiFactorScoreQuery(fallbackQuery, scoringContext, _logger);
+                
+                // Add same scoring factors
+                fallbackMultiFactorQuery.AddScoringFactor(new PathRelevanceFactor(_logger));
+                fallbackMultiFactorQuery.AddScoringFactor(new FilenameRelevanceFactor());
+                fallbackMultiFactorQuery.AddScoringFactor(new FileTypeRelevanceFactor());
+                fallbackMultiFactorQuery.AddScoringFactor(new RecencyBoostFactor());
+                fallbackMultiFactorQuery.AddScoringFactor(new ExactMatchBoostFactor(parameters.CaseSensitive));
+                fallbackMultiFactorQuery.AddScoringFactor(new InterfaceImplementationFactor(_logger));
+                
+                searchResult = await _luceneIndexService.SearchAsync(
+                    workspacePath, 
+                    fallbackMultiFactorQuery,
+                    maxResults,
+                    includeSnippets,
+                    cancellationToken);
+                
+                searchResult.Query = query; // Keep original query for display
+                
+                if (searchResult.TotalHits > 0)
+                {
+                    _logger.LogInformation("Fallback search found {HitCount} results for '{Query}'", searchResult.TotalHits, query);
+                }
+            }
             
             // Enhance results with type information if relevant
             if (_queryTypeDetector?.IsLikelyTypeQuery(query) ?? false)

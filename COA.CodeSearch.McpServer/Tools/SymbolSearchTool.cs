@@ -35,6 +35,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SymbolSearchResponseBuilder _responseBuilder;
     private readonly SmartQueryPreprocessor _queryProcessor;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<SymbolSearchTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
@@ -45,6 +46,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
+        CodeAnalyzer codeAnalyzer,
         ILogger<SymbolSearchTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
@@ -52,6 +54,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryProcessor = queryProcessor;
+        _codeAnalyzer = codeAnalyzer;
         _responseBuilder = new SymbolSearchResponseBuilder(logger as ILogger<SymbolSearchResponseBuilder>, storageService);
         _logger = logger;
     }
@@ -103,7 +106,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 symbolName, targetField, processedQuery, queryResult.Reason);
             
             // Build Lucene query using the preprocessor's field selection
-            var analyzer = new CodeAnalyzer(LUCENE_VERSION, preserveCase: false, splitCamelCase: true);
+            var analyzer = _codeAnalyzer;
             Query query;
             
             if (parameters.CaseSensitive)
@@ -354,7 +357,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
             try
             {
                 // Search for the symbol name in content
-                var parser = new QueryParser(LUCENE_VERSION, "content", new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION));
+                var parser = new QueryParser(LUCENE_VERSION, "content", _codeAnalyzer);
                 var query = parser.Parse(symbol.Name);
                 
                 var result = await _luceneIndexService.SearchAsync(workspacePath, query, 1, cancellationToken);

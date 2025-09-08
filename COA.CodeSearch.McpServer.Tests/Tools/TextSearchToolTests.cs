@@ -46,6 +46,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
+                CodeAnalyzer,
                 ToolLoggerMock.Object
             );
             return _tool;
