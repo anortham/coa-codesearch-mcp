@@ -17,7 +17,7 @@ using NUnit.Framework;
 using Lucene.Net.Documents;
 using Lucene.Net.Store;
 using Lucene.Net.Index;
-using Lucene.Net.Analysis.Standard;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using Lucene.Net.Util;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools;
@@ -40,6 +40,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
             CacheKeyGeneratorMock.Object,
             PathResolutionServiceMock.Object,
             VSCodeBridgeMock.Object,
+            CodeAnalyzer,
             Mock.Of<ILogger<SimilarFilesTool>>()
         );
         
@@ -295,7 +296,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
 
     private void SetupTestIndex()
     {
-        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, new StandardAnalyzer(LuceneVersion.LUCENE_48))))
+        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, CodeAnalyzer)))
         {
             // Add some test documents
             writer.AddDocument(CreateDocument("test.cs", "public class TestClass { public void Method() { } }"));
@@ -308,7 +309,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
 
     private void SetupEmptyIndex()
     {
-        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, new StandardAnalyzer(LuceneVersion.LUCENE_48))))
+        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, CodeAnalyzer)))
         {
             // Add only the query file
             writer.AddDocument(CreateDocument("unique.cs", "// Unique content that won't match anything"));
@@ -318,7 +319,7 @@ public class SimilarFilesToolTests : CodeSearchToolTestBase<SimilarFilesTool>
 
     private void SetupTestIndexWithManyFiles()
     {
-        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, new StandardAnalyzer(LuceneVersion.LUCENE_48))))
+        using (var writer = new IndexWriter(_testDirectory, new IndexWriterConfig(LuceneVersion.LUCENE_48, CodeAnalyzer)))
         {
             // Add the main test file
             writer.AddDocument(CreateDocument("test.cs", "public class TestClass { public void Method() { } }"));

@@ -11,6 +11,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools;
+using Lucene.Net.Util;
 using Serilog;
 using System.IO;
 using System.Linq;
@@ -69,6 +70,11 @@ public class Program
         
         // Query preprocessing for code-aware search
         services.AddSingleton<QueryPreprocessor>();
+        
+        // Code analysis services  
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Analysis.CodeAnalyzer>(provider =>
+            new COA.CodeSearch.McpServer.Services.Analysis.CodeAnalyzer(LuceneVersion.LUCENE_48, 
+                preserveCase: false, splitCamelCase: true));
         
         // Type extraction services (optional - graceful fallback if not available)
         services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService, 

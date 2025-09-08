@@ -8,6 +8,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
+using COA.CodeSearch.McpServer.Services.Analysis;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -128,18 +129,21 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
     private readonly TextSearchTool _textSearchTool;
     private readonly FileSearchTool _fileSearchTool;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
+    private readonly CodeAnalyzer _codeAnalyzer;
 
     public BatchOperationsTool(
         IServiceProvider serviceProvider,
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
         FileSearchTool fileSearchTool,
-        COA.VSCodeBridge.IVSCodeBridge vscode) : base(serviceProvider)
+        COA.VSCodeBridge.IVSCodeBridge vscode,
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
         _fileSearchTool = fileSearchTool;
         _vscode = vscode;
+        _codeAnalyzer = codeAnalyzer;
     }
 
     public override string Name => ToolNames.BatchOperations;

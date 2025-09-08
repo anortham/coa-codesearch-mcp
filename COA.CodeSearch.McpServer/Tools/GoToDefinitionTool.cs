@@ -36,6 +36,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly GoToDefinitionResponseBuilder _responseBuilder;
     private readonly ILogger<GoToDefinitionTool> _logger;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     public GoToDefinitionTool(
@@ -45,7 +46,8 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
-        ILogger<GoToDefinitionTool> logger) : base(serviceProvider)
+        ILogger<GoToDefinitionTool> logger,
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
@@ -54,6 +56,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         _queryProcessor = queryProcessor;
         _responseBuilder = new GoToDefinitionResponseBuilder(logger as ILogger<GoToDefinitionResponseBuilder>, storageService);
         _logger = logger;
+        _codeAnalyzer = codeAnalyzer;
     }
 
     public override string Name => ToolNames.GoToDefinition;
@@ -101,7 +104,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
                 symbolName, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
             
             // Build query using the processed query and target field
-            var analyzer = new CodeAnalyzer(LUCENE_VERSION, preserveCase: false, splitCamelCase: true);
+            var analyzer = _codeAnalyzer;
             Query query;
             if (parameters.CaseSensitive)
             {

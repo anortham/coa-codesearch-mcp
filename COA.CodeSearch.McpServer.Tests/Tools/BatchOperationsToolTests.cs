@@ -51,6 +51,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
+                CodeAnalyzer,
                 textSearchLoggerMock.Object);
                 
             // Create actual FileSearchTool instance  
@@ -63,7 +64,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 VSCodeBridgeMock.Object,
-                fileSearchLoggerMock.Object);
+                fileSearchLoggerMock.Object,
+                CodeAnalyzer);
                 
             _vscodeBridgeMock = new Mock<IVSCodeBridge>();
             
@@ -72,7 +74,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ToolLoggerMock.Object,
                 _textSearchTool,
                 _fileSearchTool,
-                _vscodeBridgeMock.Object
+                _vscodeBridgeMock.Object,
+                CodeAnalyzer
             );
             return _tool;
         }

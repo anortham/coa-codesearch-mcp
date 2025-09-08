@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using Lucene.Net.Analysis;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -37,7 +38,7 @@ public class QueryPreprocessor
     /// <summary>
     /// Build a Lucene query with proper handling of code syntax and special characters
     /// </summary>
-    public Query BuildQuery(string queryText, string searchType, bool caseSensitive, StandardAnalyzer analyzer)
+    public Query BuildQuery(string queryText, string searchType, bool caseSensitive, Analyzer analyzer)
     {
         switch (searchType.ToLowerInvariant())
         {
@@ -76,13 +77,13 @@ public class QueryPreprocessor
         return new FuzzyQuery(new Term("content", escapedQuery.ToLowerInvariant()));
     }
 
-    private Query BuildPhraseQuery(string queryText, StandardAnalyzer analyzer)
+    private Query BuildPhraseQuery(string queryText, Analyzer analyzer)
     {
         var parser = new QueryParser(LUCENE_VERSION, "content", analyzer);
         return parser.Parse($"\"{EscapeQueryText(queryText)}\"");
     }
 
-    private Query BuildRegexQuery(string queryText, StandardAnalyzer analyzer)
+    private Query BuildRegexQuery(string queryText, Analyzer analyzer)
     {
         try
         {
@@ -117,7 +118,7 @@ public class QueryPreprocessor
         }
     }
 
-    private Query BuildCodeQuery(string queryText, StandardAnalyzer analyzer)
+    private Query BuildCodeQuery(string queryText, Analyzer analyzer)
     {
         _logger.LogInformation("Code search: processing query '{Query}'", queryText);
         
@@ -173,7 +174,7 @@ public class QueryPreprocessor
         return codeParser.Parse(EscapeQueryText(queryText));
     }
 
-    private Query BuildStandardQuery(string queryText, StandardAnalyzer analyzer)
+    private Query BuildStandardQuery(string queryText, Analyzer analyzer)
     {
         var parser = new QueryParser(LUCENE_VERSION, "content", analyzer);
         parser.DefaultOperator = Operator.AND;

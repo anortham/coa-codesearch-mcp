@@ -39,6 +39,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 smartQueryPreprocessor,
+                CodeAnalyzer,
                 ToolLoggerMock.Object
             );
             return _tool;

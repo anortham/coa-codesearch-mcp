@@ -9,6 +9,7 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -39,6 +40,7 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
     private readonly IPathResolutionService _pathResolutionService;
     private readonly SimilarFilesResponseBuilder _responseBuilder;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<SimilarFilesTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
@@ -50,6 +52,7 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
         ICacheKeyGenerator keyGenerator,
         IPathResolutionService pathResolutionService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
+        CodeAnalyzer codeAnalyzer,
         ILogger<SimilarFilesTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
@@ -58,6 +61,7 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
         _keyGenerator = keyGenerator;
         _pathResolutionService = pathResolutionService;
         _vscode = vscode;
+        _codeAnalyzer = codeAnalyzer;
         _logger = logger;
         
         // Create response builder with dependencies
@@ -235,7 +239,7 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
                 // Configure MoreLikeThis
                 var mlt = new MoreLikeThis(reader)
                 {
-                    Analyzer = new StandardAnalyzer(LUCENE_VERSION),
+                    Analyzer = _codeAnalyzer,
                     MinTermFreq = 1,
                     MinDocFreq = 1,
                     MaxQueryTerms = 25,

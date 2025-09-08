@@ -53,21 +53,7 @@ public class FileIndexingService : IFileIndexingService
         
         // Initialize blacklisted extensions from configuration or defaults
         var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
-            ?? new[] { 
-                // Binary files
-                ".dll", ".exe", ".pdb", ".so", ".dylib", ".lib", ".a", ".o", ".obj",
-                // Media files  
-                ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".svg", ".webp",
-                ".mp3", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv",
-                // Archives
-                ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
-                // Database files
-                ".db", ".sqlite", ".mdf", ".ldf", ".bak",
-                // Temporary files
-                ".tmp", ".temp", ".cache", ".swp", ".swo",
-                // Logs (large files)
-                ".log"
-            };
+            ?? PathConstants.DefaultBlacklistedExtensions;
         _blacklistedExtensions = new HashSet<string>(blacklistedExts, StringComparer.OrdinalIgnoreCase);
         
         // Initialize excluded directories
@@ -466,9 +452,8 @@ public class FileIndexingService : IFileIndexingService
                 new TextField("content", content, Field.Store.YES), // KEEP - needed for line extraction
                                 
                                 // Multi-field indexing for different search modes
-                                new TextField("content_code", content, Field.Store.NO),        // Code-aware tokenization
-                                new TextField("content_literal", content, Field.Store.NO),     // Exact matching (uses KeywordTokenizer)
-                                new TextField("content_symbols", ExtractSymbolsOnly(content, typeData), Field.Store.NO), // Symbols only
+                                new TextField("content_symbols", ExtractSymbolsOnly(content, typeData), Field.Store.NO), // Symbol-only search (identifiers, class names)
+                                new TextField("content_patterns", content, Field.Store.NO),     // Pattern-preserving search (special chars preserved)
                 
                 // Metadata fields
                 new StringField("extension", fileInfo.Extension.ToLowerInvariant(), Field.Store.YES),

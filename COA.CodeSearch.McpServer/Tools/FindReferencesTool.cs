@@ -10,6 +10,7 @@ using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using COA.Mcp.Framework.Interfaces;
@@ -33,6 +34,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly ILogger<FindReferencesTool> _logger;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     public FindReferencesTool(
@@ -42,6 +44,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
+        CodeAnalyzer codeAnalyzer,
         ILogger<FindReferencesTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
@@ -49,6 +52,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryProcessor = queryProcessor;
+        _codeAnalyzer = codeAnalyzer;
         _logger = logger;
         _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
     }
@@ -100,9 +104,8 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
             Query query;
             if (parameters.IncludePotential)
             {
-                // Broader search including partial matches using Standard analyzer
-                var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION);
-                var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, analyzer);
+                // Broader search including partial matches using CodeAnalyzer
+                var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, _codeAnalyzer);
                 query = parser.Parse(queryResult.ProcessedQuery);
             }
             else
@@ -257,7 +260,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         else
         {
             // Use wildcard for case-insensitive
-            var parser = new QueryParser(LUCENE_VERSION, "content", new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION));
+            var parser = new QueryParser(LUCENE_VERSION, "content", _codeAnalyzer);
             booleanQuery.Add(parser.Parse(symbolName.ToLowerInvariant()), Occur.MUST);
         }
         
@@ -281,8 +284,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         else
         {
             // Use QueryParser with the processed query for case-insensitive search
-            var analyzer = new Lucene.Net.Analysis.Standard.StandardAnalyzer(LUCENE_VERSION);
-            var parser = new QueryParser(LUCENE_VERSION, "content_symbols", analyzer);
+            var parser = new QueryParser(LUCENE_VERSION, "content_symbols", _codeAnalyzer);
             booleanQuery.Add(parser.Parse(processedQuery.ToLowerInvariant()), Occur.MUST);
         }
         

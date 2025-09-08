@@ -15,6 +15,7 @@ using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using FrameworkErrorInfo = COA.Mcp.Framework.Models.ErrorInfo;
 using FrameworkRecoveryInfo = COA.Mcp.Framework.Models.RecoveryInfo;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -27,7 +28,6 @@ using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
-using Lucene.Net.Analysis.Standard;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -44,6 +44,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
     private readonly DirectorySearchResponseBuilder _responseBuilder;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<DirectorySearchTool> _logger;
+    private readonly CodeAnalyzer _codeAnalyzer;
     
     private static readonly HashSet<string> ExcludedDirectories = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -60,7 +61,8 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<DirectorySearchTool> logger)
+        ILogger<DirectorySearchTool> logger,
+        CodeAnalyzer codeAnalyzer)
         : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
@@ -71,6 +73,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         _responseBuilder = new DirectorySearchResponseBuilder(null, storageService);
         _vscode = vscode;
         _logger = logger;
+        _codeAnalyzer = codeAnalyzer;
     }
 
     public override string Name => ToolNames.DirectorySearch;

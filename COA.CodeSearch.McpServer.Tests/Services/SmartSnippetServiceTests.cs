@@ -7,7 +7,6 @@ using COA.CodeSearch.McpServer.Services.Lucene;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
 using Lucene.Net.Store;
-using Lucene.Net.Analysis.Standard;
 using Lucene.Net.Util;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using System.Threading.Tasks;
@@ -25,16 +24,18 @@ namespace COA.CodeSearch.McpServer.Tests.Services
         private Mock<ILogger<SmartSnippetService>> _loggerMock = null!;
         private IndexSearcher _searcher = null!;
         private RAMDirectory _directory = null!;
+        private CodeAnalyzer _codeAnalyzer = null!;
 
         [SetUp]
         public void SetUp()
         {
             _loggerMock = new Mock<ILogger<SmartSnippetService>>();
-            _service = new SmartSnippetService(_loggerMock.Object);
+            _codeAnalyzer = new CodeAnalyzer(LuceneVersion.LUCENE_48);
+            _service = new SmartSnippetService(_loggerMock.Object, _codeAnalyzer);
             
             // Setup in-memory index for testing
             _directory = new RAMDirectory();
-            var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, new StandardAnalyzer(LuceneVersion.LUCENE_48));
+            var config = new IndexWriterConfig(LuceneVersion.LUCENE_48, _codeAnalyzer);
             
             using (var writer = new IndexWriter(_directory, config))
             {
@@ -55,6 +56,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
         {
             _searcher?.IndexReader?.Dispose();
             _directory?.Dispose();
+            _codeAnalyzer?.Dispose();
         }
 
         [Test]

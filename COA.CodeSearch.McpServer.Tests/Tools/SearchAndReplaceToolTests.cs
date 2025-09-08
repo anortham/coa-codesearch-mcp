@@ -46,6 +46,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 smartQueryPreprocessor,
                 resourceStorageServiceMock.Object,
                 advancedPatternMatcherMock.Object,
+                CodeAnalyzer,
                 ToolLoggerMock.Object
             );
             return _tool;

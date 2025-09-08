@@ -1,4 +1,5 @@
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Services.Utils;
 using Microsoft.Extensions.Logging;
 using System.Text.RegularExpressions;
 
@@ -39,6 +40,27 @@ public class SmartQueryPreprocessor
             };
         }
 
+        // Check for invalid wildcard patterns and attempt to sanitize
+        if (WildcardValidator.IsInvalidWildcardQuery(userQuery))
+        {
+            var sanitizedQuery = WildcardValidator.SanitizeWildcardQuery(userQuery);
+            if (sanitizedQuery == null)
+            {
+                // Cannot sanitize, return error result
+                return new QueryProcessingResult
+                {
+                    ProcessedQuery = userQuery,
+                    TargetField = "content",
+                    DetectedMode = SearchMode.Standard,
+                    Reason = "Invalid wildcard pattern (pure wildcards cannot be processed)"
+                };
+            }
+            
+            // Use sanitized query and log the change
+            _logger.LogDebug("Sanitized invalid wildcard query: '{Original}' -> '{Sanitized}'", userQuery, sanitizedQuery);
+            userQuery = sanitizedQuery;
+        }
+
         var detectedMode = mode == SearchMode.Auto ? DetectOptimalMode(userQuery) : mode;
         var result = ProcessForMode(userQuery, detectedMode);
 
@@ -53,20 +75,14 @@ public class SmartQueryPreprocessor
     /// </summary>
     private SearchMode DetectOptimalMode(string query)
     {
-        // Check for special characters that break Lucene parser
+        // Check for special characters that should use pattern-preserving search
         if (ContainsSpecialChars(query))
         {
-            return SearchMode.Literal;
+            return SearchMode.Pattern;
         }
 
-        // Check for code patterns (method calls, namespaces, etc.)
-        if (CodePatternPattern.IsMatch(query))
-        {
-            return SearchMode.Code;
-        }
-
-        // Check if it looks like a simple symbol name
-        if (IsSimpleSymbolQuery(query))
+        // Check for code patterns (method calls, namespaces, etc.) for enhanced symbol detection
+        if (CodePatternPattern.IsMatch(query) || IsSimpleSymbolQuery(query))
         {
             return SearchMode.Symbol;
         }
@@ -82,20 +98,12 @@ public class SmartQueryPreprocessor
     {
         return mode switch
         {
-            SearchMode.Literal => new QueryProcessingResult
+            SearchMode.Pattern => new QueryProcessingResult
             {
-                ProcessedQuery = query, // No processing for literal search
-                TargetField = "content_literal",
-                DetectedMode = SearchMode.Literal,
-                Reason = "Special characters detected - using exact matching"
-            },
-
-            SearchMode.Code => new QueryProcessingResult
-            {
-                ProcessedQuery = ProcessCodeQuery(query),
-                TargetField = "content_code",
-                DetectedMode = SearchMode.Code,
-                Reason = "Code patterns detected - using enhanced code tokenization"
+                ProcessedQuery = query, // Minimal processing for pattern-preserving search
+                TargetField = "content_patterns",
+                DetectedMode = SearchMode.Pattern,
+                Reason = "Special characters detected - using pattern-preserving search"
             },
 
             SearchMode.Symbol => new QueryProcessingResult
@@ -152,15 +160,6 @@ public class SmartQueryPreprocessor
         return query.Trim();
     }
 
-    /// <summary>
-    /// Process query for code-aware search
-    /// </summary>
-    private string ProcessCodeQuery(string query)
-    {
-        // Enhanced processing for code patterns
-        // Could add more sophisticated code-aware processing here
-        return query.Trim();
-    }
 
     /// <summary>
     /// Process query for symbol-only search

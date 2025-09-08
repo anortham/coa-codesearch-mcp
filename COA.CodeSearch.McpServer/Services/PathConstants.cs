@@ -30,6 +30,24 @@ public static class PathConstants
         BaseDirectoryName, CodeSearchDirectoryName, ".codenav"
     };
     
+    // Blacklisted extensions (common across services) - files to exclude from indexing
+    public static readonly string[] DefaultBlacklistedExtensions = 
+    {
+        // Binary files
+        ".dll", ".exe", ".pdb", ".so", ".dylib", ".lib", ".a", ".o", ".obj",
+        // Media files  
+        ".jpg", ".jpeg", ".png", ".gif", ".bmp", ".ico", ".svg", ".webp",
+        ".mp3", ".mp4", ".avi", ".mov", ".wmv", ".flv", ".webm", ".mkv",
+        // Archives
+        ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
+        // Database files
+        ".db", ".sqlite", ".mdf", ".ldf", ".bak",
+        // Temporary files
+        ".tmp", ".temp", ".cache", ".swp", ".swo",
+        // Logs (large files)
+        ".log"
+    };
+    
     // Hash settings
     public const int WorkspaceHashLength = 8; // Reduced from 16 for readability
     public const int MaxSafeWorkspaceName = 30;
