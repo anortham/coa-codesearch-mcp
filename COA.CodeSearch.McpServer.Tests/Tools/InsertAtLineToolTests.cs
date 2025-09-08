@@ -8,6 +8,7 @@ using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.Models;
 using COA.Mcp.Framework;
+using COA.Mcp.Framework.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
@@ -237,7 +238,7 @@ Line 5");
             };
 
             // Act & Assert
-            Assert.ThrowsAsync<ArgumentException>(
+            Assert.ThrowsAsync<ToolExecutionException>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
         }
 
@@ -278,7 +279,7 @@ Line 5");
             };
 
             // Act & Assert
-            Assert.ThrowsAsync<ArgumentException>(
+            Assert.ThrowsAsync<ToolExecutionException>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
         }
 
@@ -295,9 +296,14 @@ Line 5");
                 ContextLines = 2
             };
 
-            // Act & Assert
-            Assert.ThrowsAsync<FileNotFoundException>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            // Act
+            var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Success.Should().BeFalse();
+            result.Error.Should().NotBeNull();
+            result.Error!.Message.Should().Contain("File not found");
         }
 
         [Test]

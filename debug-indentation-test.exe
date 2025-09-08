@@ -1,0 +1,37 @@
+using System;
+using System.IO;
+using System.Threading.Tasks;
+
+class Program
+{
+    static async Task Main(string[] args)
+    {
+        Console.WriteLine("=== DEBUGGING INDENTATION DETECTION ===");
+        
+        // Create a test file with the exact same content as the failing test
+        var testFilePath = Path.GetTempFileName();
+        var mixedIndentContent = "Line 1\n\tTab indented\n    Space indented\nNo indent";
+        await File.WriteAllTextAsync(testFilePath, mixedIndentContent);
+        
+        // Read the file the same way the tool does
+        var lines = await File.ReadAllLinesAsync(testFilePath);
+        
+        Console.WriteLine("File content:");
+        for (int i = 0; i < lines.Length; i++)
+        {
+            // Show raw bytes to see tabs vs spaces clearly
+            var bytes = System.Text.Encoding.UTF8.GetBytes(lines[i]);
+            var hex = BitConverter.ToString(bytes);
+            Console.WriteLine($"  Line {i+1}: '{lines[i]}' -> Bytes: {hex}");
+        }
+        
+        // Test what DetectIndentationForInsertion would see
+        Console.WriteLine("\n=== INSERT BEFORE LINE 2 (targetLineIndex = 1) ===");
+        // This is what the failing test is doing: inserting at LineNumber=2 which is targetLineIndex=1
+        
+        // Clean up
+        File.Delete(testFilePath);
+        
+        Console.WriteLine("Manual analysis needed - check the FileLineUtilities algorithm");
+    }
+}

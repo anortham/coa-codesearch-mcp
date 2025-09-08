@@ -58,7 +58,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     }
 
     public override string Name => ToolNames.FileSearch;
-    public override string Description => "USE BEFORE Read - Locate files by name/pattern instead of guessing paths. FASTER than manual navigation. Essential for finding: UserService.cs, *.test.js, configuration files.";
+    public override string Description => "USE BEFORE Read - Locate files by name/pattern instead of guessing paths. FASTER than manual navigation. Supports recursive patterns (**/*.ext) and directory-specific searches (src/**/*.cs). Essential for finding: UserService.cs, **/*.test.js, configuration files.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<FileSearchResult>> ExecuteInternalAsync(
@@ -102,23 +102,16 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
                 return CreateNoIndexError(workspacePath);
             }
             
-            // Create a query for the filename_lower field (case-insensitive matching)
-            // For simple patterns, we can use a wildcard query
-            Query query;
-            if (pattern.Contains("*") || pattern.Contains("?"))
-            {
-                // Use filename_lower field for case-insensitive wildcard search
-                query = new WildcardQuery(new Term("filename_lower", pattern.ToLowerInvariant()));
-                _logger.LogDebug("Using WildcardQuery for pattern: {Pattern} on filename_lower field", pattern);
-            }
-            else
-            {
-                // Exact filename match using filename_lower for case-insensitive
-                query = new TermQuery(new Term("filename_lower", pattern.ToLowerInvariant()));
-                _logger.LogDebug("Using TermQuery for exact match: {Pattern} on filename_lower field", pattern);
-            }
+            // Determine if this pattern requires path-based search (contains ** or /)
+            // For regex patterns, only check for actual path separators, not escape sequences
+            var requiresPathSearch = parameters.UseRegex == true
+                ? pattern.Contains("/")  // For regex, only forward slash indicates path search
+                : pattern.Contains("**") || pattern.Contains("/") || pattern.Contains("\\");
+            var searchField = requiresPathSearch ? "path" : "filename_lower";
+            var searchPattern = requiresPathSearch ? pattern : pattern.ToLowerInvariant();
             
-            // For regex patterns or match-all patterns, use MatchAllDocsQuery and filter later
+            // Create appropriate query based on pattern type
+            Query query;
             if (parameters.UseRegex == true)
             {
                 query = new MatchAllDocsQuery();
@@ -128,6 +121,24 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             {
                 query = new MatchAllDocsQuery();
                 _logger.LogDebug("Using MatchAllDocsQuery for match-all pattern");
+            }
+            else if (pattern.Contains("**"))
+            {
+                // Lucene WildcardQuery doesn't support ** syntax, use MatchAllDocsQuery and filter later
+                query = new MatchAllDocsQuery();
+                _logger.LogDebug("Using MatchAllDocsQuery for ** pattern: {Pattern} (Lucene doesn't support ** wildcards)", pattern);
+            }
+            else if (pattern.Contains("*") || pattern.Contains("?"))
+            {
+                // Use wildcard query on appropriate field for simple wildcards
+                query = new WildcardQuery(new Term(searchField, searchPattern));
+                _logger.LogDebug("Using WildcardQuery for pattern: {Pattern} on {Field} field", pattern, searchField);
+            }
+            else
+            {
+                // Exact match on appropriate field
+                query = new TermQuery(new Term(searchField, searchPattern));
+                _logger.LogDebug("Using TermQuery for exact match: {Pattern} on {Field} field", pattern, searchField);
             }
             
             var searchResult = await _luceneIndexService.SearchAsync(
@@ -142,7 +153,10 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             var files = new List<FileSearchMatch>();
             var useRegex = parameters.UseRegex ?? false;
             var regex = useRegex ? new Regex(pattern, RegexOptions.IgnoreCase) : null;
-            var globPattern = useRegex ? null : ConvertGlobToRegex(pattern);
+            
+            // For ** patterns, we need to normalize the pattern and create the regex once
+            var normalizedPattern = pattern.Replace('\\', '/');
+            var globPattern = useRegex ? null : ConvertGlobToRegex(normalizedPattern);
             
             _logger.LogDebug("Filtering {Count} search hits with pattern: {Pattern} (regex: {UseRegex})", 
                 searchResult.Hits.Count, pattern, useRegex);
@@ -154,13 +168,25 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
                 {
                     var fileName = Path.GetFileName(filePath);
                     
-                    // Check if filename matches pattern
-                    bool matches = useRegex 
-                        ? regex!.IsMatch(fileName)
-                        : globPattern!.IsMatch(fileName);
+                    // Choose what to match against based on pattern type
+                    var matchTarget = requiresPathSearch ? filePath : fileName;
                     
-                    _logger.LogDebug("File {FileName} matches pattern {Pattern}: {Matches}", 
-                        fileName, pattern, matches);
+                    // Check if target matches pattern
+                    bool matches;
+                    if (useRegex)
+                    {
+                        // For regex patterns, use the original target without normalization
+                        matches = regex!.IsMatch(matchTarget);
+                    }
+                    else
+                    {
+                        // For glob patterns, normalize path separators for consistent matching
+                        var normalizedTarget = matchTarget.Replace('\\', '/');
+                        matches = globPattern!.IsMatch(normalizedTarget);
+                    }
+                    
+                    _logger.LogDebug("Target {MatchTarget} matches pattern {Pattern}: {Matches}", 
+                        requiresPathSearch ? $"path:{filePath}" : $"filename:{fileName}", pattern, matches);
                     
                     if (matches)
                     {
@@ -351,9 +377,29 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     
     private Regex ConvertGlobToRegex(string pattern)
     {
-        var regexPattern = "^" + Regex.Escape(pattern)
-            .Replace("\\*", ".*")
-            .Replace("\\?", ".") + "$";
+        // Handle recursive ** patterns properly (assumes normalized forward slash paths)
+        var regexPattern = Regex.Escape(pattern)
+            .Replace("\\*\\*/", ".*/")      // **/ becomes .*/ (match any directory path)
+            .Replace("/\\*\\*", "/.*")      // /** becomes /.* (match any subdirectory)
+            .Replace("\\*\\*", ".*")        // ** becomes .* (match anything)
+            .Replace("\\*", "[^/]*")        // * becomes [^/]* (match filename without path separators)
+            .Replace("\\?", "[^/]");        // ? becomes [^/] (single char without path separators)
+        
+        // For patterns starting with a directory (like "src/**/*.cs"), allow matching anywhere in path
+        // For patterns starting with ** (like "**/*.cs"), ensure they match from path boundaries
+        if (pattern.StartsWith("**/"))
+        {
+            regexPattern = "(^|/)" + regexPattern + "$";  // Match at start or after path separator
+        }
+        else if (pattern.Contains("/"))
+        {
+            regexPattern = "/" + regexPattern + "$";      // Match after path separator for directory patterns
+        }
+        else
+        {
+            regexPattern = "^" + regexPattern + "$";      // Exact match for filename-only patterns
+        }
+        
         return new Regex(regexPattern, RegexOptions.IgnoreCase);
     }
     

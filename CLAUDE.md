@@ -5,6 +5,7 @@
 This server provides powerful code search and navigation capabilities via Lucene.NET indexing and Tree-sitter type extraction. Features hybrid local indexing model with multi-workspace support and cross-platform compatibility.
 
 ### Core Tools Available (12 total)
+
 ```csharp
 // Search & Navigation
 ToolNames.TextSearch = "text_search"           // Full-text code search
@@ -13,7 +14,7 @@ ToolNames.GoToDefinition = "goto_definition"   // Jump to symbol definitions
 ToolNames.FindReferences = "find_references"   // Find all usages
 
 // File Operations
-ToolNames.FileSearch = "file_search"           // Find files by pattern
+ToolNames.FileSearch = "file_search"           // Find files by pattern (supports **/*.ext recursive patterns)
 ToolNames.DirectorySearch = "directory_search" // Find directories
 ToolNames.RecentFiles = "recent_files"         // Recent modifications
 ToolNames.SimilarFiles = "similar_files"       // Find similar code
@@ -28,6 +29,7 @@ ToolNames.IndexWorkspace = "index_workspace"   // Build/update search index
 ## 🚨 Critical: Code Changes Require Full Restart
 
 **After ANY code changes:**
+
 1. Exit Claude Code completely
 2. Run: `dotnet build -c Release`
 3. Restart Claude Code
@@ -38,34 +40,42 @@ ToolNames.IndexWorkspace = "index_workspace"   // Build/update search index
 ## 🔍 Essential Usage Patterns
 
 ### Always Start With
+
 ```bash
 # REQUIRED FIRST - Initialize search index
 mcp__codesearch__index_workspace --workspacePath "path/to/project"
 ```
 
 ### Common Searches
+
 ```bash
 # Find code patterns
 mcp__codesearch__text_search --query "class UserService"
 
-# Navigate to definitions  
+# Navigate to definitions
 mcp__codesearch__goto_definition --symbol "UserService"
 
 # Find all usages before refactoring
-mcp__codesearch__find_references --symbol "UpdateUser" 
+mcp__codesearch__find_references --symbol "UpdateUser"
 
-# Search files by name
+# Search files by name (simple patterns)
 mcp__codesearch__file_search --pattern "*Controller.cs"
+
+# Search files recursively (NEW: supports **/* patterns)
+mcp__codesearch__file_search --pattern "**/*.csproj"  # All .csproj files recursively
+mcp__codesearch__file_search --pattern "src/**/*.test.js"  # All test files in src directory
 ```
 
 ## 🔤 Enhanced Features (2025-09-05)
 
 ### CamelCase Tokenization with Generic Type Support
+
 - **Before**: "McpToolBase" search returned 0 hits
 - **After**: Returns all `McpToolBase<TParams, TResult>` occurrences
 - **Implementation**: Enhanced `SplitCamelCase` in `CodeAnalyzer.cs:519-587`
 
 **Examples:**
+
 ```bash
 search: "McpToolBase" → finds "McpToolBase<TParams, TResult>"
 search: "Tool" → finds "CodeSearchToolBase", "McpToolBase", etc.
@@ -73,13 +83,40 @@ search: "Repository" → finds "IRepository<T>", "UserRepository"
 ```
 
 ### ResourceStorageProvider & MCP Resources
+
 - **Problem**: `mcp-resource://memory-compressed/...` URIs timing out
 - **Solution**: Implemented `ResourceStorageProvider.cs`
 - **Result**: Large search results now accessible without timeouts
 
+### Recursive Glob Pattern Support (2025-09-08)
+
+- **Problem**: `**/*.csproj` patterns failed while `*.csproj` worked
+- **Root Cause**: FileSearchTool only searched `filename_lower` field, not full paths
+- **Solution**: Smart field selection - use `path` field for recursive patterns, `filename_lower` for simple patterns
+- **Implementation**: Enhanced `FileSearchTool.cs` with path detection and improved glob-to-regex conversion
+
+**Pattern Support:**
+
+```bash
+# Simple patterns (searches filename only)
+*.cs → Program.cs, Startup.cs
+*Controller.cs → HomeController.cs, UserController.cs
+
+# Recursive patterns (searches full paths)  
+**/*.csproj → Tools/Project.csproj, Tests/Unit/Tests.csproj
+src/**/*.test.js → src/components/Button.test.js, src/services/api.test.js
+```
+
+**Benefits:**
+- **Full compatibility** with standard glob syntax including `**`
+- **Performance optimized** - uses appropriate Lucene field for each pattern type  
+- **Cross-platform** - handles both `/` and `\` path separators
+- **Comprehensive test coverage** - 5 new test cases covering all scenarios
+
 ## 🏠 Hybrid Local Indexing Architecture
 
 ### Storage Model
+
 - **Local Workspace Indexes**: `.coa/codesearch/indexes/{workspace-name_hash}/` within workspace
 - **Global Logs**: `~/.coa/codesearch/logs/` for centralized logging
 - **Multi-Workspace**: Each workspace gets isolated index
@@ -98,10 +135,12 @@ search: "Repository" → finds "IRepository<T>", "UserRepository"
 **CRITICAL**: When working with instruction templates, NEVER guess what's available.
 
 ### Template Context Location
+
 `COA.Mcp.Framework/src/COA.Mcp.Framework/Services/InstructionTemplateProcessor.cs:131-206`
 
 ### Available Variables
-- `available_tools` - String array of tool names  
+
+- `available_tools` - String array of tool names
 - `available_markers` - String array of capability markers
 - `tool_priorities` - Dictionary<string, int> of tool priorities
 - `workflow_suggestions` - Array of workflow suggestions
@@ -111,17 +150,21 @@ search: "Repository" → finds "IRepository<T>", "UserRepository"
 - `enforcement_level` - String: "strongly_urge", "recommend", "suggest"
 
 ### Available Helper Functions
+
 - `has_tool(tools, tool)` - Check if tool exists in array
-- `has_marker(markers, marker)` - Check if marker exists  
+- `has_marker(markers, marker)` - Check if marker exists
 - `has_builtin(builtins, tool)` - Check if builtin exists
 
 ### Available Scriban Built-in Functions
+
 With v2.1.5+, standard Scriban functions are now available:
+
 - `array.size` - Get array length
 - `object.default` - Provide default value for null/undefined objects
 - `string.*` - All standard string functions (upcase, downcase, etc.)
 
 ### Template Pattern Examples
+
 ```scriban
 // ✅ CORRECT - Use native Scriban functions
 {{ tool_priorities[tool] | object.default 50 }}
@@ -143,6 +186,7 @@ With v2.1.5+, standard Scriban functions are now available:
 ## 🛠️ Code Patterns
 
 ### Path Resolution (Use Service)
+
 ```csharp
 // ✅ CORRECT
 _pathResolver.GetIndexPath(workspacePath)
@@ -154,6 +198,7 @@ Directory.Exists(path)
 ```
 
 ### Lucene Operations (Use Service)
+
 ```csharp
 // ✅ CORRECT
 await _indexService.IndexDocumentAsync(...)
@@ -164,6 +209,7 @@ using (var writer = IndexWriter.Create(...))
 ```
 
 ### Response Building
+
 ```csharp
 // ✅ CORRECT
 Data = new AIResponseData<T>
@@ -175,7 +221,10 @@ Data = new AIOptimizedData<T>
 
 ## 🧪 Testing & Debugging
 
+### This project uses NUnit NOT XUnit
+
 ### Unit Tests
+
 ```bash
 # All tests (should be 206+)
 dotnet test
@@ -185,6 +234,7 @@ dotnet test --filter "SymbolSearchToolTests"
 ```
 
 ### Health Checks
+
 ```bash
 # Check if indexed
 mcp__codesearch__recent_files --workspacePath "."
@@ -196,8 +246,9 @@ mcp__codesearch__index_workspace --workspacePath "." --forceRebuild true
 ## 📚 Related Projects
 
 - **COA MCP Framework**: Core framework for MCP tools
-- **Goldfish MCP**: Session and memory management  
+- **Goldfish MCP**: Session and memory management
 - **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
 
 ---
-*Last updated: 2025-09-05 - Enhanced CamelCase tokenization with generic type support, ResourceStorageProvider for MCP resource URIs, hybrid local indexing model*
+
+_Last updated: 2025-09-05 - Enhanced CamelCase tokenization with generic type support, ResourceStorageProvider for MCP resource URIs, hybrid local indexing model_

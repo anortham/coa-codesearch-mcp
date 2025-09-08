@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using System.Diagnostics;
 using System.Text.RegularExpressions;
 using Lucene.Net.Analysis.Standard;
+using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Util;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -25,7 +26,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     private readonly ILuceneIndexService _indexService;
     private readonly LineAwareSearchService _lineSearchService;
     private readonly IPathResolutionService _pathResolutionService;
-    private readonly QueryPreprocessor _queryPreprocessor;
+    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly IResourceStorageService _storageService;
         private readonly AdvancedPatternMatcher _patternMatcher;
     private readonly ILogger<SearchAndReplaceTool> _logger;
@@ -35,7 +36,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         ILuceneIndexService indexService,
         LineAwareSearchService lineSearchService,
         IPathResolutionService pathResolutionService,
-        QueryPreprocessor queryPreprocessor,
+        SmartQueryPreprocessor queryProcessor,
         IResourceStorageService storageService,
                 AdvancedPatternMatcher patternMatcher,
         ILogger<SearchAndReplaceTool> logger) : base(serviceProvider)
@@ -43,7 +44,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         _indexService = indexService;
         _lineSearchService = lineSearchService;
         _pathResolutionService = pathResolutionService;
-        _queryPreprocessor = queryPreprocessor;
+        _queryProcessor = queryProcessor;
                 _patternMatcher = patternMatcher;
         _storageService = storageService;
         _logger = logger;
@@ -191,7 +192,15 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             _logger.LogDebug("Auto-detected curly braces in search pattern, using literal search type");
         }
         
-        var query = _queryPreprocessor.BuildQuery(parameters.SearchPattern, searchType, parameters.CaseSensitive, analyzer);
+        // Use SmartQueryPreprocessor for multi-field search optimization
+        var searchMode = DetermineSearchMode(searchType);
+        var queryResult = _queryProcessor.Process(parameters.SearchPattern, searchMode);
+        
+        _logger.LogInformation("Search and Replace: {Pattern} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
+            parameters.SearchPattern, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
+        
+        var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, analyzer);
+        var query = parser.Parse(queryResult.ProcessedQuery);
 
         // Search for files containing the pattern
         var searchResults = await _indexService.SearchAsync(workspacePath, query, parameters.MaxMatches * 2, cancellationToken);
@@ -242,7 +251,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         try
         {
             var content = await File.ReadAllTextAsync(hit.FilePath);
-            var lines = content.Split('\n');
+            var lines = FileLineUtilities.SplitLines(content);
 
             for (int i = 0; i < lines.Length; i++)
             {
@@ -313,7 +322,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             try
             {
                 var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-                var lines = content.Split('\n');
+                var lines = FileLineUtilities.SplitLines(content);
 
                 foreach (var match in fileGroup)
                 {
@@ -405,7 +414,11 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             
             try
             {
-                var lines = await File.ReadAllLinesAsync(filePath, cancellationToken);
+                // Read original content to preserve line endings
+                var originalContent = await File.ReadAllTextAsync(filePath, cancellationToken);
+                
+                // Use FileLineUtilities to preserve original line endings
+                var (lines, encoding) = await FileLineUtilities.ReadFileWithEncodingAsync(filePath, cancellationToken);
                 
                 // Apply changes in reverse order to preserve line numbers
                 foreach (var change in fileGroup.OrderByDescending(c => c.LineNumber))
@@ -425,8 +438,8 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
                     }
                 }
 
-                // Write the modified file
-                await File.WriteAllLinesAsync(filePath, lines, cancellationToken);
+                // Write the modified file preserving original line endings and encoding
+                await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, lines, encoding, originalContent, cancellationToken);
 
                 _logger.LogInformation("Applied {ChangeCount} changes to {FilePath}", 
                     fileGroup.Count(), filePath);
@@ -581,5 +594,18 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         {
             return Path.GetFileName(fullPath) ?? fullPath;
         }
+    }
+    
+    private SearchMode DetermineSearchMode(string searchType)
+    {
+        return searchType?.ToLowerInvariant() switch
+        {
+            "literal" => SearchMode.Literal,
+            "regex" => SearchMode.Code,
+            "wildcard" => SearchMode.Standard,
+            "code" => SearchMode.Code,
+            "standard" or null => SearchMode.Standard,
+            _ => SearchMode.Standard // Default to standard for search & replace
+        };
     }
 }

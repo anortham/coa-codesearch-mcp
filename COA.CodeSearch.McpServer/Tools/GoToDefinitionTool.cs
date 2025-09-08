@@ -9,6 +9,7 @@ using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
@@ -32,6 +33,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly GoToDefinitionResponseBuilder _responseBuilder;
     private readonly ILogger<GoToDefinitionTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
@@ -42,12 +44,14 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        SmartQueryPreprocessor queryProcessor,
         ILogger<GoToDefinitionTool> logger) : base(serviceProvider)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _queryProcessor = queryProcessor;
         _responseBuilder = new GoToDefinitionResponseBuilder(logger as ILogger<GoToDefinitionResponseBuilder>, storageService);
         _logger = logger;
     }
@@ -89,27 +93,31 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             
-            // Build query to find the symbol in type_names field (definitions only)
-            // Use CodeAnalyzer to match how the field was indexed
+            // Use SmartQueryPreprocessor for optimal field selection and query processing
+            // Symbol definitions work best with SearchMode.Symbol targeting type_names field
+            var queryResult = _queryProcessor.Process(symbolName, SearchMode.Symbol);
+            
+            _logger.LogInformation("GoToDefinition: {Symbol} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
+                symbolName, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
+            
+            // Build query using the processed query and target field
             var analyzer = new CodeAnalyzer(LUCENE_VERSION, preserveCase: false, splitCamelCase: true);
             Query query;
             if (parameters.CaseSensitive)
             {
-                // For case-sensitive, we still need to use the analyzer since type_names is analyzed
-                // Note: CodeAnalyzer with preserveCase=false always lowercases, so true case-sensitive isn't possible
-                var parser = new QueryParser(LUCENE_VERSION, "type_names", analyzer);
-                query = parser.Parse(symbolName);
+                // For case-sensitive, use the target field from SmartQueryPreprocessor
+                var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, analyzer);
+                query = parser.Parse(queryResult.ProcessedQuery);
             }
             else
             {
-                // Case-insensitive search using QueryParser with CodeAnalyzer
-                var parser = new QueryParser(LUCENE_VERSION, "type_names", analyzer);
-                query = parser.Parse(symbolName);
+                // Case-insensitive search using processed query and target field
+                var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, analyzer);
+                query = parser.Parse(queryResult.ProcessedQuery);
             }
             
-            // Log the query for debugging
-            _logger.LogInformation("GoToDefinition searching for symbol '{Symbol}' with query: {Query}", 
-                symbolName, query.ToString());
+            // Log the final query for debugging
+            _logger.LogInformation("Generated Lucene query: {Query}", query.ToString());
             
             // Search for the definition
             var searchResult = await _luceneIndexService.SearchAsync(
@@ -253,11 +261,11 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
             return new AIOptimizedResponse<SymbolDefinition>
             {
                 Success = false,
-                Error = new ErrorInfo
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
                 {
                     Code = "GOTO_DEFINITION_ERROR",
                     Message = $"Failed to find definition: {ex.Message}",
-                    Recovery = new RecoveryInfo
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
                     {
                         Steps = new[]
                         {

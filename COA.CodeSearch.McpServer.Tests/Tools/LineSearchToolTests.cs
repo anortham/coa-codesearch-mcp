@@ -32,14 +32,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _lineSearchServiceMock = new Mock<LineAwareSearchService>(
                 lineAwareSearchLoggerMock.Object);
 
-            var queryPreprocessorMock = new Mock<QueryPreprocessor>(Mock.Of<ILogger<QueryPreprocessor>>());
+            // Create SmartQueryPreprocessor dependency
+            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
+            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
+            
             var resourceStorageServiceMock = new Mock<IResourceStorageService>();
             _tool = new LineSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 _lineSearchServiceMock.Object,
                 PathResolutionServiceMock.Object,
-                queryPreprocessorMock.Object,
+                smartQueryPreprocessor,
                 resourceStorageServiceMock.Object,
                 ToolLoggerMock.Object
             );

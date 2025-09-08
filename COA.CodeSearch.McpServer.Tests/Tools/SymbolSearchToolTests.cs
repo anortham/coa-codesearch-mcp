@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services;
+using Microsoft.Extensions.Logging;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -27,12 +28,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override SymbolSearchTool CreateTool()
         {
+            // Create SmartQueryPreprocessor dependency
+            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
+            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
+            
             _tool = new SymbolSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                smartQueryPreprocessor,
                 ToolLoggerMock.Object
             );
             return _tool;

@@ -8,6 +8,7 @@ using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.Models;
 using COA.Mcp.Framework;
+using COA.Mcp.Framework.Exceptions;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
@@ -179,10 +180,9 @@ Line 6");
                     result.Should().NotBeNull();
                     result.Success.Should().BeTrue();
 
-                    // TODO: INVESTIGATE - Indentation preservation may not be working correctly
-                    // The test currently expects the actual behavior, not the intended behavior
+                    // Verify indentation is preserved (line 2 originally had 4 spaces of indentation)
                     var fileLines = await File.ReadAllLinesAsync(_testFilePath);
-                    fileLines[1].Should().Be("New indented content"); // Currently NOT preserving indentation
+                    fileLines[1].Should().Be("    New indented content"); // Correctly preserving indentation
                 }
 
         [Test]
@@ -283,7 +283,7 @@ Line 6");
             };
 
             // Act & Assert
-            Assert.ThrowsAsync<ArgumentException>(
+            Assert.ThrowsAsync<ToolExecutionException>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
         }
 
@@ -324,9 +324,14 @@ Line 6");
                 ContextLines = 2
             };
 
-            // Act & Assert
-            Assert.ThrowsAsync<ArgumentException>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+            // Act
+            var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Success.Should().BeFalse();
+            result.Error.Should().NotBeNull();
+            result.Error!.Message.Should().Contain("StartLine");
         }
 
         [Test]
@@ -342,7 +347,7 @@ Line 6");
                 ContextLines = 2
             };
             // Act & Assert
-            Assert.ThrowsAsync<ArgumentException>(
+            Assert.ThrowsAsync<ToolExecutionException>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
                         }
 
@@ -358,9 +363,15 @@ Line 6");
                 PreserveIndentation = false,
                 ContextLines = 2
             };
-                        // Act & Assert
-                        Assert.ThrowsAsync<FileNotFoundException>(
-                            async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Act
+            var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
+
+            // Assert
+            result.Should().NotBeNull();
+            result.Success.Should().BeFalse();
+            result.Error.Should().NotBeNull();
+            result.Error!.Message.Should().Contain("file");
         }
 
         [Test]
