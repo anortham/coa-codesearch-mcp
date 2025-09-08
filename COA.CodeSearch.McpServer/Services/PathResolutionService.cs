@@ -315,11 +315,11 @@ public class PathResolutionService : IPathResolutionService
             throw new ArgumentException("Path contains invalid directory traversal sequences", nameof(workspacePath));
         }
         
-        // Check for excessively long paths that could cause issues
-        if (normalizedPath.Length > 240) // Allow some buffer for additional components
+        // Check for excessively long paths - only restrict on Windows (legacy limitation)
+        if (OperatingSystem.IsWindows() && normalizedPath.Length > 240) // Allow some buffer for additional components
         {
-            _logger.LogWarning("Path too long: {Length} characters: {WorkspacePath}", normalizedPath.Length, workspacePath);
-            throw new ArgumentException($"Path too long: {normalizedPath.Length} characters", nameof(workspacePath));
+            _logger.LogWarning("Path too long for Windows: {Length} characters: {WorkspacePath}", normalizedPath.Length, workspacePath);
+            throw new ArgumentException($"Path too long for Windows: {normalizedPath.Length} characters. Enable long path support or use shorter paths.", nameof(workspacePath));
         }
         
         // Log validation success for debugging

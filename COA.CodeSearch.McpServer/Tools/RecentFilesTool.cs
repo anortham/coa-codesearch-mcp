@@ -112,9 +112,9 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
                 return CreateNoIndexError(workspacePath);
             }
             
-            // For now, get all files and filter in memory
-            // TODO: Fix NumericRangeQuery once we understand the indexing issue
-            var query = new MatchAllDocsQuery();
+            // Use NumericRangeQuery for efficient server-side filtering by modification time
+            var cutoffTicks = cutoffTime.Ticks;
+            var query = NumericRangeQuery.NewInt64Range("modified", cutoffTicks, long.MaxValue, true, true);
             
             COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult;
             try
@@ -122,7 +122,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
                 searchResult = await _luceneIndexService.SearchAsync(
                     workspacePath,
                     query,
-                    500,  // Get many files for filtering
+                    maxResults, // Use requested max results since we're filtering server-side
                     false, // No snippets needed for recent files
                     cancellationToken
                 );
@@ -151,40 +151,35 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
                     
                 if (!string.IsNullOrEmpty(hit.FilePath) && hit.LastModified.HasValue)
                 {
-                    // Double-check the time filter (Lucene queries can be approximate)
-                    if (hit.LastModified.Value >= cutoffTime)
+                    // Apply extension filter if provided
+                    if (!string.IsNullOrEmpty(parameters.ExtensionFilter))
                     {
-                        // Apply extension filter if provided
-                        if (!string.IsNullOrEmpty(parameters.ExtensionFilter))
-                        {
-                            var extensions = parameters.ExtensionFilter
-                                .Split(',')
-                                .Select(e => e.Trim().StartsWith('.') ? e.Trim() : "." + e.Trim())
-                                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                            
-                            var fileExtension = Path.GetExtension(hit.FilePath);
-                            if (!extensions.Contains(fileExtension))
-                                continue;
-                        }
+                        var extensions = parameters.ExtensionFilter
+                            .Split(',')
+                            .Select(e => e.Trim().StartsWith('.') ? e.Trim() : "." + e.Trim())
+                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
                         
-                        recentFiles.Add(new RecentFileInfo
-                        {
-                            FilePath = hit.FilePath,
-                            FileName = Path.GetFileName(hit.FilePath),
-                            Directory = Path.GetDirectoryName(hit.FilePath) ?? "",
-                            Extension = Path.GetExtension(hit.FilePath),
-                            LastModified = hit.LastModified.Value,
-                            SizeBytes = hit.Fields.TryGetValue("size", out var sizeStr) && long.TryParse(sizeStr, out var size) ? size : 0,
-                            ModifiedAgo = DateTime.UtcNow - hit.LastModified.Value
-                        });
+                        var fileExtension = Path.GetExtension(hit.FilePath);
+                        if (!extensions.Contains(fileExtension))
+                            continue;
                     }
+                    
+                    recentFiles.Add(new RecentFileInfo
+                    {
+                        FilePath = hit.FilePath,
+                        FileName = Path.GetFileName(hit.FilePath),
+                        Directory = Path.GetDirectoryName(hit.FilePath) ?? "",
+                        Extension = Path.GetExtension(hit.FilePath),
+                        LastModified = hit.LastModified.Value,
+                        SizeBytes = hit.Fields.TryGetValue("size", out var sizeStr) && long.TryParse(sizeStr, out var size) ? size : 0,
+                        ModifiedAgo = DateTime.UtcNow - hit.LastModified.Value
+                    });
                 }
             }
             
-            // Sort by modification time (most recent first)
+            // Sort by modification time (most recent first) - Lucene already limited results
             recentFiles = recentFiles
                 .OrderByDescending(f => f.LastModified)
-                .Take(maxResults)
                 .ToList();
             
             _logger.LogDebug("Found {Count} recent files in the last {TimeFrame}", 

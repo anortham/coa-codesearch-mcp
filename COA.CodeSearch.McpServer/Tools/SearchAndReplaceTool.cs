@@ -290,7 +290,8 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             "regex" => Regex.IsMatch(line, parameters.SearchPattern, 
                 parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
             "literal" => line.Contains(parameters.SearchPattern, comparison),
-            "code" => line.Contains(parameters.SearchPattern, comparison), // TODO: Enhance with word boundaries
+            "code" => Regex.IsMatch(line, $@"\b{Regex.Escape(parameters.SearchPattern)}\b",
+                parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
             _ => line.Contains(parameters.SearchPattern, comparison)
         };
     }
