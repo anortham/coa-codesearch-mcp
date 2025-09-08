@@ -2,7 +2,7 @@
 
 A lightning-fast code search and navigation tool for Claude Code that helps you find files, search code, navigate symbols, and understand your projects instantly. Just ask Claude to "find all my React components", "show me recent changes", or "find the definition of UserService" and get results in milliseconds.
 
-Built with .NET 9.0 and COA MCP Framework 2.0.1, featuring Lucene-powered search with AI-optimized responses.
+Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search with AI-optimized responses.
 
 ## 🚀 Features
 
@@ -157,7 +157,7 @@ The build script automatically detects common Linux library paths and supports v
 
 ```bash
 # Install from NuGet (recommended)
-dotnet tool install -g COA.CodeSearch --version 2.1.0
+dotnet tool install -g COA.CodeSearch --version 2.1.43
 
 # Verify installation
 codesearch --version
@@ -500,7 +500,7 @@ Configuration via `appsettings.json`:
 - **Configuration**: Per-workspace settings with workspace-specific isolation
 
 ### Framework Integration
-Built on **COA MCP Framework 2.0.1**:
+Built on **COA MCP Framework 2.1.8**:
 - Automatic tool discovery
 - Token optimization
 - Progressive response disclosure
@@ -578,7 +578,7 @@ Close Claude Code completely and restart it
 - Template file: `Templates/codesearch-instructions.scriban`
 - Embedded resource name: `COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban`
 - Loading mechanism: Changed from file-based (`WithInstructionsFromTemplate`) to resource-based (`WithTemplateInstructions` with embedded content)
-- Framework fix: COA.Mcp.Framework v2.1.3+ includes defensive checks for missing template directories
+- Framework fix: COA.Mcp.Framework v2.1.8+ includes defensive checks for missing template directories
 
 This change ensures CodeSearch works consistently across all workspaces without filesystem dependencies.
 
@@ -632,9 +632,9 @@ MIT License - see [LICENSE](LICENSE) file.
 
 - **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
 - **Documentation**: [docs/](docs/) folder
-- **Framework**: [COA MCP Framework 2.0.1](https://www.nuget.org/packages/COA.Mcp.Framework)
+- **Framework**: [COA MCP Framework 2.1.8](https://www.nuget.org/packages/COA.Mcp.Framework)
 - **NuGet Package**: [COA.CodeSearch](https://www.nuget.org/packages/COA.CodeSearch)
 
 ---
 
-**Built with** [COA MCP Framework 2.0.1](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
+**Built with** [COA MCP Framework 2.1.8](https://www.nuget.org/packages/COA.Mcp.Framework) • **Powered by** [Lucene.NET](https://lucenenet.apache.org/)
