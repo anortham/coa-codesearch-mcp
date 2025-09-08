@@ -16,7 +16,6 @@ using System.Threading;
 using System;
 using System.Collections.Generic;
 using COA.Mcp.Framework.Models;
-using Microsoft.Extensions.Logging;
 using COA.Mcp.Framework.Exceptions;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools

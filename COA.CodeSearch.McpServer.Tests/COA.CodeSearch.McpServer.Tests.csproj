@@ -7,6 +7,8 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Suppress common test warnings that don't affect test reliability -->
+    <NoWarn>CS8602;CS1998;NUnit1033</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

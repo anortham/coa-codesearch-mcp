@@ -87,7 +87,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
             var result = new FindPatternsResult
             {
                 FilePath = filePath,
-                Language = extractionResult.Language,
+                Language = extractionResult.Language ?? "unknown",
                 PatternsFound = patterns,
                 TotalPatterns = patterns.Count,
                 AnalysisTime = DateTime.UtcNow
@@ -105,7 +105,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Detects semantic patterns in the code based on Tree-sitter analysis and file content.
     /// </summary>
-    private async Task<List<CodePattern>> DetectPatternsAsync(
+    private Task<List<CodePattern>> DetectPatternsAsync(
         string fileContent, 
         TypeExtractionResult extractionResult, 
         FindPatternsParameters parameters,
@@ -157,7 +157,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
             filteredPatterns = filteredPatterns.Take(parameters.MaxResults).ToList();
         }
 
-        return filteredPatterns.OrderBy(p => p.LineNumber).ToList();
+        return Task.FromResult(filteredPatterns.OrderBy(p => p.LineNumber).ToList());
     }
 
     /// <summary>

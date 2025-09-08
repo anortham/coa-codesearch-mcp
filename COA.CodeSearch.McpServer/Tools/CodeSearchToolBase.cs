@@ -58,7 +58,7 @@ public abstract class CodeSearchToolBase<TParams, TResult> : McpToolBase<TParams
         // Call base validation but catch and simplify validation errors for test compatibility
         try
         {
-            base.ValidateParameters(parameters);
+            base.ValidateParameters(parameters!); // parameters is checked above, safe to use !
         }
         catch (ValidationException ex) when (ex.Message.Contains("Parameter validation failed"))
         {

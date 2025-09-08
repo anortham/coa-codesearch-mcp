@@ -131,7 +131,7 @@ public static class FileLineUtilities
         /// </summary>
         private static string DetectMinimumIndentation(string[] lines)
         {
-            string minIndent = null;
+            string? minIndent = null;
             
             foreach (var line in lines)
             {
