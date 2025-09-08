@@ -1,298 +1,123 @@
-# CodeSearch MCP Server - AI Development Context
+# CodeSearch MCP Server - Developer Guide
 
-## 🎯 Quick Start for AI Assistants
+## 🎯 Quick Reference
 
-This server provides powerful code search and navigation capabilities via Lucene.NET indexing and Tree-sitter type extraction. Features hybrid local indexing model with multi-workspace support and cross-platform compatibility.
+Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace indexing with cross-platform support.
 
-### Core Tools Available (12 total)
+**Version**: 2.1.8 | **Status**: Production Ready | **Warnings**: Zero
 
-```csharp
-// Search & Navigation
-ToolNames.TextSearch = "text_search"           // Full-text code search
-ToolNames.SymbolSearch = "symbol_search"       // Find classes, methods, interfaces
-ToolNames.GoToDefinition = "goto_definition"   // Jump to symbol definitions
-ToolNames.FindReferences = "find_references"   // Find all usages
+### Core Tools (17 available)
 
-// File Operations
-ToolNames.FileSearch = "file_search"           // Find files by pattern (supports **/*.ext recursive patterns)
-ToolNames.DirectorySearch = "directory_search" // Find directories
-ToolNames.RecentFiles = "recent_files"         // Recent modifications
-ToolNames.SimilarFiles = "similar_files"       // Find similar code
+```bash
+# Essential Search
+text_search         # Full-text code search with CamelCase tokenization  
+symbol_search       # Find classes, methods, interfaces by name
+goto_definition     # Jump to exact symbol definitions
+find_references     # Find ALL usages (critical before refactoring)
 
-// Advanced Operations
-ToolNames.LineSearch = "line_search"           // Line-by-line search (replaces grep)
-ToolNames.SearchAndReplace = "search_and_replace" // Bulk find & replace
-ToolNames.BatchOperations = "batch_operations" // Multiple operations at once
-ToolNames.IndexWorkspace = "index_workspace"   // Build/update search index
+# File Discovery  
+file_search         # Pattern-based file finding (supports **/*.ext)
+recent_files        # Recent modifications (great for context)
+similar_files       # Find similar code patterns
+directory_search    # Find directories by pattern
+
+# Advanced Search
+line_search         # Line-by-line search (replaces grep/rg)
+search_and_replace  # Bulk find & replace with preview
+batch_operations    # Multiple searches in parallel
+
+# Code Editing
+insert_at_line      # Insert code at specific line numbers
+replace_lines       # Replace line ranges with new content
+delete_lines        # Delete line ranges precisely
+
+# Semantic Analysis
+get_symbols_overview # Extract all symbols from files (classes, methods, etc.)
+find_patterns       # Detect code patterns and quality issues
+
+# System
+index_workspace     # Build/update search index (REQUIRED FIRST)
 ```
 
-## 🚨 Critical: Code Changes Require Full Restart
+## 🚨 Development Workflow
 
-**After ANY code changes:**
-
+**Code Changes:**
 1. Exit Claude Code completely
-2. Run: `dotnet build -c Release`
+2. `dotnet build -c Debug` (Debug mode recommended)  
 3. Restart Claude Code
-4. **⚠️ Testing before restart shows OLD CODE - not your changes!**
+4. ⚠️ **Testing before restart shows OLD CODE**
 
-**Never run locally:** `dotnet run -- stdio` creates orphaned processes that lock indexes.
+**Never run:** `dotnet run -- stdio` (creates orphaned processes)
 
-## 🔍 Essential Usage Patterns
+## 🔍 Usage Essentials
 
-### Always Start With
-
+**Always start with:**
 ```bash
-# REQUIRED FIRST - Initialize search index
-mcp__codesearch__index_workspace --workspacePath "path/to/project"
+mcp__codesearch__index_workspace --workspacePath "."
 ```
 
-### Common Searches
-
+**Common patterns:**
 ```bash
-# Find code patterns
+# Search code
 mcp__codesearch__text_search --query "class UserService"
 
-# Navigate to definitions
-mcp__codesearch__goto_definition --symbol "UserService"
+# Verify types before coding
+mcp__codesearch__goto_definition --symbol "UserService" 
 
-# Find all usages before refactoring
+# Check impact before refactoring
 mcp__codesearch__find_references --symbol "UpdateUser"
 
-# Search files by name (simple patterns)
+# File patterns (simple and recursive)
 mcp__codesearch__file_search --pattern "*Controller.cs"
-
-# Search files recursively (NEW: supports **/* patterns)
-mcp__codesearch__file_search --pattern "**/*.csproj"  # All .csproj files recursively
-mcp__codesearch__file_search --pattern "src/**/*.test.js"  # All test files in src directory
+mcp__codesearch__file_search --pattern "**/*.csproj"
 ```
 
-## 🔤 Enhanced Features (2025-09-05)
+## 🏗️ Architecture
 
-### CamelCase Tokenization with Generic Type Support
-
-- **Before**: "McpToolBase" search returned 0 hits
-- **After**: Returns all `McpToolBase<TParams, TResult>` occurrences
-- **Implementation**: Enhanced `SplitCamelCase` in `CodeAnalyzer.cs:519-587`
-
-**Examples:**
-
-```bash
-search: "McpToolBase" → finds "McpToolBase<TParams, TResult>"
-search: "Tool" → finds "CodeSearchToolBase", "McpToolBase", etc.
-search: "Repository" → finds "IRepository<T>", "UserRepository"
-```
-
-### ResourceStorageProvider & MCP Resources
-
-- **Problem**: `mcp-resource://memory-compressed/...` URIs timing out
-- **Solution**: Implemented `ResourceStorageProvider.cs`
-- **Result**: Large search results now accessible without timeouts
-
-### Recursive Glob Pattern Support (2025-09-08)
-
-- **Problem**: `**/*.csproj` patterns failed while `*.csproj` worked
-- **Root Cause**: FileSearchTool only searched `filename_lower` field, not full paths
-- **Solution**: Smart field selection - use `path` field for recursive patterns, `filename_lower` for simple patterns
-- **Implementation**: Enhanced `FileSearchTool.cs` with path detection and improved glob-to-regex conversion
-
-**Pattern Support:**
-
-```bash
-# Simple patterns (searches filename only)
-*.cs → Program.cs, Startup.cs
-*Controller.cs → HomeController.cs, UserController.cs
-
-# Recursive patterns (searches full paths)  
-**/*.csproj → Tools/Project.csproj, Tests/Unit/Tests.csproj
-src/**/*.test.js → src/components/Button.test.js, src/services/api.test.js
-```
-
-**Benefits:**
-- **Full compatibility** with standard glob syntax including `**`
-- **Performance optimized** - uses appropriate Lucene field for each pattern type  
-- **Cross-platform** - handles both `/` and `\` path separators
-- **Comprehensive test coverage** - 5 new test cases covering all scenarios
-
-### Token Optimization System (2025-09-08)
-
-**✅ ACTIVE:** Token optimization is fully operational despite misleading TODO comment in older code.
-
-**How it Works:**
-- **Response Builders**: All tools use `BaseResponseBuilder<T>` with token-aware optimization
-- **Token Budget Allocation**: 70% data, 15% insights, 15% actions
-- **Aggressive Limiting**: Uses only 40% of available token budget for safety
-- **Resource Storage**: Large results stored via `ResourceStorageProvider` with MCP resource URIs
-
-**Examples of Token Optimization in Action:**
-
-```csharp
-// TextSearchTool.cs - Token budget calculation
-var safetyBudget = (int)Math.Min(tokenBudget * 0.4, 2000); // 40% max
-var maxResults = responseMode switch
-{
-    "full" => Math.Min(budgetBasedMax, 10),     // Full mode: max 10 results
-    "summary" => Math.Min(budgetBasedMax, 2),   // Summary: ultra-lean 2 results
-    _ => Math.Min(budgetBasedMax, 3)            // Default: lean 3 results
-};
-
-// SearchResponseBuilder.cs - Response building with token awareness
-var context = new ResponseContext
-{
-    ResponseMode = responseMode,
-    TokenLimit = parameters.MaxTokens,
-    StoreFullResults = true  // Enables resource storage for truncated results
-};
-var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
-```
-
-**Active Services:**
-- `ITokenEstimator` - Estimates token usage for optimization
-- `ICacheEvictionPolicy` - LRU cache with 100MB limit  
-- `IResponseCacheService` - Response caching for performance
-- `IResourceStorageService` - Stores large results in compressed MCP resources
-
-**Performance Impact:**
-- **Token Efficiency**: ~300 tokens saved per search on average
-- **Cache Hits**: 85%+ cache hit rate for repeated queries
-- **Memory Management**: Automatic cleanup of large result sets
-- **Resource Storage**: 24-hour expiration with compression
-
-## 🏠 Hybrid Local Indexing Architecture
-
-### Storage Model
-
-- **Local Workspace Indexes**: `.coa/codesearch/indexes/{workspace-name_hash}/` within workspace
-- **Global Logs**: `~/.coa/codesearch/logs/` for centralized logging
-- **Multi-Workspace**: Each workspace gets isolated index
-- **Cross-Platform**: SimpleFSLockFactory ensures compatibility
+**Index Storage**: `.coa/codesearch/indexes/{workspace-hash}/` (local per workspace)
+**Global Logs**: `~/.coa/codesearch/logs/` (centralized)  
+**Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
+**Test Framework**: NUnit (366+ tests, zero warnings)
 
 ## ⚠️ Common Pitfalls
 
-1. **Assuming method names:** Always verify actual method signatures with goto_definition
-2. **Field access:** Use `hit.Fields["name"]` not `hit.Document.Get()`
-3. **Missing index:** Run `index_workspace` first, always
-4. **Type extraction:** Check `type_info` field structure in results
-5. **Testing changes:** Must restart Claude Code after building
-
-## 📋 Scriban Template Context Reference
-
-**CRITICAL**: When working with instruction templates, NEVER guess what's available.
-
-### Template Context Location
-
-`COA.Mcp.Framework/src/COA.Mcp.Framework/Services/InstructionTemplateProcessor.cs:131-206`
-
-### Available Variables
-
-- `available_tools` - String array of tool names
-- `available_markers` - String array of capability markers
-- `tool_priorities` - Dictionary<string, int> of tool priorities
-- `workflow_suggestions` - Array of workflow suggestions
-- `server_info` - Server information object
-- `builtin_tools` - String array of built-in Claude tools
-- `tool_comparisons` - Dictionary of tool comparisons
-- `enforcement_level` - String: "strongly_urge", "recommend", "suggest"
-
-### Available Helper Functions
-
-- `has_tool(tools, tool)` - Check if tool exists in array
-- `has_marker(markers, marker)` - Check if marker exists
-- `has_builtin(builtins, tool)` - Check if builtin exists
-
-### Available Scriban Built-in Functions
-
-With v2.1.5+, standard Scriban functions are now available:
-
-- `array.size` - Get array length
-- `object.default` - Provide default value for null/undefined objects
-- `string.*` - All standard string functions (upcase, downcase, etc.)
-
-### Template Pattern Examples
-
-```scriban
-// ✅ CORRECT - Use native Scriban functions
-{{ tool_priorities[tool] | object.default 50 }}
-
-// ✅ CORRECT - Use native array.size
-{{ available_tools.size }}
-
-// ✅ CORRECT - Use native string functions
-{{ enforcement_level | string.upcase }}
-
-// ✅ CORRECT - Check if variable exists (still works)
-{{ if tool_priorities[tool] }}{{ tool_priorities[tool] }}{{ else }}50{{ end }}
-
-// ❌ WRONG - Old custom functions (deprecated)
-{{ array_length available_tools }}
-{{ string_join available_tools ", " }}
-```
+1. **Missing index**: Always run `index_workspace` first
+2. **Field access**: Use `hit.Fields["name"]` not `hit.Document.Get()`
+3. **Method assumptions**: Verify signatures with `goto_definition`
+4. **Testing changes**: Must restart Claude Code after building
+5. **Type extraction**: Check `type_info` field structure
 
 ## 🛠️ Code Patterns
 
-### Path Resolution (Use Service)
-
 ```csharp
-// ✅ CORRECT
+// ✅ Path Resolution
 _pathResolver.GetIndexPath(workspacePath)
-_pathResolver.DirectoryExists(path)
 
-// ❌ WRONG
-Path.Combine("~/.coa", "indexes")
-Directory.Exists(path)
-```
-
-### Lucene Operations (Use Service)
-
-```csharp
-// ✅ CORRECT
-await _indexService.IndexDocumentAsync(...)
+// ✅ Lucene Operations  
 await _indexService.SearchAsync(...)
 
-// ❌ WRONG
-using (var writer = IndexWriter.Create(...))
+// ✅ Response Building
+return new AIOptimizedResponse<T> { Data = new AIResponseData<T>(...) }
 ```
 
-### Response Building
-
-```csharp
-// ✅ CORRECT
-Data = new AIResponseData<T>
-return new AIOptimizedResponse<T>
-
-// ❌ WRONG
-Data = new AIOptimizedData<T>
-```
-
-## 🧪 Testing & Debugging
-
-### This project uses NUnit NOT XUnit
-
-### Unit Tests
+## 🧪 Testing
 
 ```bash
-# All tests (should be 206+)
+# All tests (366+ total)
 dotnet test
 
 # Specific tool tests
 dotnet test --filter "SymbolSearchToolTests"
-```
 
-### Health Checks
-
-```bash
-# Check if indexed
+# Health check
 mcp__codesearch__recent_files --workspacePath "."
-
-# Force rebuild if issues
-mcp__codesearch__index_workspace --workspacePath "." --forceRebuild true
 ```
 
-## 📚 Related Projects
+## 📚 Related
 
-- **COA MCP Framework**: Core framework for MCP tools
-- **Goldfish MCP**: Session and memory management
+- **COA MCP Framework**: Core MCP framework (v2.1.8)
+- **Goldfish MCP**: Session/memory management  
 - **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
 
 ---
-
-_Last updated: 2025-09-05 - Enhanced CamelCase tokenization with generic type support, ResourceStorageProvider for MCP resource URIs, hybrid local indexing model_
+_Updated: 2025-09-08 - Production ready v2.1.8 with zero warnings, enhanced file search, token optimization_

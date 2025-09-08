@@ -28,12 +28,22 @@
     <ProjectReference Include="..\COA.CodeSearch.McpServer\COA.CodeSearch.McpServer.csproj" />
   </ItemGroup>
 
-  <!-- Copy tree-sitter DLLs from main project to test output -->
-  <Target Name="CopyTreeSitterDlls" AfterTargets="Build">
-    <ItemGroup>
+  <!-- Copy tree-sitter native libraries from main project to test output -->
+  <Target Name="CopyTreeSitterNatives" AfterTargets="Build">
+    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">
       <TreeSitterFiles Include="$(OutDir)..\..\..\..\COA.CodeSearch.McpServer\bin\$(Configuration)\$(TargetFramework)\tree-sitter*.dll" />
+      <TreeSitterFiles Include="$(OutDir)..\..\..\..\COA.CodeSearch.McpServer\bin\$(Configuration)\$(TargetFramework)\TreeSitter.dll" />
+    </ItemGroup>
+    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Linux'))">
+      <TreeSitterFiles Include="$(OutDir)..\..\..\..\COA.CodeSearch.McpServer\bin\$(Configuration)\$(TargetFramework)\libtree-sitter*.so" />
+    </ItemGroup>
+    <ItemGroup Condition="$([MSBuild]::IsOSPlatform('OSX'))">
+      <TreeSitterFiles Include="$(OutDir)..\..\..\..\COA.CodeSearch.McpServer\bin\$(Configuration)\$(TargetFramework)\libtree-sitter*.dylib" />
     </ItemGroup>
     <Copy SourceFiles="@(TreeSitterFiles)" DestinationFolder="$(OutDir)" SkipUnchangedFiles="true" />
+    
+    <!-- Optional: Skip type-extraction tests gracefully if native libs are missing -->
+    <Message Text="TreeSitter native libraries copied: @(TreeSitterFiles->'%(Filename)%(Extension)')" Importance="normal" />
   </Target>
 
 </Project>

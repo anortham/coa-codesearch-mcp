@@ -30,6 +30,7 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         _insertTool = new InsertAtLineTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            WorkspaceRegistryServiceMock.Object,
             insertLogger.Object
         );
         return _insertTool;
@@ -46,6 +47,7 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         _replaceTool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            WorkspaceRegistryServiceMock.Object,
             replaceLogger.Object
         );
         
