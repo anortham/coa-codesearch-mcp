@@ -39,6 +39,9 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         var insightsBudget = (int)(tokenBudget * 0.15); // 15% for insights
         var actionsBudget = (int)(tokenBudget * 0.15);  // 15% for actions
         
+        _logger?.LogDebug("Token optimization: Data={DataBudget}, Insights={InsightsBudget}, Actions={ActionsBudget}, Total={TotalBudget}", 
+            dataBudget, insightsBudget, actionsBudget, tokenBudget);
+        
         // Reduce search hits to fit budget
         var reducedHits = ReduceSearchHits(data.Hits, dataBudget, context.ResponseMode);
         var wasTruncated = reducedHits.Count < data.Hits.Count;
@@ -116,8 +119,9 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
         // Update token estimate
         response.Meta.TokenInfo!.Estimated = TokenEstimator.EstimateObject(response);
         
-        _logger?.LogInformation("Built search response: {Hits} of {Total} hits, {Insights} insights, {Actions} actions, {Tokens} tokens",
-            reducedHits.Count, data.TotalHits, response.Insights.Count, response.Actions.Count, response.Meta.TokenInfo.Estimated);
+        _logger?.LogInformation("Built search response: {Hits} of {Total} hits, {Insights} insights, {Actions} actions, {Tokens} tokens (Budget: {Budget}, Truncated: {Truncated}, Stored: {HasResource})",
+            reducedHits.Count, data.TotalHits, response.Insights.Count, response.Actions.Count, 
+            response.Meta.TokenInfo.Estimated, tokenBudget, wasTruncated, resourceUri != null);
         
         return response;
     }

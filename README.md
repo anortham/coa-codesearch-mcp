@@ -100,6 +100,57 @@ ls /usr/local/lib/libtree-sitter*.dylib
 
 The build script automatically detects your Mac architecture (Apple Silicon vs Intel) and adjusts paths accordingly.
 
+### Linux Tree-sitter Setup
+
+**⚠️ Important for Linux users:** Similar to macOS, Linux users need to install Tree-sitter libraries manually for advanced type extraction from 25+ languages:
+
+#### Quick Setup (Recommended)
+```bash
+# 1. Install Tree-sitter runtime via your package manager
+# Ubuntu/Debian:
+sudo apt install libtree-sitter-dev
+
+# Fedora/RHEL/CentOS:
+sudo dnf install tree-sitter-devel
+# or: sudo yum install tree-sitter-devel
+
+# Arch Linux:
+sudo pacman -S tree-sitter
+
+# 2. Build grammar libraries using our automation script
+bash scripts/build-grammars-linux.sh
+```
+
+This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Go, Rust, Java, JSON, HTML, CSS, and Bash.
+
+#### Custom Installation Directory
+If you want to install in a local directory instead of system paths:
+
+```bash
+# Build to custom directory
+DEST_DIR="$PWD/native" bash scripts/build-grammars-linux.sh
+
+# Then set the environment variable for runtime discovery
+export TREE_SITTER_NATIVE_PATHS="$PWD/native:/usr/local/lib:/usr/lib:/usr/lib/x86_64-linux-gnu"
+```
+
+#### Build Specific Grammars Only
+```bash
+# Build only C# and TypeScript grammars
+GRAMMARS="c-sharp typescript" bash scripts/build-grammars-linux.sh
+```
+
+#### Manual Verification
+After setup, verify the installation:
+```bash
+# Check installed libraries
+ls /usr/local/lib/libtree-sitter*.so
+# or: ls /usr/lib/libtree-sitter*.so
+# or: ls /usr/lib/x86_64-linux-gnu/libtree-sitter*.so
+```
+
+The build script automatically detects common Linux library paths and supports various distributions.
+
 ## 🚀 Quick Start
 
 ### Installation as Global Tool

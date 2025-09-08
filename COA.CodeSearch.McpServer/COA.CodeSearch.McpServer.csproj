@@ -6,14 +6,13 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    <DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
     
     <!-- Global dotnet tool configuration -->
     <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>codesearch</ToolCommandName>
     <PackageId>COA.CodeSearch</PackageId>
-    <Version>2.1.4</Version>
+    <Version>2.1.8</Version>
     <Authors>COA Team</Authors>
     <Company>COA Team</Company>
     <Description>High-performance file search MCP server with Lucene.NET backend for Claude Code integration</Description>
@@ -49,16 +48,12 @@
     <PackageReference Include="Serilog.Settings.Configuration" Version="9.0.0" />
     <PackageReference Include="Serilog.Sinks.File" Version="6.0.0" />
     
-    <!-- ASP.NET Core for HTTP mode -->
-    <PackageReference Include="Microsoft.AspNetCore.Mvc.Core" Version="2.2.5" />
-    <PackageReference Include="Swashbuckle.AspNetCore" Version="7.2.0" />
     
     <!-- Core dependencies -->
     <PackageReference Include="Microsoft.Extensions.Configuration.Json" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.Logging.Console" Version="9.0.8" />
     <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.0" />
-    <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
   </ItemGroup>
 
   <ItemGroup>

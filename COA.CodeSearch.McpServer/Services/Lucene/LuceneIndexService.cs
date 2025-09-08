@@ -864,7 +864,34 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                         // Check for uncommitted changes before disposal
                         if (context.Writer.HasUncommittedChanges())
                         {
-                            context.Writer.Commit();
+                            try
+                            {
+                                // Verify index directory state before commit
+                                var directoryFiles = context.Writer.Directory.ListAll();
+                                if (directoryFiles.Length > 0)
+                                {
+                                    context.Writer.Commit();
+                                }
+                                else
+                                {
+                                    _logger.LogDebug("Index directory empty during disposal for {Hash} - skipping commit", context.WorkspaceHash);
+                                }
+                            }
+                            catch (FileNotFoundException ex) when (ex.Message.Contains(".cfs"))
+                            {
+                                // macOS-specific: Compound file segments cleaned up externally by aggressive file system optimization
+                                _logger.LogDebug("Compound file segment missing during disposal for {Hash} (common on macOS) - continuing with disposal", context.WorkspaceHash);
+                            }
+                            catch (System.IO.DirectoryNotFoundException)
+                            {
+                                // Index directory was removed externally - safe to continue
+                                _logger.LogDebug("Index directory removed externally during disposal for {Hash} - continuing", context.WorkspaceHash);
+                            }
+                            catch (global::Lucene.Net.Index.CorruptIndexException)
+                            {
+                                // Index corruption during disposal - log and continue
+                                _logger.LogDebug("Index corruption detected during disposal for {Hash} - continuing with cleanup", context.WorkspaceHash);
+                            }
                         }
                         context.Writer.Dispose();
                     }
@@ -874,7 +901,13 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     }
                     catch (Exception writerEx)
                     {
-                        _logger.LogError(writerEx, "Error disposing writer for {Hash}", context.WorkspaceHash);
+                        // Enhanced error logging with macOS context
+                        var isMacOSFileSystemError = writerEx is FileNotFoundException && writerEx.Message.Contains(".cfs");
+                        var logLevel = isMacOSFileSystemError ? LogLevel.Debug : LogLevel.Error;
+                        
+                        _logger.Log(logLevel, writerEx, "Error disposing writer for {Hash}{MacOSNote}", 
+                            context.WorkspaceHash, 
+                            isMacOSFileSystemError ? " (macOS file system race condition)" : "");
                     }
                 }
             }
