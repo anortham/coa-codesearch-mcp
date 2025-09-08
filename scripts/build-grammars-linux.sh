@@ -1,11 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Build and install Tree-sitter grammar dynamic libraries for Linux.
-# - Defaults to /usr/local prefix
-# - Falls back to /usr or /opt
-# - Installs .so files to DEST_DIR (defaults to <PREFIX>/lib)
-# - Probes include paths via pkg-config and vendored headers
+# Build and install Tree-sitter grammar shared libraries for Linux.
+# - Probes common distro paths (/usr/include, /usr/local/include)
+# - Falls back to pkg-config for tree-sitter headers
+# - Installs .so files to DEST_DIR (defaults to /usr/local/lib)
 # - Supports custom install dir + env-driven probing via TREE_SITTER_NATIVE_PATHS
 #
 # Usage:
@@ -21,16 +20,15 @@ if [[ "$(uname -s)" != "Linux" ]]; then
   exit 1
 fi
 
-# Detect a reasonable prefix
+# Detect a reasonable prefix for Linux distributions
 detect_prefix() {
-  # Check for common Linux package manager install locations
-  for prefix in /usr/local /usr /opt; do
-    if [[ -d "$prefix" ]]; then
-      echo "$prefix"
-      return
-    fi
-  done
-  echo "/usr/local"  # Default fallback
+  if [[ -d /usr/local ]]; then
+    echo "/usr/local"
+  elif [[ -d /usr ]]; then
+    echo "/usr"
+  else
+    echo "/usr/local"
+  fi
 }
 
 PREFIX_DEFAULT="$(detect_prefix)"
@@ -87,10 +85,10 @@ discover_include_flags() {
     flags+=($(pkg-config --cflags tree-sitter 2>/dev/null)) || true
   fi
 
-  # 3) Common Linux system include paths
-  for inc_path in /usr/include /usr/local/include; do
-    if [[ -f "$inc_path/tree_sitter/parser.h" ]]; then
-      flags+=(-I "$inc_path")
+  # 3) Common Linux system paths
+  for path in /usr/include /usr/local/include; do
+    if [[ -f "$path/tree_sitter/parser.h" ]]; then
+      flags+=(-I "$path")
     fi
   done
 
@@ -119,35 +117,39 @@ compile_grammar() {
     exit 1
   fi
 
-  # Optimization flags for Linux shared libraries
+  # Linux shared library compilation flags
   local -a base_cflags=(-O3 -ffast-math -fPIC -shared)
   local -a inc_flags
   # shellcheck disable=SC2207
   inc_flags=($(discover_include_flags))
 
   # If we still don't have a usable header, hint clearly
-  local header_found=false
-  for inc_path in /usr/include /usr/local/include "$INCLUDE_DIR"; do
-    if [[ -f "$inc_path/tree_sitter/parser.h" ]]; then
-      header_found=true
-      break
-    fi
-  done
-
-  if [[ "$header_found" != true ]]; then
+  if [[ ! -f "$INCLUDE_DIR/tree_sitter/parser.h" ]]; then
     # Try to detect at least one vendored header to confirm we have coverage
     local found_vendor=false
-    # Silence missing-glob errors by using nullglob
-    local had_glob=false
+    local found_system=false
+    
+    # Check system paths
+    for path in /usr/include /usr/local/include; do
+      if [[ -f "$path/tree_sitter/parser.h" ]]; then
+        found_system=true
+        break
+      fi
+    done
+    
+    # Check vendored headers
     shopt -s nullglob
     for f in "${REPOS_DIR}"/*/src/tree_sitter/parser.h; do
-      had_glob=true
       if [[ -f "$f" ]]; then found_vendor=true; break; fi
     done
     shopt -u nullglob
-    if [[ "$found_vendor" != true ]]; then
-      echo "Warning: Could not find tree_sitter/parser.h in system paths or vendored repos." >&2
-      echo "         Install tree-sitter development package (e.g. 'apt install libtree-sitter-dev' or 'yum install tree-sitter-devel')." >&2
+    
+    if [[ "$found_vendor" != true && "$found_system" != true ]]; then
+      echo "Warning: Could not find tree_sitter/parser.h in INCLUDE_DIR ($INCLUDE_DIR), system paths, or vendored repos." >&2
+      echo "         Ensure 'tree-sitter' development headers are installed:" >&2
+      echo "         - Ubuntu/Debian: apt-get install tree-sitter-dev" >&2
+      echo "         - RHEL/CentOS: yum install tree-sitter-devel" >&2
+      echo "         - Arch: pacman -S tree-sitter" >&2
     fi
   fi
 
@@ -258,7 +260,7 @@ main() {
   ls -1 "$DEST_DIR"/libtree-sitter-*.so || true
   echo
   echo "If you used a custom DEST_DIR, set:"
-  echo "  export TREE_SITTER_NATIVE_PATHS=\"$DEST_DIR:/usr/local/lib:/usr/lib:/usr/lib/x86_64-linux-gnu\""
+  echo "  export TREE_SITTER_NATIVE_PATHS=\"$DEST_DIR:/usr/local/lib:/usr/lib\""
 }
 
 main "$@"

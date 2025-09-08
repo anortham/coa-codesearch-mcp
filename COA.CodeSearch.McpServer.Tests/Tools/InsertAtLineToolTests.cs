@@ -29,6 +29,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new InsertAtLineTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
+                WorkspaceRegistryServiceMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;

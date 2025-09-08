@@ -102,8 +102,9 @@ public class TypeExtractionService : ITypeExtractionService
         }
         
         // Check if we have a specialized analyzer for this language (but avoid recursion for embedded files)
+        var fileExtension = Path.GetExtension(filePath).ToLowerInvariant();
         if (_specializedAnalyzers.TryGetValue(languageName, out var analyzer) && 
-            !filePath.Contains(".ts") && !filePath.Contains(".js") && !filePath.Contains(".cs"))
+            fileExtension != ".ts" && fileExtension != ".js" && fileExtension != ".cs")
         {
             try
             {
@@ -304,11 +305,13 @@ public class TypeExtractionService : ITypeExtractionService
     {
         private readonly TreeSitterNative.TSNode _node;
         private readonly byte[] _bytes;
+        private readonly NativeNodeAdapter? _parent;
 
-        public NativeNodeAdapter(TreeSitterNative.TSNode node, byte[] bytes)
+        public NativeNodeAdapter(TreeSitterNative.TSNode node, byte[] bytes, NativeNodeAdapter? parent = null)
         {
             _node = node;
             _bytes = bytes;
+            _parent = parent;
         }
 
         public string Type
@@ -348,10 +351,12 @@ public class TypeExtractionService : ITypeExtractionService
                 for (uint i = 0; i < count; i++)
                 {
                     var child = TreeSitterNative.ts_node_child(_node, i);
-                    yield return new NativeNodeAdapter(child, _bytes);
+                    yield return new NativeNodeAdapter(child, _bytes, this);
                 }
             }
         }
+
+        public NativeNodeAdapter? Parent => _parent;
     }
 
     private static void TryPreloadMacNativeLibrary(string libraryName)
@@ -561,9 +566,20 @@ public class TypeExtractionService : ITypeExtractionService
 
     private NativeNodeAdapter? FindParentTypeNative(NativeNodeAdapter node)
     {
-        // Since we don't have parent navigation in NativeNodeAdapter,
-        // we can't implement this method properly. Return null for now.
-        // This is a limitation of the native approach compared to TreeSitter.DotNet
+        var current = node.Parent;
+        while (current != null)
+        {
+            var nodeType = current.Type;
+            if (nodeType == "class_declaration" || 
+                nodeType == "interface_declaration" || 
+                nodeType == "struct_declaration" ||
+                nodeType == "enum_declaration" ||
+                nodeType == "namespace_declaration")
+            {
+                return current;
+            }
+            current = current.Parent;
+        }
         return null;
     }
 
