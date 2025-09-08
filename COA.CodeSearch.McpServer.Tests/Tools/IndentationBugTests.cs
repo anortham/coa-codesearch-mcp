@@ -26,7 +26,6 @@ public class IndentationBugTests : CodeSearchToolTestBase<ReplaceLinesTool>
         _tool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
-            WorkspaceRegistryServiceMock.Object,
             ToolLoggerMock.Object
         );
         return _tool;

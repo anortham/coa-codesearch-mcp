@@ -19,17 +19,14 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
-    private readonly IWorkspaceRegistryService _workspaceRegistryService;
     private readonly ILogger<ReplaceLinesTool> _logger;
 
     public ReplaceLinesTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
-        IWorkspaceRegistryService workspaceRegistryService,
         ILogger<ReplaceLinesTool> logger) : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
-        _workspaceRegistryService = workspaceRegistryService;
         _logger = logger;
     }
 
@@ -48,7 +45,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         try
         {
             // Validate and resolve file path
-            var filePath = await ValidateAndResolvePathAsync(parameters.FilePath);
+            var filePath = ValidateAndResolvePath(parameters.FilePath);
             
             // Validate line parameters
             ValidateReplacementParameters(parameters);
@@ -148,7 +145,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         }
     }
 
-    private async Task<string> ValidateAndResolvePathAsync(string filePath, bool enforceWorkspaceConstraint = true)
+    private string ValidateAndResolvePath(string filePath)
     {
         if (string.IsNullOrWhiteSpace(filePath))
             throw new ArgumentException("FilePath is required", nameof(filePath));
@@ -161,65 +158,8 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         {
             throw new FileNotFoundException($"File not found: {resolvedPath}");
         }
-
-        // Optional workspace constraint validation
-        if (enforceWorkspaceConstraint)
-        {
-            var isWithinRegisteredWorkspace = await IsPathWithinRegisteredWorkspaceAsync(resolvedPath);
-            if (!isWithinRegisteredWorkspace)
-            {
-                var fileName = Path.GetFileName(resolvedPath);
-                _logger.LogWarning("Attempted to edit file outside registered workspaces: {FilePath}", resolvedPath);
-                throw new UnauthorizedAccessException(
-                    $"File '{fileName}' is outside registered workspace boundaries. " +
-                    "Only files within indexed workspaces can be edited for safety. " +
-                    "Index the workspace containing this file first.");
-            }
-        }
         
         return resolvedPath;
-    }
-
-    private async Task<bool> IsPathWithinRegisteredWorkspaceAsync(string filePath)
-    {
-        try
-        {
-            var workspaces = await _workspaceRegistryService.GetAllWorkspacesAsync();
-            
-            foreach (var workspace in workspaces)
-            {
-                // Check if file path is within this workspace directory
-                if (IsPathWithinDirectory(filePath, workspace.OriginalPath))
-                {
-                    return true;
-                }
-            }
-            
-            return false;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to check workspace constraints for {FilePath}, allowing edit", filePath);
-            return true; // Fail open - don't block edits if workspace check fails
-        }
-    }
-
-    private static bool IsPathWithinDirectory(string filePath, string directoryPath)
-    {
-        var fileInfo = new FileInfo(filePath);
-        var dirInfo = new DirectoryInfo(directoryPath);
-        
-        var currentDir = fileInfo.Directory;
-        while (currentDir != null)
-        {
-            if (string.Equals(currentDir.FullName, dirInfo.FullName, StringComparison.OrdinalIgnoreCase))
-            {
-                return true;
-            }
-            currentDir = currentDir.Parent;
-        }
-        
-        return false;
     }
 
     private void ValidateReplacementParameters(ReplaceLinesParameters parameters)
