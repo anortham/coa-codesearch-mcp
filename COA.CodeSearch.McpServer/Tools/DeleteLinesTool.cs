@@ -76,7 +76,7 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             if (startLine > endLine)
             {
                 return CreateErrorResponse(
-                    $"StartLine {parameters.StartLine} cannot be greater than EndLine {parameters.EndLine}");
+                    $"EndLine must be >= StartLine. Got StartLine={parameters.StartLine}, EndLine={parameters.EndLine}");
             }
             
             // Capture deleted content for recovery purposes
@@ -167,8 +167,12 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
         var content = encoding.GetString(fileBytes);
         var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         
-        // Remove empty line at end if it exists (common artifact of string splitting)
-        if (lines.Length > 0 && string.IsNullOrEmpty(lines[lines.Length - 1]))
+        // Handle potential trailing empty line from string splitting
+        // Only remove if there are multiple trailing empty lines (artifact of splitting)
+        // Preserve intentional single trailing blank lines
+        if (lines.Length > 1 && 
+            string.IsNullOrEmpty(lines[lines.Length - 1]) && 
+            string.IsNullOrEmpty(lines[lines.Length - 2]))
         {
             lines = lines.Take(lines.Length - 1).ToArray();
         }
@@ -242,10 +246,10 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             }
         }
         
-        // Show context after deletion (adjust line numbers for deletion)
+        // Show context after deletion (lines after deletion point)
         for (int i = deletionStartLine; i <= contextEnd && i < newLines.Length; i++)
         {
-            var lineNumber = i + deletedLineCount + 1; // Adjust for deleted lines
+            var lineNumber = i + 1; // Convert to 1-based for display (no adjustment needed - these are new line positions)
             context.Add($" {lineNumber,4}: {newLines[i]}");
         }
         

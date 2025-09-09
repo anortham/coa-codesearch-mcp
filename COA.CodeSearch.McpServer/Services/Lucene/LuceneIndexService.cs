@@ -342,6 +342,17 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     }
                 }
                 
+                // Ensure type_info field is available for type-aware classification
+                // StoredField instances don't appear in doc.Fields enumeration, so retrieve explicitly
+                if (!hit.Fields.ContainsKey("type_info"))
+                {
+                    var typeInfoValue = doc.Get("type_info");
+                    if (!string.IsNullOrEmpty(typeInfoValue))
+                    {
+                        hit.Fields["type_info"] = typeInfoValue;
+                    }
+                }
+                
                 // Parse modified date if available
                 if (hit.Fields.TryGetValue("modified", out var modifiedTicks) && 
                     long.TryParse(modifiedTicks, out var ticks))
