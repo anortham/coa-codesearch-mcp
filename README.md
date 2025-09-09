@@ -9,7 +9,7 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, and enhanced CamelCase tokenization with full generic type support (finds `McpToolBase<TParams, TResult>` when searching for "McpToolBase")
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
-- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 25+ languages including C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, Vue, Razor, and more
+- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 15+ languages including C#, TypeScript, Python, Java, Rust, C++, Ruby, PHP, Scala, Vue, Razor, and more
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
 - **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety
@@ -36,16 +36,20 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 
 ### 🧬 Supported Languages for Type Extraction
 
-The type extraction system supports **25+ programming languages** using Tree-sitter parsers:
+The type extraction system supports **15+ programming languages** using Tree-sitter parsers:
 
-**Systems Languages**: C, C++, Rust, Go  
-**Object-Oriented**: C#, Java, Swift, Scala  
+**✅ Fully Supported:**
+**Systems Languages**: C, C++, Rust  
+**Object-Oriented**: C#, Java, Scala  
 **Scripting**: Python, Ruby, PHP, JavaScript, TypeScript  
 **Web**: Vue.js (SFC), Razor/Blazor, HTML, CSS  
 **Functional**: Haskell, OCaml, Julia  
 **Hardware**: Verilog  
 **Shell**: Bash  
-**Data**: JSON, TOML  
+**Data**: JSON, TOML
+
+**⚠️ Limited Support (missing Tree-sitter libraries):**
+Go, Swift, Kotlin, R, Objective-C, Lua, Dart, Zig, Elm, Clojure, Elixir  
 
 **Special Support**:
 - **Vue Single File Components**: Extracts types from `<script>` blocks (TS/JS)
@@ -58,7 +62,7 @@ The type extraction system supports **25+ programming languages** using Tree-sit
 
 ### macOS Tree-sitter Setup
 
-**⚠️ Important for macOS users:** This project uses Tree-sitter for advanced type extraction from 25+ languages. The NuGet package doesn't ship native Darwin libraries, so you need to install them manually:
+**⚠️ Important for macOS users:** This project uses Tree-sitter for advanced type extraction from 15+ languages. The NuGet package doesn't ship native Darwin libraries, so you need to install them manually:
 
 #### Quick Setup (Recommended)
 ```bash
@@ -69,7 +73,7 @@ brew install tree-sitter
 sh scripts/build-grammars-macos.sh
 ```
 
-This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Go, Rust, Java, JSON, HTML, CSS, and Bash.
+This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Rust, Java, JSON, HTML, CSS, and Bash.
 
 #### Custom Installation Directory
 If you want to install in a local directory instead of Homebrew's default location:
@@ -102,7 +106,7 @@ The build script automatically detects your Mac architecture (Apple Silicon vs I
 
 ### Linux Tree-sitter Setup
 
-**⚠️ Important for Linux users:** Similar to macOS, Linux users need to install Tree-sitter libraries manually for advanced type extraction from 25+ languages:
+**⚠️ Important for Linux users:** Similar to macOS, Linux users need to install Tree-sitter libraries manually for advanced type extraction from 15+ languages:
 
 #### Quick Setup (Recommended)
 ```bash
@@ -121,7 +125,7 @@ sudo pacman -S tree-sitter
 bash scripts/build-grammars-linux.sh
 ```
 
-This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Go, Rust, Java, JSON, HTML, CSS, and Bash.
+This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Rust, Java, JSON, HTML, CSS, and Bash.
 
 #### Custom Installation Directory
 If you want to install in a local directory instead of system paths:
@@ -348,7 +352,7 @@ Shows inheritance relationships and usage counts
 
 **"Find all classes and interfaces in my project"**
 ```
-Claude will extract types from C#, TypeScript, Python, Java, Rust, Go, C++, Ruby, PHP, Swift, Scala, and more
+Claude will extract types from C#, TypeScript, Python, Java, Rust, C++, Ruby, PHP, Scala, and more
 ```
 
 **"Show me all functions and methods in my codebase"**
