@@ -30,6 +30,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new GetSymbolsOverviewTool(
                 ServiceProvider,
                 _typeExtractionServiceMock.Object,
+                LuceneIndexServiceMock.Object,
+                CodeAnalyzer,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
