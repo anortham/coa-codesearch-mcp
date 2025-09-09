@@ -58,6 +58,13 @@ public class TypeExtractionService : ITypeExtractionService
         // don't have tree-sitter DLLs available in the current build
         // Note: Vue and Razor use specialized multi-language extractors
     };
+
+    // Languages that don't have Tree-sitter DLLs available or have compatibility issues
+    private static readonly HashSet<string> UnsupportedTreeSitterLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+    {
+        "kotlin", "r", "objective-c", "lua", "dart", "zig", "elm", "clojure", "elixir",
+        "go", "swift" // Currently have missing DLLs or version compatibility issues
+    };
     
     public TypeExtractionService(ILogger<TypeExtractionService> logger)
     {
@@ -126,6 +133,14 @@ public class TypeExtractionService : ITypeExtractionService
             }
 
             // Non-macOS path: use TreeSitter.DotNet
+            
+            // Check if this language is known to be unsupported
+            if (UnsupportedTreeSitterLanguages.Contains(languageName))
+            {
+                _logger.LogDebug("Language {Language} is not supported by Tree-sitter (missing DLL or compatibility issues) for file {FilePath}", languageName, filePath);
+                return new TypeExtractionResult { Success = false };
+            }
+            
             Language language;
             if (languageName == "c-sharp")
             {
@@ -140,7 +155,15 @@ public class TypeExtractionService : ITypeExtractionService
             }
             else
             {
-                language = new Language(languageName);
+                try
+                {
+                    language = new Language(languageName);
+                }
+                catch (Exception ex) when (ex.Message.Contains("Could not find entry point") || ex.Message.Contains("incompatible"))
+                {
+                    _logger.LogDebug("Tree-sitter library for {Language} is not available or incompatible: {Error} for file {FilePath}", languageName, ex.Message, filePath);
+                    return new TypeExtractionResult { Success = false };
+                }
             }
 
             using (language)
@@ -177,6 +200,13 @@ public class TypeExtractionService : ITypeExtractionService
 
     private TypeExtractionResult ExtractTypesWithNativeApiMac(string content, string filePath, string languageName)
     {
+        // Check if this language is known to be unsupported
+        if (UnsupportedTreeSitterLanguages.Contains(languageName))
+        {
+            _logger.LogDebug("Language {Language} is not supported by Tree-sitter (missing DLL or compatibility issues) for file {FilePath}", languageName, filePath);
+            return new TypeExtractionResult { Success = false };
+        }
+        
         // Handle languages that don't have tree-sitter libraries
         if (languageName == "razor")
         {
@@ -399,17 +429,44 @@ public class TypeExtractionService : ITypeExtractionService
         
         switch (nodeType)
         {
+            // C#, Java, TypeScript, JavaScript, Swift classes and types
             case "class_declaration":
             case "interface_declaration":
             case "struct_declaration":
             case "enum_declaration":
+            case "protocol_declaration":  // Swift protocols
+            // Python classes and types
+            case "class_definition":        
+            case "decorated_definition":    
+            // Rust types
+            case "struct_item":
+            case "enum_item":
+            case "union_item":
+            case "trait_item":
+            case "impl_item":
+            // Go types
+            case "type_declaration":
+            case "type_spec":
+            // Ruby classes and modules
+            case "class":
+            case "module":
+            case "singleton_class":
                 ExtractTypeDeclaration(node, types);
                 break;
                 
+            // C#, Java, TypeScript, JavaScript, Swift functions
             case "method_declaration":
             case "function_declaration":
             case "function_definition":
             case "arrow_function":
+            case "method_definition":
+            case "init_declaration":      // Swift initializers
+            // Rust functions
+            case "function_item":
+            case "associated_function":
+            // Ruby methods
+            case "method":
+            case "singleton_method":
                 ExtractMethodDeclaration(node, methods);
                 break;
                 
@@ -433,17 +490,44 @@ public class TypeExtractionService : ITypeExtractionService
 
         switch (nodeType)
         {
+            // C#, Java, TypeScript, JavaScript, Swift classes and types
             case "class_declaration":
             case "interface_declaration":
             case "struct_declaration":
             case "enum_declaration":
+            case "protocol_declaration":  // Swift protocols
+            // Python classes and types
+            case "class_definition":        
+            case "decorated_definition":    
+            // Rust types
+            case "struct_item":
+            case "enum_item":
+            case "union_item":
+            case "trait_item":
+            case "impl_item":
+            // Go types
+            case "type_declaration":
+            case "type_spec":
+            // Ruby classes and modules
+            case "class":
+            case "module":
+            case "singleton_class":
                 ExtractTypeDeclarationNative(node, types);
                 break;
 
+            // C#, Java, TypeScript, JavaScript, Swift functions
             case "method_declaration":
             case "function_declaration":
             case "function_definition":
             case "arrow_function":
+            case "method_definition":
+            case "init_declaration":      // Swift initializers
+            // Rust functions
+            case "function_item":
+            case "associated_function":
+            // Ruby methods
+            case "method":
+            case "singleton_method":
                 ExtractMethodDeclarationNative(node, methods);
                 break;
 
