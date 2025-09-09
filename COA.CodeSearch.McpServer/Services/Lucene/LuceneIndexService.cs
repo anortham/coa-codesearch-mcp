@@ -397,32 +397,6 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                             _logger.LogDebug("Deserialized type_info: {TypeCount} types, {MethodCount} methods, Language: {Language}", 
                                 typeData.types?.Count ?? 0, typeData.methods?.Count ?? 0, typeData.language);
                             
-                            hit.TypeContext = new COA.CodeSearch.McpServer.Models.TypeContext
-                            {
-                                Language = typeData.language,
-                                NearbyTypes = typeData.types ?? new List<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeInfo>(),
-                                NearbyMethods = typeData.methods ?? new List<COA.CodeSearch.McpServer.Services.TypeExtraction.MethodInfo>()
-                            };
-                            
-                            _logger.LogDebug("Created TypeContext with {TypeCount} types, {MethodCount} methods", 
-                                hit.TypeContext.NearbyTypes.Count, hit.TypeContext.NearbyMethods.Count);
-                            
-                            // Determine containing type based on line number
-                            if (hit.LineNumber > 0 && typeData.types != null)
-                            {
-                                // Find the type that contains this line
-                                // Since we only have start line, we'll use proximity
-                                var nearestType = typeData.types
-                                    .Where(t => t.Line <= hit.LineNumber)
-                                    .OrderBy(t => hit.LineNumber - t.Line)
-                                    .FirstOrDefault();
-                                    
-                                if (nearestType != null)
-                                {
-                                    hit.TypeContext.ContainingType = $"{nearestType.Kind} {nearestType.Name}";
-                                    _logger.LogDebug("Set ContainingType to: {ContainingType}", hit.TypeContext.ContainingType);
-                                }
-                            }
                         }
                         else
                         {

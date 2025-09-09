@@ -519,12 +519,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     "{"
                 },
                 Snippet = "public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable",
-                EnhancedSnippet = "📦 LuceneIndexService - public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable",
-                TypeContext = new TypeContext 
-                { 
-                    ContainingType = "LuceneIndexService",
-                    Language = "c-sharp"
-                }
             };
             
             var regularHit = new SearchHit
@@ -571,10 +565,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             
             var firstHit = hits!.First();
             firstHit.Score.Should().Be(10.0f, "Type definitions must have highest score to appear first");
-            firstHit.EnhancedSnippet.Should().NotBeNullOrEmpty("Enhanced snippet should show prominent type info");
-            firstHit.EnhancedSnippet.Should().Contain("📦", "Type information must be visually prominent");
-            firstHit.TypeContext.Should().NotBeNull("Type context must be populated for type queries");
-            firstHit.TypeContext!.ContainingType.Should().NotBeNullOrEmpty("Containing type must be identified");
+// Type enhancement functionality removed - text_search now focuses on clean search results
         }
         
         [Test]
@@ -595,16 +586,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     ["type_info"] = "{\"types\":[{\"Name\":\"LuceneIndexService\",\"Kind\":\"class\",\"Line\":21}],\"methods\":[{\"Name\":\"SearchAsync\",\"Signature\":\"Task<SearchResult> SearchAsync(string workspacePath, Query query)\",\"Line\":257,\"ContainingType\":\"LuceneIndexService\"}],\"language\":\"c-sharp\"}"
                 },
                 Snippet = "public async Task<SearchResult> SearchAsync(string workspacePath, Query query)",
-                EnhancedSnippet = "🔧 SearchAsync - public async Task<SearchResult> SearchAsync(string workspacePath, Query query)",
-                TypeContext = new TypeContext 
-                { 
-                    ContainingType = "LuceneIndexService",
-                    Language = "c-sharp",
-                    NearbyMethods = new List<COA.CodeSearch.McpServer.Services.TypeExtraction.MethodInfo>
-                    {
-                        new() { Name = "SearchAsync", Signature = "Task<SearchResult> SearchAsync(string workspacePath, Query query)" }
-                    }
-                }
             };
             
             var searchResult = new SearchResult
@@ -641,10 +622,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             hits.Should().NotBeNull().And.NotBeEmpty();
             
             var hit = hits!.First();
-            hit.TypeContext.Should().NotBeNull("Type context must ALWAYS be populated when type_info exists");
-            hit.TypeContext!.ContainingType.Should().NotBeNullOrEmpty("Claude needs to know which class contains the method");
-            hit.TypeContext!.NearbyMethods.Should().NotBeEmpty("Claude needs to see available methods");
-            hit.EnhancedSnippet.Should().Contain("🔧", "Method signatures must be prominently displayed");
+// Type enhancement functionality removed - use dedicated type tools for type information
         }
         
         [Test]

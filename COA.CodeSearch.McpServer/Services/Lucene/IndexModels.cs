@@ -48,9 +48,6 @@ public class SearchHit
     public int? StartLine { get; set; }
     public int? EndLine { get; set; }
     
-    // NEW: Type context for enhanced search results
-    public TypeContext? TypeContext { get; set; }
-    public string? EnhancedSnippet { get; set; }
     
     // Helper properties for common fields
     public string? FileName => Fields.GetValueOrDefault("filename");
