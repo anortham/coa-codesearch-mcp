@@ -4,7 +4,7 @@
 
 Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace indexing with cross-platform support.
 
-**Version**: 2.1.8 | **Status**: Production Ready | **Warnings**: Zero
+**Version**: 2.1.8+ | **Status**: Production Ready | **Warnings**: Zero | **Framework**: Local Dev Mode
 
 ### Core Tools (17 available)
 
@@ -77,7 +77,26 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 **Index Storage**: `.coa/codesearch/indexes/{workspace-hash}/` (local per workspace)
 **Global Logs**: `~/.coa/codesearch/logs/` (centralized)  
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
-**Test Framework**: NUnit (366+ tests, zero warnings)
+**Test Framework**: NUnit (456+ tests, zero warnings)
+**Framework**: Local project references for active development
+
+## 🚀 Recent Improvements (v2.1.8+)
+
+**SmartQueryPreprocessor Integration**
+- ✅ Comprehensive test suite: 35 unit tests with full coverage
+- ✅ Intelligent query routing: Auto-detects Symbol/Pattern/Standard modes  
+- ✅ Wildcard validation: Shared utility prevents invalid Lucene queries
+- ✅ Multi-field optimization: Routes queries to optimal indexed fields
+
+**CodeAnalyzer Consistency Audit**
+- ✅ Fixed 3 critical inconsistencies in SmartSnippetService, GoToDefinitionTool, SymbolSearchTool
+- ✅ Unified dependency injection: All tools use single configured CodeAnalyzer instance
+- ✅ Consistent tokenization: `preserveCase: false, splitCamelCase: true` across system
+
+**Framework Integration**  
+- ✅ Local project references: Active development with live framework changes
+- ✅ All 456 tests passing: Full compatibility with framework improvements
+- ✅ Zero regressions: Maintains production stability during development
 
 ## ⚠️ Common Pitfalls
 
