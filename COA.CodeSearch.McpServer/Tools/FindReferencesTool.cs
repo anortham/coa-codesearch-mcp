@@ -1,5 +1,7 @@
 using System.ComponentModel;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.Mcp.Framework;
 using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
@@ -32,7 +34,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SmartQueryPreprocessor _queryProcessor;
-    private readonly SearchResponseBuilder _responseBuilder;
+    private readonly FindReferencesResponseBuilder _responseBuilder;
     private readonly ILogger<FindReferencesTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
@@ -54,7 +56,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         _queryProcessor = queryProcessor;
         _codeAnalyzer = codeAnalyzer;
         _logger = logger;
-        _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
+        _responseBuilder = new FindReferencesResponseBuilder(logger as ILogger<FindReferencesResponseBuilder>, storageService);
     }
 
     public override string Name => ToolNames.FindReferences;
@@ -115,17 +117,17 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
                 query = processedQuery;
             }
             
-            // Perform the search
+            // Perform the search  
             var searchResult = await _luceneIndexService.SearchAsync(
                 workspacePath, 
                 query, 
                 parameters.MaxResults,
-                true, // Include snippets for context
+                false, // TEMPORARILY DISABLE snippets to test type_info retrieval
                 cancellationToken);
             
             stopwatch.Stop();
             
-            // Post-process results to highlight references
+            // Post-process results with type-aware analysis
             if (searchResult.Hits != null)
             {
                 foreach (var hit in searchResult.Hits)
@@ -136,11 +138,13 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
                         hit.ContextLines = HighlightSymbolInContext(hit.ContextLines, symbolName, parameters.CaseSensitive);
                     }
                     
-                    // Add reference-specific metadata
+                    // Add reference-specific metadata using type information
                     if (hit.Fields == null)
                         hit.Fields = new Dictionary<string, string>();
                     
-                    hit.Fields["referenceType"] = DetermineReferenceType(hit.ContextLines, symbolName);
+                    // Enhanced reference type detection using indexed type info
+                    hit.Fields["referenceType"] = await DetermineReferenceTypeWithTypeInfoAsync(
+                        hit, symbolName, parameters.CaseSensitive, cancellationToken);
                 }
                 
                 // Group by file if requested
@@ -348,6 +352,183 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         
         return "usage";
     }
+
+    /// <summary>
+    /// Enhanced reference type detection using both indexed type information and context analysis.
+    /// This provides more accurate classification by understanding the symbol's semantic meaning.
+    /// </summary>
+    private Task<string> DetermineReferenceTypeWithTypeInfoAsync(
+        SearchHit hit, string symbolName, bool caseSensitive, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Start with the basic regex-based detection
+            var baseType = DetermineReferenceType(hit.ContextLines, symbolName);
+            
+            // Get type information from the index for this file
+            var typeInfoJson = hit.Fields?.ContainsKey("type_info") == true ? hit.Fields["type_info"] : null;
+            
+            if (string.IsNullOrEmpty(typeInfoJson))
+            {
+                // No type info available, return the regex-based result
+                return Task.FromResult(baseType);
+            }
+            
+            // Deserialize the type information
+            TypeExtractionResult? typeData = null;
+            try
+            {
+                typeData = JsonSerializer.Deserialize<TypeExtractionResult>(
+                    typeInfoJson, 
+                    TypeExtractionResult.DeserializationOptions);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to deserialize type_info for {FilePath}", hit.FilePath);
+                return Task.FromResult(baseType);
+            }
+            
+            if (typeData?.Success != true)
+                return Task.FromResult(baseType);
+            
+            // Check if this symbol is defined in this file (definition vs reference)
+            var isDefinition = IsSymbolDefinedInFile(typeData, symbolName, caseSensitive);
+            if (isDefinition.isDefined)
+            {
+                return Task.FromResult(isDefinition.symbolType == "type" ? "type-definition" : 
+                       isDefinition.symbolType == "method" ? "method-definition" : 
+                       "definition");
+            }
+            
+            // Enhance the reference type based on what we know about the symbol
+            var symbolInfo = GetSymbolInfo(typeData, symbolName, caseSensitive);
+            if (symbolInfo != null)
+            {
+                // If we know this symbol is a type, enhance the reference classification
+                if (symbolInfo.IsType)
+                {
+                    return Task.FromResult(EnhanceTypeReference(baseType, hit.ContextLines, symbolName));
+                }
+                else if (symbolInfo.IsMethod)
+                {
+                    return Task.FromResult(EnhanceMethodReference(baseType, hit.ContextLines, symbolName));
+                }
+            }
+            
+            return Task.FromResult(baseType);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Error in enhanced reference type detection for {Symbol} in {FilePath}", 
+                symbolName, hit.FilePath);
+            return Task.FromResult(DetermineReferenceType(hit.ContextLines, symbolName));
+        }
+    }
+
+    /// <summary>
+    /// Checks if a symbol is defined in the given type data (indicating this is the declaration file)
+    /// </summary>
+    private (bool isDefined, string symbolType) IsSymbolDefinedInFile(
+        TypeExtractionResult typeData, string symbolName, bool caseSensitive)
+    {
+        var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        
+        // Check types first
+        if (typeData.Types?.Any(t => t.Name.Equals(symbolName, comparison)) == true)
+        {
+            return (true, "type");
+        }
+        
+        // Check methods
+        if (typeData.Methods?.Any(m => m.Name.Equals(symbolName, comparison)) == true)
+        {
+            return (true, "method");
+        }
+        
+        return (false, "");
+    }
+
+    /// <summary>
+    /// Gets information about a symbol from type data across the solution
+    /// </summary>
+    private SymbolInfo? GetSymbolInfo(TypeExtractionResult typeData, string symbolName, bool caseSensitive)
+    {
+        var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        
+        // Check if it's a type
+        var matchingType = typeData.Types?.FirstOrDefault(t => t.Name.Equals(symbolName, comparison));
+        if (matchingType != null)
+        {
+            return new SymbolInfo { IsType = true, Kind = matchingType.Kind };
+        }
+        
+        // Check if it's a method
+        var matchingMethod = typeData.Methods?.FirstOrDefault(m => m.Name.Equals(symbolName, comparison));
+        if (matchingMethod != null)
+        {
+            return new SymbolInfo { IsMethod = true, ReturnType = matchingMethod.ReturnType };
+        }
+        
+        return null;
+    }
+
+    /// <summary>
+    /// Enhances type reference classification with semantic understanding
+    /// </summary>
+    private string EnhanceTypeReference(string baseType, List<string>? contextLines, string symbolName)
+    {
+        if (contextLines == null || contextLines.Count == 0)
+            return baseType;
+        
+        var context = string.Join(" ", contextLines).ToLowerInvariant();
+        
+        // More specific type usage patterns
+        if (context.Contains($"new {symbolName.ToLowerInvariant()}"))
+            return "type-instantiation";
+        if (context.Contains($": {symbolName.ToLowerInvariant()}") || context.Contains($"extends {symbolName.ToLowerInvariant()}"))
+            return "type-inheritance";
+        if (context.Contains($"implements {symbolName.ToLowerInvariant()}"))
+            return "interface-implementation";
+        if (context.Contains($"<{symbolName.ToLowerInvariant()}>") || context.Contains($"<{symbolName.ToLowerInvariant()},"))
+            return "generic-type-parameter";
+        if (context.Contains($"typeof({symbolName.ToLowerInvariant()})") || context.Contains($"{symbolName.ToLowerInvariant()}.class"))
+            return "type-reflection";
+        
+        return baseType == "usage" ? "type-reference" : baseType;
+    }
+
+    /// <summary>
+    /// Enhances method reference classification with semantic understanding
+    /// </summary>
+    private string EnhanceMethodReference(string baseType, List<string>? contextLines, string symbolName)
+    {
+        if (contextLines == null || contextLines.Count == 0)
+            return baseType;
+        
+        var context = string.Join(" ", contextLines).ToLowerInvariant();
+        
+        // Method-specific patterns
+        if (context.Contains($"{symbolName.ToLowerInvariant()}("))
+            return "method-call";
+        if (context.Contains($"override {symbolName.ToLowerInvariant()}") || context.Contains($"overrides {symbolName.ToLowerInvariant()}"))
+            return "method-override";
+        if (context.Contains($"=> {symbolName.ToLowerInvariant()}") || context.Contains($"= {symbolName.ToLowerInvariant()}"))
+            return "method-reference";
+        
+        return baseType == "usage" ? "method-usage" : baseType;
+    }
+
+    /// <summary>
+    /// Helper class to store symbol information
+    /// </summary>
+    private class SymbolInfo
+    {
+        public bool IsType { get; set; }
+        public bool IsMethod { get; set; }
+        public string? Kind { get; set; }
+        public string? ReturnType { get; set; }
+    }
+    
     
     private string GenerateReferencesSummary(SearchResult result, string symbolName)
     {

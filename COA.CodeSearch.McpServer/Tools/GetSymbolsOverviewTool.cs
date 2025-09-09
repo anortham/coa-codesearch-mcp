@@ -9,9 +9,13 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
+using Lucene.Net.QueryParsers.Classic;
+using Lucene.Net.Util;
 using COA.Mcp.Framework.Interfaces;
 using Microsoft.Extensions.Logging;
 
@@ -23,25 +27,30 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParameters, AIOptimizedResponse<SymbolsOverviewResult>>, IPrioritizedTool
 {
     private readonly ITypeExtractionService _typeExtractionService;
+    private readonly ILuceneIndexService _luceneIndexService;
+    private readonly CodeAnalyzer _codeAnalyzer;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
-    // Skip custom response builder for now - use direct response
     private readonly ILogger<GetSymbolsOverviewTool> _logger;
+    private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     public GetSymbolsOverviewTool(
         IServiceProvider serviceProvider,
         ITypeExtractionService typeExtractionService,
+        ILuceneIndexService luceneIndexService,
+        CodeAnalyzer codeAnalyzer,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         ILogger<GetSymbolsOverviewTool> logger) : base(serviceProvider)
     {
         _typeExtractionService = typeExtractionService;
+        _luceneIndexService = luceneIndexService;
+        _codeAnalyzer = codeAnalyzer;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
-        // Skip custom response builder for now
         _logger = logger;
     }
 
@@ -124,30 +133,43 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
             
-            _logger.LogInformation("Extracting symbols overview from {FilePath}", filePath);
+            _logger.LogInformation("Getting symbols overview from {FilePath}", filePath);
             
-            // Read file content
-            string content;
-            try
+            // First try to get type information from the index (optimization)
+            TypeExtractionResult? typeExtractionResult = await TryGetTypeInfoFromIndexAsync(filePath, parameters.WorkspacePath, cancellationToken);
+            
+            // If not found in index or index lookup failed, fall back to direct extraction
+            if (typeExtractionResult == null || !typeExtractionResult.Success)
             {
-                content = await File.ReadAllTextAsync(filePath, cancellationToken);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to read file {FilePath}", filePath);
-                return new AIOptimizedResponse<SymbolsOverviewResult>
+                _logger.LogDebug("Type info not found in index for {FilePath}, falling back to direct extraction", filePath);
+                
+                // Read file content
+                string content;
+                try
                 {
-                    Success = false,
-                    Error = new ErrorInfo
+                    content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Failed to read file {FilePath}", filePath);
+                    return new AIOptimizedResponse<SymbolsOverviewResult>
                     {
-                        Code = "FILE_READ_ERROR",
-                        Message = $"Failed to read file: {ex.Message}"
-                    }
-                };
+                        Success = false,
+                        Error = new ErrorInfo
+                        {
+                            Code = "FILE_READ_ERROR",
+                            Message = $"Failed to read file: {ex.Message}"
+                        }
+                    };
+                }
+                
+                // Extract types using Tree-sitter as fallback
+                typeExtractionResult = _typeExtractionService.ExtractTypes(content, filePath);
             }
-            
-            // Extract types using Tree-sitter
-            var typeExtractionResult = _typeExtractionService.ExtractTypes(content, filePath);
+            else
+            {
+                _logger.LogDebug("Successfully retrieved type info from index for {FilePath}", filePath);
+            }
             
             stopwatch.Stop();
             
@@ -329,5 +351,74 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             result.Classes.Count, result.Interfaces.Count, result.Structs.Count, result.Enums.Count, result.Methods.Count);
         
         return result;
+    }
+
+    /// <summary>
+    /// Attempts to retrieve type information from the Lucene index instead of re-extracting from file content.
+    /// This provides significant performance improvements for indexed files.
+    /// </summary>
+    private async Task<TypeExtractionResult?> TryGetTypeInfoFromIndexAsync(string filePath, string? workspacePath, CancellationToken cancellationToken)
+    {
+        try
+        {
+            // If no workspace path provided, we can't search the index
+            if (string.IsNullOrEmpty(workspacePath))
+            {
+                _logger.LogDebug("No workspace path provided, skipping index lookup for {FilePath}", filePath);
+                return null;
+            }
+
+            // Convert to absolute path for consistent searching
+            var absoluteFilePath = Path.GetFullPath(filePath);
+            
+            // Search for this specific file in the index
+            var parser = new QueryParser(LUCENE_VERSION, "path", _codeAnalyzer);
+            var query = parser.Parse($"\"{absoluteFilePath}\"");
+            
+            var searchResult = await _luceneIndexService.SearchAsync(
+                workspacePath, 
+                query, 
+                1, // We only need one result - the exact file
+                false, // No snippets needed
+                cancellationToken);
+            
+            if (searchResult.Hits == null || searchResult.Hits.Count == 0)
+            {
+                _logger.LogDebug("File {FilePath} not found in index", filePath);
+                return null;
+            }
+            
+            var hit = searchResult.Hits.First();
+            
+            // Get the stored type_info JSON from the index
+            var typeInfoJson = hit.Fields?.ContainsKey("type_info") == true ? hit.Fields["type_info"] : null;
+            
+            if (string.IsNullOrEmpty(typeInfoJson))
+            {
+                _logger.LogDebug("No type_info found in index for {FilePath}", filePath);
+                return null;
+            }
+            
+            // Deserialize the stored type information using shared options
+            var typeData = JsonSerializer.Deserialize<TypeExtractionResult>(
+                typeInfoJson, 
+                TypeExtractionResult.DeserializationOptions);
+                
+            if (typeData == null)
+            {
+                _logger.LogWarning("Failed to deserialize type_info for {FilePath}", filePath);
+                return null;
+            }
+            
+            _logger.LogInformation("Successfully retrieved {TypeCount} types and {MethodCount} methods from index for {FilePath}", 
+                typeData.Types?.Count ?? 0, typeData.Methods?.Count ?? 0, filePath);
+            
+            return typeData;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Failed to retrieve type info from index for {FilePath}, will fall back to extraction", filePath);
+            return null;
+        }
     }
 }

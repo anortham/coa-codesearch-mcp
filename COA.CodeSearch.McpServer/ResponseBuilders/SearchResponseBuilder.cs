@@ -318,7 +318,7 @@ public class SearchResponseBuilder : BaseResponseBuilder<SearchResult, AIOptimiz
             // Keep only non-duplicated essential fields
             if (hit.Fields.ContainsKey("size"))
                 minimalFields["size"] = hit.Fields["size"];
-            
+                
                 
             // Round score to 2 decimal places
             hit.Score = (float)Math.Round(hit.Score, 2);
