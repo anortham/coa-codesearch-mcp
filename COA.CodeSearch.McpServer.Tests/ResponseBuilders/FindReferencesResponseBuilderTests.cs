@@ -138,9 +138,9 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
             response.Should().NotBeNull();
             response.Data.Results.Hits.Should().HaveCount(10, "All results should fit in large budget");
             
-            // REAL test: Essential fields should be preserved
+            // REAL test: Essential fields should be preserved (type_info excluded to prevent token explosion)
             var firstHit = response.Data.Results.Hits.First();
-            firstHit.Fields.Should().ContainKey("type_info");
+            firstHit.Fields.Should().NotContainKey("type_info", "type_info is excluded from find_references to prevent token explosion");
             firstHit.Fields.Should().ContainKey("language");
             firstHit.Fields.Should().ContainKey("referenceType");
             firstHit.ContextLines.Should().NotBeNull();
@@ -179,16 +179,19 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
             // Act
             var response = await _responseBuilder.BuildResponseAsync(searchResult, context);
 
-            // Assert - Test ACTUAL type info capping
+            // Assert - Test ACTUAL token optimization behavior
             var responseHit = response.Data.Results.Hits.First();
-            var returnedTypeInfo = responseHit.Fields["type_info"];
             
-            // REAL test: Type info should be capped, not the original massive size
-            var typeInfoTokens = EstimateTokens(returnedTypeInfo);
-            typeInfoTokens.Should().BeLessOrEqualTo(60, "Large type_info should be capped at 60 tokens max");
+            // REAL test: type_info should be excluded to prevent token explosion
+            responseHit.Fields.Should().NotContainKey("type_info", "type_info excluded from find_references to prevent token explosion");
             
-            // REAL test: Type info should still be valid JSON even when capped
-            returnedTypeInfo.Should().StartWith("{", "Capped type_info should still be valid JSON");
+            // REAL test: Essential reference fields should still be present
+            responseHit.Fields.Should().ContainKey("language");
+            responseHit.Fields.Should().ContainKey("referenceType");
+            
+            // REAL test: Response should be much smaller without type_info
+            var totalTokens = response.Meta.TokenInfo?.Estimated ?? 0;
+            totalTokens.Should().BeLessThan(8000, "Response should be well under budget without massive type_info");
         }
 
         [Test]

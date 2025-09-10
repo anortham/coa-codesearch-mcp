@@ -332,46 +332,10 @@ public class FindReferencesResponseBuilder : BaseResponseBuilder<SearchResult, A
             return CleanupHitsPreservingTypeInfo(result.Items);
         }
         
-        /// <summary>
-        /// Actually caps type_info content to reduce tokens
-        /// </summary>
-        private string CapTypeInfoContent(string typeInfoJson)
-        {
-            if (string.IsNullOrEmpty(typeInfoJson))
-                return typeInfoJson;
-            
-            var baseEstimate = TokenEstimator.EstimateString(typeInfoJson);
-            
-            // If already small enough, return as-is
-            if (baseEstimate <= 60)
-                return typeInfoJson;
-            
-            // Try to parse and truncate JSON content intelligently
-            try
-            {
-                // For large type info, create a summarized version
-                if (typeInfoJson.StartsWith("{") && typeInfoJson.Contains("\"methods\""))
-                {
-                    // Extract just the essential info: type, name, and first few methods/properties
-                    var lines = typeInfoJson.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-                    var essential = lines.Take(3).ToList(); // Type, name, and maybe namespace
-                    essential.Add("\"...truncated for size\"");
-                    essential.Add("}");
-                    return string.Join("\n", essential);
-                }
-                
-                // Fallback: truncate to reasonable length while keeping valid JSON structure
-                var truncated = typeInfoJson.Length > 200 ? typeInfoJson.Substring(0, 197) + "...}" : typeInfoJson;
-                return truncated;
-            }
-            catch
-            {
-                // If parsing fails, just truncate the string
-                return typeInfoJson.Length > 200 ? typeInfoJson.Substring(0, 197) + "..." : typeInfoJson;
-            }
-        }
+        // CapTypeInfoContent method removed - no longer needed since we don't include type_info in find_references results
     /// <summary>
-    /// Cleans up hits while preserving fields needed for type-aware reference classification
+    /// Cleans up hits while preserving fields needed for reference classification
+    /// Note: type_info removed to prevent token explosion - find_references should focus on locations, not type catalogs
     /// </summary>
     private List<SearchHit> CleanupHitsPreservingTypeInfo(List<SearchHit> hits)
     {
@@ -383,9 +347,8 @@ public class FindReferencesResponseBuilder : BaseResponseBuilder<SearchResult, A
             if (hit.Fields.ContainsKey("size"))
                 preservedFields["size"] = hit.Fields["size"];
             
-            // Type-aware fields for reference classification
-            if (hit.Fields.ContainsKey("type_info"))
-                preservedFields["type_info"] = CapTypeInfoContent(hit.Fields["type_info"]); // Actually cap the content
+            // REMOVED: type_info field - causes token explosion and isn't needed for reference location
+            // Find references should show WHERE something is used, not WHAT the entire file contains
             
             if (hit.Fields.ContainsKey("language"))
                 preservedFields["language"] = hit.Fields["language"];
@@ -443,7 +406,7 @@ public class FindReferencesResponseBuilder : BaseResponseBuilder<SearchResult, A
     }
     
     /// <summary>
-    /// Optimized field token estimation with smart type_info handling
+    /// Field token estimation for find_references (no type_info to avoid token explosion)
     /// </summary>
     private int EstimateFieldTokensWithTypeInfo(Dictionary<string, string>? fields)
     {
@@ -453,15 +416,8 @@ public class FindReferencesResponseBuilder : BaseResponseBuilder<SearchResult, A
         var tokens = 0;
         foreach (var field in fields)
         {
-            // Smart type_info handling - compress large type info
-            if (field.Key == "type_info")
-            {
-                tokens += EstimateTypeInfoTokens(field.Value);
-            }
-            else
-            {
-                tokens += TokenEstimator.EstimateString(field.Value);
-            }
+            // No special handling needed - type_info is excluded from find_references responses
+            tokens += TokenEstimator.EstimateString(field.Value);
         }
         
         return tokens;
