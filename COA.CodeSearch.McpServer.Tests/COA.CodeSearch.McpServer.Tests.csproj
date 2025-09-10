@@ -13,7 +13,7 @@
 
   <ItemGroup>
     <!-- Framework testing NuGet package reference -->
-    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.10" />
+    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.12" />
     <PackageReference Include="DiffPlex" Version="1.8.0" />
     <PackageReference Include="FluentAssertions" Version="7.2.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
