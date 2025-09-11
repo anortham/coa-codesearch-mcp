@@ -494,27 +494,28 @@ public class Program
             var resourceName = "COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban";
             var fallbackPath = Path.Combine(AppContext.BaseDirectory, "..", "Templates", "codesearch-instructions.scriban");
             
-            Log.Information("Attempting to load behavioral adoption template from embedded resource: {ResourceName}", resourceName);
+            // BEHAVIORAL ADOPTION PIPELINE: Stage 1 - Template Loading
+            Log.Information("[BEHAVIORAL-ADOPTION] Stage 1: Template Loading - Attempting to load from embedded resource: {ResourceName}", resourceName);
             
             // List all available embedded resources for debugging
             var availableResources = assembly.GetManifestResourceNames();
-            Log.Information("Available embedded resources: {Resources}", string.Join(", ", availableResources));
+            Log.Information("[BEHAVIORAL-ADOPTION] Available embedded resources: {Resources}", string.Join(", ", availableResources));
             
             using (var stream = assembly.GetManifestResourceStream(resourceName))
             {
                 if (stream == null)
                 {
-                    Log.Warning("Embedded resource '{ResourceName}' not found. Attempting fallback to filesystem", resourceName);
+                    Log.Warning("[BEHAVIORAL-ADOPTION] Embedded resource '{ResourceName}' not found. Attempting fallback to filesystem", resourceName);
                     
                     // Try fallback to filesystem
                     if (File.Exists(fallbackPath))
                     {
-                        Log.Information("Loading template from fallback path: {Path}", fallbackPath);
+                        Log.Information("[BEHAVIORAL-ADOPTION] Loading template from fallback path: {Path}", fallbackPath);
                         templateContent = await File.ReadAllTextAsync(fallbackPath);
                     }
                     else
                     {
-                        Log.Warning("Fallback template file not found at: {Path}. Using hardcoded fallback template", fallbackPath);
+                        Log.Warning("[BEHAVIORAL-ADOPTION] Fallback template file not found at: {Path}. Using hardcoded fallback template", fallbackPath);
                         
                         // Hardcoded fallback template to ensure behavioral adoption works
                         templateContent = @"# CodeSearch MCP - Optimized Code Intelligence
@@ -564,7 +565,7 @@ You have access to specialized code search tools that significantly outperform b
                 }
                 else
                 {
-                    Log.Information("Successfully found embedded resource, loading template content");
+                    Log.Information("[BEHAVIORAL-ADOPTION] Successfully found embedded resource, loading template content");
                     using (var reader = new StreamReader(stream))
                     {
                         templateContent = reader.ReadToEnd();
@@ -572,8 +573,14 @@ You have access to specialized code search tools that significantly outperform b
                 }
             }
             
-            Log.Information("Template loaded successfully. Content length: {Length} characters", templateContent.Length);
-            Log.Debug("Template content preview: {Preview}...", templateContent.Substring(0, Math.Min(200, templateContent.Length)));
+            // BEHAVIORAL ADOPTION PIPELINE: Stage 2 - Template Content Verification
+            var templateHash = templateContent.GetHashCode().ToString("X8");
+            Log.Information("[BEHAVIORAL-ADOPTION] Stage 2: Template Content Loaded - Length: {Length} characters, Hash: {Hash}", templateContent.Length, templateHash);
+            Log.Debug("[BEHAVIORAL-ADOPTION] Template content preview: {Preview}...", templateContent.Substring(0, Math.Min(200, templateContent.Length)));
+            
+            // BEHAVIORAL ADOPTION PIPELINE: Stage 3 - Variable Preparation
+            Log.Information("[BEHAVIORAL-ADOPTION] Stage 3: Variable Preparation - Preparing {ToolCount} tools, {ComparisonCount} comparisons", 
+                templateVariables.AvailableTools.Length, templateVariables.ToolComparisons.Count);
             
             // Use WithTemplateInstructions with the template content directly
             builder.WithTemplateInstructions(options =>
@@ -592,15 +599,20 @@ You have access to specialized code search tools that significantly outperform b
                     ["has_tool"] = true
                 };
                 
-                Log.Information("Template instruction configuration complete. Variables: {VariableCount}", options.CustomTemplateVariables.Count);
-                Log.Debug("Available tools for template: {Tools}", string.Join(", ", templateVariables.AvailableTools));
-                Log.Debug("Tool comparisons count: {Count}", templateVariables.ToolComparisons.Count);
-                Log.Debug("Enforcement level: {Level}", templateVariables.EnforcementLevel);
+                // BEHAVIORAL ADOPTION PIPELINE: Stage 4 - Template Configuration
+                Log.Information("[BEHAVIORAL-ADOPTION] Stage 4: Template Configuration Complete - Variables: {VariableCount}", options.CustomTemplateVariables.Count);
+                Log.Information("[BEHAVIORAL-ADOPTION] Template variables configured:");
+                Log.Information("[BEHAVIORAL-ADOPTION] - Available tools: {Tools}", string.Join(", ", templateVariables.AvailableTools));
+                Log.Information("[BEHAVIORAL-ADOPTION] - Tool comparisons: {Count} comparisons", templateVariables.ToolComparisons.Count);
+                Log.Information("[BEHAVIORAL-ADOPTION] - Enforcement level: {Level}", templateVariables.EnforcementLevel);
+                Log.Information("[BEHAVIORAL-ADOPTION] - Template context: {Context}", options.TemplateContext);
+                Log.Information("[BEHAVIORAL-ADOPTION] - Template instructions enabled: {Enabled}", options.EnableTemplateInstructions);
             })
-            // Explicit tool management configuration for full control over behavioral adoption features
-            // Note: WithTemplateInstructions already sets basic defaults, but this allows customization
+            // BEHAVIORAL ADOPTION PIPELINE: Stage 5 - Tool Management Configuration
             .ConfigureToolManagement(config =>
             {
+                Log.Information("[BEHAVIORAL-ADOPTION] Stage 5: Configuring Tool Management System");
+                
                 // Keep the defaults set by WithTemplateInstructions but add our customizations
                 config.UseDefaultDescriptionProvider = true;
                 config.EnableWorkflowSuggestions = true;
@@ -611,6 +623,12 @@ You have access to specialized code search tools that significantly outperform b
                 config.EmphasizeHighImpactWorkflows = true; // Focus on most beneficial guidance
                 config.IncludeExpectedBenefits = true; // Evidence-based guidance with measurable justification
                 config.MaxWorkflowSuggestionsInInstructions = 5; // Focused guidance without overwhelming
+                
+                Log.Information("[BEHAVIORAL-ADOPTION] Tool management configured:");
+                Log.Information("[BEHAVIORAL-ADOPTION] - Workflow suggestions: {Enabled}", config.EnableWorkflowSuggestions);
+                Log.Information("[BEHAVIORAL-ADOPTION] - Tool priority system: {Enabled}", config.EnableToolPrioritySystem);
+                Log.Information("[BEHAVIORAL-ADOPTION] - Alternative suggestions: {Enabled}", config.IncludeAlternativeToolSuggestions);
+                Log.Information("[BEHAVIORAL-ADOPTION] - High impact workflows: {Enabled}", config.EmphasizeHighImpactWorkflows);
             });
 
             // Register prompts for interactive workflows
@@ -620,7 +638,10 @@ You have access to specialized code search tools that significantly outperform b
 
             // Run in STDIO mode (the only mode now)
             {
-                Log.Information("Starting CodeSearch MCP Server");
+                // BEHAVIORAL ADOPTION PIPELINE: Stage 6 - Server Startup
+                Log.Information("[BEHAVIORAL-ADOPTION] Stage 6: Starting CodeSearch MCP Server with Enhanced Behavioral Adoption");
+                Log.Information("[BEHAVIORAL-ADOPTION] Template hash: {Hash} | Enforcement: {Level} | Tools: {Count}", 
+                    templateHash, templateVariables.EnforcementLevel, templateVariables.AvailableTools.Length);
                 
                 // Register startup indexing service
                 builder.Services.AddHostedService<StartupIndexingService>();
@@ -634,6 +655,11 @@ You have access to specialized code search tools that significantly outperform b
                 
                 // Use STDIO transport
                 builder.UseStdioTransport();
+                
+                // BEHAVIORAL ADOPTION PIPELINE: Stage 7 - Final Preparation
+                Log.Information("[BEHAVIORAL-ADOPTION] Stage 7: STDIO Transport Configured - Ready to deliver behavioral adoption instructions");
+                Log.Information("[BEHAVIORAL-ADOPTION] Pipeline Complete: Template loaded → Variables prepared → Instructions configured → Server ready");
+                Log.Information("[BEHAVIORAL-ADOPTION] Expected behavior: Claude should prefer CodeSearch tools and follow architect/implementer workflow");
                 
                 // FileWatcherService will self-start when StartWatching is called
                 // This ensures the same instance receives and processes events
