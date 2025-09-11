@@ -19,14 +19,17 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<ReplaceLinesTool> _logger;
 
     public ReplaceLinesTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
+        UnifiedFileEditService fileEditService,
         ILogger<ReplaceLinesTool> logger) : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
+        _fileEditService = fileEditService;
         _logger = logger;
     }
 
@@ -50,73 +53,43 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
             // Validate line parameters
             ValidateReplacementParameters(parameters);
             
-            // Read current file content
-            string[] lines;
-            Encoding fileEncoding;
-            (lines, fileEncoding) = await ReadFileWithEncodingAsync(filePath, cancellationToken);
-            
-            // Determine actual line range
-            var startLine = parameters.StartLine - 1; // Convert to 0-based
-            var endLine = (parameters.EndLine ?? parameters.StartLine) - 1; // Convert to 0-based
-            
-            // Validate line range against file content
-            if (startLine < 0 || startLine >= lines.Length)
+            // Use UnifiedFileEditService for reliable, concurrent line replacement
+            var editResult = await _fileEditService.ReplaceLinesAsync(
+                filePath,
+                parameters.StartLine,
+                parameters.EndLine,
+                parameters.Content ?? string.Empty,
+                parameters.PreserveIndentation,
+                cancellationToken);
+
+            if (!editResult.Success)
             {
-                return CreateErrorResponse(
-                    $"StartLine {parameters.StartLine} is out of range. File has {lines.Length} lines. " +
-                    $"Valid range: 1-{lines.Length}");
+                return CreateErrorResponse(editResult.ErrorMessage ?? "Replace operation failed");
             }
+
+            // Generate context for verification
+            var modifiedLines = FileLineUtilities.SplitLines(editResult.ModifiedContent ?? "");
+            var originalLines = FileLineUtilities.SplitLines(editResult.OriginalContent ?? "");
+            var actualEndLine = parameters.EndLine ?? parameters.StartLine;
             
-            if (endLine < 0 || endLine >= lines.Length)
-            {
-                return CreateErrorResponse(
-                    $"EndLine {parameters.EndLine} is out of range. File has {lines.Length} lines. " +
-                    $"Valid range: 1-{lines.Length}");
-            }
-            
-            if (startLine > endLine)
-            {
-                return CreateErrorResponse(
-                    $"StartLine {parameters.StartLine} cannot be greater than EndLine {parameters.EndLine}");
-            }
-            
-            // Capture original content for undo purposes
-            var originalLines = lines.Skip(startLine).Take(endLine - startLine + 1).ToArray();
-            var originalContent = string.Join(Environment.NewLine, originalLines);
-            
-            // Detect indentation using centralized consistency-aware algorithm
-            string indentation = "";
-            if (parameters.PreserveIndentation)
-            {
-                // For replacement operations, exclude the target line from analysis to avoid bias
-                indentation = FileLineUtilities.DetectIndentationForInsertion(lines, startLine, includeTargetLine: false);
-            }
-            
-            // Prepare replacement content with proper indentation
-            var contentLines = string.IsNullOrEmpty(parameters.Content) 
+            // Calculate lines added from the replacement content
+            var replacementLines = string.IsNullOrEmpty(parameters.Content) 
                 ? new string[0] 
                 : parameters.Content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            var indentedContent = ApplyIndentation(contentLines, indentation);
             
-            // Perform the replacement
-            var newLines = ReplaceLinesAt(lines, startLine, endLine, indentedContent);
-            
-            // Write back to file with original encoding, preserving line endings
-            var originalFileContent = fileEncoding.GetString(await File.ReadAllBytesAsync(filePath, cancellationToken));
-            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalFileContent, cancellationToken);
-            // Generate context for verification
-            var contextLines = GenerateContext(newLines, startLine, indentedContent.Length, parameters.ContextLines);
-            
+            var contextLines = GenerateContext(modifiedLines, parameters.StartLine - 1, 
+                replacementLines.Length, parameters.ContextLines); // Pass actual replacement line count
+
             var result = new ReplaceLinesResult
             {
                 Success = true,
                 FilePath = filePath,
                 StartLine = parameters.StartLine,
-                EndLine = parameters.EndLine ?? parameters.StartLine,
-                LinesRemoved = originalLines.Length,
-                LinesAdded = indentedContent.Length,
+                EndLine = actualEndLine,
+                LinesRemoved = (actualEndLine - parameters.StartLine + 1),
+                LinesAdded = replacementLines.Length,
                 ContextLines = contextLines,
-                OriginalContent = originalContent
+                OriginalContent = editResult.DeletedContent
             };
 
             _logger.LogInformation("Successfully replaced lines {StartLine}-{EndLine} in {FilePath} " +

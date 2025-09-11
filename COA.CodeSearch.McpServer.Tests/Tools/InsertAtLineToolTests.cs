@@ -26,9 +26,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override InsertAtLineTool CreateTool()
         {
+            // Create mock for UnifiedFileEditService
+            var editServiceLoggerMock = new Mock<ILogger<UnifiedFileEditService>>();
+            var unifiedFileEditService = new UnifiedFileEditService(editServiceLoggerMock.Object);
+            
             _tool = new InsertAtLineTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
+                unifiedFileEditService,
                 ToolLoggerMock.Object
             );
             return _tool;

@@ -9,6 +9,7 @@ using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
+using Moq;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools;
 
@@ -23,10 +24,14 @@ public class IndentationBugTests : CodeSearchToolTestBase<ReplaceLinesTool>
 
     protected override ReplaceLinesTool CreateTool()
     {
+        var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+        var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<ReplaceLinesTool>>();
         _tool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
-            ToolLoggerMock.Object
+            unifiedFileEditService,
+            replaceLogger.Object
         );
         return _tool;
     }
