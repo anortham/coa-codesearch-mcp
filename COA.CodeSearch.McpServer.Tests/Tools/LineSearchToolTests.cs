@@ -175,5 +175,32 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // TODO: Fix property access for LineSearchResult
             response.Result.Data.Should().NotBeNull();
         }
+
+        [Test]
+        public async Task ExecuteAsync_MalformedLuceneQuery_ShouldHandleGracefully()
+        {
+            // Arrange - This reproduces the exact bug from the logs: "[Ignore" causes ParseException
+            var parameters = new LineSearchParams
+            {
+                Pattern = "[Ignore", // Missing closing bracket - causes Lucene ParseException
+                WorkspacePath = TestWorkspacePath,
+                SearchType = "standard"
+            };
+
+            // Act
+            var response = await ExecuteToolAsync<AIOptimizedResponse<LineSearchResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert - Should handle the parsing error gracefully, not crash
+            response.Success.Should().BeTrue("Tool should handle malformed queries gracefully");
+            response.Result.Should().NotBeNull();
+            response.Result!.Success.Should().BeTrue();
+            response.Result.Data.Should().NotBeNull();
+            
+            // After the fix, this should complete without ParseException
+            var result = response.Result.Data!.Data;
+            result.Should().NotBeNull("Should return valid result object even for malformed queries");
+            result!.Summary.Should().NotBeNull("Should have a summary instead of crashing");
+        }
     }
 }
