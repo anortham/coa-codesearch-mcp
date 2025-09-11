@@ -41,21 +41,49 @@ When working in this environment, please:
 
 {{ end }}
 
-### {{ if enforcement_level == "strongly_urge" }}STRONGLY URGE{{ else if enforcement_level == "recommend" }}RECOMMEND{{ else }}SUGGEST{{ end }} Workflow for Maximum Efficiency
+### {{ if enforcement_level == "strongly_urge" }}MANDATORY{{ else if enforcement_level == "recommend" }}STRONGLY RECOMMENDED{{ else }}SUGGESTED{{ end }} Professional Development Workflow
 
 {{ if enforcement_level == "strongly_urge" }}
-**CRITICAL**: You MUST use CodeSearch tools for all code-related operations. Built-in tools lack the type information and indexing required for accurate code analysis and will result in compilation errors and token waste.
-{{ else if enforcement_level == "recommend" }}
-**RECOMMENDED**: CodeSearch tools are strongly recommended for all code-related tasks due to their superior performance, accuracy, and token efficiency.
+**MANDATORY DISCIPLINE**: You MUST follow this workflow for ALL code-related operations. Shortcuts lead to compilation errors, broken functionality, and wasted tokens. This is non-negotiable professional practice.
+{{ else if enforcement_level == "recommend" }}  
+**PROFESSIONAL STANDARD**: This workflow represents industry best practices. Following it prevents errors and demonstrates engineering discipline.
 {{ else }}
-**SUGGESTED**: Consider using CodeSearch tools for better performance in code-related tasks.
+**SUGGESTED APPROACH**: Consider this workflow for better code quality and efficiency.
 {{ end }}
 
-### Optimal Development Workflow
-1. **BEFORE writing any code**: Use `goto_definition` to verify exact type signatures
-2. **BEFORE refactoring**: Use `find_references` to understand complete impact  
-3. **WHEN exploring code**: Use `text_search` not grep (100x faster with type awareness)
-4. **FOR file operations**: Use `file_search` not bash find (pre-indexed, instant results)
+### Complete Professional Development Cycle
+
+**Phase 1: Planning & Discovery**
+1. **BEFORE starting ANY task**: Create todo list with Goldfish (`mcp__goldfish__todo`)
+2. **UNDERSTAND the codebase**: Use `text_search` to find similar implementations
+3. **VERIFY existing patterns**: Use `symbol_search` to locate related types
+4. **CHECKPOINT current state**: Use Goldfish checkpoint before major changes
+
+**Phase 2: Type & Dependency Analysis**  
+5. **VERIFY ALL types**: Use `goto_definition` for every class/method you'll use
+6. **UNDERSTAND impact**: Use `find_references` before changing ANY existing code
+7. **MAP dependencies**: Use `get_symbols_overview` to understand class structure
+8. **VALIDATE signatures**: Never assume method names or parameters
+
+**Phase 3: Implementation with Discipline**
+9. **EDIT with precision**: Use `insert_at_line`/`replace_lines` for exact changes
+10. **TRACK progress**: Mark todos complete as you finish each step
+11. **VERIFY changes**: Use `find_references` to confirm no breaking changes
+12. **CHECKPOINT after completion**: Save progress with clear description
+
+**Phase 4: Quality & Documentation**
+13. **RUN tests**: Verify your changes don't break existing functionality  
+14. **UPDATE todos**: Mark all related tasks complete
+15. **FINAL checkpoint**: Document what was accomplished and lessons learned
+
+### Critical Workflow Violations That MUST Be Avoided
+
+❌ **Writing code without type verification** → Compilation errors guaranteed
+❌ **Refactoring without finding references** → Breaking changes guaranteed  
+❌ **Using grep instead of text_search** → Missing results, wasted time
+❌ **Using bash find instead of file_search** → Slow, incomplete results
+❌ **Starting tasks without todos** → Poor organization, forgotten requirements
+❌ **No checkpointing** → Lost context, inability to recover from mistakes
 
 ### Technical Superiority
 {{ if available_tools }}
@@ -79,11 +107,37 @@ Use built-in tools **ONLY** for:
 - System operations (process control, file management)
 - Files outside indexed workspaces
 
+### Goldfish Workflow Integration
+
+**CodeSearch and Goldfish work together to create professional development habits:**
+
+{{ if enforcement_level == "strongly_urge" }}
+**REQUIRED INTEGRATION**: You MUST use both tools together:
+{{ else }}
+**RECOMMENDED INTEGRATION**: Use both tools for maximum effectiveness:
+{{ end }}
+
+- **Before coding**: Create Goldfish todo list → Use CodeSearch to verify types → Checkpoint state
+- **During development**: Mark todos complete → Use CodeSearch for precision → Update checkpoints  
+- **After completion**: Final checkpoint → Plan next steps → Review lessons learned
+
+**Goldfish Commands to Use Alongside CodeSearch:**
+- `mcp__goldfish__todo` - Create/manage task lists for organized development
+- `mcp__goldfish__checkpoint` - Save progress before/after major changes
+- `mcp__goldfish__plan` - Strategic planning for complex features
+- `mcp__goldfish__recall` - Restore context from previous work sessions
+
 ### Token Economy Impact
 {{ if enforcement_level != "suggest" }}
-⚠️ **Performance Impact**: Using built-in tools for code tasks typically requires 3-5 error correction iterations, wasting 200-500 tokens per task. CodeSearch tools provide accurate information immediately, enabling first-time-right code generation.
+⚠️ **Critical Performance Impact**: 
+- **Without proper workflow**: 3-5 error correction cycles, 200-500+ wasted tokens per task
+- **With CodeSearch + Goldfish**: First-time-right implementation, 50-100 tokens total
+- **ROI**: 5x-10x token efficiency through professional discipline and accurate information
 {{ else }}
-💡 **Efficiency Note**: CodeSearch tools reduce iteration cycles and token usage through accurate type information and comprehensive search results.
+💡 **Efficiency Advantage**: 
+- CodeSearch provides accurate type information reducing error cycles
+- Goldfish maintains context preventing repeated discovery work
+- Combined workflow typically 3x more token-efficient than ad-hoc approaches
 {{ end }}
 
 ### Index Status
