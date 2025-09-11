@@ -18,14 +18,17 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptimizedResponse<DeleteLinesResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<DeleteLinesTool> _logger;
 
     public DeleteLinesTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
+        UnifiedFileEditService fileEditService,
         ILogger<DeleteLinesTool> logger) : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
+        _fileEditService = fileEditService;
         _logger = logger;
     }
 
@@ -49,63 +52,34 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             // Validate line parameters
             ValidateDeletionParameters(parameters);
             
-            // Read current file content using shared utilities for consistency
-            string[] lines;
-            Encoding fileEncoding;
-            string originalContent;
-            
-            // Read the original content once to ensure consistency
-            var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
-            fileEncoding = FileLineUtilities.DetectEncoding(fileBytes);
-            originalContent = fileEncoding.GetString(fileBytes);
-            lines = FileLineUtilities.SplitLines(originalContent);
-            
-            // Determine actual line range
-            var startLine = parameters.StartLine - 1; // Convert to 0-based
-            var endLine = (parameters.EndLine ?? parameters.StartLine) - 1; // Convert to 0-based
-            
-            // Validate line range against file content
-            if (startLine < 0 || startLine >= lines.Length)
+            // Use UnifiedFileEditService for reliable, concurrent line deletion
+            var editResult = await _fileEditService.DeleteLinesAsync(
+                filePath,
+                parameters.StartLine,
+                parameters.EndLine,
+                cancellationToken);
+
+            if (!editResult.Success)
             {
-                return CreateErrorResponse(
-                    $"StartLine {parameters.StartLine} is out of range. File has {lines.Length} lines. " +
-                    $"Valid range: 1-{lines.Length}");
+                return CreateErrorResponse(editResult.ErrorMessage ?? "Delete operation failed");
             }
-            
-            if (endLine < 0 || endLine >= lines.Length)
-            {
-                return CreateErrorResponse(
-                    $"EndLine {parameters.EndLine} is out of range. File has {lines.Length} lines. " +
-                    $"Valid range: 1-{lines.Length}");
-            }
-            
-            if (startLine > endLine)
-            {
-                return CreateErrorResponse(
-                    $"EndLine must be >= StartLine. Got StartLine={parameters.StartLine}, EndLine={parameters.EndLine}");
-            }
-            
-            // Capture deleted content for recovery purposes
-            var deletedLines = lines.Skip(startLine).Take(endLine - startLine + 1).ToArray();
-            var deletedContent = string.Join(Environment.NewLine, deletedLines);
-            
-            // Perform the deletion
-            var newLines = DeleteLinesAt(lines, startLine, endLine);
-            
-            // Write back to file with original encoding, preserving line endings
-            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalContent, cancellationToken);
-            // Generate context for verification (adjusted for deletion)
-            var contextLines = GenerateContext(newLines, startLine, deletedLines.Length, parameters.ContextLines);
+
+            // Generate context for verification
+            var modifiedLines = FileLineUtilities.SplitLines(editResult.ModifiedContent ?? "");
+            var actualEndLine = parameters.EndLine ?? parameters.StartLine;
+            var deletedLineCount = actualEndLine - parameters.StartLine + 1; // Calculate actual deleted lines
+            var contextLines = GenerateContext(modifiedLines, parameters.StartLine - 1, 
+                deletedLineCount, parameters.ContextLines); // Pass actual deleted line count
             
             var result = new DeleteLinesResult
             {
                 Success = true,
                 FilePath = filePath,
                 StartLine = parameters.StartLine,
-                EndLine = parameters.EndLine ?? parameters.StartLine,
-                LinesDeleted = deletedLines.Length,
+                EndLine = actualEndLine,
+                LinesDeleted = (actualEndLine - parameters.StartLine + 1),
                 ContextLines = contextLines,
-                DeletedContent = deletedContent
+                DeletedContent = editResult.DeletedContent ?? string.Empty
             };
 
             _logger.LogInformation("Successfully deleted lines {StartLine}-{EndLine} in {FilePath} " +

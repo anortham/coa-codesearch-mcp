@@ -1,0 +1,238 @@
+{
+  "TestCases": [
+    {
+      "TestName": "YAML_DockerCompose_ServiceUpdate",
+      "Description": "Update Docker Compose service configuration with real-world YAML",
+      "SourceFile": "serena_compose.yaml",
+      "ControlFile": "serena_compose_updated.yaml",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "serena:latest",
+        "ReplacePattern": "serena:v1.2.3",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 5
+      }
+    },
+    {
+      "TestName": "YAML_EnvironmentVariables_Insert",
+      "Description": "Insert new environment variable in Docker Compose YAML structure",
+      "SourceFile": "serena_compose.yaml",
+      "ControlFile": "serena_compose_env_added.yaml",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 16,
+        "Content": "      - SERENA_LOG_LEVEL=DEBUG",
+        "PreserveIndentation": true,
+        "ContextLines": 4
+      }
+    },
+    {
+      "TestName": "TOML_RustCargo_DependencyAdd",
+      "Description": "Add dependency to Rust Cargo.toml with proper TOML structure",
+      "SourceFile": "rust_cargo.toml",
+      "ControlFile": "rust_cargo_with_deps.toml",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 6,
+        "EndLine": 7,
+        "Content": "serde = { version = \"1.0\", features = [\"derive\"] }\ntokio = { version = \"1.0\", features = [\"full\"] }\nclap = { version = \"4.0\", features = [\"derive\"] }",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "XML_Maven_PluginVersionUpdate",
+      "Description": "Update Maven plugin version in pom.xml with XML structure preservation",
+      "SourceFile": "java_pom.xml",
+      "ControlFile": "java_pom_updated.xml",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "<version>${maven.compiler.plugin.version}</version>",
+        "ReplacePattern": "<version>3.14.0</version>",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "Go_FunctionRename_CamelCase",
+      "Description": "Rename Go function using regex capture groups for consistent naming",
+      "SourceFile": "go_main.go",
+      "ControlFile": "go_main_renamed.go",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "func (\\w+)\\(",
+        "ReplacePattern": "func $1Handler(",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 10
+      }
+    },
+    {
+      "TestName": "TypeScript_ClassMethod_AsyncConversion",
+      "Description": "Convert TypeScript synchronous method to async pattern",
+      "SourceFile": "typescript_demo.ts",
+      "ControlFile": "typescript_demo_async.ts",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "printValue\\(\\) \\{",
+        "ReplacePattern": "async printValue(): Promise<void> {",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 5
+      }
+    },
+    {
+      "TestName": "JavaScript_ErrorHandling_TryCatchAdd",
+      "Description": "Add try-catch error handling around JavaScript operations",
+      "SourceFile": "dashboard.js",
+      "ControlFile": "dashboard_error_handling.js",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 24,
+        "EndLine": 29,
+        "Content": "        let highlightedMessage = message;\n        try {\n            toolNames.forEach(function(toolName) {\n                const regex = new RegExp('\\\\b' + toolName + '\\\\b', 'gi');\n                highlightedMessage = highlightedMessage.replace(regex, '<span class=\"tool-name\">' + toolName + '</span>');\n            });\n        } catch (error) {\n            console.warn('Failed to highlight tool names:', error);\n        }\n        return highlightedMessage;",
+        "PreserveIndentation": true,
+        "ContextLines": 4
+      }
+    },
+    {
+      "TestName": "YAML_CommentPreservation_ConfigUpdate",
+      "Description": "Update YAML configuration while preserving important comments",
+      "SourceFile": "serena_compose.yaml",
+      "ControlFile": "serena_compose_port_updated.yaml",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "\\\"\\$\\{SERENA_PORT:-9121\\}:9121\\\"",
+        "ReplacePattern": "\\\"\\$\\{SERENA_PORT:-8080\\}:8080\\\"",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 2
+      }
+    },
+    {
+      "TestName": "MultiLine_JavaScript_ClassModification",
+      "Description": "Modify multi-line JavaScript class constructor with proper indentation",
+      "SourceFile": "dashboard.js",
+      "ControlFile": "dashboard_constructor_enhanced.js",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "constructor\\(message, toolNames\\) \\{\\s*message = this\\.escapeHtml\\(message\\);",
+        "ReplacePattern": "constructor(message, toolNames, options = {}) {\\n        this.options = options;\\n        message = this.escapeHtml(message);",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 5,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "Go_StructField_TypeChange",
+      "Description": "Change Go struct field type with type safety considerations",
+      "SourceFile": "go_main.go",
+      "ControlFile": "go_main_struct_updated.go",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 14,
+        "EndLine": 16,
+        "Content": "type DemoStruct struct {\n    Field string `json:\"field\"`\n    ID    int64  `json:\"id\"`\n}",
+        "PreserveIndentation": false,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "XML_MavenProperty_Addition",
+      "Description": "Add new Maven property to properties section in pom.xml",
+      "SourceFile": "java_pom.xml",
+      "ControlFile": "java_pom_properties_added.xml",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 13,
+        "Content": "        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "TypeScript_ImportStatement_Organization",
+      "Description": "Reorganize TypeScript import statements for better code organization",
+      "SourceFile": "typescript_demo.ts",
+      "ControlFile": "typescript_demo_imports.ts",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 1,
+        "Content": "import { Logger } from './logger';\nimport type { ConfigOptions } from './types';\n",
+        "PreserveIndentation": false,
+        "ContextLines": 2
+      }
+    },
+    {
+      "TestName": "TOML_Section_CompleteReplacement",
+      "Description": "Replace entire TOML section with updated configuration",
+      "SourceFile": "rust_cargo.toml",
+      "ControlFile": "rust_cargo_metadata.toml",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 5,
+        "Content": "\n[package.metadata.docs.rs]\nall-features = true\nrustdoc-args = [\"--cfg\", \"docsrs\"]\n\n[features]\ndefault = []\nfull = [\"serde\", \"tokio\"]\n",
+        "PreserveIndentation": false,
+        "ContextLines": 2
+      }
+    },
+    {
+      "TestName": "JavaScript_SecurityFix_InputValidation",
+      "Description": "Add input validation to prevent security vulnerabilities in JavaScript",
+      "SourceFile": "dashboard.js",
+      "ControlFile": "dashboard_input_validated.js",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 32,
+        "EndLine": 33,
+        "Content": "    escapeHtml (convertString) {\n        if (typeof convertString !== 'string' || convertString.length > 10000) {\n            return convertString || ''; \n        }",
+        "PreserveIndentation": true,
+        "ContextLines": 4
+      }
+    },
+    {
+      "TestName": "Go_ErrorHandling_Enhancement",
+      "Description": "Add proper error handling to Go functions following Go conventions",
+      "SourceFile": "go_main.go",
+      "ControlFile": "go_main_error_handling.go",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 10,
+        "EndLine": 12,
+        "Content": "func Helper() error {\n    if err := validateState(); err != nil {\n        return fmt.Errorf(\"helper validation failed: %w\", err)\n    }\n    fmt.Println(\"Helper function called\")\n    return nil\n}\n\nfunc validateState() error {\n    return nil // Placeholder for actual validation\n}",
+        "PreserveIndentation": false,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "YAML_MultiService_PortMapping",
+      "Description": "Update multiple service port mappings in Docker Compose YAML",
+      "SourceFile": "serena_compose.yaml",
+      "ControlFile": "serena_compose_multi_port.yaml",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "\\d+:\\d+",
+        "ReplacePattern": "0.0.0.0:$&",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 10
+      }
+    }
+  ]
+}

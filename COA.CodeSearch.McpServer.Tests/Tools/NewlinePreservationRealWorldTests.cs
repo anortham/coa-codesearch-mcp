@@ -25,10 +25,13 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
 
     protected override DeleteLinesTool CreateTool()
     {
+        var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
         _deleteTool = new DeleteLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditService,
             deleteLogger.Object
         );
         return _deleteTool;
@@ -41,17 +44,23 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         _fileManager = new TestFileManager();
         
         // Create additional tools
+        var unifiedFileEditServiceForInsert = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
         _insertTool = new InsertAtLineTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForInsert,
             insertLogger.Object
         );
         
+        var unifiedFileEditServiceForReplace = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
         _replaceTool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForReplace,
             replaceLogger.Object
         );
     }
@@ -223,7 +232,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
 
         // Verify the method was replaced
         var modifiedContent = validation.CurrentContent;
-        modifiedContent.Should().Contain("Enhanced line ending detection", "Method should be replaced with enhanced version");
+        modifiedContent.Should().Contain("Enhanced encoding detection", "Method should be replaced with enhanced version");
         modifiedContent.Should().Contain("Modified by newline preservation test", "Replacement marker should be present");
         
         // Verify C# syntax is still valid

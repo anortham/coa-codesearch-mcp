@@ -29,10 +29,13 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
 
     protected override DeleteLinesTool CreateTool()
     {
+        var unifiedFileEditService = new UnifiedFileEditService(
+            new Mock<ILogger<UnifiedFileEditService>>().Object);
         var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
         _deleteTool = new DeleteLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditService,
             deleteLogger.Object
         );
         return _deleteTool;
@@ -44,39 +47,63 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
         base.SetUp();
         _fileManager = new TestFileManager();
         
+        // Setup index exists for SearchAndReplaceTool tests
+        SetupExistingIndex();
+        
+        // Setup index exists for any workspace path used by the tests
+        LuceneIndexServiceMock
+            .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(true);
+            
+        // Setup search results that return the test file being operated on
+        // This will be dynamically updated for each test case
+        LuceneIndexServiceMock
+            .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Lucene.Net.Search.Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync((string workspace, Lucene.Net.Search.Query query, int maxResults, CancellationToken ct) =>
+            {
+                // Return a result that indicates the file was found
+                return CreateTestSearchResult(1);
+            });
+        
+        var unifiedFileEditServiceForInsert = new UnifiedFileEditService(
+            new Mock<ILogger<UnifiedFileEditService>>().Object);
         var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
         _insertTool = new InsertAtLineTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForInsert,
             insertLogger.Object
         );
         
+        var unifiedFileEditServiceForReplace = new UnifiedFileEditService(
+            new Mock<ILogger<UnifiedFileEditService>>().Object);
         var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
         _replaceTool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForReplace,
             replaceLogger.Object
         );
         
-        // Create additional services needed for SearchAndReplaceTool
-        var lineAwareSearchLogger = new Mock<ILogger<LineAwareSearchService>>();
-        var lineAwareSearchService = new LineAwareSearchService(lineAwareSearchLogger.Object);
-        
+        // Create additional services needed for enhanced SearchAndReplaceTool
         var smartQueryPreprocessorLogger = new Mock<ILogger<SmartQueryPreprocessor>>();
         var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLogger.Object);
         
-        var advancedPatternMatcher = new AdvancedPatternMatcher();
+        var unifiedFileEditService = new UnifiedFileEditService(
+            new Mock<ILogger<UnifiedFileEditService>>().Object);
+        var workspacePermissionServiceMock = new Mock<IWorkspacePermissionService>();
+        workspacePermissionServiceMock.Setup(x => x.IsEditAllowedAsync(It.IsAny<EditPermissionRequest>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(new EditPermissionResult { Allowed = true });
         
         var searchReplaceLogger = new Mock<ILogger<SearchAndReplaceTool>>();
         _searchReplaceTool = new SearchAndReplaceTool(
             ServiceProvider,
             LuceneIndexServiceMock.Object,
-            lineAwareSearchService,
-            PathResolutionServiceMock.Object,
             smartQueryPreprocessor,
             ResourceStorageServiceMock.Object,
-            advancedPatternMatcher,
             CodeAnalyzer,
+            unifiedFileEditService,
+            workspacePermissionServiceMock.Object,
             searchReplaceLogger.Object
         );
     }
@@ -206,6 +233,33 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
 
     private async Task<dynamic> ExecuteSearchReplaceOperation(GoldenMasterTestCase testCase, string filePath)
     {
+        // Setup search results to return the specific test file
+        var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+        {
+            Query = testCase.Operation.SearchPattern ?? "test",
+            TotalHits = 1,
+            Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
+            {
+                new COA.CodeSearch.McpServer.Services.Lucene.SearchHit
+                {
+                    FilePath = filePath,
+                    Score = 1.0f,
+                    Fields = new Dictionary<string, string>
+                    {
+                        { "content", File.ReadAllText(filePath) },
+                        { "filename", Path.GetFileName(filePath) },
+                        { "relativePath", Path.GetRelativePath(Path.GetDirectoryName(filePath) ?? "", filePath) },
+                        { "extension", Path.GetExtension(filePath) }
+                    }
+                }
+            },
+            SearchTime = TimeSpan.FromMilliseconds(10)
+        };
+
+        LuceneIndexServiceMock
+            .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Lucene.Net.Search.Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .ReturnsAsync(searchResult);
+
         var parameters = new SearchAndReplaceParams
         {
             SearchPattern = testCase.Operation.SearchPattern ?? throw new ArgumentException("SearchPattern is required"),

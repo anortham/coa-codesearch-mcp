@@ -25,6 +25,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
     {
         private SearchAndReplaceTool _tool = null!;
         private Mock<LineAwareSearchService> _lineSearchServiceMock = null!;
+        private Mock<COA.CodeSearch.McpServer.Services.IWorkspacePermissionService> _workspacePermissionServiceMock = null!;
 
         protected override SearchAndReplaceTool CreateTool()
         {
@@ -37,17 +38,20 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
             
             var resourceStorageServiceMock = new Mock<IResourceStorageService>();
-            var advancedPatternMatcherMock = new Mock<AdvancedPatternMatcher>();
+            var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+                new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+            _workspacePermissionServiceMock = new Mock<COA.CodeSearch.McpServer.Services.IWorkspacePermissionService>();
+            var searchReplaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<SearchAndReplaceTool>>();
+            
             _tool = new SearchAndReplaceTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
-                _lineSearchServiceMock.Object,
-                PathResolutionServiceMock.Object,
                 smartQueryPreprocessor,
                 resourceStorageServiceMock.Object,
-                advancedPatternMatcherMock.Object,
                 CodeAnalyzer,
-                ToolLoggerMock.Object
+                unifiedFileEditService,
+                _workspacePermissionServiceMock.Object,
+                searchReplaceLogger.Object
             );
             return _tool;
         }
@@ -64,6 +68,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Setup index service mocks
             LuceneIndexServiceMock.Setup(s => s.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(true);
+                
+            // Setup workspace permission service mock - CRITICAL for SearchAndReplaceTool
+            _workspacePermissionServiceMock.Setup(x => x.IsEditAllowedAsync(It.IsAny<COA.CodeSearch.McpServer.Models.EditPermissionRequest>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new COA.CodeSearch.McpServer.Models.EditPermissionResult { Allowed = true });
         }
 
         [Test]
@@ -387,21 +395,33 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             {
                 SearchPattern = "old_value",
                 ReplacePattern = "new_value", 
+                SearchType = "literal",
+                MatchMode = "literal",
                 WorkspacePath = TestWorkspacePath,
-                Preview = false // Actually apply changes
+                CaseSensitive = true,
+                Preview = false, // Actually apply changes
+                MaxMatches = 10,
+                ContextLines = 3
             };
 
             var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
             {
+                Query = "old_value",
                 TotalHits = 1,
                 Hits = new List<COA.CodeSearch.McpServer.Services.Lucene.SearchHit>
                 {
                     new COA.CodeSearch.McpServer.Services.Lucene.SearchHit
                     {
                         FilePath = testFile,
-                        Score = 1.0f
+                        Score = 1.0f,
+                        Fields = new Dictionary<string, string>
+                        {
+                            { "content", "old_value test content" },
+                            { "filename", Path.GetFileName(testFile) }
+                        }
                     }
-                }
+                },
+                SearchTime = TimeSpan.FromMilliseconds(10)
             };
 
             LuceneIndexServiceMock.Setup(s => s.SearchAsync(
@@ -418,9 +438,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
 
                 // Assert - Verify the operation succeeded
-                response.Success.Should().BeTrue();
+                response.Success.Should().BeTrue($"Response failed: {(response.Result?.Success == false ? response.Result?.Data?.Summary : "unknown error")}");
                 response.Result.Should().NotBeNull();
-                response.Result!.Success.Should().BeTrue();
+                response.Result!.Success.Should().BeTrue($"Result failed: {response.Result?.Error?.Message}");
                 response.Result.Data.Should().NotBeNull();
 
                 // Critical assertion: Verify no duplicate lines were created

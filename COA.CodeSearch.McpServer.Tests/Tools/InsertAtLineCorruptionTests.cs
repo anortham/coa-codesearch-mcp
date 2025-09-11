@@ -10,6 +10,7 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.Linq;
 using System.Text;
+using Moq;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools;
 
@@ -25,10 +26,14 @@ public class InsertAtLineCorruptionTests : CodeSearchToolTestBase<InsertAtLineTo
 
     protected override InsertAtLineTool CreateTool()
     {
+        var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<InsertAtLineTool>>();
         _tool = new InsertAtLineTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
-            ToolLoggerMock.Object
+            unifiedFileEditService,
+            insertLogger.Object
         );
         return _tool;
     }

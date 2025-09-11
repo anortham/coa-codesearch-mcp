@@ -19,14 +19,17 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOptimizedResponse<InsertAtLineResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
+    private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<InsertAtLineTool> _logger;
 
     public InsertAtLineTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
+        UnifiedFileEditService fileEditService,
         ILogger<InsertAtLineTool> logger) : base(serviceProvider)
     {
         _pathResolutionService = pathResolutionService;
+        _fileEditService = fileEditService;
         _logger = logger;
     }
 
@@ -50,53 +53,38 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
             // Validate line number and content
             ValidateInsertParameters(parameters);
             
-            // Read current file content
-            string[] lines;
-            Encoding fileEncoding;
-            (lines, fileEncoding) = await ReadFileWithEncodingAsync(filePath, cancellationToken);
-            
-            // Validate line number against actual file content
-            if (parameters.LineNumber > lines.Length + 1)
+            // Use UnifiedFileEditService for reliable, concurrent insertion
+            var editResult = await _fileEditService.InsertAtLineAsync(
+                filePath,
+                parameters.LineNumber,
+                parameters.Content,
+                parameters.PreserveIndentation,
+                cancellationToken);
+
+            if (!editResult.Success)
             {
-                return CreateErrorResponse(
-                    $"Line number {parameters.LineNumber} exceeds file length ({lines.Length} lines). " +
-                    $"Valid range: 1-{lines.Length + 1}");
+                return CreateErrorResponse(editResult.ErrorMessage ?? "Insert operation failed");
             }
-            
-            // Detect indentation using centralized consistency-aware algorithm
-            string indentation = "";
-            if (parameters.PreserveIndentation)
-            {
-                indentation = FileLineUtilities.DetectIndentationForInsertion(lines, parameters.LineNumber - 1);
-            }
-            
-            // Prepare content with proper indentation
-            var contentLines = parameters.Content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            var indentedContent = ApplyIndentation(contentLines, indentation);
-            
-            // Insert content at specified line
-            var newLines = InsertLinesAt(lines, parameters.LineNumber - 1, indentedContent);
-            
-            // Write back to file with original encoding, preserving line endings
-            var originalContent = fileEncoding.GetString(await File.ReadAllBytesAsync(filePath, cancellationToken));
-            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalContent, cancellationToken);
+
             // Generate context for verification
-            var contextLines = GenerateContext(newLines, parameters.LineNumber - 1, 
-                indentedContent.Length, parameters.ContextLines);
+            var modifiedLines = FileLineUtilities.SplitLines(editResult.ModifiedContent ?? "");
+            var insertedLineCount = parameters.Content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None).Length;
+            var contextLines = GenerateContext(modifiedLines, parameters.LineNumber - 1, 
+                insertedLineCount, parameters.ContextLines);
             
             var result = new InsertAtLineResult
             {
                 Success = true,
                 FilePath = filePath,
                 InsertedAtLine = parameters.LineNumber,
-                LinesInserted = indentedContent.Length,
+                LinesInserted = insertedLineCount,
                 ContextLines = contextLines,
-                DetectedIndentation = string.IsNullOrEmpty(indentation) ? "none" : $"'{indentation}'",
-                TotalFileLines = newLines.Length
+                DetectedIndentation = editResult.DetectedIndentation ?? "none", // Use actual detected indentation
+                TotalFileLines = modifiedLines.Length
             };
             
             _logger.LogDebug("Successfully inserted {LineCount} lines at line {LineNumber} in {FilePath}",
-                indentedContent.Length, parameters.LineNumber, filePath);
+                insertedLineCount, parameters.LineNumber, filePath);
             
             return CreateSuccessResponse(result);
         }

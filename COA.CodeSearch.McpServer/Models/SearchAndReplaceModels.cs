@@ -18,12 +18,11 @@ public class SearchAndReplaceParams
     public required string SearchPattern { get; set; }
 
     /// <summary>
-    /// Replacement pattern
+    /// Replacement pattern (use empty string for deletion)
     /// </summary>
     [JsonPropertyName("replacePattern")]
-    [Description("Replacement pattern")]
-    [Required]
-    public required string ReplacePattern { get; set; }
+    [Description("Replacement pattern (use empty string for deletion)")]
+    public string ReplacePattern { get; set; } = string.Empty;
 
     /// <summary>
     /// Workspace path to search in

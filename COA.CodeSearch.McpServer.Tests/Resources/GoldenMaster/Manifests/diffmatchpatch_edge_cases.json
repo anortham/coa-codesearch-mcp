@@ -1,0 +1,199 @@
+{
+  "TestCases": [
+    {
+      "TestName": "DMP_MultiLine_Pattern_Replace",
+      "Description": "DiffMatchPatch handling of multi-line pattern replacement - addresses GPT review critical issue",
+      "SourceFile": "multi_line_code.cs",
+      "ControlFile": "multi_line_code_dmp_replace.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "public void ProcessItems(\\s*List<string> items\\s*)\\s*{\\s*foreach \\(var item in items\\)\\s*{\\s*Console\\.WriteLine\\(item\\);\\s*}\\s*}",
+        "ReplacePattern": "public async Task ProcessItemsAsync(List<string> items)\n{\n    await foreach (var item in items.ToAsyncEnumerable())\n    {\n        await Console.Out.WriteLineAsync(item);\n    }\n}",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 5,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "DMP_WhitespaceHandling_Tabs_Spaces",
+      "Description": "Verify DiffMatchPatch preserves mixed tab/space indentation correctly",
+      "SourceFile": "mixed_indentation.cs",
+      "ControlFile": "mixed_indentation_dmp_fixed.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "    // Old comment with spaces",
+        "ReplacePattern": "\t// New comment with tab",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 5
+      }
+    },
+    {
+      "TestName": "DMP_LargeFile_Performance",
+      "Description": "Test DiffMatchPatch performance and accuracy on large files",
+      "SourceFile": "large_file.cs",
+      "ControlFile": "large_file_dmp_updated.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "public class LargeClass",
+        "ReplacePattern": "public sealed class LargeClass",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "DMP_ConcurrencyPrevention_Test",
+      "Description": "Verify that UnifiedFileEditService prevents concurrent edits",
+      "SourceFile": "concurrent_test.cs",
+      "ControlFile": "concurrent_test_dmp_safe.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "// CONCURRENT_MARKER",
+        "ReplacePattern": "// SAFELY_REPLACED",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 10
+      }
+    },
+    {
+      "TestName": "DMP_LineEnding_Preservation_CRLF",
+      "Description": "Ensure Windows CRLF line endings preserved through DiffMatchPatch",
+      "SourceFile": "windows_line_endings.cs",
+      "ControlFile": "windows_line_endings_dmp_preserved.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "using System;",
+        "ReplacePattern": "using System;\nusing System.Threading.Tasks;",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "DMP_LineEnding_Preservation_LF",
+      "Description": "Ensure Unix LF line endings preserved through DiffMatchPatch",
+      "SourceFile": "unix_line_endings.py",
+      "ControlFile": "unix_line_endings_dmp_preserved.py",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "import os",
+        "ReplacePattern": "import os\nimport asyncio",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "DMP_SpecialChars_Handling",
+      "Description": "Test DiffMatchPatch with special characters and escape sequences",
+      "SourceFile": "special_chars.json",
+      "ControlFile": "special_chars_dmp_replaced.json",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "\"value\": \"test\\n\\t\\\"string\\\"\"",
+        "ReplacePattern": "\"value\": \"updated\\n\\t\\\"string\\\" with ümlauts\"",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 2,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "DMP_EmptyReplacement_Deletion",
+      "Description": "Test DiffMatchPatch deletion by replacing with empty string",
+      "SourceFile": "deletion_test.cs",
+      "ControlFile": "deletion_test_dmp_cleaned.cs", 
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "// TODO: Remove this debug code\\n\\s*Console\\.WriteLine\\(\"Debug: \" \\+ value\\);",
+        "ReplacePattern": "",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 5
+      }
+    },
+    {
+      "TestName": "DMP_RegexCapture_Groups",
+      "Description": "Verify DiffMatchPatch correctly handles regex capture groups",
+      "SourceFile": "regex_capture_test.cs",
+      "ControlFile": "regex_capture_test_dmp_replaced.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "public\\s+(\\w+)\\s+(\\w+)\\s*\\(",
+        "ReplacePattern": "public $1 $2Async(",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 10
+      }
+    },
+    {
+      "TestName": "DMP_ErrorRecovery_InvalidRegex",
+      "Description": "Test DiffMatchPatch error handling with invalid regex patterns",
+      "SourceFile": "error_recovery_test.cs",
+      "ControlFile": "error_recovery_test.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "[invalid regex pattern (",
+        "ReplacePattern": "valid replacement",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 1
+      },
+      "ExpectedBehavior": "ErrorHandling"
+    },
+    {
+      "TestName": "DMP_Workspace_Permission_Denied",
+      "Description": "Verify workspace permission service integration with DiffMatchPatch",
+      "SourceFile": "permission_test.cs",
+      "ControlFile": "permission_test.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "old text",
+        "ReplacePattern": "new text",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 1
+      },
+      "ExpectedBehavior": "PermissionDenied"
+    },
+    {
+      "TestName": "DMP_BinaryFile_SafetyCheck",
+      "Description": "Ensure DiffMatchPatch safely handles binary file detection",
+      "SourceFile": "test_image.png",
+      "ControlFile": "test_image.png",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "PNG",
+        "ReplacePattern": "JPG",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 0,
+        "MaxMatches": 1
+      },
+      "ExpectedBehavior": "BinarySafety"
+    }
+  ]
+}
