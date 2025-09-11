@@ -1,13 +1,13 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace COA.CodeSearch.McpServer.Services;
+namespace COA.CodeSearch.McpServer.TestSample;
 
 /// <summary>
-/// Shared utilities for consistent file line handling across all editing tools.
-/// Prevents corruption from inconsistent line splitting and manipulation logic.
+/// Sample utilities for testing editing tools with real C# code.
+/// Based on FileLineUtilities but with different namespace to avoid conflicts.
 /// </summary>
-public static class FileLineUtilities
+public static class SampleFileUtilities
 {
     /// <summary>
     /// Reads file with encoding detection and consistent line splitting.
@@ -15,14 +15,14 @@ public static class FileLineUtilities
     /// <param name="filePath">Path to file</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>Tuple of lines array and detected encoding</returns>
-    public static async Task<(string[] lines, Encoding encoding)> ReadFileWithEncodingAsync(
-        string filePath, CancellationToken cancellationToken = default)
+    public static async Task<(String[] lines, Encoding encoding)> ReadFileWithEncodingAsync(
+        String filePath, CancellationToken cancellationToken = default)
     {
         // Read raw bytes and detect encoding
         var bytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
         var encoding = DetectEncoding(bytes);
         
-        // Convert to string and split lines consistently
+        // Convert to String and split lines consistently
         var content = encoding.GetString(bytes);
         var lines = SplitLines(content);
         
@@ -33,19 +33,19 @@ public static class FileLineUtilities
     /// Splits content into lines using consistent logic across all tools.
     /// Handles mixed line endings and removes trailing empty lines consistently.
     /// </summary>
-    /// <param name="content">File content string</param>
+    /// <param name="content">File content String</param>
     /// <returns>Array of lines with consistent empty line handling</returns>
-    public static string[] SplitLines(string content)
+    public static String[] SplitLines(String content)
     {
-        if (string.IsNullOrEmpty(content))
-            return Array.Empty<string>();
+        if (String.IsNullOrEmpty(content))
+            return Array.Empty<String>();
             
         // Split on all common line ending types
         var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
         
         // CRITICAL: Consistent empty line removal logic
-        // Remove trailing empty line only if it exists (artifact of string splitting)
-        if (lines.Length > 0 && string.IsNullOrEmpty(lines[^1]))
+        // Remove trailing empty line only if it exists (artifact of String splitting)
+        if (lines.Length > 0 && String.IsNullOrEmpty(lines[^1]))
         {
             // Use Array.Resize for consistent behavior across all tools
             Array.Resize(ref lines, lines.Length - 1);
@@ -81,10 +81,10 @@ public static class FileLineUtilities
     /// Extracts indentation (leading whitespace) from a line.
     /// </summary>
     /// <param name="line">Source line</param>
-    /// <returns>Leading whitespace string</returns>
-    public static string ExtractIndentation(string line)
+    /// <returns>Leading whitespace String</returns>
+    public static String ExtractIndentation(String line)
     {
-        if (string.IsNullOrEmpty(line))
+        if (String.IsNullOrEmpty(line))
             return "";
             
         var match = Regex.Match(line, @"^(\s*)");
@@ -95,21 +95,21 @@ public static class FileLineUtilities
     /// Applies consistent indentation to content lines.
     /// </summary>
     /// <param name="contentLines">Lines to indent</param>
-    /// <param name="indentation">Indentation string</param>
+    /// <param name="indentation">Indentation String</param>
     /// <returns>Indented lines</returns>
-        public static string[] ApplyIndentation(string[] contentLines, string indentation)
+        public static String[] ApplyIndentation(String[] contentLines, String indentation)
         {
-            if (string.IsNullOrEmpty(indentation) || contentLines.Length == 0)
+            if (String.IsNullOrEmpty(indentation) || contentLines.Length == 0)
                 return contentLines;
             
             // Detect the minimum indentation to preserve relative structure
             var minIndentation = DetectMinimumIndentation(contentLines);
             
-            var result = new string[contentLines.Length];
+            var result = new String[contentLines.Length];
             for (int i = 0; i < contentLines.Length; i++)
             {
                 // Only add indentation to non-empty lines
-                if (string.IsNullOrEmpty(contentLines[i]))
+                if (String.IsNullOrEmpty(contentLines[i]))
                 {
                     result[i] = contentLines[i];
                 }
@@ -129,13 +129,13 @@ public static class FileLineUtilities
         /// <summary>
         /// Detects the minimum indentation level across all non-empty lines.
         /// </summary>
-        private static string DetectMinimumIndentation(string[] lines)
+        private static String DetectMinimumIndentation(String[] lines)
         {
-            string? minIndent = null;
+            String? minIndent = null;
             
             foreach (var line in lines)
             {
-                if (string.IsNullOrWhiteSpace(line))
+                if (String.IsNullOrWhiteSpace(line))
                     continue;
                     
                 var indent = ExtractIndentation(line);
@@ -149,9 +149,9 @@ public static class FileLineUtilities
         /// <summary>
         /// Removes the common base indentation while preserving relative indentation.
         /// </summary>
-        private static string RemoveCommonIndentation(string line, string commonIndent)
+        private static String RemoveCommonIndentation(String line, String commonIndent)
         {
-            if (string.IsNullOrEmpty(commonIndent) || string.IsNullOrEmpty(line))
+            if (String.IsNullOrEmpty(commonIndent) || String.IsNullOrEmpty(line))
                 return line;
                 
             if (line.StartsWith(commonIndent))
@@ -167,7 +167,7 @@ public static class FileLineUtilities
     /// <param name="lines">Lines to write</param>
     /// <param name="encoding">File encoding to preserve</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public static async Task WriteAllLinesAsync(string filePath, string[] lines, 
+    public static async Task WriteAllLinesAsync(String filePath, String[] lines, 
         Encoding encoding, CancellationToken cancellationToken = default)
     {
         await File.WriteAllLinesAsync(filePath, lines, encoding, cancellationToken);
@@ -182,8 +182,8 @@ public static class FileLineUtilities
     /// <param name="encoding">File encoding to preserve</param>
     /// <param name="originalContent">Original file content to detect line endings from</param>
     /// <param name="cancellationToken">Cancellation token</param>
-    public static async Task WriteAllLinesPreservingEndingsAsync(string filePath, string[] lines, 
-        Encoding encoding, string originalContent, CancellationToken cancellationToken = default)
+    public static async Task WriteAllLinesPreservingEndingsAsync(String filePath, String[] lines, 
+        Encoding encoding, String originalContent, CancellationToken cancellationToken = default)
     {
         // Handle empty lines array
         if (lines == null || lines.Length == 0)
@@ -196,7 +196,7 @@ public static class FileLineUtilities
         var lineEnding = DetectLineEnding(originalContent);
         
         // Preserve whether the original file ended with a newline
-        bool originalEndsWithNewline = !string.IsNullOrEmpty(originalContent) && 
+        bool originalEndsWithNewline = !String.IsNullOrEmpty(originalContent) && 
             (originalContent.EndsWith("\n") || originalContent.EndsWith("\r\n") || originalContent.EndsWith("\r"));
         
         // Build content carefully to avoid double newlines
@@ -228,9 +228,9 @@ public static class FileLineUtilities
     /// </summary>
     /// <param name="content">File content to analyze</param>
     /// <returns>Detected line ending</returns>
-    private static string DetectLineEnding(string content)
+    private static String DetectLineEnding(String content)
     {
-        if (string.IsNullOrEmpty(content))
+        if (String.IsNullOrEmpty(content))
             return Environment.NewLine;
             
         // Count occurrences of different line endings
@@ -257,8 +257,8 @@ public static class FileLineUtilities
     /// <param name="lines">All file lines</param>
     /// <param name="targetLineIndex">0-based index of the line where content will be inserted</param>
     /// <param name="includeTargetLine">Whether to include the target line in analysis (true for insertion, false for replacement)</param>
-    /// <returns>Detected indentation string (tabs or spaces)</returns>
-    public static string DetectIndentationForInsertion(string[] lines, int targetLineIndex, bool includeTargetLine = true)
+    /// <returns>Detected indentation String (tabs or spaces)</returns>
+    public static String DetectIndentationForInsertion(String[] lines, int targetLineIndex, bool includeTargetLine = true)
     {
         if (lines == null || lines.Length == 0 || targetLineIndex < 0)
             return "";
@@ -267,8 +267,8 @@ public static class FileLineUtilities
         var stats = AnalyzeIndentationConsistency(lines, targetLineIndex, contextRadius: 3, includeTargetLine);
         
         // Get target line indentation for comparison
-        string targetIndentation = "";
-        if (targetLineIndex < lines.Length && !string.IsNullOrWhiteSpace(lines[targetLineIndex]))
+        String targetIndentation = "";
+        if (targetLineIndex < lines.Length && !String.IsNullOrWhiteSpace(lines[targetLineIndex]))
         {
             targetIndentation = ExtractIndentation(lines[targetLineIndex]);
         }
@@ -276,26 +276,26 @@ public static class FileLineUtilities
         // PRIORITY 1: Very strong surrounding consistency (80%+) with multiple examples always wins
         // This ensures consistent style in well-structured files, even for replacements
         // Require at least 2 indented lines for meaningful consistency
-        if (stats.SurroundingConsistency >= 0.8f && stats.TotalLines >= 2 && !string.IsNullOrEmpty(stats.SurroundingIndentation))
+        if (stats.SurroundingConsistency >= 0.8f && stats.TotalLines >= 2 && !String.IsNullOrEmpty(stats.SurroundingIndentation))
         {
             return stats.SurroundingIndentation;
         }
         
         // PRIORITY 2: For replacement operations, use target line indentation when surrounding consistency is weak
         // This maintains existing style when there's no clear surrounding pattern
-        if (!includeTargetLine && !string.IsNullOrEmpty(targetIndentation))
+        if (!includeTargetLine && !String.IsNullOrEmpty(targetIndentation))
         {
             return targetIndentation;
         }
         
         // PRIORITY 3: Use target line's indentation if available (for insertion operations)
-        if (!string.IsNullOrEmpty(targetIndentation))
+        if (!String.IsNullOrEmpty(targetIndentation))
         {
             return targetIndentation;
         }
         
         // PRIORITY 4: Medium surrounding consistency (60%+) as fallback
-        if (stats.SurroundingConsistency >= 0.6f && !string.IsNullOrEmpty(stats.SurroundingIndentation))
+        if (stats.SurroundingConsistency >= 0.6f && !String.IsNullOrEmpty(stats.SurroundingIndentation))
         {
             return stats.SurroundingIndentation;
         }
@@ -317,13 +317,13 @@ public static class FileLineUtilities
     /// <param name="contextRadius">Number of lines to analyze around target</param>
     /// <param name="includeTargetLine">Whether to include the target line in analysis</param>
     /// <returns>Indentation statistics</returns>
-    private static IndentationStats AnalyzeIndentationConsistency(string[] lines, int targetLineIndex, int contextRadius, bool includeTargetLine)
+    private static IndentationStats AnalyzeIndentationConsistency(String[] lines, int targetLineIndex, int contextRadius, bool includeTargetLine)
     {
         var tabCount = 0;
         var spaceCount = 0;
         var totalIndentedLines = 0;
-        string mostCommonIndentation = "";
-        var indentationCounts = new Dictionary<string, int>();
+        String mostCommonIndentation = "";
+        var indentationCounts = new Dictionary<String, int>();
         
         // Analyze lines in the vicinity (target line inclusion controlled by parameter)
         var startIndex = Math.Max(0, targetLineIndex - contextRadius);
@@ -335,10 +335,10 @@ public static class FileLineUtilities
             if (!includeTargetLine && i == targetLineIndex) continue;
             
             var line = lines[i];
-            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (String.IsNullOrWhiteSpace(line)) continue;
             
             var indentation = ExtractIndentation(line);
-            if (string.IsNullOrEmpty(indentation)) continue;
+            if (String.IsNullOrEmpty(indentation)) continue;
             
             totalIndentedLines++;
             
@@ -389,9 +389,9 @@ public static class FileLineUtilities
     /// </summary>
     private record IndentationStats
     {
-        public string SurroundingIndentation { get; init; } = "";
+        public String SurroundingIndentation { get; init; } = "";
         public float SurroundingConsistency { get; init; }
-        public string MostCommonIndentation { get; init; } = "";
+        public String MostCommonIndentation { get; init; } = "";
         public int TabCount { get; init; }
         public int SpaceCount { get; init; }
         public int TotalLines { get; init; }
@@ -404,9 +404,9 @@ public static class FileLineUtilities
     /// <returns>Resolved absolute path</returns>
     /// <exception cref="ArgumentException">If path is invalid</exception>
     /// <exception cref="FileNotFoundException">If file doesn't exist</exception>
-    public static string ValidateAndResolvePath(string filePath)
+    public static String ValidateAndResolvePath(String filePath)
     {
-        if (string.IsNullOrWhiteSpace(filePath))
+        if (String.IsNullOrWhiteSpace(filePath))
         {
             throw new ArgumentException("File path cannot be null or empty");
         }

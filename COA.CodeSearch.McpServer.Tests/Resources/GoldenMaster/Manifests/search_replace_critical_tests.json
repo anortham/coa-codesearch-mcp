@@ -1,0 +1,133 @@
+{
+  "TestCases": [
+    {
+      "TestName": "SearchAndReplace_SingleFile_LiteralMatch",
+      "Description": "Replace simple string literal in single Python file - basic functionality test",
+      "SourceFile": "agent.py",
+      "ControlFile": "agent_search_replace_literal.py",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "import multiprocessing",
+        "ReplacePattern": "from multiprocessing import Pool",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 10
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_RegexPattern_Agent",
+      "Description": "Replace regex pattern in agent.py - regex functionality test",
+      "SourceFile": "agent.py",
+      "ControlFile": "agent_search_replace_regex.py",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "import\\s+([a-zA-Z_][a-zA-Z0-9_]*)",
+        "ReplacePattern": "from $1 import *",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 20
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_JSON_StructuredEdit",
+      "Description": "Replace values in JSON structure without breaking syntax",
+      "SourceFile": "devcontainer.json", 
+      "ControlFile": "devcontainer_search_replace.json",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "\"ms-python.python\"",
+        "ReplacePattern": "\"ms-python.python-dev\"",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 5
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_EdgeCase_FileStart",
+      "Description": "Replace text at very beginning of file",
+      "SourceFile": "feature_request.md",
+      "ControlFile": "feature_request_search_replace_start.md",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool", 
+        "SearchPattern": "---\\nname: Feature request",
+        "ReplacePattern": "---\\nname: Bug report",
+        "SearchType": "regex",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 5,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_EdgeCase_FileEnd",
+      "Description": "Replace text at very end of file",
+      "SourceFile": "feature_request.md",
+      "ControlFile": "feature_request_search_replace_end.md", 
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "Add any other context or screenshots about the feature request here.",
+        "ReplacePattern": "Add detailed context, screenshots, and examples here.",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 5,
+        "MaxMatches": 1
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_Preview_SafetyCheck",
+      "Description": "Verify preview mode doesn't modify files - safety test",
+      "SourceFile": "agent.py",
+      "ControlFile": "agent.py",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "import os",
+        "ReplacePattern": "DANGEROUS_REPLACEMENT",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": true,
+        "ContextLines": 3,
+        "MaxMatches": 10
+      },
+      "ExpectedBehavior": "PreviewOnly"
+    },
+    {
+      "TestName": "SearchAndReplace_CaseSensitivity_Test",
+      "Description": "Verify case sensitivity controls work correctly",
+      "SourceFile": "SampleFileUtilities.cs",
+      "ControlFile": "SampleFileUtilities_search_replace_case.cs",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "string",
+        "ReplacePattern": "String",
+        "SearchType": "literal",
+        "CaseSensitive": false,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 20
+      }
+    },
+    {
+      "TestName": "SearchAndReplace_EncodingPreservation_UTF8",
+      "Description": "Ensure UTF-8 encoding preserved during replacement",
+      "SourceFile": "jinja_template.py",
+      "ControlFile": "jinja_template_search_replace_utf8.py",
+      "Operation": {
+        "Tool": "SearchAndReplaceTool",
+        "SearchPattern": "template",
+        "ReplacePattern": "modèle",
+        "SearchType": "literal",
+        "CaseSensitive": true,
+        "Preview": false,
+        "ContextLines": 3,
+        "MaxMatches": 10
+      }
+    }
+  ]
+}

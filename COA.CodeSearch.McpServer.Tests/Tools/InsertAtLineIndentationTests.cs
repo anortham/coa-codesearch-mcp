@@ -199,6 +199,99 @@ public static class ToolNames
                         consoleLine.Should().NotBeNull();
                         consoleLine!.Should().StartWith("        ", "Method body should have proper method-level indentation (8 spaces)");
     }
+        [Test]
+        public async Task InsertAtLine_InsertingMethodsNearClassEnd_ShouldMaintainClassBoundaries()
+        {
+            // Arrange: This test reproduces the boundary violation issue where methods were inserted outside the class
+            var originalContent = @"public class ResponseBuilder
+    {
+        private readonly ILogger _logger;
+        
+        public ResponseBuilder(ILogger logger)
+        {
+            _logger = logger;
+        }
+        
+        public string BuildSummary(object data)
+        {
+            return $""Summary for {data}"";
+        }
+    }";
+
+            var testFile = await _fileManager.CreateTestFileAsync(originalContent, "ResponseBuilder.cs");
+
+            // Act: Insert abstract method implementations near the end of the class
+            // This simulates the exact scenario that caused the boundary violation
+            var parameters = new InsertAtLineParameters
+            {
+                FilePath = testFile.FilePath,
+                LineNumber = 13, // Insert before the closing brace of the class
+                Content = @"    
+        /// <summary>
+        /// Generate insights for the base response builder pattern
+        /// </summary>
+        protected virtual List<string> GenerateInsights(object data, string responseMode)
+        {
+            return new List<string> { ""Default insight"" };
+        }",
+                PreserveIndentation = true,
+                ContextLines = 3
+            };
+
+            var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
+
+            // Assert: The method should be inserted INSIDE the class, not outside
+            result.Success.Should().BeTrue($"Insert operation failed: {result.Error?.Message}");
+
+            var modifiedContent = await File.ReadAllTextAsync(testFile.FilePath);
+            Console.WriteLine($"=== MODIFIED CONTENT ===\n{modifiedContent}\n=== END ===");
+
+            // Critical assertion: Verify the new method is inside the class boundaries
+            var lines = modifiedContent.Split('\n', StringSplitOptions.None);
+            
+            // Find the GenerateInsights method
+            var methodStartIndex = -1;
+            for (int i = 0; i < lines.Length; i++)
+            {
+                if (lines[i].Contains("GenerateInsights"))
+                {
+                    methodStartIndex = i;
+                    break;
+                }
+            }
+            
+            methodStartIndex.Should().BeGreaterThan(-1, "GenerateInsights method should be found in the file");
+            
+            // Find the class closing brace
+            var classEndIndex = -1;
+            for (int i = lines.Length - 1; i >= 0; i--)
+            {
+                if (lines[i].Trim() == "}")
+                {
+                    classEndIndex = i;
+                    break;
+                }
+            }
+            
+            classEndIndex.Should().BeGreaterThan(-1, "Class closing brace should be found");
+            
+            // CRITICAL: The method should be positioned BEFORE the class closing brace
+            methodStartIndex.Should().BeLessThan(classEndIndex, 
+                "GenerateInsights method must be inside the class boundaries (before the closing brace)");
+                
+            // Verify proper indentation - class-level methods should have 4-space indentation
+            var methodLine = lines[methodStartIndex];
+            methodLine.Trim().Should().StartWith("protected virtual", 
+                "Method declaration should be properly formatted");
+            methodLine.Should().StartWith("    ", 
+                "Method should have proper class-level indentation (4 spaces)");
+                
+            // Verify the method body is also properly indented
+            var returnLine = lines.FirstOrDefault(line => line.Contains("return new List<string>"));
+            returnLine.Should().NotBeNull("Method body should contain the return statement");
+            returnLine!.Should().StartWith("        ", 
+                "Method body should have proper method-level indentation (8 spaces)");
+        }
 
     [TearDown]
     public override void TearDown()

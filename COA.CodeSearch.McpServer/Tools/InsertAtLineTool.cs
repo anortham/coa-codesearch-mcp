@@ -77,9 +77,9 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
             // Insert content at specified line
             var newLines = InsertLinesAt(lines, parameters.LineNumber - 1, indentedContent);
             
-            // Write back to file with original encoding
-            await File.WriteAllLinesAsync(filePath, newLines, fileEncoding, cancellationToken);
-            
+            // Write back to file with original encoding, preserving line endings
+            var originalContent = fileEncoding.GetString(await File.ReadAllBytesAsync(filePath, cancellationToken));
+            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalContent, cancellationToken);
             // Generate context for verification
             var contextLines = GenerateContext(newLines, parameters.LineNumber - 1, 
                 indentedContent.Length, parameters.ContextLines);

@@ -24,6 +24,7 @@ public static class ToolNames
     public const string SymbolSearch = "symbol_search";
     public const string FindReferences = "find_references";
     public const string GoToDefinition = "goto_definition";
+    public const string TraceCallPath = "trace_call_path";
     
     // Editing tools
     public const string InsertAtLine = "insert_at_line";
