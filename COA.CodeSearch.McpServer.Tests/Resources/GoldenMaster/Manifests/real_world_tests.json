@@ -1,0 +1,82 @@
+{
+  "TestCases": [
+    {
+      "TestName": "DeleteLines_PythonAgent_RemoveImports",
+      "Description": "Delete import multiprocessing and import os from Python agent file",
+      "SourceFile": "agent.py",
+      "ControlFile": "agent_delete_lines_5_7.py",
+      "Operation": {
+        "Tool": "DeleteLinesTool",
+        "StartLine": 5,
+        "EndLine": 6,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "InsertAtLine_PythonJinja_AddImport",
+      "Description": "Insert import os statement in Python Jinja template file",
+      "SourceFile": "jinja_template.py",
+      "ControlFile": "jinja_template_insert_import.py",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 2,
+        "Content": "import os",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "InsertAtLine_PythonJinja_AddMethod",
+      "Description": "Insert reset_env method in _JinjaEnvProvider class",
+      "SourceFile": "jinja_template.py",
+      "ControlFile": "jinja_template_insert_method.py",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 24,
+        "Content": "    \n    def reset_env(self) -> None:\n        \"\"\"Reset the Jinja environment to force recreation.\"\"\"\n        self._env = None",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "ReplaceLines_PythonJinja_EnhanceMethod",
+      "Description": "Replace get_env method with enhanced version with custom configuration",
+      "SourceFile": "jinja_template.py",
+      "ControlFile": "jinja_template_replace_method.py",
+      "Operation": {
+        "Tool": "ReplaceLinesTool",
+        "StartLine": 20,
+        "EndLine": 23,
+        "Content": "    def get_env(self) -> jinja2.Environment:\n        \"\"\"Get or create the Jinja environment with custom configuration.\"\"\"\n        if self._env is None:\n            self._env = jinja2.Environment(\n                trim_blocks=True,\n                lstrip_blocks=True\n            )\n        return self._env",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "InsertAtLine_JSON_AddExtension",
+      "Description": "Insert new VS Code extension in devcontainer JSON",
+      "SourceFile": "devcontainer.json",
+      "ControlFile": "devcontainer_insert_extension.json",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 13,
+        "Content": "    \"ms-python.flake8\"",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    },
+    {
+      "TestName": "InsertAtLine_CSharp_AddMethod",
+      "Description": "Insert GetLineCountAsync method in SampleFileUtilities class",
+      "SourceFile": "SampleFileUtilities.cs",
+      "ControlFile": "SampleFileUtilities_insert_method.cs",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 31,
+        "Content": "    \n    /// <summary>\n    /// Gets the total number of lines in a file without loading the entire content.\n    /// </summary>\n    /// <param name=\"filePath\">Path to the file</param>\n    /// <param name=\"cancellationToken\">Cancellation token</param>\n    /// <returns>Number of lines in the file</returns>\n    public static async Task<int> GetLineCountAsync(string filePath, CancellationToken cancellationToken = default)\n    {\n        var (lines, _) = await ReadFileWithEncodingAsync(filePath, cancellationToken);\n        return lines.Length;\n    }",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
+    }
+  ]
+}
