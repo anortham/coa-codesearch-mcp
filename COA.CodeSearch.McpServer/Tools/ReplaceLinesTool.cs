@@ -101,9 +101,9 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
             // Perform the replacement
             var newLines = ReplaceLinesAt(lines, startLine, endLine, indentedContent);
             
-            // Write back to file with original encoding
-            await File.WriteAllLinesAsync(filePath, newLines, fileEncoding, cancellationToken);
-            
+            // Write back to file with original encoding, preserving line endings
+            var originalFileContent = fileEncoding.GetString(await File.ReadAllBytesAsync(filePath, cancellationToken));
+            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalFileContent, cancellationToken);
             // Generate context for verification
             var contextLines = GenerateContext(newLines, startLine, indentedContent.Length, parameters.ContextLines);
             

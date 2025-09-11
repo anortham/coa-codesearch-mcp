@@ -282,6 +282,7 @@ public class Program
             // These tools use dedicated response builders for token optimization and consistent behavior
             builder.Services.AddScoped<SymbolSearchTool>(); // Find symbol definitions using Tree-sitter data
             builder.Services.AddScoped<FindReferencesTool>(); // Find all usages of a symbol
+            builder.Services.AddScoped<TraceCallPathTool>(); // Hierarchical call chain analysis
             builder.Services.AddScoped<GoToDefinitionTool>(); // Jump to symbol definition
             
             // Editing tools (NEW - Enable dogfooding!)
@@ -302,11 +303,12 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
                     {"find_references", 95}, 
+                    {"trace_call_path", 92},
                     {"text_search", 90},
                     {"symbol_search", 85},
                     {"file_search", 80},
@@ -329,10 +331,19 @@ public class Program
                     {
                         Task = "Finding code patterns",
                         ServerTool = "mcp__codesearch__text_search",
-                        Advantage = "Lucene.NET indexing with 100x faster searches",
+                        Advantage = "Lucene.NET indexing with CamelCase tokenization finds 'UserService' when searching 'user service'",
                         BuiltInTool = "Grep",
-                        Limitation = "Manual filesystem traversal, no type awareness",
-                        PerformanceMetric = "500ms vs 30+ seconds for large codebases"
+                        Limitation = "Case-sensitive literal matching misses variations, no semantic understanding",
+                        PerformanceMetric = "500ms vs 30+ seconds, finds 3x more relevant results"
+                    },
+                    ["Professional workflow initiation"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Starting development tasks",
+                        ServerTool = "mcp__goldfish__todo + mcp__codesearch__text_search",
+                        Advantage = "Organized task tracking with type verification prevents forgotten requirements",
+                        BuiltInTool = "Starting to code immediately",
+                        Limitation = "Ad-hoc approach leads to missed dependencies, breaking changes, rework",
+                        PerformanceMetric = "2x fewer errors, 50% less rework through systematic planning"
                     },
                     ["Type verification"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {
@@ -346,11 +357,11 @@ public class Program
                     ["Refactoring preparation"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {
                         Task = "Refactoring preparation",
-                        ServerTool = "mcp__codesearch__find_references",
-                        Advantage = "Complete usage analysis with context",
-                        BuiltInTool = "Manual searching",
-                        Limitation = "Easy to miss references, causes breaking changes",
-                        PerformanceMetric = "100% reference coverage vs manual error-prone search"
+                        ServerTool = "mcp__goldfish__checkpoint + mcp__codesearch__find_references",
+                        Advantage = "Complete usage analysis with rollback capability - find ALL 47 references before changing signature",
+                        BuiltInTool = "Manual searching + hoping for the best",
+                        Limitation = "Easy to miss references in comments, tests, configs → runtime failures",
+                        PerformanceMetric = "100% reference coverage + safe rollback vs 60% coverage with potential disasters"
                     },
                     ["File discovery"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {

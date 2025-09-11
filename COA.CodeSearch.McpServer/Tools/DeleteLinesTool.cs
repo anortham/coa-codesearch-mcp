@@ -49,10 +49,16 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             // Validate line parameters
             ValidateDeletionParameters(parameters);
             
-            // Read current file content
+            // Read current file content using shared utilities for consistency
             string[] lines;
             Encoding fileEncoding;
-            (lines, fileEncoding) = await ReadFileWithEncodingAsync(filePath, cancellationToken);
+            string originalContent;
+            
+            // Read the original content once to ensure consistency
+            var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
+            fileEncoding = FileLineUtilities.DetectEncoding(fileBytes);
+            originalContent = fileEncoding.GetString(fileBytes);
+            lines = FileLineUtilities.SplitLines(originalContent);
             
             // Determine actual line range
             var startLine = parameters.StartLine - 1; // Convert to 0-based
@@ -86,9 +92,8 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             // Perform the deletion
             var newLines = DeleteLinesAt(lines, startLine, endLine);
             
-            // Write back to file with original encoding
-            await File.WriteAllLinesAsync(filePath, newLines, fileEncoding, cancellationToken);
-            
+            // Write back to file with original encoding, preserving line endings
+            await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, newLines, fileEncoding, originalContent, cancellationToken);
             // Generate context for verification (adjusted for deletion)
             var contextLines = GenerateContext(newLines, startLine, deletedLines.Length, parameters.ContextLines);
             
@@ -158,41 +163,6 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
             throw new ArgumentException("ContextLines must be between 0 and 20", nameof(parameters.ContextLines));
     }
 
-    private async Task<(string[] lines, Encoding encoding)> ReadFileWithEncodingAsync(string filePath, CancellationToken cancellationToken)
-    {
-        // Try to detect encoding from BOM
-        var fileBytes = await File.ReadAllBytesAsync(filePath, cancellationToken);
-        var encoding = DetectEncoding(fileBytes);
-        
-        var content = encoding.GetString(fileBytes);
-        var lines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        
-        // Handle potential trailing empty line from string splitting
-        // Only remove if there are multiple trailing empty lines (artifact of splitting)
-        // Preserve intentional single trailing blank lines
-        if (lines.Length > 1 && 
-            string.IsNullOrEmpty(lines[lines.Length - 1]) && 
-            string.IsNullOrEmpty(lines[lines.Length - 2]))
-        {
-            lines = lines.Take(lines.Length - 1).ToArray();
-        }
-        
-        return (lines, encoding);
-    }
-
-    private Encoding DetectEncoding(byte[] bytes)
-    {
-        // Check for BOM
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            return Encoding.UTF8;
-        if (bytes.Length >= 2 && bytes[0] == 0xFF && bytes[1] == 0xFE)
-            return Encoding.Unicode; // UTF-16 LE
-        if (bytes.Length >= 2 && bytes[0] == 0xFE && bytes[1] == 0xFF)
-            return Encoding.BigEndianUnicode; // UTF-16 BE
-        
-        // Default to UTF-8 without BOM
-        return new UTF8Encoding(false);
-    }
 
     private string[] DeleteLinesAt(string[] originalLines, int startLine, int endLine)
     {
