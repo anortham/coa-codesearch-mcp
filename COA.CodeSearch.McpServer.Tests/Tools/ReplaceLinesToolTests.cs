@@ -26,10 +26,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override ReplaceLinesTool CreateTool()
         {
+            var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+                new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+            var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<ReplaceLinesTool>>();
             _tool = new ReplaceLinesTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
-                ToolLoggerMock.Object
+                unifiedFileEditService,
+                replaceLogger.Object
             );
             return _tool;
         }

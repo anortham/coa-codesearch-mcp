@@ -25,10 +25,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         
         protected override DeleteLinesTool CreateTool()
         {
+            var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+                new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+            var deleteLogger = new Mock<Microsoft.Extensions.Logging.ILogger<DeleteLinesTool>>();
             _tool = new DeleteLinesTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
-                ToolLoggerMock.Object
+                unifiedFileEditService,
+                deleteLogger.Object
             );
             return _tool;
         }

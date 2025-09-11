@@ -26,10 +26,13 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
     protected override InsertAtLineTool CreateTool()
     {
         // Create primary tool for base class
+        var unifiedFileEditServiceForInsert = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
         _insertTool = new InsertAtLineTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForInsert,
             insertLogger.Object
         );
         return _insertTool;
@@ -42,17 +45,23 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         _fileManager = new TestFileManager();
         
         // Create additional tools
+        var unifiedFileEditServiceForReplace = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
         _replaceTool = new ReplaceLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForReplace,
             replaceLogger.Object
         );
         
+        var unifiedFileEditServiceForDelete = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
         var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
         _deleteTool = new DeleteLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
+            unifiedFileEditServiceForDelete,
             deleteLogger.Object
         );
     }

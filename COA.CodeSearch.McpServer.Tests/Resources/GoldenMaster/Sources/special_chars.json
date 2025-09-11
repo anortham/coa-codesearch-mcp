@@ -1,0 +1,31 @@
+{
+  "test": {
+    "name": "Special Characters Test",
+    "description": "Testing Unicode and escaped characters",
+    "value": "test\n\t\"string\"",
+    "unicode_examples": {
+      "latin": "café",
+      "cyrillic": "привет",
+      "chinese": "你好",
+      "japanese": "こんにちは",
+      "emoji": "🚀🔧💻"
+    },
+    "escape_sequences": [
+      "line\nbreak",
+      "tab\tcharacter",
+      "quote\"mark",
+      "backslash\\character",
+      "carriage\return"
+    ],
+    "special_numbers": {
+      "infinity": "∞",
+      "pi": "π",
+      "delta": "Δ"
+    }
+  },
+  "metadata": {
+    "encoding": "UTF-8",
+    "created": "2025-09-11T15:30:00Z",
+    "author": "Test Suite"
+  }
+}

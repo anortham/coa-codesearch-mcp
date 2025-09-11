@@ -42,6 +42,9 @@
     <!-- Tree-sitter for type extraction -->
     <PackageReference Include="TreeSitter.DotNet" Version="1.0.1" />
     
+    <!-- Diff/Patch operations -->
+    <PackageReference Include="DiffMatchPatch" Version="4.0.0" />
+    
     <!-- Logging -->
     <PackageReference Include="Serilog" Version="4.2.0" />
     <PackageReference Include="Serilog.Extensions.Logging" Version="9.0.0" />

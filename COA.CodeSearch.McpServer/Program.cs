@@ -62,6 +62,10 @@ public class Program
                         services.AddSingleton<AdvancedPatternMatcher>();
                 services.AddSingleton<SmartQueryPreprocessor>();
         
+        // Register modern file editing services
+        services.AddScoped<UnifiedFileEditService>();
+        services.AddSingleton<IWorkspacePermissionService, WorkspacePermissionService>();
+        
         // API services for HTTP mode
         services.AddSingleton<ConfidenceCalculatorService>();
         
@@ -275,7 +279,7 @@ public class Program
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
             builder.Services.AddScoped<SimilarFilesTool>(); // New! Find similar files using MoreLikeThis
             builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
-            builder.Services.AddScoped<SearchAndReplaceTool>(); // New! Consolidates Search→Read→Edit workflow
+            builder.Services.AddScoped<SearchAndReplaceTool>(); // Enhanced! Uses DiffMatchPatch and workspace permissions
             
             // Navigation tools (from CodeNav consolidation)
             // TODO: All tools should follow the response builder pattern for consistency

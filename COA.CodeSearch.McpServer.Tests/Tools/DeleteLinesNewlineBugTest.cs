@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Threading.Tasks;
 using System.Threading;
+using Moq;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools;
 
@@ -22,10 +23,14 @@ public class DeleteLinesNewlineBugTest : CodeSearchToolTestBase<DeleteLinesTool>
 
     protected override DeleteLinesTool CreateTool()
     {
+        var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
+            new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
+        var deleteLogger = new Mock<Microsoft.Extensions.Logging.ILogger<DeleteLinesTool>>();
         _tool = new DeleteLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
-            ToolLoggerMock.Object
+            unifiedFileEditService,
+            deleteLogger.Object
         );
         return _tool;
     }

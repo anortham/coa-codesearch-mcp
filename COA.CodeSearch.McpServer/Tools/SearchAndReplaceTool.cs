@@ -15,602 +15,473 @@ using System.Text.RegularExpressions;
 using Lucene.Net.Analysis.Standard;
 using Lucene.Net.QueryParsers.Classic;
 using Lucene.Net.Util;
+using DiffMatchPatch;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Search and replace tool that consolidates the common search-read-edit workflow.
-/// Finds all occurrences and can apply replacements in a single operation.
+/// Enhanced search and replace tool using DiffMatchPatch and workspace permissions.
+/// Fixes multi-line matching issues and provides reliable concurrency protection.
 /// </summary>
 public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, AIOptimizedResponse<SearchAndReplaceResult>>
 {
     private readonly ILuceneIndexService _indexService;
-    private readonly LineAwareSearchService _lineSearchService;
-    private readonly IPathResolutionService _pathResolutionService;
     private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly IResourceStorageService _storageService;
-        private readonly AdvancedPatternMatcher _patternMatcher;
     private readonly CodeAnalyzer _codeAnalyzer;
+    private readonly UnifiedFileEditService _editService;
+    private readonly IWorkspacePermissionService _permissionService;
     private readonly ILogger<SearchAndReplaceTool> _logger;
 
     public SearchAndReplaceTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService indexService,
-        LineAwareSearchService lineSearchService,
-        IPathResolutionService pathResolutionService,
         SmartQueryPreprocessor queryProcessor,
         IResourceStorageService storageService,
-                AdvancedPatternMatcher patternMatcher,
         CodeAnalyzer codeAnalyzer,
+        UnifiedFileEditService editService,
+        IWorkspacePermissionService permissionService,
         ILogger<SearchAndReplaceTool> logger) : base(serviceProvider)
     {
         _indexService = indexService;
-        _lineSearchService = lineSearchService;
-        _pathResolutionService = pathResolutionService;
         _queryProcessor = queryProcessor;
-                _patternMatcher = patternMatcher;
-        _codeAnalyzer = codeAnalyzer;
         _storageService = storageService;
+        _codeAnalyzer = codeAnalyzer;
+        _editService = editService;
+        _permissionService = permissionService;
         _logger = logger;
     }
 
     public override string Name => ToolNames.SearchAndReplace;
     public override string Description => 
         "BULK updates across files - Replace patterns everywhere at once. SAFER than manual edits - preview mode by default. " +
-        "Perfect for: renaming, refactoring, fixing patterns. Consolidates search→read→edit workflow.";
+        "Perfect for: renaming, refactoring, fixing patterns. Consolidates search→read→edit workflow. " +
+        "Enhanced with multi-line support, workspace safety, and DiffMatchPatch reliability.";
     public override ToolCategory Category => ToolCategory.Query;
 
     protected override async Task<AIOptimizedResponse<SearchAndReplaceResult>> ExecuteInternalAsync(
-        SearchAndReplaceParams parameters, 
+        SearchAndReplaceParams parameters,
         CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();
-        
+        var searchStartTime = DateTime.UtcNow;
+
         try
         {
             // Validate parameters
             if (string.IsNullOrWhiteSpace(parameters.SearchPattern))
-                throw new ArgumentException("Search pattern cannot be empty");
+                return CreateErrorResponse("Search pattern cannot be empty");
+
+            // Use workspace path directly
+            var workspacePath = parameters.WorkspacePath ?? Directory.GetCurrentDirectory();
             
-            if (string.IsNullOrWhiteSpace(parameters.ReplacePattern))
-                throw new ArgumentException("Replace pattern cannot be empty");
-
-            // Validate search type
-            var validTypes = new[] { "standard", "literal", "regex", "code" };
-            if (!validTypes.Contains(parameters.SearchType.ToLowerInvariant()))
-                throw new ArgumentException($"Invalid search type. Must be one of: {string.Join(", ", validTypes)}");
-
-            // Validate regex if using regex search
-            if (parameters.SearchType.ToLowerInvariant() == "regex")
+            // Check if index exists
+            if (!await _indexService.IndexExistsAsync(workspacePath, cancellationToken))
             {
-                try
-                {
-                    _ = new Regex(parameters.SearchPattern);
-                }
-                catch (ArgumentException ex)
-                {
-                    throw new ArgumentException($"Invalid regex pattern: {ex.Message}");
-                }
+                return CreateErrorResponse($"No index found for workspace: {workspacePath}. Please run index_workspace first.");
             }
 
-            // Resolve workspace path
-            if (string.IsNullOrEmpty(parameters.WorkspacePath))
-            {
-                throw new ArgumentException("WorkspacePath is required for search and replace operations");
-            }
-            
-            var normalizedPath = Path.GetFullPath(parameters.WorkspacePath);
-
-            // Ensure index exists
-            if (!await _indexService.IndexExistsAsync(normalizedPath, cancellationToken))
-            {
-                throw new InvalidOperationException($"No search index found for workspace. Run index_workspace first for: {parameters.WorkspacePath}");
-            }
-
-            // Phase 1: Find all matches using line-aware search
-            var matches = await FindAllMatches(parameters, normalizedPath, cancellationToken);
-
-            if (!matches.Any())
-            {
-                return await BuildNoMatchesResponse(parameters, stopwatch.Elapsed);
-            }
-
-            // Phase 2: Build replacement changes
-            var changes = await BuildReplacementChanges(matches, parameters, cancellationToken);
-
-            // Phase 3: Apply changes if not preview mode
-            TimeSpan? applyTime = null;
+            // Check workspace permissions for editing operations
             if (!parameters.Preview)
             {
-                var applyStopwatch = Stopwatch.StartNew();
-                await ApplyChangesToFiles(changes, cancellationToken);
-                applyStopwatch.Stop();
-                applyTime = applyStopwatch.Elapsed;
-            }
-
-            stopwatch.Stop();
-
-            // Build result
-            var result = BuildResult(changes, parameters, stopwatch.Elapsed, applyTime);
-
-            // Use response builder for optimization
-            var responseContext = new ResponseContext
-            {
-                TokenLimit = parameters.MaxTokens ?? 8000,
-                ResponseMode = parameters.ResponseMode ?? "default",
-                StoreFullResults = changes.Count > 50,
-                ToolName = Name
-            };
-
-            // Create response builder and build response
-            var responseBuilder = new SearchAndReplaceResponseBuilder(null, _storageService);
-            return await responseBuilder.BuildResponseAsync(result, responseContext);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error during search and replace for pattern: {Pattern}", parameters.SearchPattern);
-            stopwatch.Stop();
-
-            var errorResult = new SearchAndReplaceResult
-            {
-                Summary = $"Error: {ex.Message}",
-                Preview = parameters.Preview,
-                Changes = new List<ReplacementChange>(),
-                FileSummaries = new List<FileChangeSummary>(),
-                TotalFiles = 0,
-                TotalReplacements = 0,
-                SearchTime = stopwatch.Elapsed,
-                SearchPattern = parameters.SearchPattern,
-                ReplacePattern = parameters.ReplacePattern,
-                Truncated = false,
-                Insights = new List<string> { $"Operation failed: {ex.Message}" }
-            };
-
-            var errorContext = new ResponseContext
-            {
-                TokenLimit = parameters.MaxTokens ?? 8000,
-                ResponseMode = parameters.ResponseMode ?? "default",
-                StoreFullResults = false,
-                ToolName = Name
-            };
-
-            var responseBuilder = new SearchAndReplaceResponseBuilder(null, _storageService);
-            return await responseBuilder.BuildResponseAsync(errorResult, errorContext);
-        }
-    }
-
-    private async Task<List<LineMatch>> FindAllMatches(
-        SearchAndReplaceParams parameters,
-        string workspacePath,
-        CancellationToken cancellationToken)
-    {
-        // Build Lucene query - automatically use literal search for patterns with curly braces
-        // Use CodeAnalyzer for consistent tokenization with indexing
-        var searchType = parameters.SearchType;
-        
-        // Auto-detect code patterns with curly braces and force literal search
-        if ((searchType == "standard" || string.IsNullOrEmpty(searchType)) && 
-            (parameters.SearchPattern.Contains('{') || parameters.SearchPattern.Contains('}')))
-        {
-            searchType = "literal";
-            _logger.LogDebug("Auto-detected curly braces in search pattern, using literal search type");
-        }
-        
-        // Use SmartQueryPreprocessor for multi-field search optimization
-        var searchMode = DetermineSearchMode(searchType);
-        var queryResult = _queryProcessor.Process(parameters.SearchPattern, searchMode);
-        
-        _logger.LogInformation("Search and Replace: {Pattern} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
-            parameters.SearchPattern, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
-        
-        var parser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
-        var query = parser.Parse(queryResult.ProcessedQuery);
-
-        // Search for files containing the pattern
-        var searchResults = await _indexService.SearchAsync(workspacePath, query, parameters.MaxMatches * 2, cancellationToken);
-
-        var allMatches = new List<LineMatch>();
-        var processedCount = 0;
-
-        foreach (var hit in searchResults.Hits)
-        {
-            // Apply file pattern filter if specified
-            if (!string.IsNullOrEmpty(parameters.FilePattern))
-            {
-                var fileName = Path.GetFileName(hit.FilePath);
-                if (!IsFilePatternMatch(fileName, parameters.FilePattern))
-                    continue;
-            }
-
-            // Extract line matches from this file
-            var lineMatches = await ExtractLineMatches(hit, parameters);
-            allMatches.AddRange(lineMatches);
-
-            processedCount += lineMatches.Count;
-            if (processedCount >= parameters.MaxMatches)
-            {
-                allMatches = allMatches.Take(parameters.MaxMatches).ToList();
-                break;
-            }
-        }
-
-        return allMatches;
-    }
-
-    private bool IsFilePatternMatch(string fileName, string pattern)
-    {
-        // Simple glob pattern matching
-        if (pattern.Contains("*"))
-        {
-            var regexPattern = "^" + Regex.Escape(pattern).Replace("\\*", ".*") + "$";
-            return Regex.IsMatch(fileName, regexPattern, RegexOptions.IgnoreCase);
-        }
-        return fileName.Equals(pattern, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private async Task<List<LineMatch>> ExtractLineMatches(SearchHit hit, SearchAndReplaceParams parameters)
-    {
-        var matches = new List<LineMatch>();
-
-        try
-        {
-            var content = await File.ReadAllTextAsync(hit.FilePath);
-            var lines = FileLineUtilities.SplitLines(content);
-
-            for (int i = 0; i < lines.Length; i++)
-            {
-                var line = lines[i];
-                if (ContainsPattern(line, parameters))
+                var permissionRequest = new EditPermissionRequest();
+                var permissionResult = await _permissionService.IsEditAllowedAsync(permissionRequest, cancellationToken);
+                if (!permissionResult.Allowed)
                 {
-                    var contextBefore = GetContextLines(lines, i - parameters.ContextLines, i - 1);
-                    var contextAfter = GetContextLines(lines, i + 1, i + parameters.ContextLines);
-
-                    matches.Add(new LineMatch
-                    {
-                        FilePath = hit.FilePath,
-                        LineNumber = i + 1, // 1-based
-                        LineContent = line,
-                        ContextLines = contextBefore.Concat(contextAfter).ToArray(),
-                        StartLine = Math.Max(1, i + 1 - parameters.ContextLines),
-                        EndLine = Math.Min(lines.Length, i + 1 + parameters.ContextLines)
-                    });
+                    return CreateErrorResponse($"Edit not allowed: {permissionResult.Reason}");
                 }
             }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Error extracting line matches from {FilePath}", hit.FilePath);
-        }
 
-        return matches;
-    }
-
-    private bool ContainsPattern(string line, SearchAndReplaceParams parameters)
-    {
-        var comparison = parameters.CaseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
-        
-        return parameters.SearchType.ToLowerInvariant() switch
-        {
-            "regex" => Regex.IsMatch(line, parameters.SearchPattern, 
-                parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
-            "literal" => line.Contains(parameters.SearchPattern, comparison),
-            "code" => Regex.IsMatch(line, $@"\b{Regex.Escape(parameters.SearchPattern)}\b",
-                parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase),
-            _ => line.Contains(parameters.SearchPattern, comparison)
-        };
-    }
-
-    private string[] GetContextLines(string[] allLines, int startIndex, int endIndex)
-    {
-        if (startIndex < 0 || endIndex >= allLines.Length || startIndex > endIndex)
-            return Array.Empty<string>();
-
-        var contextLines = new string[endIndex - startIndex + 1];
-        Array.Copy(allLines, startIndex, contextLines, 0, contextLines.Length);
-        return contextLines;
-    }
-
-    private async Task<List<ReplacementChange>> BuildReplacementChanges(
-        List<LineMatch> matches,
-        SearchAndReplaceParams parameters,
-        CancellationToken cancellationToken)
-    {
-        var changes = new List<ReplacementChange>();
-        
-        // Group matches by file
-        var matchesByFile = matches.GroupBy(m => m.FilePath);
-
-        foreach (var fileGroup in matchesByFile)
-        {
-            var filePath = fileGroup.Key;
+            // Extract simple search term for Lucene file discovery
+            var luceneSearchTerm = ExtractLuceneSearchTerm(parameters.SearchPattern, parameters.SearchType);
             
+            // Build Lucene query for finding candidate files
+            var queryBuilder = new QueryParser(LuceneVersion.LUCENE_48, "content", new StandardAnalyzer(LuceneVersion.LUCENE_48));
+            queryBuilder.AllowLeadingWildcard = true;
+            
+            Lucene.Net.Search.Query query;
             try
             {
-                var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-                var lines = FileLineUtilities.SplitLines(content);
-
-                foreach (var match in fileGroup)
-                {
-                    var lineIndex = match.LineNumber - 1; // Convert to 0-based
-                    if (lineIndex < 0 || lineIndex >= lines.Length)
-                        continue;
-
-                    var originalLine = lines[lineIndex];
-                    var change = BuildReplacementForLine(originalLine, parameters, match, filePath);
-                    if (change != null)
-                    {
-                        changes.Add(change);
-                    }
-                }
+            query = queryBuilder.Parse(luceneSearchTerm);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error building replacements for file {FilePath}", filePath);
+            // Fallback to wildcard search if Lucene parsing fails
+            _logger.LogWarning("Failed to parse Lucene query '{LuceneSearchTerm}': {Error}. Using fallback search.", luceneSearchTerm, ex.Message);
+            query = queryBuilder.Parse("*"); // Search all files as fallback
+            }
+
+            // Search for matching files
+            var searchResults = await _indexService.SearchAsync(workspacePath, query, parameters.MaxMatches, cancellationToken);
+            var searchTime = DateTime.UtcNow - searchStartTime;
+            
+            if (searchResults.TotalHits == 0)
+            {
+                return CreateSuccessResponse(new SearchAndReplaceResult
+                {
+                    Summary = "No matches found for the search pattern",
+                    Preview = parameters.Preview,
+                    Changes = new List<ReplacementChange>(),
+                    FileSummaries = new List<FileChangeSummary>(),
+                    TotalFiles = 0,
+                    TotalReplacements = 0,
+                    SearchTime = searchTime,
+                    SearchPattern = parameters.SearchPattern,
+                    ReplacePattern = parameters.ReplacePattern ?? string.Empty,
+                    Truncated = false
+                });
+            }
+
+            // Process each file that had matches
+            var changes = new List<ReplacementChange>();
+            var fileSummaries = new Dictionary<string, FileChangeSummary>();
+            int totalReplacements = 0;
+            var applyStartTime = DateTime.UtcNow;
+
+            foreach (var hit in searchResults.Hits.Take(parameters.MaxMatches))
+            {
+                var filePath = hit.FilePath;
+                
+                try
+                {
+                    // Setup edit options
+                    var editOptions = new EditOptions
+                    {
+                        PreviewMode = parameters.Preview,
+                        MatchMode = parameters.MatchMode ?? "literal",
+                        CaseSensitive = parameters.CaseSensitive,
+                        ContextLines = parameters.ContextLines
+                    };
+
+                    // Apply search and replace using UnifiedFileEditService
+                    var editResult = await _editService.ApplySearchReplaceAsync(
+                        filePath,
+                        parameters.SearchPattern,
+                        parameters.ReplacePattern ?? string.Empty,
+                        editOptions,
+                        cancellationToken);
+
+                    if (editResult.Success && editResult.ChangesMade && editResult.Diffs != null)
+                    {
+                        // Convert DiffMatchPatch diffs to our model format
+                        var fileChanges = ConvertDiffsToReplacementChanges(editResult.Diffs, filePath, parameters.ContextLines);
+                        changes.AddRange(fileChanges);
+                        totalReplacements += fileChanges.Count;
+
+                        // Create file summary
+                        var fileSummary = new FileChangeSummary
+                        {
+                            FilePath = filePath,
+                            ChangeCount = fileChanges.Count,
+                            LastModified = File.GetLastWriteTimeUtc(filePath),
+                            FileSize = new System.IO.FileInfo(filePath).Length,
+                            AllApplied = !parameters.Preview
+                        };
+                        fileSummaries[filePath] = fileSummary;
+
+                        _logger.LogDebug("Applied {Count} replacements in {File}", 
+                            fileChanges.Count, filePath);
+                    }
+                    else if (editResult.Success && !editResult.ChangesMade)
+                    {
+                        // File was processed but no changes were needed
+                        _logger.LogDebug("No changes needed in {File}", filePath);
+                    }
+                    else if (!editResult.Success)
+                    {
+                        // Handle failed operations
+                        var errorChange = new ReplacementChange
+                        {
+                            FilePath = filePath,
+                            LineNumber = 1,
+                            ColumnStart = 0,
+                            OriginalLength = 0,
+                            OriginalText = "",
+                            ReplacementText = "",
+                            Applied = false,
+                            Error = editResult.ErrorMessage
+                        };
+                        changes.Add(errorChange);
+                        
+                        _logger.LogWarning("Failed to process {File}: {Error}", filePath, editResult.ErrorMessage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    var errorChange = new ReplacementChange
+                    {
+                        FilePath = filePath,
+                        LineNumber = 1,
+                        ColumnStart = 0,
+                        OriginalLength = 0,
+                        OriginalText = "",
+                        ReplacementText = "",
+                        Applied = false,
+                        Error = ex.Message
+                    };
+                    changes.Add(errorChange);
+                    
+                    _logger.LogError(ex, "Exception processing {File}", filePath);
+                }
+            }
+
+            var applyTime = parameters.Preview ? null : (TimeSpan?)(DateTime.UtcNow - applyStartTime);
+            stopwatch.Stop();
+
+            var result = new SearchAndReplaceResult
+            {
+                Summary = GenerateResultSummary(fileSummaries.Values.ToList(), totalReplacements, parameters.Preview),
+                Preview = parameters.Preview,
+                Changes = changes,
+                FileSummaries = fileSummaries.Values.ToList(),
+                TotalFiles = fileSummaries.Count,
+                TotalReplacements = totalReplacements,
+                SearchTime = searchTime,
+                ApplyTime = applyTime,
+                SearchPattern = parameters.SearchPattern,
+                ReplacePattern = parameters.ReplacePattern ?? string.Empty,
+                Truncated = searchResults.TotalHits > parameters.MaxMatches
+            };
+
+            var successCount = fileSummaries.Count;
+            _logger.LogInformation("Search and replace completed: {Success}/{Total} files processed, {Replacements} total replacements in {Time}ms",
+                successCount, fileSummaries.Count, totalReplacements, stopwatch.ElapsedMilliseconds);
+
+            return CreateSuccessResponse(result);
+        }
+        catch (Exception ex)
+        {
+            stopwatch.Stop();
+            _logger.LogError(ex, "Search and replace failed after {Time}ms", stopwatch.ElapsedMilliseconds);
+            return CreateErrorResponse($"Search and replace operation failed: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Converts DiffMatchPatch diffs to ReplacementChange objects
+    /// </summary>
+    private List<ReplacementChange> ConvertDiffsToReplacementChanges(List<Diff> diffs, string filePath, int contextLines)
+    {
+        var changes = new List<ReplacementChange>();
+        var lineNumber = 1;
+        var columnPosition = 0;
+
+        for (int i = 0; i < diffs.Count; i++)
+        {
+            var diff = diffs[i];
+            
+            if (diff.operation == Operation.DELETE && i + 1 < diffs.Count && diffs[i + 1].operation == Operation.INSERT)
+            {
+                // This is a replacement operation
+                var deleteText = diff.text ?? "";
+                var insertText = diffs[i + 1].text ?? "";
+                
+                var change = new ReplacementChange
+                {
+                    FilePath = filePath,
+                    LineNumber = lineNumber,
+                    ColumnStart = columnPosition,
+                    OriginalLength = deleteText.Length,
+                    OriginalText = deleteText,
+                    ReplacementText = insertText,
+                    Applied = true // Will be set correctly based on preview mode
+                };
+                
+                changes.Add(change);
+                i++; // Skip the next INSERT diff since we've processed it
+                
+                // Update position after replacement
+                var newlineCount = insertText.Count(c => c == '\n');
+                if (newlineCount > 0)
+                {
+                    lineNumber += newlineCount;
+                    columnPosition = insertText.Length - insertText.LastIndexOf('\n') - 1;
+                }
+                else
+                {
+                    columnPosition += insertText.Length;
+                }
+            }
+            else if (diff.operation == Operation.EQUAL)
+            {
+                // Update position for unchanged text
+                var text = diff.text ?? "";
+                var newlineCount = text.Count(c => c == '\n');
+                if (newlineCount > 0)
+                {
+                    lineNumber += newlineCount;
+                    columnPosition = text.Length - text.LastIndexOf('\n') - 1;
+                }
+                else
+                {
+                    columnPosition += text.Length;
+                }
             }
         }
 
         return changes;
     }
 
-    private ReplacementChange? BuildReplacementForLine(
-        string line, 
-        SearchAndReplaceParams parameters, 
-        LineMatch match, 
-        string filePath)
+    /// <summary>
+    /// Generates a human-readable summary of the operation results
+    /// </summary>
+    private string GenerateResultSummary(List<FileChangeSummary> fileSummaries, int totalReplacements, bool preview)
     {
-        // Use AdvancedPatternMatcher for enhanced matching capabilities
-        string newLine;
-        int columnStart = 0;
-        int originalLength = 0;
-        string matchedText = parameters.SearchPattern;
-
-        // Handle regex separately as it has different logic
-        if (parameters.SearchType.ToLowerInvariant() == "regex")
-        {
-            var regex = new Regex(parameters.SearchPattern, 
-                parameters.CaseSensitive ? RegexOptions.None : RegexOptions.IgnoreCase);
-            var regexMatch = regex.Match(line);
-            if (!regexMatch.Success) return null;
+        var mode = preview ? "Found" : "Applied";
+        var fileCount = fileSummaries.Count;
+        var summary = $"{mode} {totalReplacements} replacement{(totalReplacements == 1 ? "" : "s")} across {fileCount} file{(fileCount == 1 ? "" : "s")}";
+        
+        var errorCount = fileSummaries.Count(f => f.AllApplied == false);
+        if (errorCount > 0)
+            summary += $" ({errorCount} file{(errorCount == 1 ? "" : "s")} had errors)";
             
-            newLine = regex.Replace(line, parameters.ReplacePattern);
-            columnStart = regexMatch.Index;
-            originalLength = regexMatch.Length;
-            matchedText = regexMatch.Value;
-        }
-        else
+        return summary;
+    }
+
+    private AIOptimizedResponse<SearchAndReplaceResult> CreateErrorResponse(string errorMessage)
+    {
+        return new AIOptimizedResponse<SearchAndReplaceResult>
         {
-            // Use AdvancedPatternMatcher for all other modes
-            var matchResult = _patternMatcher.FindMatch(line, parameters.SearchPattern, parameters);
-            if (!matchResult.Found) return null;
-
-            // Perform the replacement using the advanced matcher
-            newLine = _patternMatcher.PerformReplacement(line, parameters.SearchPattern, parameters.ReplacePattern, parameters);
-            columnStart = matchResult.StartIndex;
-            originalLength = matchResult.Length;
-            matchedText = matchResult.MatchedText;
-
-            // Log the matching mode used for debugging
-            _logger.LogDebug("Used {MatchMode} matching for pattern '{Pattern}' in {FilePath}:{LineNumber}",
-                matchResult.Mode, parameters.SearchPattern, filePath, match.LineNumber);
-        }
-
-        return new ReplacementChange
-        {
-            FilePath = filePath,
-            LineNumber = match.LineNumber,
-            ColumnStart = columnStart,
-            OriginalLength = originalLength,
-            OriginalText = matchedText, // Use the actual matched text, not the pattern
-            ReplacementText = parameters.ReplacePattern,
-            ModifiedLine = newLine?.TrimEnd('\r', '\n'),
-            ContextBefore = match.ContextLines?.Take(parameters.ContextLines).ToArray(),
-            ContextAfter = match.ContextLines?.Skip(parameters.ContextLines).ToArray()
+            Success = false,
+            Error = new COA.Mcp.Framework.Models.ErrorInfo
+            {
+                Code = "SEARCH_REPLACE_FAILED",
+                Message = errorMessage
+            },
+            Data = new AIResponseData<SearchAndReplaceResult>
+            {
+                Results = new SearchAndReplaceResult
+                {
+                    Summary = "Search and replace failed",
+                    Preview = true,
+                    Changes = new List<ReplacementChange>(),
+                    FileSummaries = new List<FileChangeSummary>(),
+                    TotalFiles = 0,
+                    TotalReplacements = 0,
+                    SearchTime = TimeSpan.Zero,
+                    SearchPattern = "",
+                    ReplacePattern = "",
+                    Truncated = false
+                },
+                Summary = "Search and replace operation failed",
+                Count = 0
+            }
         };
     }
 
-    private async Task ApplyChangesToFiles(List<ReplacementChange> changes, CancellationToken cancellationToken)
+    private AIOptimizedResponse<SearchAndReplaceResult> CreateSuccessResponse(SearchAndReplaceResult result)
     {
-        // Group by file to minimize I/O
-        var changesByFile = changes.GroupBy(c => c.FilePath);
-
-        foreach (var fileGroup in changesByFile)
+        return new AIOptimizedResponse<SearchAndReplaceResult>
         {
-            var filePath = fileGroup.Key;
-            
+            Success = true,
+            Data = new AIResponseData<SearchAndReplaceResult>
+            {
+                Results = result,
+                Summary = result.Summary,
+                Count = result.TotalReplacements
+            }
+        };
+    }
+        /// <summary>
+        /// Extracts a simple Lucene-compatible search term from complex search patterns.
+        /// This is used to find candidate files that might contain matches, not for the actual replacement.
+        /// </summary>
+        private string ExtractLuceneSearchTerm(string searchPattern, string? searchType)
+        {
+            if (string.IsNullOrWhiteSpace(searchPattern))
+                return "*";
+
+            // For literal searches, use a simplified version of the pattern
+            if (searchType == "literal")
+            {
+                // Extract the most significant words for Lucene search
+                var words = searchPattern
+                    .Split(new[] { ' ', '\t', '\n', '\r', '(', ')', '{', '}', '[', ']', ';', ',', '.', '!', '?' }, 
+                           StringSplitOptions.RemoveEmptyEntries)
+                    .Where(w => w.Length >= 3) // Only meaningful words
+                    .Take(3) // Limit to first 3 words to avoid complex queries
+                    .ToList();
+
+                if (words.Count > 0)
+                {
+                    return string.Join(" AND ", words.Select(w => $"\"{w}\""));
+                }
+            }
+
+            // For regex searches, extract literal parts
+            if (searchType == "regex")
+            {
+                var literalParts = ExtractLiteralPartsFromRegex(searchPattern);
+                if (literalParts.Any())
+                {
+                    return string.Join(" AND ", literalParts.Take(3).Select(p => $"\"{p}\""));
+                }
+            }
+
+            // Fallback: try to extract any alphanumeric sequences
+            var matches = Regex.Matches(searchPattern, @"\b[a-zA-Z_][a-zA-Z0-9_]{2,}\b")
+                              .Cast<Match>()
+                              .Select(m => m.Value)
+                              .Where(v => !IsCommonWord(v))
+                              .Distinct()
+                              .Take(3)
+                              .ToList();
+
+            if (matches.Any())
+            {
+                return string.Join(" AND ", matches.Select(m => $"\"{m}\""));
+            }
+
+            // Ultimate fallback: search all files
+            return "*";
+        }
+
+        /// <summary>
+        /// Extracts literal parts from regex patterns for Lucene search
+        /// </summary>
+        private List<string> ExtractLiteralPartsFromRegex(string regexPattern)
+        {
+            var literalParts = new List<string>();
+        
             try
             {
-                // Read original content to preserve line endings
-                var originalContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-                
-                // Use FileLineUtilities to preserve original line endings
-                var (lines, encoding) = await FileLineUtilities.ReadFileWithEncodingAsync(filePath, cancellationToken);
-                
-                // Apply changes in reverse order to preserve line numbers
-                foreach (var change in fileGroup.OrderByDescending(c => c.LineNumber))
-                {
-                    var lineIndex = change.LineNumber - 1; // Convert to 0-based
-                    if (lineIndex >= 0 && lineIndex < lines.Length)
-                    {
-                        // Clean up any trailing carriage returns from ModifiedLine before writing
-                        var cleanedLine = change.ModifiedLine?.TrimEnd('\r', '\n') ?? lines[lineIndex];
-                        lines[lineIndex] = cleanedLine;
-                        change.Applied = true;
-                    }
-                    else
-                    {
-                        change.Applied = false;
-                        change.Error = $"Line {change.LineNumber} is out of range";
-                    }
-                }
+                // Remove common regex metacharacters and extract literal sequences
+                var cleaned = regexPattern
+                    .Replace(@"\s*", " ")
+                    .Replace(@"\s+", " ")
+                    .Replace(@"\.", ".")
+                    .Replace(@"\(", "(")
+                    .Replace(@"\)", ")")
+                    .Replace(@"\\", @"\");
 
-                // Write the modified file preserving original line endings and encoding
-                await FileLineUtilities.WriteAllLinesPreservingEndingsAsync(filePath, lines, encoding, originalContent, cancellationToken);
+                // Extract meaningful literal sequences (3+ characters)
+                var matches = Regex.Matches(cleaned, @"[a-zA-Z_][a-zA-Z0-9_]{2,}")
+                                  .Cast<Match>()
+                                  .Select(m => m.Value)
+                                  .Where(v => !IsCommonWord(v))
+                                  .Distinct()
+                                  .ToList();
 
-                _logger.LogInformation("Applied {ChangeCount} changes to {FilePath}", 
-                    fileGroup.Count(), filePath);
+                literalParts.AddRange(matches);
             }
-            catch (Exception ex)
+            catch
             {
-                _logger.LogError(ex, "Failed to apply changes to {FilePath}", filePath);
-                
-                // Mark all changes in this file as failed
-                foreach (var change in fileGroup)
-                {
-                    change.Applied = false;
-                    change.Error = ex.Message;
-                }
+                // If regex parsing fails, fall back to simple word extraction
             }
-        }
-    }
 
-    private SearchAndReplaceResult BuildResult(
-        List<ReplacementChange> changes, 
-        SearchAndReplaceParams parameters, 
-        TimeSpan searchTime,
-        TimeSpan? applyTime)
-    {
-        var fileSummaries = changes
-            .GroupBy(c => c.FilePath)
-            .Select(g => new FileChangeSummary
+            return literalParts;
+        }
+
+        /// <summary>
+        /// Checks if a word is too common to be useful for search
+        /// </summary>
+        private bool IsCommonWord(string word)
+        {
+            var commonWords = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
             {
-                FilePath = ShortenPath(g.Key),
-                ChangeCount = g.Count(),
-                AllApplied = !parameters.Preview ? g.All(c => c.Applied == true) : null,
-                LastModified = File.Exists(g.Key) ? File.GetLastWriteTime(g.Key) : null,
-                FileSize = File.Exists(g.Key) ? new System.IO.FileInfo(g.Key).Length : null
-            })
-            .ToList();
-
-        var totalFiles = fileSummaries.Count;
-        var totalReplacements = changes.Count;
-        var appliedCount = changes.Count(c => c.Applied == true);
-
-        var summary = parameters.Preview
-            ? $"Would change {totalReplacements} occurrences in {totalFiles} files"
-            : $"Changed {appliedCount} of {totalReplacements} occurrences in {totalFiles} files";
-
-        return new SearchAndReplaceResult
-        {
-            Summary = summary,
-            Preview = parameters.Preview,
-            Changes = changes,
-            FileSummaries = fileSummaries,
-            TotalFiles = totalFiles,
-            TotalReplacements = totalReplacements,
-            SearchTime = searchTime,
-            ApplyTime = applyTime,
-            SearchPattern = parameters.SearchPattern,
-            ReplacePattern = parameters.ReplacePattern,
-            Truncated = changes.Count >= parameters.MaxMatches,
-            Insights = GenerateInsights(changes, parameters)
-        };
-    }
-
-    private async Task<AIOptimizedResponse<SearchAndReplaceResult>> BuildNoMatchesResponse(
-        SearchAndReplaceParams parameters, 
-        TimeSpan searchTime)
-    {
-        var result = new SearchAndReplaceResult
-        {
-            Summary = "No matches found",
-            Preview = parameters.Preview,
-            Changes = new List<ReplacementChange>(),
-            FileSummaries = new List<FileChangeSummary>(),
-            TotalFiles = 0,
-            TotalReplacements = 0,
-            SearchTime = searchTime,
-            SearchPattern = parameters.SearchPattern,
-            ReplacePattern = parameters.ReplacePattern,
-            Truncated = false,
-            Insights = new List<string> { "No matches found - try broader search terms or different file patterns" }
-        };
-
-        var responseContext = new ResponseContext
-        {
-            TokenLimit = parameters.MaxTokens ?? 8000,
-            ResponseMode = parameters.ResponseMode ?? "default",
-            StoreFullResults = false,
-            ToolName = Name
-        };
-
-        var responseBuilder = new SearchAndReplaceResponseBuilder(null, _storageService);
-        return await responseBuilder.BuildResponseAsync(result, responseContext);
-    }
-
-    private List<string> GenerateInsights(List<ReplacementChange> changes, SearchAndReplaceParams parameters)
-    {
-        var insights = new List<string>();
-
-        if (!changes.Any())
-            return insights;
-
-        // File type distribution
-        var fileExtensions = changes
-            .Select(c => Path.GetExtension(c.FilePath))
-            .Where(ext => !string.IsNullOrEmpty(ext))
-            .GroupBy(ext => ext)
-            .OrderByDescending(g => g.Count())
-            .Take(3)
-            .Select(g => $"{g.Key}:{g.Count()}")
-            .ToList();
-
-        if (fileExtensions.Any())
-        {
-            insights.Add($"File types: {string.Join(", ", fileExtensions)}");
+                "the", "and", "for", "are", "but", "not", "you", "all", "can", "had", "her", "was", "one", "our", "out", "day", "get", "use", "man", "new", "now", "old", "see", "way", "who", "boy", "did", "its", "let", "put", "say", "she", "too", "use"
+            };
+        
+            return commonWords.Contains(word);
         }
-
-        // High-frequency files
-        var topFiles = changes
-            .GroupBy(c => c.FilePath)
-            .Where(g => g.Count() > 2)
-            .OrderByDescending(g => g.Count())
-            .Take(3)
-            .Select(g => $"{Path.GetFileName(g.Key)} ({g.Count()} changes)")
-            .ToList();
-
-        if (topFiles.Any())
-        {
-            insights.Add($"High frequency: {string.Join(", ", topFiles)}");
-        }
-
-        // Safety reminder for non-preview mode
-        if (!parameters.Preview)
-        {
-            insights.Add("Changes applied - files have been modified");
-        }
-        else
-        {
-            insights.Add("Preview mode - no files modified. Set preview:false to apply changes");
-        }
-
-        return insights;
-    }
-
-    private string ShortenPath(string fullPath)
-    {
-        // Convert to relative path or use just filename + parent directory
-        try
-        {
-            var fileName = Path.GetFileName(fullPath);
-            var directory = Path.GetFileName(Path.GetDirectoryName(fullPath));
-            return string.IsNullOrEmpty(directory) ? fileName : $"{directory}/{fileName}";
-        }
-        catch
-        {
-            return Path.GetFileName(fullPath) ?? fullPath;
-        }
-    }
-    
-    private SearchMode DetermineSearchMode(string searchType)
-    {
-        return searchType?.ToLowerInvariant() switch
-        {
-            "literal" => SearchMode.Pattern,
-            "regex" => SearchMode.Pattern,
-            "wildcard" => SearchMode.Standard,
-            "code" => SearchMode.Symbol,
-            "standard" or null => SearchMode.Standard,
-            _ => SearchMode.Standard // Default to standard for search & replace
-        };
-    }
 }
