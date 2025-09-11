@@ -1,0 +1,172 @@
+{
+  "ConnectionStrings": {
+    "DefaultConnection": "Server=localhost;Database=UserManagement;Trusted_Connection=true;MultipleActiveResultSets=true",
+    "ReadOnlyConnection": "Server=localhost;Database=UserManagement_ReadOnly;Trusted_Connection=true;MultipleActiveResultSets=true",
+    "CacheConnection": "localhost:6379"
+  },
+  "Database": {
+    "CommandTimeout": 30,
+    "MaxRetryCount": 3,
+    "EnableSensitiveDataLogging": false,
+    "EnableDetailedErrors": true,
+    "MigrationsAssembly": "UserManagement.Data.Migrations"
+  },
+  "Caching": {
+    "Redis": {
+      "Enabled": true,
+      "DefaultExpiration": "00:15:00",
+      "SlidingExpiration": "00:05:00",
+      "KeyPrefix": "UserMgmt:",
+      "Database": 0
+    },
+    "Memory": {
+      "SizeLimit": 100,
+      "CompactionPercentage": 0.25,
+      "ExpirationScanFrequency": "00:02:00"
+    }
+  },
+  "Logging": {
+    "LogLevel": {
+      "Default": "Information",
+      "Microsoft": "Warning",
+      "Microsoft.Hosting.Lifetime": "Information",
+      "Microsoft.EntityFrameworkCore": "Warning",
+      "System.Net.Http.HttpClient": "Warning"
+    },
+    "Console": {
+      "IncludeScopes": false,
+      "LogToStandardErrorThreshold": "Warning"
+    },
+    "File": {
+      "Path": "logs/app-.log",
+      "RollingInterval": "Day",
+      "RetainedFileCountLimit": 7,
+      "FileSizeLimitBytes": 10485760,
+      "RollOnFileSizeLimit": true
+    }
+  },
+  "Authentication": {
+    "JWT": {
+      "SecretKey": "your-super-secret-jwt-key-that-should-be-in-env-vars",
+      "Issuer": "UserManagement.API",
+      "Audience": "UserManagement.Client",
+      "ExpirationMinutes": 60,
+      "RefreshTokenExpirationDays": 7
+    },
+    "Google": {
+      "ClientId": "your-google-client-id",
+      "ClientSecret": "your-google-client-secret"
+    },
+    "Microsoft": {
+      "ClientId": "your-microsoft-client-id",
+      "ClientSecret": "your-microsoft-client-secret",
+      "TenantId": "your-tenant-id"
+    }
+  },
+  "Email": {
+    "SMTP": {
+      "Host": "smtp.gmail.com",
+      "Port": 587,
+      "EnableSSL": true,
+      "Username": "your-email@gmail.com",
+      "Password": "your-app-password"
+    },
+    "SendGrid": {
+      "ApiKey": "your-sendgrid-api-key",
+      "FromEmail": "noreply@yourdomain.com",
+      "FromName": "User Management System"
+    },
+    "Templates": {
+      "WelcomeEmail": "welcome-template-id",
+      "PasswordReset": "password-reset-template-id",
+      "EmailVerification": "email-verification-template-id"
+    }
+  },
+  "FileStorage": {
+    "Provider": "Local",
+    "Local": {
+      "BasePath": "wwwroot/uploads",
+      "MaxFileSize": 5242880,
+      "AllowedExtensions": [".jpg", ".jpeg", ".png", ".gif", ".pdf", ".docx"]
+    },
+    "Azure": {
+      "ConnectionString": "your-azure-storage-connection-string",
+      "ContainerName": "user-files",
+      "BaseUrl": "https://yourstorageaccount.blob.core.windows.net"
+    },
+    "AWS": {
+      "AccessKey": "your-aws-access-key",
+      "SecretKey": "your-aws-secret-key",
+      "BucketName": "user-management-files",
+      "Region": "us-east-1"
+    }
+  },
+  "Features": {
+    "EnableRegistration": true,
+    "EnableEmailVerification": true,
+    "EnableTwoFactorAuth": false,
+    "EnableAuditLogging": true,
+    "EnableRateLimiting": true,
+    "EnableSwagger": true,
+    "EnableHealthChecks": true
+  },
+  "RateLimiting": {
+    "General": {
+      "Window": "00:01:00",
+      "PermitLimit": 100,
+      "QueueLimit": 10
+    },
+    "Authentication": {
+      "Window": "00:15:00",
+      "PermitLimit": 5,
+      "QueueLimit": 0
+    },
+    "API": {
+      "Window": "00:01:00",
+      "PermitLimit": 60,
+      "QueueLimit": 5
+    }
+  },
+  "HealthChecks": {
+    "UI": {
+      "Enabled": true,
+      "Path": "/health-ui"
+    },
+    "Checks": [
+      {
+        "Name": "Database",
+        "Type": "SqlServer",
+        "ConnectionString": "DefaultConnection",
+        "Timeout": "00:00:30"
+      },
+      {
+        "Name": "Redis",
+        "Type": "Redis",
+        "ConnectionString": "CacheConnection",
+        "Timeout": "00:00:10"
+      },
+      {
+        "Name": "External API",
+        "Type": "Http",
+        "Url": "https://jsonplaceholder.typicode.com/posts/1",
+        "Timeout": "00:00:15"
+      }
+    ]
+  },
+  "Monitoring": {
+    "ApplicationInsights": {
+      "InstrumentationKey": "your-application-insights-key",
+      "EnableSqlCommandTextInstrumentation": false,
+      "EnableDependencyTracking": true,
+      "EnablePerformanceCounterCollectionModule": true
+    },
+    "Metrics": {
+      "Enabled": true,
+      "FlushInterval": "00:01:00",
+      "Tags": {
+        "Environment": "Development",
+        "Application": "UserManagement"
+      }
+    }
+  }
+}
