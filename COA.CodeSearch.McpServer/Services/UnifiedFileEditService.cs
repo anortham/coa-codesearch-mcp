@@ -307,11 +307,35 @@ public class UnifiedFileEditService
             string detectedIndentation = "none";
             if (preserveIndentation && lines.Length > 0)
             {
-            var indentation = FileLineUtilities.DetectIndentationForInsertion(lines, lineNumber - 1);
-            detectedIndentation = $"'{indentation}'";  // Format as expected by tests
-            var contentLines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-            finalContent = string.Join(Environment.NewLine, contentLines.Select(line => 
-            string.IsNullOrWhiteSpace(line) ? line : indentation + line));
+                var indentation = FileLineUtilities.DetectIndentationForInsertion(lines, lineNumber - 1);
+                detectedIndentation = $"'{indentation}'";  // Format as expected by tests
+                var contentLines = content.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                
+                // Smart indentation: only apply base indentation to lines that need it
+                finalContent = string.Join(Environment.NewLine, contentLines.Select(line => 
+                {
+                    if (string.IsNullOrWhiteSpace(line))
+                        return line;
+                        
+                    // If the line already starts with the target indentation or more, don't add more
+                    if (!string.IsNullOrEmpty(indentation) && line.StartsWith(indentation))
+                        return line;
+                        
+                    // If the line has any leading whitespace, it might be pre-indented content
+                    // In this case, we should be more careful about applying indentation
+                    var lineIndentation = FileLineUtilities.ExtractIndentation(line);
+                    if (!string.IsNullOrEmpty(lineIndentation))
+                    {
+                        // The line is already indented. We need to decide if we should apply base indentation.
+                        // If the existing indentation is significant (4+ spaces or contains tabs), 
+                        // assume it's intentional and preserve it as-is
+                        if (lineIndentation.Length >= 4 || lineIndentation.Contains('\t'))
+                            return line;
+                    }
+                    
+                    // Apply base indentation to unindented or minimally indented lines
+                    return indentation + line;
+                }));
             }
 
             // Insert the content
