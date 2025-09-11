@@ -77,7 +77,7 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 **Index Storage**: `.coa/codesearch/indexes/{workspace-hash}/` (local per workspace)
 **Global Logs**: `~/.coa/codesearch/logs/` (centralized)  
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
-**Test Framework**: NUnit (456+ tests, zero warnings)
+**Test Framework**: NUnit (528+ tests, zero warnings)
 **Framework**: Local project references for active development
 
 ## 🚀 Recent Improvements (v2.1.8+)
@@ -134,7 +134,7 @@ mcp__codesearch__recent_files --workspacePath "."
 
 ## 📚 Related
 
-- **COA MCP Framework**: Core MCP framework (v2.1.8)
+- **COA MCP Framework**: Core MCP framework (v2.1.16)
 - **Goldfish MCP**: Session/memory management  
 - **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
 

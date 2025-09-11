@@ -249,7 +249,10 @@ public class Program
                 {
                     logging.ClearProviders();
                     logging.AddSerilog(); // Use Serilog for all logging
-                });
+                })
+                // Framework 2.1.12+ features: Opt-in production features that were previously default-enabled
+                .EnableResourceCaching() // Important for ResourceStorageProvider functionality
+                .WithAdvancedErrorRecovery(); // Production-grade error handling and recovery
 
             // Configure shared services
             ConfigureSharedServices(builder.Services, configuration);
@@ -593,6 +596,21 @@ You have access to specialized code search tools that significantly outperform b
                 Log.Debug("Available tools for template: {Tools}", string.Join(", ", templateVariables.AvailableTools));
                 Log.Debug("Tool comparisons count: {Count}", templateVariables.ToolComparisons.Count);
                 Log.Debug("Enforcement level: {Level}", templateVariables.EnforcementLevel);
+            })
+            // Explicit tool management configuration for full control over behavioral adoption features
+            // Note: WithTemplateInstructions already sets basic defaults, but this allows customization
+            .ConfigureToolManagement(config =>
+            {
+                // Keep the defaults set by WithTemplateInstructions but add our customizations
+                config.UseDefaultDescriptionProvider = true;
+                config.EnableWorkflowSuggestions = true;
+                config.EnableToolPrioritySystem = true;
+                
+                // Additional customizations for CodeSearch-specific needs
+                config.IncludeAlternativeToolSuggestions = true; // Educational context about different approaches
+                config.EmphasizeHighImpactWorkflows = true; // Focus on most beneficial guidance
+                config.IncludeExpectedBenefits = true; // Evidence-based guidance with measurable justification
+                config.MaxWorkflowSuggestionsInInstructions = 5; // Focused guidance without overwhelming
             });
 
             // Register prompts for interactive workflows
