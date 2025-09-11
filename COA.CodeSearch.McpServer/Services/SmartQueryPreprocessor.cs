@@ -91,6 +91,73 @@ public class SmartQueryPreprocessor
     /// <code>
     /// // Symbol query - routes to content_symbols
     /// var result = processor.Process("UserService");
+        /// <summary>
+        /// Processes a query for pattern-preserving search with safe bracket escaping.
+        /// </summary>
+        /// <param name="query">The query to process for pattern matching.</param>
+        /// <returns>The processed query with problematic characters safely escaped for Lucene.</returns>
+        /// <remarks>
+        /// Pattern Processing Strategy:
+        /// 1. Preserves most special characters for code pattern matching
+        /// 2. Escapes problematic bracket syntax that causes Lucene parser errors
+        /// 3. Maintains query intent while ensuring Lucene compatibility
+        /// 
+        /// This fixes the issue where queries like "[Ignore" cause ParseException
+        /// while still allowing meaningful pattern searches with other special characters.
+        /// </remarks>
+        private string ProcessPatternQuery(string query)
+        {
+            // Preserve most patterns but escape problematic bracket syntax
+            var processed = query.Trim();
+        
+            // Escape unmatched brackets that cause Lucene parser errors
+            // This prevents ParseException while preserving search intent
+            if (processed.Contains('[') && !IsValidLuceneBracketSyntax(processed))
+            {
+                processed = processed.Replace("[", "\\[");
+            }
+        
+            if (processed.Contains(']') && !IsValidLuceneBracketSyntax(processed))
+            {
+                processed = processed.Replace("]", "\\]");
+            }
+        
+            return processed;
+        }
+    
+        /// <summary>
+        /// Determines if bracket usage follows valid Lucene range query syntax.
+        /// </summary>
+        /// <param name="query">The query to validate.</param>
+        /// <returns>True if brackets form valid Lucene range syntax, false otherwise.</returns>
+        /// <remarks>
+        /// Valid Lucene range syntax examples:
+        /// - [a TO z] (inclusive range)
+        /// - {a TO z} (exclusive range)
+        /// - [a TO z} (mixed range)
+        /// 
+        /// Invalid syntax (should be escaped):
+        /// - [Ignore (incomplete range)
+        /// - [Test] (not a TO range)
+        /// - Multiple unmatched brackets
+        /// </remarks>
+        private bool IsValidLuceneBracketSyntax(string query)
+        {
+            // Check for valid Lucene range syntax [a TO b] or {a TO b}
+            var rangePattern = new Regex(@"[\[\{][^[\]{}]*\s+TO\s+[^[\]{}]*[\]\}]", RegexOptions.IgnoreCase);
+        
+            if (rangePattern.IsMatch(query))
+            {
+                return true; // Valid range syntax
+            }
+        
+            // Check for balanced brackets without TO (probably not Lucene syntax)
+            var openBrackets = query.Count(c => c == '[' || c == '{');
+            var closeBrackets = query.Count(c => c == ']' || c == '}');
+        
+            // If brackets are unbalanced or don't contain TO, they're probably code patterns
+            return openBrackets == closeBrackets && openBrackets == 0;
+        }
     /// // result.TargetField == "content_symbols"
     /// // result.DetectedMode == SearchMode.Symbol
     /// 
@@ -208,10 +275,10 @@ public class SmartQueryPreprocessor
         {
             SearchMode.Pattern => new QueryProcessingResult
             {
-                ProcessedQuery = query, // Minimal processing for pattern-preserving search
+                ProcessedQuery = ProcessPatternQuery(query), // Safe processing for pattern-preserving search
                 TargetField = "content_patterns",
                 DetectedMode = SearchMode.Pattern,
-                Reason = "Special characters detected - using pattern-preserving search"
+                Reason = "Special characters detected - using pattern-preserving search with safe escaping"
             },
 
             SearchMode.Symbol => new QueryProcessingResult
