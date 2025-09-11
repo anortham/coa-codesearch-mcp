@@ -12,8 +12,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- Framework testing NuGet package reference -->
-    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.12" />
+    <!-- COA Framework Testing NuGet package -->
+    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.14" />
     <PackageReference Include="DiffPlex" Version="1.8.0" />
     <PackageReference Include="FluentAssertions" Version="7.2.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />
@@ -26,6 +26,16 @@
 
   <ItemGroup>
     <ProjectReference Include="..\COA.CodeSearch.McpServer\COA.CodeSearch.McpServer.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Exclude C# files in Resources from compilation - they are test data only -->
+    <Compile Remove="Resources\**\*.cs" />
+    <None Include="Resources\**\*.cs" />
+    <None Include="Resources\**\*.py" />
+    <None Include="Resources\**\*.json" />
+    <None Include="Resources\**\*.yml" />
+    <None Include="Resources\**\*.md" />
   </ItemGroup>
 
   <!-- Copy tree-sitter native libraries from main project to test output -->

@@ -1,13 +1,13 @@
 using System.Text;
 using System.Text.RegularExpressions;
 
-namespace COA.CodeSearch.McpServer.Services;
+namespace COA.CodeSearch.McpServer.TestSample;
 
 /// <summary>
-/// Shared utilities for consistent file line handling across all editing tools.
-/// Prevents corruption from inconsistent line splitting and manipulation logic.
+/// Sample utilities for testing editing tools with real C# code.
+/// Based on FileLineUtilities but with different namespace to avoid conflicts.
 /// </summary>
-public static class FileLineUtilities
+public static class SampleFileUtilities
 {
     /// <summary>
     /// Reads file with encoding detection and consistent line splitting.
@@ -27,6 +27,18 @@ public static class FileLineUtilities
         var lines = SplitLines(content);
         
         return (lines, encoding);
+    }
+    
+    /// <summary>
+    /// Gets the total number of lines in a file without loading the entire content.
+    /// </summary>
+    /// <param name="filePath">Path to the file</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Number of lines in the file</returns>
+    public static async Task<int> GetLineCountAsync(string filePath, CancellationToken cancellationToken = default)
+    {
+        var (lines, _) = await ReadFileWithEncodingAsync(filePath, cancellationToken);
+        return lines.Length;
     }
     
     /// <summary>
