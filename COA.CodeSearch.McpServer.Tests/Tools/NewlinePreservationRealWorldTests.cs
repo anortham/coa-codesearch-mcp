@@ -239,6 +239,156 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         ValidateCSharpSyntax(modifiedContent).Should().BeTrue("Modified file should still be valid C#");
     }
 
+    /// <summary>
+    /// Reproduces the indentation corruption issue where inserting pre-indented content
+    /// results in double indentation due to improper indentation handling.
+    /// </summary>
+    [Test]
+    public async Task InsertAtLine_PreIndentedContent_ShouldNotDoubleIndent()
+    {
+        // Arrange - Create a temporary test file with proper C# class structure
+        var testContent = @"using System;
+
+namespace TestNamespace
+{
+    public class TestClass
+    {
+        public void ExistingMethod()
+        {
+            Console.WriteLine(""existing code"");
+        }
+        
+        // Insert point - new method should be added here with proper indentation
+    }
+}";
+        
+        var tempFilePath = Path.GetTempFileName();
+        tempFilePath = Path.ChangeExtension(tempFilePath, ".cs");
+        await File.WriteAllTextAsync(tempFilePath, testContent);
+        
+        try
+        {
+            // Content to insert - already properly indented for a class member
+            var contentToInsert = @"        public void NewMethod()
+        {
+            Console.WriteLine(""new method"");
+            if (true)
+            {
+                Console.WriteLine(""nested block"");
+            }
+        }";
+            
+            // Act - Insert the pre-indented content
+            var parameters = new InsertAtLineParameters
+            {
+                FilePath = tempFilePath,
+                LineNumber = 12, // Insert after the comment line
+                Content = contentToInsert,
+                PreserveIndentation = true
+            };
+            
+            var result = await _insertTool.ExecuteAsync(parameters, CancellationToken.None);
+            
+            // Assert - Verify the operation succeeded
+            result.Should().NotBeNull();
+            result.Success.Should().BeTrue($"Insert operation failed: {result.Error?.Message}");
+            result.Error.Should().BeNull();
+            
+            // Read the modified content
+            var modifiedContent = await File.ReadAllTextAsync(tempFilePath);
+            
+            // Verify no double indentation occurred
+            // The new method should have exactly 8 spaces (2 levels: namespace + class)
+            modifiedContent.Should().Contain("        public void NewMethod()"); // 8 spaces exactly
+            modifiedContent.Should().NotContain("            public void NewMethod()"); // 12 spaces would be wrong
+            
+            // Verify nested content maintains relative indentation
+            modifiedContent.Should().Contain("            Console.WriteLine(\"new method\");"); // 12 spaces for method body
+            modifiedContent.Should().Contain("                Console.WriteLine(\"nested block\");"); // 16 spaces for nested block
+            
+            // Verify the file is still valid C# syntax
+            ValidateCSharpSyntax(modifiedContent).Should().BeTrue("The modified file should have valid C# syntax");
+        }
+        finally
+        {
+            // Cleanup
+            if (File.Exists(tempFilePath))
+                File.Delete(tempFilePath);
+        }
+    }
+
+    /// <summary>
+    /// Test that mixed indentation scenarios work correctly (tabs vs spaces, different levels).
+    /// </summary>
+    [Test]
+    public async Task InsertAtLine_MixedIndentationScenarios_HandlesCorrectly()
+    {
+        var testContent = @"namespace TestNamespace
+{
+    public class TestClass
+    {
+        // Insert various indentation scenarios here
+    }
+}";
+        
+        var tempFilePath = Path.GetTempFileName();
+        tempFilePath = Path.ChangeExtension(tempFilePath, ".cs");
+        await File.WriteAllTextAsync(tempFilePath, testContent);
+        
+        try
+        {
+            // Test Case 1: Content with no indentation should get base indentation applied
+            var unindentedContent = @"public void UnindentedMethod()
+{
+    Console.WriteLine(""test"");
+}";
+            
+            var parameters1 = new InsertAtLineParameters
+            {
+                FilePath = tempFilePath,
+                LineNumber = 5,
+                Content = unindentedContent,
+                PreserveIndentation = true
+            };
+            
+            var result1 = await _insertTool.ExecuteAsync(parameters1, CancellationToken.None);
+            result1.Success.Should().BeTrue();
+            
+            // Verify unindented content gets proper base indentation
+            var modifiedContent1 = await File.ReadAllTextAsync(tempFilePath);
+            modifiedContent1.Should().Contain("        public void UnindentedMethod()"); // 8 spaces
+            
+            // Test Case 2: Add content that should preserve its existing indentation
+            var preIndentedContent = @"        public void AlreadyIndentedMethod()
+        {
+            Console.WriteLine(""already indented"");
+        }";
+            
+            var parameters2 = new InsertAtLineParameters
+            {
+                FilePath = tempFilePath,
+                LineNumber = 6,
+                Content = preIndentedContent,
+                PreserveIndentation = true
+            };
+            
+            var result2 = await _insertTool.ExecuteAsync(parameters2, CancellationToken.None);
+            result2.Success.Should().BeTrue();
+            
+            // Verify pre-indented content is preserved as-is
+            var modifiedContent2 = await File.ReadAllTextAsync(tempFilePath);
+            modifiedContent2.Should().Contain("        public void AlreadyIndentedMethod()"); // Original 8 spaces preserved
+            modifiedContent2.Should().NotContain("            public void AlreadyIndentedMethod()"); // No double indentation
+            
+            ValidateCSharpSyntax(modifiedContent2).Should().BeTrue("File should remain syntactically valid");
+        }
+        finally
+        {
+            if (File.Exists(tempFilePath))
+                File.Delete(tempFilePath);
+        }
+    }
+
     #region Helper Methods
 
     private int FindLineContaining(string[] lines, string searchText)
