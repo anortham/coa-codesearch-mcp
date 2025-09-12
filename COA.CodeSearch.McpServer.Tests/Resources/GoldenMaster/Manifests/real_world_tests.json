@@ -77,6 +77,19 @@
         "PreserveIndentation": true,
         "ContextLines": 3
       }
+    },
+    {
+      "TestName": "InsertAtLine_CSharp_PreIndentedMethod_NoDoubleIndent",
+      "Description": "Insert pre-indented method without causing indentation corruption - tests the smart indentation fix",
+      "SourceFile": "ResponseBuilder.cs",
+      "ControlFile": "ResponseBuilder_insert_indented_method.cs",
+      "Operation": {
+        "Tool": "InsertAtLineTool",
+        "StartLine": 25,
+        "Content": "    /// <summary>\n    /// Generate insights for the base response builder pattern\n    /// </summary>\n    protected virtual List<string> GenerateInsights(object data, string responseMode)\n    {\n        return new List<string> { \"Default insight\" };\n    }\n    ",
+        "PreserveIndentation": true,
+        "ContextLines": 3
+      }
     }
   ]
 }
