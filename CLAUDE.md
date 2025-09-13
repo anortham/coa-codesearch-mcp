@@ -10,12 +10,12 @@ Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace
 
 ```bash
 # Essential Search
-text_search         # Full-text code search with CamelCase tokenization  
+text_search         # Full-text code search with CamelCase tokenization
 symbol_search       # Find classes, methods, interfaces by name
 goto_definition     # Jump to exact symbol definitions
 find_references     # Find ALL usages (critical before refactoring)
 
-# File Discovery  
+# File Discovery
 file_search         # Pattern-based file finding (supports **/*.ext)
 recent_files        # Recent modifications (great for context)
 similar_files       # Find similar code patterns
@@ -42,8 +42,9 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 ## 🚨 Development Workflow
 
 **Code Changes:**
+
 1. Exit Claude Code completely
-2. `dotnet build -c Debug` (Debug mode recommended)  
+2. `dotnet build -c Debug` (Debug mode recommended)
 3. Restart Claude Code
 4. ⚠️ **Testing before restart shows OLD CODE**
 
@@ -52,17 +53,19 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 ## 🔍 Usage Essentials
 
 **Always start with:**
+
 ```bash
 mcp__codesearch__index_workspace --workspacePath "."
 ```
 
 **Common patterns:**
+
 ```bash
 # Search code
 mcp__codesearch__text_search --query "class UserService"
 
 # Verify types before coding
-mcp__codesearch__goto_definition --symbol "UserService" 
+mcp__codesearch__goto_definition --symbol "UserService"
 
 # Check impact before refactoring
 mcp__codesearch__find_references --symbol "UpdateUser"
@@ -75,7 +78,6 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 ## 🏗️ Architecture
 
 **Index Storage**: `.coa/codesearch/indexes/{workspace-hash}/` (local per workspace)
-**Global Logs**: `~/.coa/codesearch/logs/` (centralized)  
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
 **Test Framework**: NUnit (528+ tests, zero warnings)
 **Framework**: Local project references for active development
@@ -83,17 +85,20 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 ## 🚀 Recent Improvements (v2.1.8+)
 
 **SmartQueryPreprocessor Integration**
+
 - ✅ Comprehensive test suite: 35 unit tests with full coverage
-- ✅ Intelligent query routing: Auto-detects Symbol/Pattern/Standard modes  
+- ✅ Intelligent query routing: Auto-detects Symbol/Pattern/Standard modes
 - ✅ Wildcard validation: Shared utility prevents invalid Lucene queries
 - ✅ Multi-field optimization: Routes queries to optimal indexed fields
 
 **CodeAnalyzer Consistency Audit**
+
 - ✅ Fixed 3 critical inconsistencies in SmartSnippetService, GoToDefinitionTool, SymbolSearchTool
 - ✅ Unified dependency injection: All tools use single configured CodeAnalyzer instance
 - ✅ Consistent tokenization: `preserveCase: false, splitCamelCase: true` across system
 
-**Framework Integration**  
+**Framework Integration**
+
 - ✅ Local project references: Active development with live framework changes
 - ✅ All 456 tests passing: Full compatibility with framework improvements
 - ✅ Zero regressions: Maintains production stability during development
@@ -112,7 +117,7 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 // ✅ Path Resolution
 _pathResolver.GetIndexPath(workspacePath)
 
-// ✅ Lucene Operations  
+// ✅ Lucene Operations
 await _indexService.SearchAsync(...)
 
 // ✅ Response Building
@@ -135,8 +140,9 @@ mcp__codesearch__recent_files --workspacePath "."
 ## 📚 Related
 
 - **COA MCP Framework**: Core MCP framework (v2.1.16)
-- **Goldfish MCP**: Session/memory management  
+- **Goldfish MCP**: Session/memory management
 - **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
 
 ---
+
 _Updated: 2025-09-08 - Production ready v2.1.8 with zero warnings, enhanced file search, token optimization_
