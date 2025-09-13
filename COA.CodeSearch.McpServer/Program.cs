@@ -86,8 +86,7 @@ public class Program
         services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector, 
                               COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>();
         
-        // ProjectKnowledge integration services
-        services.AddHttpClient<IProjectKnowledgeService, ProjectKnowledgeService>();
+        // Documentation services (ProjectKnowledge integration removed)
         services.AddSingleton<SmartDocumentationService>();
         
         // FileWatcher as background service - register properly for auto-start

@@ -28,7 +28,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             var queryPreprocessorLoggerMock = new Mock<ILogger<QueryPreprocessor>>();
             var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
-            var projectKnowledgeServiceMock = CreateMock<IProjectKnowledgeService>();
+            // ProjectKnowledgeService removed - service retired
             var smartDocLoggerMock = new Mock<ILogger<SmartDocumentationService>>();
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
@@ -42,7 +42,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
                 null, // IQueryTypeDetector is optional
-                projectKnowledgeServiceMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
