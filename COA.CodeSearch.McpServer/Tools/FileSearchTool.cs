@@ -419,10 +419,10 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             {
                 try
                 {
-                    // Deserialize using shared options from StoredTypeInfo
+                    // Deserialize using case-insensitive options for external JSON data
                     var typeData = System.Text.Json.JsonSerializer.Deserialize<COA.CodeSearch.McpServer.Models.StoredTypeInfo>(
                         typeInfoJson, 
-                        COA.CodeSearch.McpServer.Models.StoredTypeInfo.DeserializationOptions);
+                        COA.Mcp.Framework.Serialization.JsonOptionsFactory.CreateForDeserialization());
                     
                     if (typeData != null)
                     {
