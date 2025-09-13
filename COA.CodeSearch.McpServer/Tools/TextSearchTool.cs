@@ -42,7 +42,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
     private readonly IQueryTypeDetector? _queryTypeDetector;
-    private readonly IProjectKnowledgeService _projectKnowledgeService;
     private readonly SmartDocumentationService _smartDocumentationService;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
         private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
@@ -57,7 +56,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
         IQueryTypeDetector? queryTypeDetector,
-        IProjectKnowledgeService projectKnowledgeService,
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
                 SmartQueryPreprocessor smartQueryPreprocessor,
@@ -70,7 +68,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
         _queryTypeDetector = queryTypeDetector;
-        _projectKnowledgeService = projectKnowledgeService;
         _smartDocumentationService = smartDocumentationService;
         _vscode = vscode;
         _logger = logger;
@@ -504,24 +501,9 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             metadata["searchType"] = parameters.SearchType;
             metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
 
-            // Store in ProjectKnowledge
-            var knowledgeId = await _projectKnowledgeService.StoreKnowledgeAsync(
-                content,
-                knowledgeType,
-                metadata,
-                tags,
-                priority
-            );
-
-            if (knowledgeId != null)
-            {
-                _logger.LogInformation("Auto-documented search findings: Query='{Query}', Type={Type}, KnowledgeId={Id}", 
-                    query, knowledgeType, knowledgeId);
-            }
-            else
-            {
-                _logger.LogWarning("Failed to auto-document search findings for query: {Query}", query);
-            }
+            // ProjectKnowledge integration removed - service retired
+            _logger.LogDebug("Search findings documented locally: Query='{Query}', Type={Type}", 
+                query, knowledgeType);
         }
         catch (Exception ex)
         {
