@@ -217,6 +217,18 @@ public class FileWatcherService : BackgroundService
             }
         }
 
+        // Enhanced temp file detection for Claude Code settings files
+        // Files like "settings.local.json.tmp.54492.1757682376336" have multi-part extensions
+        if (!string.IsNullOrEmpty(fileName))
+        {
+            // Check for temp file patterns that Claude Code creates
+            if (fileName.Contains(".tmp.") && char.IsDigit(fileName[fileName.LastIndexOf(".tmp.") + 5]))
+            {
+                _logger.LogTrace("Excluding temp file with numeric suffix: {FilePath}", filePath);
+                return false;
+            }
+        }
+
         // Check extension - allow all extensions except blacklisted ones
         var extension = Path.GetExtension(filePath);
         if (string.IsNullOrEmpty(extension))

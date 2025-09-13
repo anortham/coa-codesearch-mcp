@@ -42,7 +42,7 @@ public static class PathConstants
         ".zip", ".rar", ".7z", ".tar", ".gz", ".bz2", ".xz",
         // Database files
         ".db", ".sqlite", ".mdf", ".ldf", ".bak",
-        // Temporary files
+        // Temporary files (including Claude Code temp files with numbered suffixes)
         ".tmp", ".temp", ".cache", ".swp", ".swo",
         // Logs (large files)
         ".log"

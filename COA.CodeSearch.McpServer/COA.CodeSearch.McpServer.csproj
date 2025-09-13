@@ -26,9 +26,9 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <!-- COA Framework NuGet packages -->
-    <PackageReference Include="COA.Mcp.Framework" Version="2.1.16" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.16" />
+    <!-- COA Framework local project references for development -->
+    <ProjectReference Include="..\..\COA MCP Framework\src\COA.Mcp.Framework\COA.Mcp.Framework.csproj" />
+    <ProjectReference Include="..\..\COA MCP Framework\src\COA.Mcp.Framework.TokenOptimization\COA.Mcp.Framework.TokenOptimization.csproj" />
     
     <!-- VS Code Bridge integration -->
     <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.1.0" />

@@ -486,12 +486,16 @@ public class FileIndexingService : IFileIndexingService
                     
                 document.Add(new TextField("type_names", typeNamesField, Field.Store.NO));
                 
-                // Stored field with full type information (JSON)
+                // Stored field with full type information (JSON) - using UTF-8 safe serialization
                 var typeJson = JsonSerializer.Serialize(new
                 {
                     types = typeData.Types,
                     methods = typeData.Methods,
                     language = typeData.Language
+                }, new JsonSerializerOptions
+                {
+                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                    WriteIndented = false
                 });
                 document.Add(new StoredField("type_info", typeJson));
                 

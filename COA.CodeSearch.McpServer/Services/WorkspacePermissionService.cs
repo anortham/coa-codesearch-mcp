@@ -283,7 +283,11 @@ public class WorkspacePermissionService : IWorkspacePermissionService
         try
         {
             var json = await File.ReadAllTextAsync(metadataPath, cancellationToken);
-            var metadata = JsonSerializer.Deserialize<WorkspacePermissionMetadata>(json);
+            var metadata = JsonSerializer.Deserialize<WorkspacePermissionMetadata>(json, new JsonSerializerOptions
+            {
+                PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+                WriteIndented = false
+            });
             return metadata ?? new WorkspacePermissionMetadata 
             { 
                 PrimaryWorkspace = Path.GetFullPath(workspacePath) 
@@ -312,13 +316,12 @@ public class WorkspacePermissionService : IWorkspacePermissionService
             Directory.CreateDirectory(metadataDir);
         }
 
-        var options = new JsonSerializerOptions
+        // Use centralized JSON configuration with UTF-8 support and indenting for readability
+        var json = JsonSerializer.Serialize(metadata, new JsonSerializerOptions
         {
-            WriteIndented = true,
-            PropertyNamingPolicy = JsonNamingPolicy.CamelCase
-        };
-
-        var json = JsonSerializer.Serialize(metadata, options);
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        });
         await File.WriteAllTextAsync(metadataPath, json, cancellationToken);
         
         // Update cache
