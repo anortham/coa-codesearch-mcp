@@ -31,6 +31,17 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
     private readonly LineSearchResponseBuilder _responseBuilder;
     private readonly ILogger<LineSearchTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the LineSearchTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="indexService">Lucene index service for search operations</param>
+    /// <param name="lineSearchService">Line-aware search service</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="logger">Logger instance</param>
     public LineSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService indexService,
@@ -51,12 +62,29 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.LineSearch;
-    public override string Description => 
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
+    public override string Description =>
         "REPLACE grep/bash - Get ALL occurrences with line numbers. BETTER than Bash grep - returns structured JSON. " +
         "Perfect for: counting usages, refactoring prep, finding all instances. Use when you need EVERY match, not just examples.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the line search operation to find all occurrences of a pattern.
+    /// </summary>
+    /// <param name="parameters">Line search parameters including pattern and search options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Line search results with all matching lines and their context</returns>
     protected override async Task<AIOptimizedResponse<LineSearchResult>> ExecuteInternalAsync(LineSearchParams parameters, CancellationToken cancellationToken)
     {
         var stopwatch = Stopwatch.StartNew();

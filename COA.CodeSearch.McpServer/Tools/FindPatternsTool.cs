@@ -27,6 +27,11 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     private readonly ITypeExtractionService _typeExtractionService;
     private readonly ILogger<FindPatternsTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the FindPatternsTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="logger">Logger instance</param>
     public FindPatternsTool(
         IServiceProvider serviceProvider,
         ILogger<FindPatternsTool> logger) : base(serviceProvider, logger)
@@ -35,14 +40,32 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.FindPatterns;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "Detects semantic patterns and code quality issues using Tree-sitter analysis";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
+    public override ToolCategory Category => ToolCategory.Query;
 
     /// <summary>
     /// This tool handles validation internally in ExecuteInternalAsync, so disable framework validation
     /// </summary>
     protected override bool ShouldValidateDataAnnotations => false;
 
+    /// <summary>
+    /// Executes the find patterns operation to detect code patterns and quality issues.
+    /// </summary>
+    /// <param name="parameters">Find patterns parameters including file path and pattern options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Find patterns results with detected patterns and quality insights</returns>
     protected override async Task<AIOptimizedResponse<FindPatternsResult>> ExecuteInternalAsync(
         FindPatternsParameters parameters, CancellationToken cancellationToken)
     {

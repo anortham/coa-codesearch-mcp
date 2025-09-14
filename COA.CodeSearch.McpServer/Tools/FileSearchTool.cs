@@ -38,6 +38,18 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     private readonly ILogger<FileSearchTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
 
+    /// <summary>
+    /// Initializes a new instance of the FileSearchTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
     public FileSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -60,10 +72,27 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         _codeAnalyzer = codeAnalyzer;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.FileSearch;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "USE BEFORE Read - Locate files by name/pattern instead of guessing paths. FASTER than manual navigation. Supports recursive patterns (**/*.ext) and directory-specific searches (src/**/*.cs). Essential for finding: UserService.cs, **/*.test.js, configuration files.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the file search operation to find files matching the specified pattern.
+    /// </summary>
+    /// <param name="parameters">File search parameters including pattern and workspace path</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>File search results with matching file paths and metadata</returns>
     protected override async Task<AIOptimizedResponse<FileSearchResult>> ExecuteInternalAsync(
         FileSearchParameters parameters,
         CancellationToken cancellationToken)
@@ -501,22 +530,29 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
 }
 
 /// <summary>
-/// Parameters for the FileSearch tool
+/// Parameters for the FileSearch tool - locate files by name/pattern with intelligent matching
 /// </summary>
 public class FileSearchParameters
 {
     /// <summary>
-    /// Path to the workspace directory to search
+    /// Path to the workspace directory to search. Can be absolute or relative path.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [Required]
-    [Description("Path to the workspace directory to search")]
+    [Description("Path to the workspace directory to search. Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// The search pattern (glob or regex)
+    /// The search pattern supporting glob patterns, wildcards, and recursive directory traversal.
     /// </summary>
+    /// <example>*.cs</example>
+    /// <example>**/*.test.js</example>
+    /// <example>src/**/*Controller.cs</example>
+    /// <example>UserService*</example>
     [Required]
-    [Description("The search pattern (glob or regex)")]
+    [Description("The search pattern supporting glob and wildcards. Examples: '*.cs', '**/*.test.js', 'src/**/*Controller.cs', 'UserService*'")]
     public string Pattern { get; set; } = string.Empty;
 
     /// <summary>
@@ -526,21 +562,28 @@ public class FileSearchParameters
     public int? MaxResults { get; set; }
 
     /// <summary>
-    /// Use regular expression instead of glob pattern
+    /// Use regular expression instead of glob pattern for advanced pattern matching.
     /// </summary>
-    [Description("Use regular expression instead of glob pattern")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Use regular expression instead of glob pattern for advanced matching.")]
     public bool? UseRegex { get; set; }
 
     /// <summary>
-    /// Include list of matching directories
+    /// Include list of matching directories in results for better context and navigation.
     /// </summary>
-    [Description("Include list of matching directories")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Include list of matching directories in results for better navigation context.")]
     public bool? IncludeDirectories { get; set; }
 
     /// <summary>
-    /// Comma-separated list of file extensions to filter (e.g., ".cs,.js")
+    /// Comma-separated list of file extensions to filter results, improving precision.
     /// </summary>
-    [Description("Comma-separated list of file extensions to filter (e.g., '.cs,.js')")]
+    /// <example>.cs,.js</example>
+    /// <example>.tsx,.ts</example>
+    /// <example>.json,.xml</example>
+    [Description("Comma-separated list of file extensions to filter. Examples: '.cs,.js', '.tsx,.ts', '.json,.xml'")]
     public string? ExtensionFilter { get; set; }
     
     /// <summary>

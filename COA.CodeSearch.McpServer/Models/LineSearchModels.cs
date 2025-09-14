@@ -3,25 +3,34 @@ using System.Text.Json.Serialization;
 namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
-/// Parameters for line-level search operations
+/// Parameters for line-level search operations - get ALL occurrences with line numbers, replacing grep/bash commands
 /// </summary>
 public class LineSearchParams
 {
     /// <summary>
-    /// Search pattern/query
+    /// Search pattern/query for finding text within file contents.
     /// </summary>
+    /// <example>class UserService</example>
+    /// <example>TODO.*urgent</example>
+    /// <example>function\s+\w+</example>
     [JsonPropertyName("pattern")]
     public required string Pattern { get; set; }
 
     /// <summary>
-    /// Workspace path to search in
+    /// Workspace path to search in. Can be absolute or relative path.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [JsonPropertyName("workspacePath")]
     public string? WorkspacePath { get; set; }
 
     /// <summary>
-    /// File pattern filter (e.g., "*.cs", "src/**/*.ts")
+    /// File pattern filter to limit search scope using glob patterns.
     /// </summary>
+    /// <example>*.cs</example>
+    /// <example>src/**/*.ts</example>
+    /// <example>**/*.{js,jsx}</example>
     [JsonPropertyName("filePattern")]
     public string? FilePattern { get; set; }
 
@@ -50,8 +59,11 @@ public class LineSearchParams
     public int MaxTotalResults { get; set; } = 100;
 
     /// <summary>
-    /// Search type: standard, regex, wildcard, literal
+    /// Search type controlling how the pattern is interpreted and matched.
     /// </summary>
+    /// <example>standard</example>
+    /// <example>regex</example>
+    /// <example>literal</example>
     [JsonPropertyName("searchType")]
     public string SearchType { get; set; } = "standard";
 

@@ -6,7 +6,10 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
-    
+
+    <!-- Enable XML documentation generation for enhanced MCP tool descriptions -->
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+
     <!-- Global dotnet tool configuration -->
     <IsPackable>true</IsPackable>
     <PackAsTool>true</PackAsTool>
@@ -27,9 +30,9 @@
 
   <ItemGroup>
     <!-- COA Framework NuGet package references -->
-    <PackageReference Include="COA.Mcp.Framework" Version="2.1.21" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.21" />
-    
+    <PackageReference Include="COA.Mcp.Framework" Version="2.1.23" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.23" />
+
     <!-- VS Code Bridge integration -->
     <PackageReference Include="COA.Mcp.VSCodeBridge" Version="1.1.0" />
     

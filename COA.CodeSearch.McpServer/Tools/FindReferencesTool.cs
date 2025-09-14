@@ -39,6 +39,17 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the FindReferencesTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="logger">Logger instance</param>
     public FindReferencesTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -59,14 +70,37 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         _responseBuilder = new FindReferencesResponseBuilder(logger as ILogger<FindReferencesResponseBuilder>, storageService);
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.FindReferences;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "CRITICAL FOR REFACTORING - Find ALL usages before making changes. PREVENTS breaking code. Shows: every reference, grouped by file, with context. Always use before renaming/deleting.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - VERY HIGH priority for refactoring safety
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 95;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "before_refactoring", "symbol_analysis", "impact_assessment", "before_deleting" };
 
+    /// <summary>
+    /// Executes the find references operation to locate all symbol usages.
+    /// </summary>
+    /// <param name="parameters">Find references parameters including symbol name and search options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Search results containing all references to the specified symbol</returns>
     protected override async Task<AIOptimizedResponse<SearchResult>> ExecuteInternalAsync(
         FindReferencesParameters parameters,
         CancellationToken cancellationToken)

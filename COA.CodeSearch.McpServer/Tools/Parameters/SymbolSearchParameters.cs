@@ -10,28 +10,39 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class SymbolSearchParameters : VisualizableParameters
 {
     /// <summary>
-    /// The symbol name to search for (class, interface, method, etc.)
+    /// The symbol name to search for - supports partial matching and intelligent type detection.
     /// </summary>
+    /// <example>UserService</example>
+    /// <example>FindByEmail</example>
+    /// <example>IRepository</example>
     [Required]
-    [Description("The symbol name to search for (class, interface, method, etc.)")]
+    [Description("Symbol to search for (e.g., UserService, FindByEmail, IRepository)")]
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search (defaults to current workspace)
+    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
     /// </summary>
-    [Description("Path to the workspace directory to search (defaults to current workspace)")]
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
+    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Optional: Filter by symbol type (class, interface, method, function, etc.)
+    /// Optional: Filter results by specific symbol type to narrow down search results.
     /// </summary>
-    [Description("Optional: Filter by symbol type (class, interface, method, function, etc.)")]
+    /// <example>class</example>
+    /// <example>interface</example>
+    /// <example>method</example>
+    [Description("Filter by symbol type (e.g., class, interface, method, function, property)")]
     public string? SymbolType { get; set; }
 
     /// <summary>
-    /// Include usage count for the symbol (shows how many references exist)
+    /// Include usage count for each symbol showing how many references exist across the codebase. Useful for understanding symbol popularity and impact.
     /// </summary>
-    [Description("Include usage count for the symbol (shows how many references exist)")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Include usage count (shows reference count for refactoring impact)")]
     public bool IncludeReferences { get; set; } = false;
 
     /// <summary>
@@ -57,6 +68,6 @@ public class SymbolSearchParameters : VisualizableParameters
     /// <summary>
     /// Case sensitive search
     /// </summary>
-    [Description("Case sensitive search")]
+    [Description("Case sensitive")]
     public bool CaseSensitive { get; set; } = false;
 }

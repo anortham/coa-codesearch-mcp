@@ -53,6 +53,18 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         "build", "out", "target", ".next", ".nuxt"
     };
 
+    /// <summary>
+    /// Initializes a new instance of the DirectorySearchTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="luceneService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
     public DirectorySearchTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
@@ -76,10 +88,27 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         _codeAnalyzer = codeAnalyzer;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.DirectorySearch;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "EXPLORE project structure - Navigate folders without manual traversal. BETTER than ls/find commands. Locate: modules, packages, nested components.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the directory search operation to find matching directories.
+    /// </summary>
+    /// <param name="parameters">Directory search parameters including pattern and search options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Directory search results with matching directory paths</returns>
     protected override async Task<AIOptimizedResponse<DirectorySearchResult>> ExecuteInternalAsync(
         DirectorySearchParameters parameters,
         CancellationToken cancellationToken)

@@ -10,28 +10,38 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class FindReferencesParameters : VisualizableParameters
 {
     /// <summary>
-    /// The symbol name to find references for
+    /// The symbol name to find all references for - CRITICAL for understanding impact before refactoring.
     /// </summary>
+    /// <example>UpdateUser</example>
+    /// <example>IUserService</example>
+    /// <example>UserController</example>
     [Required]
-    [Description("The symbol name to find references for")]
+    [Description("Symbol to find all references for (e.g., UpdateUser, IUserService, UserController)")]
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search (defaults to current workspace)
+    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
     /// </summary>
-    [Description("Path to the workspace directory to search (defaults to current workspace)")]
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
+    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Include potential references (less strict matching)
+    /// Include potential references using less strict matching. May include false positives but catches more usage patterns.
     /// </summary>
-    [Description("Include potential references (less strict matching)")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Include potential matches (less strict, may have false positives)")]
     public bool IncludePotential { get; set; } = false;
 
     /// <summary>
-    /// Group results by file
+    /// Group results by file for better organization and readability. Recommended for most use cases.
     /// </summary>
-    [Description("Group results by file")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Group results by file for better organization")]
     public bool GroupByFile { get; set; } = true;
 
     /// <summary>
@@ -42,9 +52,12 @@ public class FindReferencesParameters : VisualizableParameters
     public int MaxResults { get; set; } = 100;
 
     /// <summary>
-    /// Number of context lines around each reference
+    /// Number of context lines to show around each reference for better understanding of usage.
     /// </summary>
-    [Description("Number of context lines around each reference")]
+    /// <example>2</example>
+    /// <example>5</example>
+    /// <example>0</example>
+    [Description("Context lines around each reference (0-10)")]
     [Range(0, 10)]
     public int ContextLines { get; set; } = 2;
 
@@ -64,6 +77,6 @@ public class FindReferencesParameters : VisualizableParameters
     /// <summary>
     /// Case sensitive search
     /// </summary>
-    [Description("Case sensitive search")]
+    [Description("Case sensitive")]
     public bool CaseSensitive { get; set; } = false;
 }

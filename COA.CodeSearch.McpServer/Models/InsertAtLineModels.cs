@@ -4,43 +4,57 @@ using System.ComponentModel.DataAnnotations;
 namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
-/// Parameters for inserting text at a specific line in a file
+/// Parameters for inserting text at a specific line in a file with precision positioning and automatic indentation
 /// </summary>
 public class InsertAtLineParameters
 {
     /// <summary>
-    /// Absolute or relative path to the file
+    /// Absolute or relative path to the file to modify. Must be an existing file with write permissions.
     /// </summary>
+    /// <example>C:\source\MyProject\UserService.cs</example>
+    /// <example>./src/components/Button.tsx</example>
+    /// <example>../config/settings.json</example>
     [Required]
-    [Description("Absolute or relative path to the file to modify")]
+    [Description("Absolute or relative path to the file to modify. Examples: 'C:\\source\\MyProject\\UserService.cs', './src/components/Button.tsx'")]
     public required string FilePath { get; set; }
 
     /// <summary>
-    /// Line number where to insert the text (1-based)
+    /// Line number where to insert the text (1-based). Text will be inserted BEFORE this line, shifting existing content down.
     /// </summary>
+    /// <example>15</example>
+    /// <example>1</example>
+    /// <example>100</example>
     [Required]
     [Range(1, int.MaxValue)]
-    [Description("Line number where to insert the text (1-based). Text will be inserted BEFORE this line.")]
+    [Description("Line number where to insert the text (1-based). Examples: '15' (insert before line 15), '1' (insert at top)")]
     public int LineNumber { get; set; }
 
     /// <summary>
-    /// Text content to insert
+    /// Text content to insert. Can be single line or multi-line content. Indentation will be automatically detected and applied.
     /// </summary>
+    /// <example>public void NewMethod() { }</example>
+    /// <example>// TODO: Implement this feature</example>
+    /// <example>using System.Collections.Generic;</example>
     [Required]
-    [Description("Text content to insert. Will preserve the indentation of the target line.")]
+    [Description("Text content to insert. Examples: 'public void NewMethod() { }', '// TODO: Implement this feature'")]
     public required string Content { get; set; }
 
     /// <summary>
-    /// Whether to auto-detect and preserve indentation from the target line
+    /// Whether to auto-detect and preserve indentation from the surrounding lines for consistent code formatting.
     /// </summary>
-    [Description("Whether to auto-detect and preserve indentation from the target line (default: true)")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Whether to auto-detect and preserve indentation from surrounding lines (default: true)")]
     public bool PreserveIndentation { get; set; } = true;
 
     /// <summary>
-    /// Number of context lines to return before and after the insertion point for verification
+    /// Number of context lines to show before and after the insertion point for verification and confidence.
     /// </summary>
+    /// <example>5</example>
+    /// <example>0</example>
+    /// <example>10</example>
     [Range(0, 20)]
-    [Description("Number of context lines to show before and after insertion for verification (default: 3)")]
+    [Description("Number of context lines to show before and after insertion for verification. Examples: '5' (more context), '0' (no context)")]
     public int ContextLines { get; set; } = 3;
 }
 

@@ -4,13 +4,16 @@ using System.Text.Json.Serialization;
 namespace COA.CodeSearch.McpServer.Tools.Parameters;
 
 /// <summary>
-/// Parameters for the FindPatterns tool that detects semantic patterns in code.
+/// Parameters for the FindPatterns tool that detects semantic patterns and code quality issues using Tree-sitter analysis
 /// </summary>
 public class FindPatternsParameters
 {
     /// <summary>
-    /// Path to the file to analyze for patterns.
+    /// Path to the file to analyze for patterns. Must be an existing code file.
     /// </summary>
+    /// <example>C:\source\MyProject\UserService.cs</example>
+    /// <example>./src/components/Button.tsx</example>
+    /// <example>../utils/helpers.js</example>
     [Required]
     [JsonPropertyName("filePath")]
     public string FilePath { get; set; } = string.Empty;
@@ -46,14 +49,19 @@ public class FindPatternsParameters
     public bool DetectLargeMethods { get; set; } = true;
 
     /// <summary>
-    /// Custom patterns to search for (regex patterns).
+    /// Custom patterns to search for (regex patterns) - allows detection of project-specific anti-patterns.
     /// </summary>
+    /// <example>["TODO.*urgent", "@deprecated"]</example>
+    /// <example>["console\\.log", "debugger;"]</example>
     [JsonPropertyName("customPatterns")]
     public List<string> CustomPatterns { get; set; } = new();
 
     /// <summary>
-    /// Severity levels to include in results (Info, Warning, Error).
+    /// Severity levels to include in results - filter by impact level for focused analysis.
     /// </summary>
+    /// <example>["Warning", "Error"]</example>
+    /// <example>["Info"]</example>
+    /// <example>["Error"]</example>
     [JsonPropertyName("severityLevels")]
     public List<string> SeverityLevels { get; set; } = new() { "Info", "Warning", "Error" };
 

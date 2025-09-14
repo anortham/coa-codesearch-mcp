@@ -22,6 +22,13 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
     private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<InsertAtLineTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the InsertAtLineTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="fileEditService">Unified file edit service</param>
+    /// <param name="logger">Logger instance</param>
     public InsertAtLineTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
@@ -33,14 +40,31 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.InsertAtLine;
-    public override string Description => 
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
+    public override string Description =>
         "INSERT CODE WITHOUT READ - Insert text at specific line numbers with 100% accuracy. " +
         "Uses line-precise positioning from search results. Preserves indentation automatically. " +
         "USAGE TIP: Provide content without leading spaces to get automatic indentation, or with spaces to control indentation manually. " +
         "Essential for dogfooding - modify CodeSearch using CodeSearch itself!";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Refactoring;
 
+    /// <summary>
+    /// Executes the insert at line operation to add content at a specific line number.
+    /// </summary>
+    /// <param name="parameters">Insert at line parameters including file path, line number, and content</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Insert at line results with insertion details and context</returns>
     protected override async Task<AIOptimizedResponse<InsertAtLineResult>> ExecuteInternalAsync(
         InsertAtLineParameters parameters,
         CancellationToken cancellationToken)

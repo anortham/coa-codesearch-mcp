@@ -38,6 +38,17 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
     private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the TraceCallPathTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="logger">Logger instance</param>
     public TraceCallPathTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -58,14 +69,37 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
         _responseBuilder = new TraceCallPathResponseBuilder(logger as ILogger<TraceCallPathResponseBuilder>, storageService);
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.TraceCallPath;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "TRACE EXECUTION PATHS - Build hierarchical call chains to understand code flow. Essential for debugging, refactoring impact analysis, and architecture understanding.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - HIGH priority for refactoring safety
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 92;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "call_tracing", "refactoring_impact", "debugging", "architecture_analysis", "execution_flow" };
 
+    /// <summary>
+    /// Executes the trace call path operation to analyze call hierarchies.
+    /// </summary>
+    /// <param name="parameters">Trace call path parameters including symbol name and trace options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Search results containing the hierarchical call path analysis</returns>
     protected override async Task<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>> ExecuteInternalAsync(
         TraceCallPathParameters parameters,
         CancellationToken cancellationToken)

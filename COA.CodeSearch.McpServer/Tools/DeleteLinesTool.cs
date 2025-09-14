@@ -21,6 +21,13 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
     private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<DeleteLinesTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the DeleteLinesTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="fileEditService">Unified file edit service</param>
+    /// <param name="logger">Logger instance</param>
     public DeleteLinesTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
@@ -32,14 +39,31 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.DeleteLines;
-    public override string Description => 
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
+    public override string Description =>
         "DELETE LINES WITHOUT READ - Delete line ranges using precise line positioning. " +
         "Perfect for removing code blocks, cleaning up sections, or surgical deletions. " +
         "Supports single line (StartLine only) or range (StartLine to EndLine). " +
         "Provides context verification and stores deleted content for recovery.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Refactoring;
 
+    /// <summary>
+    /// Executes the delete lines operation to remove specified lines from a file.
+    /// </summary>
+    /// <param name="parameters">Delete lines parameters including file path and line range</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Delete lines results with deletion details and context</returns>
     protected override async Task<AIOptimizedResponse<DeleteLinesResult>> ExecuteInternalAsync(
         DeleteLinesParameters parameters,
         CancellationToken cancellationToken)

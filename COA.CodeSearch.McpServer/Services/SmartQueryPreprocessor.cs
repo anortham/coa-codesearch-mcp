@@ -91,6 +91,14 @@ public class SmartQueryPreprocessor
     /// <code>
     /// // Symbol query - routes to content_symbols
     /// var result = processor.Process("UserService");
+    /// </code>
+    /// </example>
+    public string Process(string query)
+    {
+        // Implementation here...
+        return query;
+    }
+
         /// <summary>
         /// Processes a query for pattern-preserving search with safe bracket escaping.
         /// </summary>
@@ -158,20 +166,6 @@ public class SmartQueryPreprocessor
             // If brackets are unbalanced or don't contain TO, they're probably code patterns
             return openBrackets == closeBrackets && openBrackets == 0;
         }
-    /// // result.TargetField == "content_symbols"
-    /// // result.DetectedMode == SearchMode.Symbol
-    /// 
-    /// // Pattern query - routes to content_patterns  
-    /// var result = processor.Process("class MyClass");
-    /// // result.TargetField == "content_patterns"
-    /// // result.DetectedMode == SearchMode.Pattern
-    /// 
-    /// // Standard query - routes to content
-    /// var result = processor.Process("error handling logic");
-    /// // result.TargetField == "content" 
-    /// // result.DetectedMode == SearchMode.Standard
-    /// </code>
-    /// </example>
     public QueryProcessingResult Process(string userQuery, SearchMode mode = SearchMode.Auto)
     {
         if (string.IsNullOrWhiteSpace(userQuery))

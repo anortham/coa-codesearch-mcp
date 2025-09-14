@@ -5,37 +5,49 @@ using System.Text.Json.Serialization;
 namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
-/// Parameters for search and replace operations
+/// Parameters for search and replace operations - BULK updates across files with safety preview mode
 /// </summary>
 public class SearchAndReplaceParams
 {
     /// <summary>
-    /// Pattern to search for
+    /// Pattern to search for - supports multiple search types for flexible matching.
     /// </summary>
+    /// <example>oldMethodName</example>
+    /// <example>TODO.*urgent</example>
+    /// <example>class\s+\w+Service</example>
     [JsonPropertyName("searchPattern")]
-    [Description("Pattern to search for")]
+    [Description("Search pattern (e.g., oldMethodName, TODO.*urgent, class\\s+\\w+Service)")]
     [Required]
     public required string SearchPattern { get; set; }
 
     /// <summary>
-    /// Replacement pattern (use empty string for deletion)
+    /// Replacement pattern - use empty string for deletion, supports regex capture groups.
     /// </summary>
+    /// <example>newMethodName</example>
+    /// <example>FIXED: $1</example>
+    /// <example></example>
     [JsonPropertyName("replacePattern")]
-    [Description("Replacement pattern (use empty string for deletion)")]
+    [Description("Replace pattern (e.g., newMethodName, FIXED: $1, '' to delete)")]
     public string ReplacePattern { get; set; } = string.Empty;
 
     /// <summary>
-    /// Workspace path to search in
+    /// Workspace path to search in. Can be absolute or relative path.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [JsonPropertyName("workspacePath")]
-    [Description("Workspace path to search in")]
+    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
     public string? WorkspacePath { get; set; }
 
     /// <summary>
-    /// File pattern filter (e.g., "*.cs", "src/**/*.ts")
+    /// File pattern filter to limit scope using glob patterns.
     /// </summary>
+    /// <example>*.cs</example>
+    /// <example>src/**/*.ts</example>
+    /// <example>**/*.{js,jsx}</example>
     [JsonPropertyName("filePattern")]
-    [Description("File pattern filter (e.g., \"*.cs\", \"src/**/*.ts\")")]
+    [Description("File pattern filter (e.g., *.cs, src/**/*.ts, **/*.{js,jsx})")]
     public string? FilePattern { get; set; }
 
     /// <summary>
@@ -62,7 +74,7 @@ public class SearchAndReplaceParams
     /// Preview mode (default: true for safety)
     /// </summary>
     [JsonPropertyName("preview")]
-    [Description("Preview mode - shows what would change without applying (default: true for safety)")]
+    [Description("Preview mode - shows changes without applying (default: true)")]
     public bool Preview { get; set; } = true;
 
     /// <summary>

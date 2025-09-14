@@ -13,22 +13,27 @@ using COA.CodeSearch.McpServer.Services.Analysis;
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
-/// Parameters for the batch operations tool
+/// Parameters for the batch operations tool - run multiple searches simultaneously for speed (3-10x faster than sequential)
 /// </summary>
 public class BatchOperationsParameters
 {
     /// <summary>
-    /// Path to the workspace directory
+    /// Path to the workspace directory to search. Can be absolute or relative path.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [Required]
-    [Description("Path to the workspace directory")]
+    [Description("Path to the workspace directory. Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
     public string WorkspacePath { get; set; } = string.Empty;
     
     /// <summary>
-    /// Array of operations to execute in JSON format
+    /// Array of operations to execute in JSON format - allows multiple search types simultaneously.
     /// </summary>
+    /// <example>[{"operation": "text_search", "query": "UserService"}, {"operation": "file_search", "pattern": "*.cs"}]</example>
+    /// <example>[{"operation": "recent_files", "timeFrame": "1d"}, {"operation": "symbol_search", "symbol": "ProcessPayment"}]</example>
     [Required]
-    [Description("Array of operations to execute")]
+    [Description("Array of operations in JSON format. Examples: '[{\"operation\": \"text_search\", \"query\": \"UserService\"}]'")]
     public string Operations { get; set; } = string.Empty;
     
     /// <summary>
@@ -131,6 +136,15 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly CodeAnalyzer _codeAnalyzer;
 
+    /// <summary>
+    /// Initializes a new instance of the BatchOperationsTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="textSearchTool">Text search tool for batch operations</param>
+    /// <param name="fileSearchTool">File search tool for batch operations</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
     public BatchOperationsTool(
         IServiceProvider serviceProvider,
         ILogger<BatchOperationsTool> logger,
@@ -146,10 +160,27 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
         _codeAnalyzer = codeAnalyzer;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.BatchOperations;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "PARALLEL search for speed - Run multiple searches simultaneously. USE when investigating across multiple dimensions (files + content + recent). 3-10x faster than sequential.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the batch operations to run multiple searches in parallel.
+    /// </summary>
+    /// <param name="parameters">Batch operations parameters including workspace path and operation definitions</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Batch operations results with individual operation outcomes</returns>
     protected override async Task<BatchOperationsResult> ExecuteInternalAsync(
         BatchOperationsParameters parameters,
         CancellationToken cancellationToken)
