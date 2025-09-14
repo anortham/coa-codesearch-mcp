@@ -58,7 +58,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         CodeAnalyzer codeAnalyzer,
-        ILogger<FindReferencesTool> logger) : base(serviceProvider)
+        ILogger<FindReferencesTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
@@ -94,6 +94,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     /// Gets the preferred usage scenarios for this tool.
     /// </summary>
     public string[] PreferredScenarios => new[] { "before_refactoring", "symbol_analysis", "impact_assessment", "before_deleting" };
+
 
     /// <summary>
     /// Executes the find references operation to locate all symbol usages.

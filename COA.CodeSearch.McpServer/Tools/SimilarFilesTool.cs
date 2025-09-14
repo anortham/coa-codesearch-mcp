@@ -65,7 +65,7 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
         IPathResolutionService pathResolutionService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
         CodeAnalyzer codeAnalyzer,
-        ILogger<SimilarFilesTool> logger) : base(serviceProvider)
+        ILogger<SimilarFilesTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

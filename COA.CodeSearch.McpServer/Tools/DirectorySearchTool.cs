@@ -75,7 +75,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<DirectorySearchTool> logger,
         CodeAnalyzer codeAnalyzer)
-        : base(serviceProvider)
+        : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _luceneService = luceneService;

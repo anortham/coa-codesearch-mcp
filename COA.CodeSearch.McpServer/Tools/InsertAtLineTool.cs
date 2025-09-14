@@ -33,7 +33,7 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<InsertAtLineTool> logger) : base(serviceProvider)
+        ILogger<InsertAtLineTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;

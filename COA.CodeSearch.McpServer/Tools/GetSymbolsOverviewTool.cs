@@ -54,7 +54,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        ILogger<GetSymbolsOverviewTool> logger) : base(serviceProvider)
+        ILogger<GetSymbolsOverviewTool> logger) : base(serviceProvider, logger)
     {
         _typeExtractionService = typeExtractionService;
         _luceneIndexService = luceneIndexService;

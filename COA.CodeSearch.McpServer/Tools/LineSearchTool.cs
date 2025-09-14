@@ -50,7 +50,7 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         SmartQueryPreprocessor queryProcessor,
         CodeAnalyzer codeAnalyzer,
         IResourceStorageService storageService,
-        ILogger<LineSearchTool> logger) : base(serviceProvider)
+        ILogger<LineSearchTool> logger) : base(serviceProvider, logger)
     {
         _indexService = indexService;
         _lineSearchService = lineSearchService;

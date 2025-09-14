@@ -58,7 +58,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         CodeAnalyzer codeAnalyzer,
-        ILogger<SymbolSearchTool> logger) : base(serviceProvider)
+        ILogger<SymbolSearchTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
@@ -94,6 +94,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// Gets the preferred usage scenarios for this tool.
     /// </summary>
     public string[] PreferredScenarios => new[] { "symbol_discovery", "type_exploration", "api_discovery", "inheritance_analysis" };
+
 
     /// <summary>
     /// Executes the symbol search operation to find type and method definitions.

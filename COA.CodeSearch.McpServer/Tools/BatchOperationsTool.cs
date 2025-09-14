@@ -151,7 +151,7 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
         TextSearchTool textSearchTool,
         FileSearchTool fileSearchTool,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;

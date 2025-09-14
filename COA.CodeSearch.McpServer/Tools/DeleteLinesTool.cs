@@ -32,7 +32,7 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<DeleteLinesTool> logger) : base(serviceProvider)
+        ILogger<DeleteLinesTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;

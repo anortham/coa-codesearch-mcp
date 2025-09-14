@@ -56,7 +56,7 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<IndexWorkspaceTool> logger) : base(serviceProvider)
+        ILogger<IndexWorkspaceTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;

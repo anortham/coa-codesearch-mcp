@@ -59,7 +59,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<RecentFilesTool> logger,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
