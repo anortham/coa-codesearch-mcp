@@ -57,7 +57,7 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         CodeAnalyzer codeAnalyzer,
-        ILogger<TraceCallPathTool> logger) : base(serviceProvider)
+        ILogger<TraceCallPathTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

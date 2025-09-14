@@ -58,7 +58,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         ILogger<GoToDefinitionTool> logger,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

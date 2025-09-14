@@ -75,7 +75,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         COA.VSCodeBridge.IVSCodeBridge vscode,
                 SmartQueryPreprocessor smartQueryPreprocessor,
         CodeAnalyzer codeAnalyzer,
-        ILogger<TextSearchTool> logger) : base(serviceProvider)
+        ILogger<TextSearchTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;

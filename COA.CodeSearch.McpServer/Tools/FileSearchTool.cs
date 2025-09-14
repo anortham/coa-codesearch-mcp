@@ -59,7 +59,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<FileSearchTool> logger,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider)
+        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _pathResolutionService = pathResolutionService;
@@ -86,6 +86,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     /// Gets the tool category for classification purposes.
     /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
+
 
     /// <summary>
     /// Executes the file search operation to find files matching the specified pattern.

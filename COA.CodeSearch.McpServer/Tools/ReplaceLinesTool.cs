@@ -33,7 +33,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<ReplaceLinesTool> logger) : base(serviceProvider)
+        ILogger<ReplaceLinesTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;

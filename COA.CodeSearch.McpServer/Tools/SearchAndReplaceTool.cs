@@ -52,7 +52,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         CodeAnalyzer codeAnalyzer,
         UnifiedFileEditService editService,
         IWorkspacePermissionService permissionService,
-        ILogger<SearchAndReplaceTool> logger) : base(serviceProvider)
+        ILogger<SearchAndReplaceTool> logger) : base(serviceProvider, logger)
     {
         _indexService = indexService;
         _queryProcessor = queryProcessor;
