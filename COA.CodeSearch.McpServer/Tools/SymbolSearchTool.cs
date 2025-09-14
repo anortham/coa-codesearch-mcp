@@ -39,6 +39,17 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     private readonly ILogger<SymbolSearchTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the SymbolSearchTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="logger">Logger instance</param>
     public SymbolSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -59,14 +70,37 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.SymbolSearch;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. Returns: signatures, documentation, inheritance, usage counts.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - HIGH priority for symbol discovery
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 85;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "symbol_discovery", "type_exploration", "api_discovery", "inheritance_analysis" };
 
+    /// <summary>
+    /// Executes the symbol search operation to find type and method definitions.
+    /// </summary>
+    /// <param name="parameters">Symbol search parameters including symbol name and workspace path</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Symbol search results with type information and usage counts</returns>
     protected override async Task<AIOptimizedResponse<SymbolSearchResult>> ExecuteInternalAsync(
         SymbolSearchParameters parameters,
         CancellationToken cancellationToken)

@@ -33,6 +33,17 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     private readonly IWorkspacePermissionService _permissionService;
     private readonly ILogger<SearchAndReplaceTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the SearchAndReplaceTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="indexService">Lucene index service for search operations</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="editService">Unified file edit service</param>
+    /// <param name="permissionService">Workspace permission service</param>
+    /// <param name="logger">Logger instance</param>
     public SearchAndReplaceTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService indexService,
@@ -52,13 +63,30 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.SearchAndReplace;
-    public override string Description => 
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
+    public override string Description =>
         "BULK updates across files - Replace patterns everywhere at once. SAFER than manual edits - preview mode by default. " +
         "Perfect for: renaming, refactoring, fixing patterns. Consolidates search→read→edit workflow. " +
         "Enhanced with multi-line support, workspace safety, and DiffMatchPatch reliability.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the search and replace operation across multiple files.
+    /// </summary>
+    /// <param name="parameters">Search and replace parameters including patterns and options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Search and replace results with affected files and change summaries</returns>
     protected override async Task<AIOptimizedResponse<SearchAndReplaceResult>> ExecuteInternalAsync(
         SearchAndReplaceParams parameters,
         CancellationToken cancellationToken)

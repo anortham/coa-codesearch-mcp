@@ -35,6 +35,18 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the IndexWorkspaceTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for indexing operations</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="fileIndexingService">File indexing service</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="logger">Logger instance</param>
     public IndexWorkspaceTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -58,10 +70,27 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.IndexWorkspace;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "REQUIRED FIRST - Initialize search index before ANY search operation. ALWAYS run when: starting new session, switching projects, or if searches return no results. Without this, all searches fail.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Resources;
 
+    /// <summary>
+    /// Executes the workspace indexing operation to build a searchable index.
+    /// </summary>
+    /// <param name="parameters">Index workspace parameters including workspace path and options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Index workspace results with indexing statistics and status</returns>
     protected override async Task<AIOptimizedResponse<IndexWorkspaceResult>> ExecuteInternalAsync(
         IndexWorkspaceParameters parameters,
         CancellationToken cancellationToken)
@@ -334,33 +363,44 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
 }
 
 /// <summary>
-/// Parameters for the IndexWorkspace tool
+/// Parameters for the IndexWorkspace tool - builds searchable index for fast file and content discovery
 /// </summary>
 public class IndexWorkspaceParameters
 {
     /// <summary>
-    /// Path to the workspace directory to index
+    /// Path to the workspace directory to index. Must be an existing directory path - this is the foundation for all search operations.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>/home/user/projects/web-app</example>
     [Required]
-    [Description("Path to the workspace directory to index")]
+    [Description("Path to the workspace directory to index. Examples: 'C:\\source\\MyProject', './src', '/home/user/projects/web-app'")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Whether to force a full rebuild of the index
+    /// Force a complete rebuild of the index from scratch, updating the schema and refreshing all content.
     /// </summary>
-    [Description("Force a full rebuild of the index even if it exists (default: false)")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Force a full rebuild of the index even if it exists. Use when schema changes or corruption suspected.")]
     public bool? ForceRebuild { get; set; }
 
     /// <summary>
-    /// File extensions to include in indexing
+    /// File extensions to include in indexing. When specified, only these file types will be indexed.
     /// </summary>
-    [Description("File extensions to include (e.g., [\".cs\", \".js\"]). If not specified, uses default set.")]
+    /// <example>[".cs", ".js"]</example>
+    /// <example>[".py", ".ts", ".tsx"]</example>
+    /// <example>[".java", ".kt"]</example>
+    [Description("File extensions to include in indexing. Examples: '[\".cs\", \".js\"]', '[\".py\", \".ts\", \".tsx\"]'")]
     public string[]? IncludeExtensions { get; set; }
 
     /// <summary>
-    /// File extensions to exclude from indexing
+    /// File extensions to explicitly exclude from indexing, overriding default inclusion patterns.
     /// </summary>
-    [Description("File extensions to exclude from indexing")]
+    /// <example>[".min.js", ".map"]</example>
+    /// <example>[".dll", ".exe", ".bin"]</example>
+    /// <example>[".log", ".tmp"]</example>
+    [Description("File extensions to exclude from indexing. Examples: '[\".min.js\", \".map\"]', '[\".dll\", \".exe\", \".bin\"]'")]
     public string[]? ExcludeExtensions { get; set; }
     
     /// <summary>

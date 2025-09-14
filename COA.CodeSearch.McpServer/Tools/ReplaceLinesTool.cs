@@ -22,6 +22,13 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
     private readonly UnifiedFileEditService _fileEditService;
     private readonly ILogger<ReplaceLinesTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the ReplaceLinesTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="fileEditService">Unified file edit service</param>
+    /// <param name="logger">Logger instance</param>
     public ReplaceLinesTool(
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
@@ -33,14 +40,31 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         _logger = logger;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.ReplaceLines;
-    public override string Description => 
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
+    public override string Description =>
         "REPLACE LINES WITHOUT READ - Replace line ranges with new content using precise line positioning. " +
         "Perfect for method body replacement, config updates, or block edits. " +
         "Supports single line (StartLine only) or range (StartLine to EndLine). " +
         "Preserves indentation automatically and provides context verification.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Refactoring;
 
+    /// <summary>
+    /// Executes the replace lines operation to replace specified lines with new content.
+    /// </summary>
+    /// <param name="parameters">Replace lines parameters including file path, line range, and new content</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Replace lines results with replacement details and context</returns>
     protected override async Task<AIOptimizedResponse<ReplaceLinesResult>> ExecuteInternalAsync(
         ReplaceLinesParameters parameters,
         CancellationToken cancellationToken)

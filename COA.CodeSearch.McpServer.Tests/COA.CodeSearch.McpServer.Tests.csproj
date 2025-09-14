@@ -7,13 +7,15 @@
     <LangVersion>latest</LangVersion>
     <IsPackable>false</IsPackable>
     <IsTestProject>true</IsTestProject>
+    <!-- Disable XML documentation generation for test projects -->
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <!-- Suppress common test warnings that don't affect test reliability -->
     <NoWarn>CS8602;CS1998;NUnit1033</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <!-- COA Framework Testing - NuGet package reference -->
-    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.21" />
+    <PackageReference Include="COA.Mcp.Framework.Testing" Version="2.1.23" />
     <PackageReference Include="DiffPlex" Version="1.8.0" />
     <PackageReference Include="FluentAssertions" Version="7.2.0" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" Version="17.8.0" />

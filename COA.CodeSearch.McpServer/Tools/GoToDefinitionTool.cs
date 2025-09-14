@@ -39,6 +39,17 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     private readonly CodeAnalyzer _codeAnalyzer;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the GoToDefinitionTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="queryProcessor">Smart query preprocessing service</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
     public GoToDefinitionTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -59,14 +70,37 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         _codeAnalyzer = codeAnalyzer;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.GoToDefinition;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "VERIFY BEFORE CODING - Jump to exact symbol definitions in <100ms. USE BEFORE writing any code that references types. Tree-sitter powered for accurate type extraction.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - HIGHEST priority for type verification
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 100;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "type_verification", "code_exploration", "before_coding" };
 
+    /// <summary>
+    /// Executes the go-to-definition operation to locate symbol definitions.
+    /// </summary>
+    /// <param name="parameters">Go-to-definition parameters including symbol name and workspace path</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Symbol definition results with location and type information</returns>
     protected override async Task<AIOptimizedResponse<SymbolDefinition>> ExecuteInternalAsync(
         GoToDefinitionParameters parameters,
         CancellationToken cancellationToken)

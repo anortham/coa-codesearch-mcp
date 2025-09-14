@@ -48,6 +48,21 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<TextSearchTool> _logger;
 
+    /// <summary>
+    /// Initializes a new instance of the TextSearchTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="queryPreprocessor">Query preprocessing service</param>
+    /// <param name="queryTypeDetector">Optional query type detection service</param>
+    /// <param name="smartDocumentationService">Smart documentation service</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="smartQueryPreprocessor">Smart query preprocessing service</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="logger">Logger instance</param>
     public TextSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -78,15 +93,50 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _responseBuilder = new SearchResponseBuilder(logger as ILogger<SearchResponseBuilder>, storageService);
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.TextSearch;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "SEARCH BEFORE CODING - Find existing implementations to avoid duplicates. PROACTIVELY use before writing ANY new feature. Discovers: function definitions, error patterns, similar code.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - HIGH priority as primary search tool
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 90;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "code_exploration", "before_coding", "pattern_search", "duplicate_detection" };
 
 
+    /// <summary>
+    /// Executes a text search across the indexed codebase using Lucene.NET with intelligent query preprocessing.
+    /// </summary>
+    /// <param name="parameters">Search parameters including query, workspace path, and search options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Ranked search results with code snippets and contextual information</returns>
+    /// <example>
+    /// Search for class definitions: query="class UserService"
+    /// Find TODO items: query="TODO|FIXME" searchType="regex"
+    /// Code patterns: query="*.findBy*" searchType="wildcard"
+    /// </example>
+    /// <remarks>
+    /// The search process includes:
+    /// 1. Query preprocessing based on SearchMode (auto-detection, camelCase tokenization)
+    /// 2. Lucene index lookup with scoring and ranking
+    /// 3. Result post-processing with snippet generation and highlighting
+    /// 4. Token optimization to stay within response limits
+    /// </remarks>
     protected override async Task<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>> ExecuteInternalAsync(
         TextSearchParameters parameters,
         CancellationToken cancellationToken)

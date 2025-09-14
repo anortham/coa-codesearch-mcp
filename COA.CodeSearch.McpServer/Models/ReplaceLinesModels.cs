@@ -4,50 +4,67 @@ using System.ComponentModel.DataAnnotations;
 namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
-/// Parameters for replacing a range of lines in a file
+/// Parameters for replacing a range of lines in a file with precise line positioning and automatic indentation
 /// </summary>
 public class ReplaceLinesParameters
 {
     /// <summary>
-    /// Absolute or relative path to the file
+    /// Absolute or relative path to the file to modify. Must be an existing file with write permissions.
     /// </summary>
+    /// <example>C:\source\MyProject\UserService.cs</example>
+    /// <example>./src/components/Button.tsx</example>
+    /// <example>../config/settings.json</example>
     [Required]
-    [Description("Absolute or relative path to the file to modify")]
+    [Description("Absolute or relative path to the file to modify. Examples: 'C:\\source\\MyProject\\UserService.cs', './src/components/Button.tsx'")]
     public required string FilePath { get; set; }
 
     /// <summary>
-    /// Starting line number (1-based, inclusive)
+    /// Starting line number (1-based, inclusive). This line and all lines up to EndLine will be replaced with new content.
     /// </summary>
+    /// <example>15</example>
+    /// <example>1</example>
+    /// <example>100</example>
     [Required]
     [Range(1, int.MaxValue)]
-    [Description("Starting line number (1-based, inclusive). This line and all lines up to EndLine will be replaced.")]
+    [Description("Starting line number (1-based, inclusive). Examples: '15' (replace from line 15), '1' (replace from top)")]
     public int StartLine { get; set; }
 
     /// <summary>
-    /// Ending line number (1-based, inclusive). If not specified, only StartLine is replaced.
+    /// Ending line number (1-based, inclusive). If not specified, only StartLine is replaced. Must be >= StartLine for range replacements.
     /// </summary>
+    /// <example>20</example>
+    /// <example>15</example>
+    /// <example>null</example>
     [Range(1, int.MaxValue)]
-    [Description("Ending line number (1-based, inclusive). If not specified, only StartLine is replaced. Must be >= StartLine.")]
+    [Description("Ending line number (1-based, inclusive). Examples: '20' (replace lines 15-20), null (replace only StartLine)")]
     public int? EndLine { get; set; }
 
     /// <summary>
-    /// New content to replace the specified lines
+    /// New content to replace the specified lines. Can be single line, multi-line, or empty string to delete the lines.
     /// </summary>
+    /// <example>public void UpdatedMethod() { return true; }</example>
+    /// <example>// Updated comment\n// with multiple lines</example>
+    /// <example></example>
     [Required]
-    [Description("New content to replace the specified lines. Can be empty to delete lines.")]
+    [Description("New content to replace the specified lines. Examples: 'public void UpdatedMethod() { return true; }', '' (empty to delete)")]
     public required string Content { get; set; }
 
     /// <summary>
-    /// Whether to auto-detect and preserve indentation from the surrounding lines
+    /// Whether to auto-detect and preserve indentation from the surrounding lines for consistent code formatting.
     /// </summary>
-    [Description("Whether to auto-detect and preserve indentation from the surrounding lines (default: true)")]
+    /// <example>true</example>
+    /// <example>false</example>
+    [Description("Whether to auto-detect and preserve indentation from surrounding lines (default: true)")]
     public bool PreserveIndentation { get; set; } = true;
 
     /// <summary>
-    /// Number of context lines to return before and after the replacement for verification
+    /// Number of context lines to show before and after the replacement for verification and confidence in the changes.
     /// </summary>
+    /// <example>5</example>
+    /// <example>0</example>
+    /// <example>10</example>
     [Range(0, 20)]
-    [Description("Number of context lines to show before and after replacement for verification (default: 3)")]
+    [Description("Number of context lines to show before and after replacement for verification. Examples: '5' (more context), '0' (no context)")]
     public int ContextLines { get; set; } = 3;
 }
 

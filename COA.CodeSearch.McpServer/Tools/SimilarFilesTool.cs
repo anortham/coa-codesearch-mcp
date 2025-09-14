@@ -44,6 +44,18 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
     private readonly ILogger<SimilarFilesTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the SimilarFilesTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="logger">Logger instance</param>
     public SimilarFilesTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -68,10 +80,27 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
         _responseBuilder = new SimilarFilesResponseBuilder(null, storageService);
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.SimilarFiles;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "BEFORE implementing features - Find existing similar code to reuse or learn from. PREVENTS reinventing wheels. Discovers: duplicate patterns, test examples, related implementations.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the similar files operation to find files with similar content patterns.
+    /// </summary>
+    /// <param name="parameters">Similar files parameters including reference file path and similarity options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Similar files results with matching files and similarity scores</returns>
     protected override async Task<AIOptimizedResponse<SimilarFilesResult>> ExecuteInternalAsync(
         SimilarFilesParameters parameters,
         CancellationToken cancellationToken)
@@ -391,22 +420,28 @@ public class SimilarFilesTool : CodeSearchToolBase<SimilarFilesParameters, AIOpt
 }
 
 /// <summary>
-/// Parameters for the SimilarFiles tool
+/// Parameters for the SimilarFiles tool - find similar code patterns to avoid reinventing wheels and discover related implementations
 /// </summary>
 public class SimilarFilesParameters
 {
     /// <summary>
-    /// Path to the file to find similar files for
+    /// Path to the file to find similar files for - analyzes content and structure for similarity matching.
     /// </summary>
+    /// <example>C:\source\MyProject\UserService.cs</example>
+    /// <example>./src/components/Button.tsx</example>
+    /// <example>../utils/helpers.js</example>
     [Required]
-    [Description("Path to the file to find similar files for")]
+    [Description("Path to the file to find similar files for. Examples: 'C:\\source\\MyProject\\UserService.cs', './src/components/Button.tsx'")]
     public string FilePath { get; set; } = string.Empty;
     
     /// <summary>
-    /// Path to the workspace directory
+    /// Path to the workspace directory to search for similar files.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [Required]
-    [Description("Path to the workspace directory")]
+    [Description("Path to the workspace directory to search. Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
     public string WorkspacePath { get; set; } = string.Empty;
     
     /// <summary>
@@ -417,9 +452,12 @@ public class SimilarFilesParameters
     public int? MaxResults { get; set; }
     
     /// <summary>
-    /// Minimum similarity score (0.0 to 1.0)
+    /// Minimum similarity score (0.0 to 1.0) - higher values return more similar files, lower values cast wider net.
     /// </summary>
-    [Description("Minimum similarity score (0.0 to 1.0, default: 0.1)")]
+    /// <example>0.8</example>
+    /// <example>0.5</example>
+    /// <example>0.1</example>
+    [Description("Minimum similarity score. Examples: '0.8' (very similar), '0.5' (moderately similar), '0.1' (broadly similar)")]
     [Range(0.0, 1.0)]
     public float? MinScore { get; set; }
     

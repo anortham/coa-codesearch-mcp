@@ -10,16 +10,22 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class TextSearchParameters : VisualizableParameters
 {
     /// <summary>
-    /// The search query string
+    /// The search query string - supports multiple search types including regex, wildcards, and intelligent code patterns.
     /// </summary>
+    /// <example>class UserService</example>
+    /// <example>*.findBy*</example>
+    /// <example>TODO|FIXME</example>
     [Required]
-    [Description("The search query string")]
+    [Description("Search query - supports regex, wildcards, code patterns (e.g., class UserService, *.findBy*, TODO|FIXME)")]
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search (defaults to current workspace)
+    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
     /// </summary>
-    [Description("Path to the workspace directory to search (defaults to current workspace)")]
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
+    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     // MaxResults removed - controlled internally based on ResponseMode to prevent token blowouts
@@ -48,27 +54,34 @@ public class TextSearchParameters : VisualizableParameters
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Search type: 'standard', 'literal', 'code', 'wildcard', 'fuzzy', 'phrase', 'regex' (default: standard)
+    /// Search type controls how the query is interpreted and matched against indexed content.
     /// </summary>
-    [Description("Search type: 'standard', 'literal', 'code', 'wildcard', 'fuzzy', 'phrase', 'regex' (default: standard)")]
+    /// <example>standard</example>
+    /// <example>regex</example>
+    /// <example>wildcard</example>
+    [Description("Search type: standard (intelligent), literal (exact), code (code-aware), wildcard (*?), fuzzy (typos), phrase, regex")]
     public string SearchType { get; set; } = "standard";
-        /// <summary>
-        /// Search mode: 'auto', 'literal', 'code', 'symbol', 'standard', 'fuzzy' (default: auto)
-        /// </summary>
-        [Description("Search mode: 'auto', 'literal', 'code', 'symbol', 'standard', 'fuzzy' (default: auto)")]
-        public string SearchMode { get; set; } = "auto";
+
+    /// <summary>
+    /// Search mode determines the intelligence level and preprocessing applied to queries.
+    /// </summary>
+    /// <example>auto</example>
+    /// <example>code</example>
+    /// <example>symbol</example>
+    [Description("Search mode: auto (smart routing), literal (no preprocessing), code (camelCase), symbol (classes/methods), standard, fuzzy")]
+    public string SearchMode { get; set; } = "auto";
 
 
     /// <summary>
     /// Case sensitive search
     /// </summary>
-    [Description("Case sensitive search")]
+    [Description("Case sensitive")]
     public bool CaseSensitive { get; set; } = false;
 
     /// <summary>
     /// Automatically document findings in ProjectKnowledge MCP when patterns are detected
     /// </summary>
-    [Description("Automatically document findings in ProjectKnowledge MCP when patterns are detected")]
+    [Description("Auto-document findings in ProjectKnowledge MCP")]
     public bool DocumentFindings { get; set; } = false;
 
     /// <summary>
@@ -80,6 +93,6 @@ public class TextSearchParameters : VisualizableParameters
     /// <summary>
     /// Enable intelligent pattern detection for auto-documentation
     /// </summary>
-    [Description("Enable intelligent pattern detection for auto-documentation")]
+    [Description("Enable intelligent pattern detection")]
     public bool AutoDetectPatterns { get; set; } = true;
 }

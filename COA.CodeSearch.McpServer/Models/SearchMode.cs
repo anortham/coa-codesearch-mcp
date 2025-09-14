@@ -11,7 +11,7 @@ public enum SearchMode
     Auto,
 
     /// <summary>
-    /// Pattern-preserving search - handles special characters like {}, (), : IRepository<T>
+    /// Pattern-preserving search - handles special characters like {}, (), : IRepository&lt;T&gt;
     /// Uses content_patterns field with WhitespaceTokenizer for pattern preservation
     /// </summary>
     Pattern,

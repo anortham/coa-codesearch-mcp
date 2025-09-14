@@ -38,6 +38,18 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
     private readonly ILogger<RecentFilesTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
 
+    /// <summary>
+    /// Initializes a new instance of the RecentFilesTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="pathResolutionService">Path resolution service</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="vscode">VS Code bridge for IDE integration</param>
+    /// <param name="logger">Logger instance</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
     public RecentFilesTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -60,10 +72,27 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         _codeAnalyzer = codeAnalyzer;
     }
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.RecentFiles;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "CHECK FIRST when resuming - See what changed since last session. IMMEDIATELY use after breaks, new sessions, or asking 'what was I working on?' Shows temporal context.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
 
+    /// <summary>
+    /// Executes the recent files operation to find recently modified files.
+    /// </summary>
+    /// <param name="parameters">Recent files parameters including workspace path and time constraints</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Recent files results with modification details and temporal context</returns>
     protected override async Task<AIOptimizedResponse<RecentFilesResult>> ExecuteInternalAsync(
         RecentFilesParameters parameters,
         CancellationToken cancellationToken)
@@ -426,21 +455,27 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
 }
 
 /// <summary>
-/// Parameters for the RecentFiles tool
+/// Parameters for the RecentFiles tool - discover recently modified files to understand project activity and changes
 /// </summary>
 public class RecentFilesParameters
 {
     /// <summary>
-    /// Path to the workspace directory to search
+    /// Path to the workspace directory to search. Can be absolute or relative path.
     /// </summary>
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
     [Required]
-    [Description("Path to the workspace directory to search")]
+    [Description("Path to the workspace directory to search. Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
     public string WorkspacePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Time frame for recent files (e.g., '1h', '2d', '1w'). Default: '7d'
+    /// Time frame for recent files - specifies how far back to look for modifications.
     /// </summary>
-    [Description("Time frame for recent files (e.g., '1h', '2d', '1w'). Default: '7d'")]
+    /// <example>1h</example>
+    /// <example>2d</example>
+    /// <example>1w</example>
+    [Description("Time frame for recent files. Examples: '1h' (1 hour), '2d' (2 days), '1w' (1 week). Default: '7d'")]
     public string? TimeFrame { get; set; }
 
     /// <summary>
@@ -450,9 +485,12 @@ public class RecentFilesParameters
     public int? MaxResults { get; set; }
 
     /// <summary>
-    /// Comma-separated list of file extensions to filter (e.g., ".cs,.js")
+    /// Comma-separated list of file extensions to filter results for focused analysis.
     /// </summary>
-    [Description("Comma-separated list of file extensions to filter (e.g., '.cs,.js')")]
+    /// <example>.cs,.js</example>
+    /// <example>.tsx,.ts</example>
+    /// <example>.json,.xml</example>
+    [Description("Comma-separated list of file extensions to filter. Examples: '.cs,.js', '.tsx,.ts', '.json,.xml'")]
     public string? ExtensionFilter { get; set; }
     
     /// <summary>

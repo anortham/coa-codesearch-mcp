@@ -3,20 +3,26 @@ using System.ComponentModel;
 namespace COA.CodeSearch.McpServer.Tools.Parameters;
 
 /// <summary>
-/// Parameters for the TraceCallPath tool that provides hierarchical call chain analysis
+/// Parameters for the TraceCallPath tool - builds hierarchical call chains to understand code execution flow and dependencies
 /// </summary>
 public class TraceCallPathParameters
 {
     /// <summary>
-    /// The symbol name to trace (method, class, or function name)
+    /// The symbol name to trace (method, class, or function name) for building call hierarchies.
     /// </summary>
-    [Description("The symbol name to trace (method, class, or function name)")]
+    /// <example>ProcessPayment</example>
+    /// <example>UserService</example>
+    /// <example>validateInput</example>
+    [Description("Symbol to trace for call hierarchies (e.g., ProcessPayment, UserService, validateInput)")]
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Direction to trace: 'up' (callers), 'down' (callees), or 'both' (full hierarchy)
+    /// Direction to trace: 'up' (callers), 'down' (callees), or 'both' (full hierarchy) for comprehensive analysis.
     /// </summary>
-    [Description("Direction to trace: 'up' (callers), 'down' (callees), or 'both' (full hierarchy)")]
+    /// <example>up</example>
+    /// <example>down</example>
+    /// <example>both</example>
+    [Description("Trace direction: up (who calls), down (what calls), both (full tree)")]
     public string Direction { get; set; } = "up";
 
     /// <summary>
@@ -52,13 +58,13 @@ public class TraceCallPathParameters
     /// <summary>
     /// Case sensitive search
     /// </summary>
-    [Description("Case sensitive search")]
+    [Description("Case sensitive")]
     public bool CaseSensitive { get; set; } = false;
 
     /// <summary>
     /// Show detailed method signatures in results
     /// </summary>
-    [Description("Show detailed method signatures in results")]
+    [Description("Show detailed method signatures")]
     public bool ShowSignatures { get; set; } = true;
 
     /// <summary>
@@ -70,7 +76,7 @@ public class TraceCallPathParameters
     /// <summary>
     /// Navigate to first result automatically when showing in VS Code
     /// </summary>
-    [Description("Navigate to first result automatically when showing in VS Code")]
+    [Description("Auto-navigate to first result in VS Code")]
     public bool NavigateToFirstResult { get; set; } = false;
 
     /// <summary>
@@ -82,18 +88,21 @@ public class TraceCallPathParameters
     /// <summary>
     /// Override tool default: whether to show in VS Code (null = use tool default)
     /// </summary>
-    [Description("Override tool default: whether to show in VS Code (null = use tool default)")]
+    [Description("Override: show in VS Code (null = default)")]
     public bool? ShowInVSCode { get; set; }
 
     /// <summary>
     /// Override tool default: preferred view type (auto, grid, chart, markdown, tree, timeline)
     /// </summary>
-    [Description("Override tool default: preferred view type (auto, grid, chart, markdown, tree, timeline)")]
+    [Description("Override: view type (auto, grid, chart, markdown, tree, timeline)")]
     public string? VSCodeView { get; set; }
 
     /// <summary>
-    /// Path to the workspace directory to search (defaults to current workspace)
+    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
     /// </summary>
-    [Description("Path to the workspace directory to search (defaults to current workspace)")]
+    /// <example>C:\source\MyProject</example>
+    /// <example>./src</example>
+    /// <example>../other-project</example>
+    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
     public string WorkspacePath { get; set; } = string.Empty;
 }

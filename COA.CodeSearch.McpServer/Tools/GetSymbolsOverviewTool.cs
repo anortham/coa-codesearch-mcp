@@ -35,6 +35,17 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
     private readonly ILogger<GetSymbolsOverviewTool> _logger;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
+    /// <summary>
+    /// Initializes a new instance of the GetSymbolsOverviewTool with required dependencies.
+    /// </summary>
+    /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="typeExtractionService">Type extraction service for symbol analysis</param>
+    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="cacheService">Response caching service</param>
+    /// <param name="storageService">Resource storage service</param>
+    /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="logger">Logger instance</param>
     public GetSymbolsOverviewTool(
         IServiceProvider serviceProvider,
         ITypeExtractionService typeExtractionService,
@@ -59,14 +70,37 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
     /// </summary>
     protected override bool ShouldValidateDataAnnotations => false;
 
+    /// <summary>
+    /// Gets the tool name identifier.
+    /// </summary>
     public override string Name => ToolNames.GetSymbolsOverview;
+
+    /// <summary>
+    /// Gets the tool description explaining its purpose and usage scenarios.
+    /// </summary>
     public override string Description => "EXTRACT ALL SYMBOLS from any file - Get complete overview of classes, methods, interfaces without reading entire files. Tree-sitter powered for accurate type information with line numbers.";
+
+    /// <summary>
+    /// Gets the tool category for classification purposes.
+    /// </summary>
     public override ToolCategory Category => ToolCategory.Query;
-    
-    // IPrioritizedTool implementation - VERY HIGH priority for file exploration
+
+    /// <summary>
+    /// Gets the priority level for this tool. Higher values indicate higher priority.
+    /// </summary>
     public int Priority => 95;
+
+    /// <summary>
+    /// Gets the preferred usage scenarios for this tool.
+    /// </summary>
     public string[] PreferredScenarios => new[] { "file_exploration", "code_understanding", "api_discovery", "type_analysis", "quick_overview" };
 
+    /// <summary>
+    /// Executes the symbols overview operation to extract all symbols from a file.
+    /// </summary>
+    /// <param name="parameters">Symbols overview parameters including file path and extraction options</param>
+    /// <param name="cancellationToken">Cancellation token for the operation</param>
+    /// <returns>Symbols overview results with all extracted symbols and their details</returns>
     protected override async Task<AIOptimizedResponse<SymbolsOverviewResult>> ExecuteInternalAsync(
         GetSymbolsOverviewParameters parameters,
         CancellationToken cancellationToken)
