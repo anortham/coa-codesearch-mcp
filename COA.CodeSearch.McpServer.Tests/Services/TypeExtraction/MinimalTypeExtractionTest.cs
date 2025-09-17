@@ -2,6 +2,7 @@ using NUnit.Framework;
 using FluentAssertions;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using Microsoft.Extensions.Logging;
+using NSubstitute;
 
 namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
 {
@@ -15,21 +16,23 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
 
             // Act
-            var service = new TypeExtractionService(logger);
+            var languageRegistry = Substitute.For<ILanguageRegistry>();
+            var service = new TypeExtractionService(logger, languageRegistry);
 
             // Assert
             service.Should().NotBeNull();
         }
 
         [Test]
-        public void TypeExtractionService_Should_Handle_Empty_Content()
+        public async Task TypeExtractionService_Should_Handle_Empty_Content()
         {
             // Arrange
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
-            var service = new TypeExtractionService(logger);
+            var languageRegistry = Substitute.For<ILanguageRegistry>();
+            var service = new TypeExtractionService(logger, languageRegistry);
 
             // Act
-            var result = service.ExtractTypes("", "test.cs");
+            var result = await service.ExtractTypes("", "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -39,14 +42,15 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
         }
 
         [Test]
-        public void TypeExtractionService_Should_Handle_Unknown_Extension()
+        public async Task TypeExtractionService_Should_Handle_Unknown_Extension()
         {
             // Arrange
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
-            var service = new TypeExtractionService(logger);
+            var languageRegistry = Substitute.For<ILanguageRegistry>();
+            var service = new TypeExtractionService(logger, languageRegistry);
 
             // Act
-            var result = service.ExtractTypes("some content", "test.unknown");
+            var result = await service.ExtractTypes("some content", "test.unknown");
 
             // Assert
             result.Should().NotBeNull();

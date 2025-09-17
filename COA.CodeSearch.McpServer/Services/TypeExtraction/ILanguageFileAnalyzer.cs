@@ -18,5 +18,5 @@ public interface ILanguageFileAnalyzer
     /// <param name="content">Full file content</param>
     /// <param name="filePath">File path for context and logging</param>
     /// <returns>Type extraction result with discovered types and methods</returns>
-    TypeExtractionResult ExtractTypes(string content, string filePath);
+    Task<TypeExtractionResult> ExtractTypes(string content, string filePath);
 }

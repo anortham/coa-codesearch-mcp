@@ -94,19 +94,19 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
             var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
             
             // Extract type information using Tree-sitter
-            var extractionResult = _typeExtractionService.ExtractTypes(fileContent, filePath);
-            
+            var extractionResult = await _typeExtractionService.ExtractTypes(fileContent, filePath);
+
             System.Console.WriteLine($"DEBUG: Type extraction success: {extractionResult.Success}");
-            
+
             if (!extractionResult.Success)
             {
                 System.Console.WriteLine($"DEBUG: Returning error response for type extraction failure");
                 return CreateErrorResponse("Failed to extract type information from file");
             }
-            
+
             // Detect patterns
             var patterns = await DetectPatternsAsync(fileContent, extractionResult, parameters, cancellationToken);
-            
+
             var result = new FindPatternsResult
             {
                 FilePath = filePath,
