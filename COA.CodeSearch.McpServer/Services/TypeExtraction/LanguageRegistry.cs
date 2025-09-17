@@ -27,8 +27,9 @@ public class LanguageRegistry : ILanguageRegistry
     // Languages that don't have Tree-sitter DLLs available or have compatibility issues
     private static readonly HashSet<string> UnsupportedTreeSitterLanguages = new(StringComparer.OrdinalIgnoreCase)
     {
-        "kotlin", "r", "objective-c", "lua", "dart", "zig", "elm", "clojure", "elixir",
-        "go", "swift" // Currently have missing DLLs or version compatibility issues
+        "kotlin", "r", "objective-c", "lua", "dart", "zig", "elm", "clojure", "elixir"
+        // Note: Go, Rust, and Swift were removed as grammar DLLs are available and working
+        // Rust was never in this list but is confirmed working
     };
 
     public LanguageRegistry(ILogger<LanguageRegistry> logger)
@@ -120,6 +121,14 @@ public class LanguageRegistry : ILanguageRegistry
                 if (languageName == "c-sharp")
                 {
                     language = new Language("tree-sitter-c-sharp", "tree_sitter_c_sharp");
+                }
+                else if (languageName == "rust")
+                {
+                    language = new Language("tree-sitter-rust", "tree_sitter_rust");
+                }
+                else if (languageName == "swift")
+                {
+                    language = new Language("tree-sitter-swift", "tree_sitter_swift");
                 }
                 else
                 {

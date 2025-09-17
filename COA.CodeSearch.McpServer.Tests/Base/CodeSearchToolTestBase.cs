@@ -82,11 +82,13 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             services.AddSingleton(mockLanguageRegistry.Object);
 
             // Add TypeExtraction services for tools that need them (e.g., FindPatternsTool)
+            services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor, COA.CodeSearch.McpServer.Services.TypeExtraction.QueryBasedExtractor>();
             services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(provider =>
             {
                 var logger = provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>>();
                 var languageRegistry = provider.GetRequiredService<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry>();
-                return new COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService(logger, languageRegistry);
+                var queryBasedExtractor = provider.GetRequiredService<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor>();
+                return new COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService(logger, languageRegistry, queryBasedExtractor);
             });
         }
         

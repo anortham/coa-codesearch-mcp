@@ -17,8 +17,10 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
         {
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
             var languageRegistryLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<LanguageRegistry>.Instance;
+            var queryExtractorLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<QueryBasedExtractor>.Instance;
             _languageRegistry = new LanguageRegistry(languageRegistryLogger);
-            _service = new TypeExtractionService(logger, _languageRegistry);
+            var queryBasedExtractor = new QueryBasedExtractor(queryExtractorLogger);
+            _service = new TypeExtractionService(logger, _languageRegistry, queryBasedExtractor);
         }
 
         [TearDown]

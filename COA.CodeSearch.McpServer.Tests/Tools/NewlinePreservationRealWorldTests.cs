@@ -76,8 +76,8 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
     public async Task DeleteLines_RemoveMethodsFromRealFile_PreservesNewlinesAndFormat()
     {
         // Arrange - Use a real C# file from our codebase
-        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory, 
-            @"..\..\..\..\COA.CodeSearch.McpServer\Services\FileLineUtilities.cs");
+        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory,
+            "..", "..", "..", "..", "COA.CodeSearch.McpServer", "Services", "FileLineUtilities.cs");
         
         var testFile = await _fileManager.CreateTestCopyAsync(sourceFile, "DeleteTest_FileLineUtilities.cs");
         
@@ -122,8 +122,8 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
     public async Task InsertAtLine_AddMethodToRealFile_PreservesNewlinesAndFormat()
     {
         // Arrange - Use a real C# file
-        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory, 
-            @"..\..\..\..\COA.CodeSearch.McpServer\Models\DeleteLinesModels.cs");
+        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory,
+            "..", "..", "..", "..", "COA.CodeSearch.McpServer", "Models", "DeleteLinesModels.cs");
         
         var testFile = await _fileManager.CreateTestCopyAsync(sourceFile, "InsertTest_SearchResults.cs");
         
@@ -171,8 +171,8 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
     public async Task ReplaceLines_ReplaceMethodInRealFile_PreservesNewlinesAndFormat()
     {
         // Arrange - Use a real C# file
-        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory, 
-            @"..\..\..\..\COA.CodeSearch.McpServer\Services\FileLineUtilities.cs");
+        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory,
+            "..", "..", "..", "..", "COA.CodeSearch.McpServer", "Services", "FileLineUtilities.cs");
         
         var testFile = await _fileManager.CreateTestCopyAsync(sourceFile, "ReplaceTest_FileLineUtilities.cs");
         

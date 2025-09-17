@@ -91,7 +91,7 @@ public class PathResolutionServiceTests
     public void GetIndexPath_Should_Be_Deterministic()
     {
         // Arrange
-        var workspace = @"C:\source\TestProject";
+        var workspace = Path.Combine(Path.GetTempPath(), "source", "TestProject");
 
         // Act
         var path1 = _service.GetIndexPath(workspace);
@@ -127,7 +127,7 @@ public class PathResolutionServiceTests
     public void ComputeWorkspaceHash_Should_Generate_8_Character_Hash()
     {
         // Arrange
-        var workspace = @"C:\source\SomeProject";
+        var workspace = Path.Combine(Path.GetTempPath(), "source", "SomeProject");
 
         // Act
         var hash = _service.ComputeWorkspaceHash(workspace);

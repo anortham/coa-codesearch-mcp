@@ -9,6 +9,8 @@
 
     <!-- Enable XML documentation generation for enhanced MCP tool descriptions -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <!-- Suppress CS1591 (missing XML documentation) as this is an internal tool, not a public API -->
+    <NoWarn>$(NoWarn);CS1591</NoWarn>
 
     <!-- Global dotnet tool configuration -->
     <IsPackable>true</IsPackable>
@@ -76,6 +78,13 @@
     <!-- Embed template as resource -->
     <EmbeddedResource Include="..\Templates\codesearch-instructions.scriban">
       <LogicalName>COA.CodeSearch.McpServer.Templates.codesearch-instructions.scriban</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Embed Tree-sitter query files as resources -->
+    <EmbeddedResource Include="Services\TypeExtraction\Queries\*.scm">
+      <LogicalName>COA.CodeSearch.McpServer.Services.TypeExtraction.Queries.%(Filename).scm</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

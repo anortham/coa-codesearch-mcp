@@ -24,14 +24,14 @@ public class FileIndexingService : IFileIndexingService
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IMemoryPressureService _memoryPressureService;
-    private readonly ITypeExtractionService? _typeExtractionService;
+    private readonly ITypeExtractionService _typeExtractionService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
     private const int MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB max file size
 
     public FileIndexingService(
-        ILogger<FileIndexingService> logger, 
+        ILogger<FileIndexingService> logger,
         IConfiguration configuration,
         ILuceneIndexService luceneIndexService,
         IPathResolutionService pathResolution,
@@ -39,7 +39,7 @@ public class FileIndexingService : IFileIndexingService
         ICircuitBreakerService circuitBreakerService,
         IMemoryPressureService memoryPressureService,
         IOptions<MemoryLimitsConfiguration> memoryLimits,
-        ITypeExtractionService? typeExtractionService = null)
+        ITypeExtractionService typeExtractionService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -49,7 +49,7 @@ public class FileIndexingService : IFileIndexingService
         _circuitBreakerService = circuitBreakerService ?? throw new ArgumentNullException(nameof(circuitBreakerService));
         _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
-        _typeExtractionService = typeExtractionService;
+        _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
         
         // Initialize blacklisted extensions from configuration or defaults
         var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
@@ -424,9 +424,9 @@ public class FileIndexingService : IFileIndexingService
                 return null;
             }
             
-            // Extract type information if service is available and enabled
+            // Extract type information if enabled
             TypeExtractionResult? typeData = null;
-            if (_typeExtractionService != null && _configuration.GetValue("CodeSearch:TypeExtraction:Enabled", true))
+            if (_configuration.GetValue("CodeSearch:TypeExtraction:Enabled", true))
             {
                 try
                 {
