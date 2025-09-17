@@ -14,10 +14,12 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
         {
             // Arrange
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
+            var loggerQuery = Microsoft.Extensions.Logging.Abstractions.NullLogger<QueryBasedExtractor>.Instance;
 
             // Act
             var languageRegistry = Substitute.For<ILanguageRegistry>();
-            var service = new TypeExtractionService(logger, languageRegistry);
+            var queryBasedExtractor = new QueryBasedExtractor(loggerQuery);
+            var service = new TypeExtractionService(logger, languageRegistry, queryBasedExtractor);
 
             // Assert
             service.Should().NotBeNull();
@@ -28,8 +30,10 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
         {
             // Arrange
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
+            var loggerQuery = Microsoft.Extensions.Logging.Abstractions.NullLogger<QueryBasedExtractor>.Instance;
             var languageRegistry = Substitute.For<ILanguageRegistry>();
-            var service = new TypeExtractionService(logger, languageRegistry);
+            var queryBasedExtractor = new QueryBasedExtractor(loggerQuery);
+            var service = new TypeExtractionService(logger, languageRegistry, queryBasedExtractor);
 
             // Act
             var result = await service.ExtractTypes("", "test.cs");
@@ -46,8 +50,10 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
         {
             // Arrange
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
+            var loggerQuery = Microsoft.Extensions.Logging.Abstractions.NullLogger<QueryBasedExtractor>.Instance;
             var languageRegistry = Substitute.For<ILanguageRegistry>();
-            var service = new TypeExtractionService(logger, languageRegistry);
+            var queryBasedExtractor = new QueryBasedExtractor(loggerQuery);
+            var service = new TypeExtractionService(logger, languageRegistry, queryBasedExtractor);
 
             // Act
             var result = await service.ExtractTypes("some content", "test.unknown");

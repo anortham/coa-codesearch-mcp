@@ -85,6 +85,8 @@ public class Program
                               COA.CodeSearch.McpServer.Services.TypeExtraction.LanguageRegistry>();
         services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService,
                               COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor,
+                              COA.CodeSearch.McpServer.Services.TypeExtraction.QueryBasedExtractor>();
         services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector,
                               COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>();
         
@@ -752,7 +754,20 @@ This approach is deeply satisfying - you've not just fixed a bug, you've built p
             // Probe common Windows locations
             var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
             var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            prefixes.AddRange(new[] { programFiles, programFilesX86, @"C:\tools" });
+            prefixes.AddRange(new[] { programFiles, programFilesX86 });
+            // Add platform-specific tools directory
+            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                prefixes.Add(@"C:\tools");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+            {
+                prefixes.Add("/usr/local");
+            }
+            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+            {
+                prefixes.Add("/usr/local");
+            }
             commonSubpaths = fn => new[]
             {
                 Path.Combine("tree-sitter", "lib", fn),

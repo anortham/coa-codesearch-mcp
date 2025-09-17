@@ -12,6 +12,7 @@ using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text.Json;
+using COA.Mcp.Framework.Serialization;
 
 namespace COA.CodeSearch.McpServer.Services.Lucene;
 
@@ -399,15 +400,24 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 {
                     try
                     {
-                        _logger.LogDebug("Attempting to deserialize type_info for {FilePath}, JSON length: {Length}", 
+                        _logger.LogDebug("Attempting to deserialize type_info for {FilePath}, JSON length: {Length}",
                             hit.FilePath, typeInfoJson.Length);
-                        
-                        var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(typeInfoJson);
+
+                        var jsonOptions = JsonOptionsFactory.CreateForDeserialization();
+                        var typeData = JsonSerializer.Deserialize<StoredTypeInfo>(typeInfoJson, jsonOptions);
                         if (typeData != null)
                         {
-                            _logger.LogDebug("Deserialized type_info: {TypeCount} types, {MethodCount} methods, Language: {Language}", 
+                            _logger.LogDebug("Deserialized type_info: {TypeCount} types, {MethodCount} methods, Language: {Language}",
                                 typeData.types?.Count ?? 0, typeData.methods?.Count ?? 0, typeData.language);
-                            
+
+                            // Create TypeContext with nearby types and methods
+                            hit.TypeContext = new TypeContext
+                            {
+                                Language = typeData.language,
+                                NearbyTypes = typeData.types,
+                                NearbyMethods = typeData.methods,
+                                ContainingType = DetermineContainingType(typeData, hit.LineNumber)
+                            };
                         }
                         else
                         {
@@ -416,7 +426,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogError(ex, "Failed to deserialize type_info for {FilePath}, JSON: {Json}", 
+                        _logger.LogError(ex, "Failed to deserialize type_info for {FilePath}, JSON: {Json}",
                             hit.FilePath, typeInfoJson.Substring(0, Math.Min(500, typeInfoJson.Length)));
                     }
                 }
@@ -493,6 +503,39 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         {
             context.Lock.Release();
         }
+    }
+
+    /// <summary>
+    /// Determines the containing type for a given line number
+    /// </summary>
+    private string? DetermineContainingType(StoredTypeInfo typeData, int? lineNumber)
+    {
+        if (!lineNumber.HasValue || typeData.types == null || !typeData.types.Any())
+            return null;
+
+        // Find the type that contains this line
+        // Types should be sorted by line number (ascending)
+        foreach (var type in typeData.types.OrderBy(t => t.Line))
+        {
+            // Simple heuristic: if the line is after the type declaration
+            // and before the next type, it's probably within this type
+            // This could be improved with end line information
+            if (type.Line <= lineNumber.Value)
+            {
+                // Check if there's a next type that would exclude this line
+                var nextType = typeData.types
+                    .Where(t => t.Line > type.Line)
+                    .OrderBy(t => t.Line)
+                    .FirstOrDefault();
+
+                if (nextType == null || nextType.Line > lineNumber.Value)
+                {
+                    return $"{type.Kind} {type.Name}";
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>

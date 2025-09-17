@@ -68,8 +68,7 @@ public class SmartQueryPreprocessor
     /// <summary>
     /// Processes a user search query to determine the optimal Lucene field and search approach.
     /// </summary>
-    /// <param name="userQuery">The raw search query from the user. Can contain symbols, patterns, or natural language.</param>
-    /// <param name="mode">The search mode to use. Auto mode enables intelligent detection based on query characteristics.</param>
+    /// <param name="query">The raw search query from the user. Can contain symbols, patterns, or natural language.</param>
     /// <returns>
     /// A <see cref="QueryProcessingResult"/> containing:
     /// - ProcessedQuery: Sanitized and prepared query for Lucene

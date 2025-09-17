@@ -391,7 +391,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             // Auto-documentation: store findings in ProjectKnowledge if enabled
             if (parameters.DocumentFindings && result.Success && searchResult.TotalHits > 0)
             {
-                await DocumentSearchFindingsAsync(parameters, searchResult, query);
+                DocumentSearchFindings(parameters, searchResult, query);
             }
 
             // Cache the successful response
@@ -516,7 +516,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <summary>
     /// Document search findings in ProjectKnowledge based on intelligent pattern detection
     /// </summary>
-    private async Task DocumentSearchFindingsAsync(TextSearchParameters parameters, COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string query)
+    private void DocumentSearchFindings(TextSearchParameters parameters, COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string query)
     {
         try
         {

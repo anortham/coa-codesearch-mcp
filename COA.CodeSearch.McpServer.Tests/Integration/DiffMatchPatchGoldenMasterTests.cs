@@ -30,7 +30,7 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
     private DeleteLinesTool _deleteTool = null!;
     private UnifiedFileEditService _unifiedEditService = null!;
 
-    private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, @"..\..\..\..\COA.CodeSearch.McpServer.Tests\Resources\GoldenMaster");
+    private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "COA.CodeSearch.McpServer.Tests", "Resources", "GoldenMaster");
 
     protected override SearchAndReplaceTool CreateTool()
     {

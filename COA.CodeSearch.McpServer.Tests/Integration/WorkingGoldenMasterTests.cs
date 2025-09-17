@@ -25,7 +25,7 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
     private ReplaceLinesTool _replaceTool = null!;
     private SearchAndReplaceTool _searchReplaceTool = null!;
 
-    private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, @"..\..\..\..\COA.CodeSearch.McpServer.Tests\Resources\GoldenMaster");
+    private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "COA.CodeSearch.McpServer.Tests", "Resources", "GoldenMaster");
 
     protected override DeleteLinesTool CreateTool()
     {
@@ -292,7 +292,7 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
     private static IEnumerable<TestCaseData> GetGoldenMasterTestCases()
     {
         var testCases = new List<TestCaseData>();
-        var testResourcesPath = Path.Combine(TestContext.CurrentContext.TestDirectory, @"..\..\..\..\COA.CodeSearch.McpServer.Tests\Resources\GoldenMaster");
+        var testResourcesPath = Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "COA.CodeSearch.McpServer.Tests", "Resources", "GoldenMaster");
         var manifestsDir = Path.Combine(testResourcesPath, "Manifests");
         
         if (!Directory.Exists(manifestsDir))

@@ -41,6 +41,13 @@
     <None Include="Resources\**\*.md" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Copy real-world test files to output directory for type extraction tests -->
+    <Content Include="Resources\TypeExtraction\RealWorld\**\*.*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
   <!-- Copy tree-sitter native libraries from main project to test output -->
   <Target Name="CopyTreeSitterNatives" AfterTargets="Build">
     <ItemGroup Condition="$([MSBuild]::IsOSPlatform('Windows'))">

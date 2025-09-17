@@ -13,8 +13,9 @@ public class TypeExtractionService : ITypeExtractionService
 {
     private readonly ILogger<TypeExtractionService> _logger;
     private readonly ILanguageRegistry _languageRegistry;
+    private readonly IQueryBasedExtractor _queryBasedExtractor;
     private readonly Dictionary<string, ILanguageFileAnalyzer> _specializedAnalyzers;
-    
+
     private static readonly Dictionary<string, string> ExtensionToLanguage = new()
     {
         { ".cs", "c-sharp" },
@@ -60,11 +61,15 @@ public class TypeExtractionService : ITypeExtractionService
         // Note: Vue and Razor use specialized multi-language extractors
     };
 
-    
-    public TypeExtractionService(ILogger<TypeExtractionService> logger, ILanguageRegistry languageRegistry)
+
+    public TypeExtractionService(
+        ILogger<TypeExtractionService> logger,
+        ILanguageRegistry languageRegistry,
+        IQueryBasedExtractor queryBasedExtractor)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _languageRegistry = languageRegistry ?? throw new ArgumentNullException(nameof(languageRegistry));
+        _queryBasedExtractor = queryBasedExtractor ?? throw new ArgumentNullException(nameof(queryBasedExtractor));
 
         // Initialize specialized analyzers - they will use this service for embedded parsing
         _specializedAnalyzers = new Dictionary<string, ILanguageFileAnalyzer>();
@@ -158,12 +163,10 @@ public class TypeExtractionService : ITypeExtractionService
 
         try
         {
-            var types = new List<TypeInfo>();
-            var methods = new List<MethodInfo>();
-
+            // Try query-based extraction first for better accuracy
             if (languageHandle.IsNative)
             {
-                // Use native macOS path
+                // Use native macOS path with query-based extraction
                 var bytes = Encoding.UTF8.GetBytes(content);
                 var tree = TreeSitterNative.ts_parser_parse_string_encoding(
                     languageHandle.NativeParser,
@@ -180,9 +183,30 @@ public class TypeExtractionService : ITypeExtractionService
 
                 try
                 {
+                    // Try query-based extraction first
+                    // Note: We pass the tree pointer, not the root node pointer to avoid unsafe code
+                    var enhancedResult = await _queryBasedExtractor.ExtractWithQueriesNative(
+                        tree, IntPtr.Zero, languageName, bytes);
+
+                    if (enhancedResult.Success)
+                    {
+                        return ConvertToBasicResult(enhancedResult, languageName);
+                    }
+
+                    // Fallback to ad-hoc extraction
                     var root = TreeSitterNative.ts_tree_root_node(tree);
+                    var types = new List<TypeInfo>();
+                    var methods = new List<MethodInfo>();
                     var adapter = new NativeNodeAdapter(root, bytes);
                     ExtractFromNodeNative(adapter, types, methods);
+
+                    return new TypeExtractionResult
+                    {
+                        Success = true,
+                        Types = types,
+                        Methods = methods,
+                        Language = languageName
+                    };
                 }
                 finally
                 {
@@ -191,7 +215,7 @@ public class TypeExtractionService : ITypeExtractionService
             }
             else
             {
-                // Use managed TreeSitter.DotNet path
+                // Use managed TreeSitter.DotNet path with query-based extraction
                 if (languageHandle.Parser == null)
                 {
                     _logger.LogWarning("Language handle for {Language} has null parser", languageName);
@@ -205,16 +229,28 @@ public class TypeExtractionService : ITypeExtractionService
                     return new TypeExtractionResult { Success = false };
                 }
 
-                ExtractFromNode(tree.RootNode, types, methods);
-            }
+                // Try query-based extraction first
+                var enhancedResult = await _queryBasedExtractor.ExtractWithQueries(
+                    tree.RootNode, languageName, content);
 
-            return new TypeExtractionResult
-            {
-                Success = true,
-                Types = types,
-                Methods = methods,
-                Language = languageName
-            };
+                if (enhancedResult.Success)
+                {
+                    return ConvertToBasicResult(enhancedResult, languageName);
+                }
+
+                // Fallback to ad-hoc extraction
+                var types = new List<TypeInfo>();
+                var methods = new List<MethodInfo>();
+                ExtractFromNode(tree.RootNode, types, methods);
+
+                return new TypeExtractionResult
+                {
+                    Success = true,
+                    Types = types,
+                    Methods = methods,
+                    Language = languageName
+                };
+            }
         }
         catch (Exception ex)
         {
@@ -866,9 +902,58 @@ public class TypeExtractionService : ITypeExtractionService
     {
         if (string.IsNullOrEmpty(text))
             return string.Empty;
-            
+
         var lines = text.Split('\n');
         return lines[0].Trim();
+    }
+
+    /// <summary>
+    /// Convert enhanced extraction result from QueryBasedExtractor to basic TypeExtractionResult
+    /// </summary>
+    private TypeExtractionResult ConvertToBasicResult(EnhancedTypeExtractionResult enhanced, string language)
+    {
+        var types = new List<TypeInfo>();
+        var methods = new List<MethodInfo>();
+
+        // Convert enhanced types to basic types
+        foreach (var enhancedType in enhanced.Types)
+        {
+            types.Add(new TypeInfo
+            {
+                Name = enhancedType.Name,
+                Kind = enhancedType.Kind,
+                Signature = enhancedType.Signature,
+                Line = enhancedType.Line,
+                Column = enhancedType.Column,
+                Modifiers = enhancedType.Modifiers,
+                BaseType = enhancedType.BaseType,
+                Interfaces = enhancedType.Interfaces
+            });
+        }
+
+        // Convert enhanced methods to basic methods
+        foreach (var enhancedMethod in enhanced.Methods)
+        {
+            methods.Add(new MethodInfo
+            {
+                Name = enhancedMethod.Name,
+                Signature = enhancedMethod.Signature,
+                ReturnType = enhancedMethod.ReturnType,
+                Line = enhancedMethod.Line,
+                Column = enhancedMethod.Column,
+                ContainingType = enhancedMethod.ContainingType,
+                Parameters = enhancedMethod.Parameters,
+                Modifiers = enhancedMethod.Modifiers
+            });
+        }
+
+        return new TypeExtractionResult
+        {
+            Success = enhanced.Success,
+            Types = types,
+            Methods = methods,
+            Language = language
+        };
     }
 }
 

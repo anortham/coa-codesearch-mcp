@@ -1,6 +1,6 @@
 # Tree-sitter Type Enhancement Plan for CodeSearch MCP
 
-**Status Update (September 17, 2025)**: ✅ Core infrastructure IMPLEMENTED - Phase 1-3 completed with critical performance fixes
+**Status Update (September 17, 2025 - Session 3)**: ✅ Type Information Surfaced in Search Results - Phase 4.2 completed with TypeContext integration
 
 ## Executive Summary
 Enhance CodeSearch with automatic type information extraction using tree-sitter, providing rich type context in search results without requiring separate navigation tools. This approach leverages Claude's natural preference for using CodeSearch while adding the type awareness that makes code navigation more effective.
@@ -167,10 +167,13 @@ if (typeData.Success && (typeData.Types.Any() || typeData.Methods.Any()))
 - ✅ Type and method count statistics
 - ✅ Error handling and graceful degradation
 
-### Phase 4: Enhanced Search Response ⚠️ PARTIALLY IMPLEMENTED
+### Phase 4: Enhanced Search Response ✅ FULLY IMPLEMENTED
 
-#### 4.1 Modify TextSearchTool ⚠️ NEEDS ENHANCEMENT
-**Status**: Type information indexed but not yet surfaced in search results
+#### 4.1 Query-Based Extraction ✅ COMPLETED (September 17, 2025 - Session 2)
+**Status**: Implemented QueryBasedExtractor with .scm query files for C#, TypeScript, and Python
+
+#### 4.2 Type Information in Search Results ✅ COMPLETED (September 17, 2025 - Session 3)
+**Status**: TypeContext added to SearchHit model, type information now surfaced in all search results
 
 ```csharp
 protected override async Task<AIOptimizedResponse<SearchResult>> ExecuteInternalAsync(
@@ -372,7 +375,7 @@ Input: "20250829.log"
 Expected: IsLikelyTypeQuery = false
 ```
 
-## Rollout Plan ✅ COMPLETED PHASES 1-3
+## Rollout Plan ✅ COMPLETED PHASES 1-4
 
 ### Phase 1: Minimal Implementation ✅ COMPLETED (September 2025)
 - ✅ Tree-sitter package added with custom bindings
@@ -386,30 +389,41 @@ Expected: IsLikelyTypeQuery = false
 - ✅ Inheritance and interface information extraction
 - ✅ Smart query preprocessing implemented
 
-### Phase 3: Scoring and Optimization ✅ COMPLETED (September 2025)
+### Phase 3: Scoring and Optimization ✅ COMPLETED (September 17, 2025)
 - ✅ Type-aware search routing with SmartQueryPreprocessor
 - ✅ Performance optimized with LanguageRegistry caching (>10x improvement)
 - ✅ Configuration options implemented
 - ✅ Comprehensive testing with 545+ passing tests
 
-### Phase 4: Monitoring and Iteration ⚠️ ONGOING
-- ⚠️ Monitor Claude's usage patterns with type context
-- ⚠️ Measure search quality improvements
-- ⚠️ Gather performance metrics from production use
-- ⚠️ Iterate based on real-world findings
+### Phase 4: Query-Based Extraction ✅ COMPLETED (September 17, 2025 - Session 2)
+- ✅ **QueryBasedExtractor Service**: Implemented with support for .scm query files
+- ✅ **Query Files Created**: C# (csharp.scm), TypeScript (typescript.scm), Python (python.scm)
+- ✅ **Enhanced Type Structures**: Added EnhancedTypeInfo and EnhancedMethodInfo with generic parameters
+- ✅ **DI Integration**: Fixed nullable service pattern, properly registered QueryBasedExtractor
+- ✅ **Test Updates**: Updated all test fixtures to support new dependencies
+- ✅ **Fallback Strategy**: Maintains backward compatibility with ad-hoc extraction
+
+### Phase 5: Future Enhancements ⚠️ IN PROGRESS
+- ✅ Surface type information in search results UI (Session 3)
+- ✅ Create query files for additional languages - Java, Go, Rust (Session 3)
+- ⚠️ Add comprehensive macOS native testing
+- ⚠️ Implement method body analysis for type references
 
 ## Success Metrics
 
-### ✅ ACHIEVED METRICS (September 2025)
+### ✅ ACHIEVED METRICS (September 17, 2025 - Session 2)
 1. ✅ **Adoption**: Claude continues using text_search naturally with enhanced type context
 2. ✅ **Performance**: >10x indexing improvement achieved (grammar caching eliminates overhead)
 3. ✅ **Coverage**: 95%+ of type definitions extracted accurately across 21 languages
 4. ✅ **Reliability**: Zero race conditions with thread-safe LanguageRegistry
-5. ✅ **Testing**: 545+ tests passing with comprehensive type extraction coverage
+5. ✅ **Testing**: All tests passing after QueryBasedExtractor integration
+6. ✅ **Query System**: Precise extraction using Tree-sitter queries instead of ad-hoc heuristics
+7. ✅ **Code Quality**: Fixed nullable service anti-pattern in DI configuration
 
 ### ⚠️ PENDING METRICS (To Measure)
-2. **Relevance**: Type-related searches return better results (needs measurement)
-5. **User Satisfaction**: Reduced need for separate navigation tools (needs assessment)
+1. **Relevance**: Type-related searches return better results (needs measurement)
+2. **User Satisfaction**: Reduced need for separate navigation tools (needs assessment)
+3. **Query Accuracy**: Compare query-based vs ad-hoc extraction accuracy
 
 ## Rollback Plan
 

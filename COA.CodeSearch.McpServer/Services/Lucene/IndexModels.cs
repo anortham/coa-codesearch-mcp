@@ -1,6 +1,7 @@
 using Lucene.Net.Documents;
 using Lucene.Net.Search;
 using COA.CodeSearch.McpServer.Models;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
 
 namespace COA.CodeSearch.McpServer.Services.Lucene;
 
@@ -49,10 +50,24 @@ public class SearchHit
     public int? EndLine { get; set; }
     
     
+    // Type information from Tree-sitter extraction
+    public TypeContext? TypeContext { get; set; }
+
     // Helper properties for common fields
     public string? FileName => Fields.GetValueOrDefault("filename");
     public string? RelativePath => Fields.GetValueOrDefault("relativePath");
     public string? Extension => Fields.GetValueOrDefault("extension");
+}
+
+/// <summary>
+/// Type context information for search hits
+/// </summary>
+public class TypeContext
+{
+    public string? ContainingType { get; set; }
+    public List<TypeExtraction.TypeInfo>? NearbyTypes { get; set; }
+    public List<TypeExtraction.MethodInfo>? NearbyMethods { get; set; }
+    public string? Language { get; set; }
 }
 
 /// <summary>
