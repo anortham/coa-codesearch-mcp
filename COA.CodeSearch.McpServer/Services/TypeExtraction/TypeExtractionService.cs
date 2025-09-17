@@ -12,6 +12,7 @@ namespace COA.CodeSearch.McpServer.Services.TypeExtraction;
 public class TypeExtractionService : ITypeExtractionService
 {
     private readonly ILogger<TypeExtractionService> _logger;
+    private readonly ILanguageRegistry _languageRegistry;
     private readonly Dictionary<string, ILanguageFileAnalyzer> _specializedAnalyzers;
     
     private static readonly Dictionary<string, string> ExtensionToLanguage = new()
@@ -59,17 +60,12 @@ public class TypeExtractionService : ITypeExtractionService
         // Note: Vue and Razor use specialized multi-language extractors
     };
 
-    // Languages that don't have Tree-sitter DLLs available or have compatibility issues
-    private static readonly HashSet<string> UnsupportedTreeSitterLanguages = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
-    {
-        "kotlin", "r", "objective-c", "lua", "dart", "zig", "elm", "clojure", "elixir",
-        "go", "swift" // Currently have missing DLLs or version compatibility issues
-    };
     
-    public TypeExtractionService(ILogger<TypeExtractionService> logger)
+    public TypeExtractionService(ILogger<TypeExtractionService> logger, ILanguageRegistry languageRegistry)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
-        
+        _languageRegistry = languageRegistry ?? throw new ArgumentNullException(nameof(languageRegistry));
+
         // Initialize specialized analyzers - they will use this service for embedded parsing
         _specializedAnalyzers = new Dictionary<string, ILanguageFileAnalyzer>();
         InitializeSpecializedAnalyzers();
@@ -87,7 +83,7 @@ public class TypeExtractionService : ITypeExtractionService
         _specializedAnalyzers["razor"] = new RazorFileAnalyzer(razorLogger, this);
     }
     
-    public TypeExtractionResult ExtractTypes(string content, string filePath)
+    public async Task<TypeExtractionResult> ExtractTypes(string content, string filePath)
     {
         // Handle empty content case - this is considered successful with no types/methods
         if (string.IsNullOrWhiteSpace(content))
@@ -110,12 +106,12 @@ public class TypeExtractionService : ITypeExtractionService
         
         // Check if we have a specialized analyzer for this language (but avoid recursion for embedded files)
         var fileExtension = Path.GetExtension(filePath).ToLowerInvariant();
-        if (_specializedAnalyzers.TryGetValue(languageName, out var analyzer) && 
+        if (_specializedAnalyzers.TryGetValue(languageName, out var analyzer) &&
             fileExtension != ".ts" && fileExtension != ".js" && fileExtension != ".cs")
         {
             try
             {
-                return analyzer.ExtractTypes(content, filePath);
+                return await analyzer.ExtractTypes(content, filePath);
             }
             catch (Exception ex)
             {
@@ -126,70 +122,7 @@ public class TypeExtractionService : ITypeExtractionService
         
         try
         {
-            // On macOS, use a direct P/Invoke path to the Tree-sitter C API to avoid NuGet loader limitations
-            if (OperatingSystem.IsMacOS())
-            {
-                return ExtractTypesWithNativeApiMac(content, filePath, languageName);
-            }
-
-            // Non-macOS path: use TreeSitter.DotNet
-            
-            // Check if this language is known to be unsupported
-            if (UnsupportedTreeSitterLanguages.Contains(languageName))
-            {
-                _logger.LogDebug("Language {Language} is not supported by Tree-sitter (missing DLL or compatibility issues) for file {FilePath}", languageName, filePath);
-                return new TypeExtractionResult { Success = false };
-            }
-            
-            Language language;
-            if (languageName == "c-sharp")
-            {
-                language = new Language("tree-sitter-c-sharp", "tree_sitter_c_sharp");
-            }
-            else if (languageName == "razor")
-            {
-                // Razor files should be handled by RazorFileAnalyzer, not tree-sitter
-                // If we reach here, the specialized analyzer failed - return failure
-                _logger.LogDebug("Razor file {FilePath} reached tree-sitter fallback - specialized analyzer should handle this", filePath);
-                return new TypeExtractionResult { Success = false };
-            }
-            else
-            {
-                try
-                {
-                    language = new Language(languageName);
-                }
-                catch (Exception ex) when (ex.Message.Contains("Could not find entry point") || ex.Message.Contains("incompatible"))
-                {
-                    _logger.LogDebug("Tree-sitter library for {Language} is not available or incompatible: {Error} for file {FilePath}", languageName, ex.Message, filePath);
-                    return new TypeExtractionResult { Success = false };
-                }
-            }
-
-            using (language)
-            {
-                using var parser = new Parser(language);
-                using var tree = parser.Parse(content);
-
-                if (tree == null)
-                {
-                    _logger.LogDebug("Failed to parse file {FilePath}", filePath);
-                    return new TypeExtractionResult { Success = false };
-                }
-
-                var types = new List<TypeInfo>();
-                var methods = new List<MethodInfo>();
-
-                ExtractFromNode(tree.RootNode, types, methods);
-
-                return new TypeExtractionResult
-                {
-                    Success = true,
-                    Types = types,
-                    Methods = methods,
-                    Language = languageName
-                };
-            }
+            return await ExtractTypesWithLanguageRegistry(content, filePath, languageName);
         }
         catch (Exception ex)
         {
@@ -198,119 +131,82 @@ public class TypeExtractionService : ITypeExtractionService
         }
     }
 
-    private TypeExtractionResult ExtractTypesWithNativeApiMac(string content, string filePath, string languageName)
+    private async Task<TypeExtractionResult> ExtractTypesWithLanguageRegistry(string content, string filePath, string languageName)
     {
-        // Check if this language is known to be unsupported
-        if (UnsupportedTreeSitterLanguages.Contains(languageName))
+        // Check if this language is supported by the registry
+        if (!_languageRegistry.IsLanguageSupported(languageName))
         {
-            _logger.LogDebug("Language {Language} is not supported by Tree-sitter (missing DLL or compatibility issues) for file {FilePath}", languageName, filePath);
+            _logger.LogDebug("Language {Language} is not supported by Tree-sitter for file {FilePath}", languageName, filePath);
             return new TypeExtractionResult { Success = false };
         }
-        
+
         // Handle languages that don't have tree-sitter libraries
         if (languageName == "razor")
         {
             // Razor files should be handled by RazorFileAnalyzer, not tree-sitter
-            _logger.LogDebug("Razor file {FilePath} reached macOS tree-sitter fallback - specialized analyzer should handle this", filePath);
+            _logger.LogDebug("Razor file {FilePath} reached tree-sitter fallback - specialized analyzer should handle this", filePath);
             return new TypeExtractionResult { Success = false };
         }
-        
-        // Ensure core and grammar libraries are preloaded
-        string libName = languageName == "c-sharp" ? "tree-sitter-c-sharp" : $"tree-sitter-{languageName}";
-        TryPreloadMacNativeLibrary("tree-sitter");
-        TryPreloadMacNativeLibrary(libName);
 
-        // Load TSLanguage* from grammar dylib by resolving the exported symbol tree_sitter_<lang>
-        var exportName = languageName == "c-sharp" ? "tree_sitter_c_sharp" : $"tree_sitter_{languageName.Replace('-', '_')}";
-
-        IntPtr langLibHandle = IntPtr.Zero;
-        IntPtr langFuncPtr = IntPtr.Zero;
-        IntPtr languagePtr = IntPtr.Zero;
-
-        // Probe common names for the grammar library
-        var dllBaseNames = new[]
+        // Get the cached language handle
+        var languageHandle = await _languageRegistry.GetLanguageHandleAsync(languageName);
+        if (languageHandle == null)
         {
-            libName,
-            libName.Replace("tree-sitter-", string.Empty),
-            languageName
-        };
-
-        foreach (var baseName in dllBaseNames)
-        {
-            // Try load by name; our DllImportResolver should help map to lib*.dylib in common locations
-            if (NativeLibrary.TryLoad(baseName, out langLibHandle))
-            {
-                break;
-            }
-        }
-
-        if (langLibHandle == IntPtr.Zero)
-        {
-            // Last resort: try direct dylib path probing
-            string dylibFile = $"lib{libName}.dylib";
-            var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
-            foreach (var prefix in prefixes)
-            {
-                var candidate = Path.Combine(prefix, "lib", dylibFile);
-                if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out langLibHandle))
-                {
-                    break;
-                }
-                var optCandidate = Path.Combine(prefix, "opt", "tree-sitter", "lib", dylibFile);
-                if (File.Exists(optCandidate) && NativeLibrary.TryLoad(optCandidate, out langLibHandle))
-                {
-                    break;
-                }
-            }
-        }
-
-        if (langLibHandle == IntPtr.Zero)
-        {
-            throw new PlatformNotSupportedException($"Could not load Tree-sitter grammar library '{libName}' on macOS.");
+            _logger.LogDebug("Failed to get language handle for {Language} for file {FilePath}", languageName, filePath);
+            return new TypeExtractionResult { Success = false };
         }
 
         try
         {
-            langFuncPtr = NativeLibrary.GetExport(langLibHandle, exportName);
-        }
-        catch (Exception ex)
-        {
-            throw new DllNotFoundException($"Missing export '{exportName}' in grammar library '{libName}'.", ex);
-        }
-
-        // Create delegate and obtain TSLanguage*
-        var del = Marshal.GetDelegateForFunctionPointer<LanguageFactory>(langFuncPtr);
-        languagePtr = del();
-        if (languagePtr == IntPtr.Zero)
-        {
-            throw new InvalidOperationException($"Failed to obtain TSLanguage* from '{exportName}'.");
-        }
-
-        // Prepare UTF8 input
-        var bytes = Encoding.UTF8.GetBytes(content);
-
-        IntPtr parser = IntPtr.Zero;
-        IntPtr tree = IntPtr.Zero;
-
-        try
-        {
-            parser = TreeSitterNative.ts_parser_new();
-            if (parser == IntPtr.Zero) throw new InvalidOperationException("ts_parser_new returned null");
-
-            TreeSitterNative.ts_parser_set_language(parser, languagePtr);
-            tree = TreeSitterNative.ts_parser_parse_string_encoding(parser, IntPtr.Zero, bytes, (uint)bytes.Length, TreeSitterNative.TSInputEncoding.UTF8);
-            if (tree == IntPtr.Zero)
-            {
-                _logger.LogDebug("Failed to parse file {FilePath}", filePath);
-                return new TypeExtractionResult { Success = false };
-            }
-
-            var root = TreeSitterNative.ts_tree_root_node(tree);
             var types = new List<TypeInfo>();
             var methods = new List<MethodInfo>();
 
-            var adapter = new NativeNodeAdapter(root, bytes);
-            ExtractFromNodeNative(adapter, types, methods);
+            if (languageHandle.IsNative)
+            {
+                // Use native macOS path
+                var bytes = Encoding.UTF8.GetBytes(content);
+                var tree = TreeSitterNative.ts_parser_parse_string_encoding(
+                    languageHandle.NativeParser,
+                    IntPtr.Zero,
+                    bytes,
+                    (uint)bytes.Length,
+                    TreeSitterNative.TSInputEncoding.UTF8);
+
+                if (tree == IntPtr.Zero)
+                {
+                    _logger.LogDebug("Failed to parse file {FilePath}", filePath);
+                    return new TypeExtractionResult { Success = false };
+                }
+
+                try
+                {
+                    var root = TreeSitterNative.ts_tree_root_node(tree);
+                    var adapter = new NativeNodeAdapter(root, bytes);
+                    ExtractFromNodeNative(adapter, types, methods);
+                }
+                finally
+                {
+                    TreeSitterNative.ts_tree_delete(tree);
+                }
+            }
+            else
+            {
+                // Use managed TreeSitter.DotNet path
+                if (languageHandle.Parser == null)
+                {
+                    _logger.LogWarning("Language handle for {Language} has null parser", languageName);
+                    return new TypeExtractionResult { Success = false };
+                }
+
+                using var tree = languageHandle.Parser.Parse(content);
+                if (tree == null)
+                {
+                    _logger.LogDebug("Failed to parse file {FilePath}", filePath);
+                    return new TypeExtractionResult { Success = false };
+                }
+
+                ExtractFromNode(tree.RootNode, types, methods);
+            }
 
             return new TypeExtractionResult
             {
@@ -320,11 +216,10 @@ public class TypeExtractionService : ITypeExtractionService
                 Language = languageName
             };
         }
-        finally
+        catch (Exception ex)
         {
-            if (tree != IntPtr.Zero) TreeSitterNative.ts_tree_delete(tree);
-            if (parser != IntPtr.Zero) TreeSitterNative.ts_parser_delete(parser);
-            if (langLibHandle != IntPtr.Zero) NativeLibrary.Free(langLibHandle);
+            _logger.LogError(ex, "Error during type extraction for {Language} file {FilePath}", languageName, filePath);
+            return new TypeExtractionResult { Success = false };
         }
     }
 
@@ -389,37 +284,6 @@ public class TypeExtractionService : ITypeExtractionService
         public NativeNodeAdapter? Parent => _parent;
     }
 
-    private static void TryPreloadMacNativeLibrary(string libraryName)
-    {
-        if (!OperatingSystem.IsMacOS()) return;
-        try
-        {
-            // If already loaded, this will be quick. Otherwise, probe system locations.
-            var fileName = $"lib{libraryName}.dylib";
-            var prefixes = new[] { "/opt/homebrew", "/usr/local", "/opt/local" };
-            foreach (var prefix in prefixes)
-            {
-                var candidate = Path.Combine(prefix, "lib", fileName);
-                if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out _)) return;
-                var optCandidate = Path.Combine(prefix, "opt", "tree-sitter", "lib", fileName);
-                if (File.Exists(optCandidate) && NativeLibrary.TryLoad(optCandidate, out _)) return;
-            }
-
-            var extra = Environment.GetEnvironmentVariable("TREE_SITTER_NATIVE_PATHS");
-            if (!string.IsNullOrWhiteSpace(extra))
-            {
-                foreach (var dir in extra.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-                {
-                    var candidate = Path.Combine(dir, fileName);
-                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out _)) return;
-                }
-            }
-        }
-        catch
-        {
-            // Best-effort only; fallback to default loading behavior if this fails
-        }
-    }
     
     private void ExtractFromNode(Node node, List<TypeInfo> types, List<MethodInfo> methods)
     {
@@ -1010,7 +874,7 @@ public class TypeExtractionService : ITypeExtractionService
 
 public interface ITypeExtractionService
 {
-    TypeExtractionResult ExtractTypes(string content, string filePath);
+    Task<TypeExtractionResult> ExtractTypes(string content, string filePath);
 }
 
 public class TypeExtractionResult

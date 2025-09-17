@@ -198,7 +198,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
                 }
                 
                 // Extract types using Tree-sitter as fallback
-                typeExtractionResult = _typeExtractionService.ExtractTypes(content, filePath);
+                typeExtractionResult = await _typeExtractionService.ExtractTypes(content, filePath);
             }
             else
             {

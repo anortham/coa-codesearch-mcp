@@ -10,16 +10,25 @@ namespace COA.CodeSearch.McpServer.Tests.Services.TypeExtraction
     public class CSharpTypeExtractionTests
     {
         private TypeExtractionService _service;
+        private LanguageRegistry _languageRegistry;
 
         [SetUp]
         public void SetUp()
         {
             var logger = Microsoft.Extensions.Logging.Abstractions.NullLogger<TypeExtractionService>.Instance;
-            _service = new TypeExtractionService(logger);
+            var languageRegistryLogger = Microsoft.Extensions.Logging.Abstractions.NullLogger<LanguageRegistry>.Instance;
+            _languageRegistry = new LanguageRegistry(languageRegistryLogger);
+            _service = new TypeExtractionService(logger, _languageRegistry);
+        }
+
+        [TearDown]
+        public void TearDown()
+        {
+            _languageRegistry?.Dispose();
         }
 
         [Test]
-        public void Should_Extract_Class_And_Method_From_CSharp_Code()
+        public async Task Should_Extract_Class_And_Method_From_CSharp_Code()
         {
             // Arrange
             var code = @"
@@ -34,7 +43,7 @@ namespace MyNamespace
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -48,7 +57,7 @@ namespace MyNamespace
         }
 
         [Test]
-        public void Should_Extract_Correct_Return_Types_For_Various_Method_Signatures()
+        public async Task Should_Extract_Correct_Return_Types_For_Various_Method_Signatures()
         {
             // Arrange
             var code = @"
@@ -78,7 +87,7 @@ public class TestClass
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -116,7 +125,7 @@ public class TestClass
         }
 
         [Test]
-        public void Should_Extract_Method_Modifiers()
+        public async Task Should_Extract_Method_Modifiers()
         {
             // Arrange
             var code = @"
@@ -136,7 +145,7 @@ public class TestClass
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -155,7 +164,7 @@ public class TestClass
         }
 
         [Test]
-        public void Should_Handle_Interface_Methods()
+        public async Task Should_Handle_Interface_Methods()
         {
             // Arrange
             var code = @"
@@ -169,7 +178,7 @@ public interface ITestService
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -196,7 +205,7 @@ public interface ITestService
         }
 
         [Test]
-        public void Debug_Simple_String_Return_Method()
+        public async Task Debug_Simple_String_Return_Method()
         {
             // Arrange - The simplest possible case with a string return type
             var code = @"
@@ -206,7 +215,7 @@ public class TestClass
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();
@@ -226,7 +235,7 @@ public class TestClass
         }
 
         [Test]
-        public void Debug_Task_Return_Method()
+        public async Task Debug_Task_Return_Method()
         {
             // Arrange - Test the specific failing case
             var code = @"
@@ -236,7 +245,7 @@ public class TestClass
 }";
 
             // Act
-            var result = _service.ExtractTypes(code, "test.cs");
+            var result = await _service.ExtractTypes(code, "test.cs");
 
             // Assert
             result.Should().NotBeNull();

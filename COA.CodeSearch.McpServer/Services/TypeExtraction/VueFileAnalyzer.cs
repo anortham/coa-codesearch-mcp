@@ -27,7 +27,7 @@ public class VueFileAnalyzer : ILanguageFileAnalyzer
         _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
     }
     
-    public TypeExtractionResult ExtractTypes(string content, string filePath)
+    public async Task<TypeExtractionResult> ExtractTypes(string content, string filePath)
     {
         try
         {
@@ -50,7 +50,7 @@ public class VueFileAnalyzer : ILanguageFileAnalyzer
                 : $"{filePath}.js";
             
             // Use the existing type extraction service to parse the script content
-            var scriptResult = _typeExtractionService.ExtractTypes(scriptBlock.Content, tempFilePath);
+            var scriptResult = await _typeExtractionService.ExtractTypes(scriptBlock.Content, tempFilePath);
             
             if (scriptResult.Success)
             {

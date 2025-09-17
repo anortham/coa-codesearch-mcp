@@ -182,7 +182,7 @@ public enum TestEnum { }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
             _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new TypeExtractionResult
+                .ReturnsAsync(new TypeExtractionResult
                 {
                     Success = true,
                     Language = "csharp",
@@ -244,7 +244,7 @@ public static void GlobalMethod() { }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
             _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new TypeExtractionResult
+                .ReturnsAsync(new TypeExtractionResult
                 {
                     Success = true,
                     Language = "csharp",
@@ -371,7 +371,7 @@ public class TestClass : BaseClass, ITestInterface
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
             _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new TypeExtractionResult
+                .ReturnsAsync(new TypeExtractionResult
                 {
                     Success = true,
                     Language = "csharp",
@@ -507,7 +507,7 @@ public class TestClass
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
             _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new TypeExtractionResult
+                .ReturnsAsync(new TypeExtractionResult
                 {
                     Success = false,
                     Language = "csharp"
@@ -639,7 +639,7 @@ public class TestClass
         private void SetupSuccessfulTypeExtraction()
         {
             _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .Returns(new TypeExtractionResult
+                .ReturnsAsync(new TypeExtractionResult
                 {
                     Success = true,
                     Language = "csharp",

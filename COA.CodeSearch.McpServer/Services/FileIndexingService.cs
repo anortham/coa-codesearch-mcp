@@ -430,7 +430,7 @@ public class FileIndexingService : IFileIndexingService
             {
                 try
                 {
-                    typeData = _typeExtractionService.ExtractTypes(content, filePath);
+                    typeData = await _typeExtractionService.ExtractTypes(content, filePath);
                 }
                 catch (Exception ex)
                 {

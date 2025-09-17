@@ -81,9 +81,11 @@ public class Program
                 preserveCase: false, splitCamelCase: true));
         
         // Type extraction services (optional - graceful fallback if not available)
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService, 
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry,
+                              COA.CodeSearch.McpServer.Services.TypeExtraction.LanguageRegistry>();
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService,
                               COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>();
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector, 
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector,
                               COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>();
         
         // Documentation services (ProjectKnowledge integration removed)

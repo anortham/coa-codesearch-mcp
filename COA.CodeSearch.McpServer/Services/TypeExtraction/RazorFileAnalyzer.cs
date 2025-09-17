@@ -47,7 +47,7 @@ public class RazorFileAnalyzer : ILanguageFileAnalyzer
         _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
     }
     
-    public TypeExtractionResult ExtractTypes(string content, string filePath)
+    public async Task<TypeExtractionResult> ExtractTypes(string content, string filePath)
     {
         try
         {
@@ -72,7 +72,7 @@ public class RazorFileAnalyzer : ILanguageFileAnalyzer
             var tempCsFilePath = $"{filePath}.cs";
             
             // Use the existing type extraction service to parse the combined C# code
-            var csharpResult = _typeExtractionService.ExtractTypes(combinedCode, tempCsFilePath);
+            var csharpResult = await _typeExtractionService.ExtractTypes(combinedCode, tempCsFilePath);
             
             if (csharpResult.Success)
             {

@@ -76,12 +76,17 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             // Add logger for TypeExtractionService specifically
             var typeExtractionLogger = new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>>();
             services.AddSingleton(typeExtractionLogger.Object);
-            
+
+            // Add mock LanguageRegistry for TypeExtractionService
+            var mockLanguageRegistry = new Mock<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry>();
+            services.AddSingleton(mockLanguageRegistry.Object);
+
             // Add TypeExtraction services for tools that need them (e.g., FindPatternsTool)
             services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(provider =>
             {
                 var logger = provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>>();
-                return new COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService(logger);
+                var languageRegistry = provider.GetRequiredService<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry>();
+                return new COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService(logger, languageRegistry);
             });
         }
         
