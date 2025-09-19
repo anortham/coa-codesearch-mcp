@@ -1,6 +1,7 @@
 using Microsoft.Extensions.Logging;
 using System.Collections.Concurrent;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using System.Text;
 using TreeSitter;
 using COA.CodeSearch.McpServer.Services.TypeExtraction.Interop;
@@ -674,14 +675,157 @@ public class QueryBasedExtractor : IQueryBasedExtractor
 
     private EnhancedTypeExtractionResult FallbackExtractionNative(IntPtr treePtr, byte[] contentBytes)
     {
-        // Basic fallback for native extraction
-        // Note: treePtr is the tree pointer, not the root node pointer
-        return new EnhancedTypeExtractionResult
+        // Convert native tree to managed Node for fallback extraction
+        try
         {
-            Success = true, // Fallback extraction technically succeeds even if no types found
-            Types = new List<EnhancedTypeInfo>(),
-            Methods = new List<EnhancedMethodInfo>()
-        };
+            // Get the root node from the tree
+            var rootNode = TreeSitterNative.ts_tree_root_node(treePtr);
+
+            // Convert content bytes to string for text extraction
+            var content = Encoding.UTF8.GetString(contentBytes);
+
+            // Create a managed wrapper for the native node to use with simplified extraction
+            var result = new EnhancedTypeExtractionResult
+            {
+                Success = true,
+                Types = new List<EnhancedTypeInfo>(),
+                Methods = new List<EnhancedMethodInfo>()
+            };
+
+            // Use the native node traversal for extraction
+            ExtractTypesFromNativeNode(rootNode, contentBytes, result.Types, result.Methods);
+
+            return result;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to perform native fallback extraction");
+            return new EnhancedTypeExtractionResult
+            {
+                Success = true, // Still mark as success to avoid breaking the flow
+                Types = new List<EnhancedTypeInfo>(),
+                Methods = new List<EnhancedMethodInfo>()
+            };
+        }
+    }
+
+    private void ExtractTypesFromNativeNode(TreeSitterNative.TSNode node, byte[] contentBytes, List<EnhancedTypeInfo> types, List<EnhancedMethodInfo> methods)
+    {
+        try
+        {
+            // Get node type using native API
+            var nodeTypePtr = TreeSitterNative.ts_node_type(node);
+            if (nodeTypePtr == IntPtr.Zero) return;
+
+            var nodeType = Marshal.PtrToStringAnsi(nodeTypePtr) ?? "";
+            var content = Encoding.UTF8.GetString(contentBytes);
+
+            // Get node position information
+            var startPoint = TreeSitterNative.ts_node_start_point(node);
+            var startRow = startPoint.row;
+            var startColumn = startPoint.column;
+
+            // Handle type declarations (classes, interfaces, structs, enums)
+            if (nodeType.Contains("class") || nodeType.Contains("interface") ||
+                nodeType.Contains("struct") || nodeType.Contains("enum"))
+            {
+                // Get the identifier child node for the name
+                var childCount = TreeSitterNative.ts_node_child_count(node);
+                for (uint i = 0; i < childCount; i++)
+                {
+                    var childNode = TreeSitterNative.ts_node_child(node, i);
+                    var childTypePtr = TreeSitterNative.ts_node_type(childNode);
+                    if (childTypePtr != IntPtr.Zero)
+                    {
+                        var childType = Marshal.PtrToStringAnsi(childTypePtr) ?? "";
+                        if (childType == "identifier" || childType == "type_identifier")
+                        {
+                            // Extract the text for this node
+                            var nodeText = ExtractNodeTextNative(childNode, contentBytes);
+                            if (!string.IsNullOrEmpty(nodeText))
+                            {
+                                var kind = nodeType.Replace("_declaration", "").Replace("_definition", "");
+                                types.Add(new EnhancedTypeInfo
+                                {
+                                    Name = nodeText,
+                                    Kind = kind,
+                                    Line = (int)startRow + 1,
+                                    Column = (int)startColumn + 1,
+                                    Signature = ExtractNodeTextNative(node, contentBytes)?.Split('\n')[0] ?? ""
+                                });
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+            // Handle method/function declarations
+            else if (nodeType.Contains("method") || nodeType.Contains("function"))
+            {
+                // Get the identifier child node for the name
+                var childCount = TreeSitterNative.ts_node_child_count(node);
+                for (uint i = 0; i < childCount; i++)
+                {
+                    var childNode = TreeSitterNative.ts_node_child(node, i);
+                    var childTypePtr = TreeSitterNative.ts_node_type(childNode);
+                    if (childTypePtr != IntPtr.Zero)
+                    {
+                        var childType = Marshal.PtrToStringAnsi(childTypePtr) ?? "";
+                        if (childType == "identifier")
+                        {
+                            // Extract the text for this node
+                            var nodeText = ExtractNodeTextNative(childNode, contentBytes);
+                            if (!string.IsNullOrEmpty(nodeText))
+                            {
+                                methods.Add(new EnhancedMethodInfo
+                                {
+                                    Name = nodeText,
+                                    Line = (int)startRow + 1,
+                                    Column = (int)startColumn + 1,
+                                    Signature = ExtractNodeTextNative(node, contentBytes)?.Split('\n')[0] ?? "",
+                                    ReturnType = "void" // Default, would need more sophisticated extraction
+                                });
+                            }
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Recursively process children
+            var totalChildren = TreeSitterNative.ts_node_child_count(node);
+            for (uint i = 0; i < totalChildren; i++)
+            {
+                var childNode = TreeSitterNative.ts_node_child(node, i);
+                ExtractTypesFromNativeNode(childNode, contentBytes, types, methods);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting types from native node");
+        }
+    }
+
+    private string? ExtractNodeTextNative(TreeSitterNative.TSNode node, byte[] contentBytes)
+    {
+        try
+        {
+            var startByte = TreeSitterNative.ts_node_start_byte(node);
+            var endByte = TreeSitterNative.ts_node_end_byte(node);
+
+            if (startByte >= 0 && endByte > startByte && endByte <= contentBytes.Length)
+            {
+                var length = (int)(endByte - startByte);
+                var nodeBytes = new byte[length];
+                Array.Copy(contentBytes, (int)startByte, nodeBytes, 0, length);
+                return Encoding.UTF8.GetString(nodeBytes);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error extracting text from native node");
+        }
+        return null;
     }
 
     private void ExtractTypesSimple(Node node, List<EnhancedTypeInfo> types, List<EnhancedMethodInfo> methods)
