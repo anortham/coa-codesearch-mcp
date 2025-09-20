@@ -448,3 +448,11 @@ docs/serena-hijacking-investigation.md
 **/tree-sitter-service*.exe
 **/*.bun-build
 **/tree-sitter-service.exe.backup*
+
+# Build artifacts and test files
+build.log
+build_warnings.log
+warnings.txt
+test-results.txt
+*.test.py
+clean-*.md
