@@ -162,10 +162,35 @@ export class TreeSitterParser {
       }
 
       console.error(`Loading WASM from: ${wasmPath}`);
-      const lang = await Language.load(wasmPath);
-      this.languages.set(language, lang);
-      console.error(`Loaded language: ${language}`);
-      return lang;
+
+      try {
+        const lang = await Language.load(wasmPath);
+        this.languages.set(language, lang);
+        console.error(`Loaded language: ${language}`);
+        return lang;
+      } catch (loadError) {
+        // Try fallback for custom WASM files (Razor, Swift, Kotlin)
+        const customLanguages = ['tree-sitter-razor.wasm', 'tree-sitter-swift.wasm', 'tree-sitter-kotlin.wasm'];
+        if (customLanguages.includes(wasmFile)) {
+          console.error(`Failed to load from node_modules, trying custom wasm directory...`);
+
+          const customWasmPath = isCompiled
+            ? path.join(path.dirname(process.execPath), 'wasm', wasmFile)
+            : path.join(import.meta.dir, '..', 'wasm', wasmFile);
+
+          console.error(`Loading custom WASM from: ${customWasmPath}`);
+
+          try {
+            const lang = await Language.load(customWasmPath);
+            this.languages.set(language, lang);
+            console.error(`Loaded custom language: ${language}`);
+            return lang;
+          } catch (customError) {
+            console.error(`Failed to load custom WASM ${language}:`, customError);
+          }
+        }
+        throw loadError;
+      }
     } catch (error) {
       console.error(`Failed to load language ${language}:`, error);
       return null;
