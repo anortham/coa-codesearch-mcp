@@ -41,7 +41,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
-    private readonly IQueryTypeDetector? _queryTypeDetector;
     private readonly SmartDocumentationService _smartDocumentationService;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
         private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
@@ -57,7 +56,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
     /// <param name="queryPreprocessor">Query preprocessing service</param>
-    /// <param name="queryTypeDetector">Optional query type detection service</param>
     /// <param name="smartDocumentationService">Smart documentation service</param>
     /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="smartQueryPreprocessor">Smart query preprocessing service</param>
@@ -70,7 +68,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
-        IQueryTypeDetector? queryTypeDetector,
         SmartDocumentationService smartDocumentationService,
         COA.VSCodeBridge.IVSCodeBridge vscode,
                 SmartQueryPreprocessor smartQueryPreprocessor,
@@ -82,7 +79,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
-        _queryTypeDetector = queryTypeDetector;
         _smartDocumentationService = smartDocumentationService;
         _vscode = vscode;
         _logger = logger;
@@ -245,10 +241,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             multiFactorQuery.AddScoringFactor(new InterfaceImplementationFactor(_logger)); // Reduce mock/test noise for interface searches
             
             // Add type definition boost if this looks like a type query
-            if (_queryTypeDetector?.IsLikelyTypeQuery(query) ?? false)
-            {
-                multiFactorQuery.AddScoringFactor(new TypeDefinitionBoostFactor());
-            }
+            // Type query detection removed - no longer needed with Bun Tree-sitter service
 
             // Implement aggressive token-aware limiting like the old system
             // The old system targeted ~1500 tokens with ~5 results for maximum relevance

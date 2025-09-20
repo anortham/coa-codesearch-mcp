@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.VSCodeBridge;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
@@ -69,7 +70,7 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-            var queryTypeDetectorMock = CreateMock<IQueryTypeDetector>();
+            var codeAnalyzer = new CodeAnalyzer(Lucene.Net.Util.LuceneVersion.LUCENE_48, preserveCase: false, splitCamelCase: true);
 
             _tool = new TextSearchTool(
                 ServiceProvider,
@@ -78,11 +79,10 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                queryTypeDetectorMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
-                CodeAnalyzer,
+                codeAnalyzer,
                 loggerMock.Object);
 
             return _tool;

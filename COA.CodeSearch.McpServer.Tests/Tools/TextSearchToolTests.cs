@@ -41,7 +41,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                null, // IQueryTypeDetector is optional
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
@@ -625,14 +624,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         }
         
         [Test]
+        [Ignore("QueryTypeDetector removed - type extraction now handled by Bun Tree-sitter service")]
         public Task QueryTypeDetector_ShouldCatchClaudePatterns()
         {
-            // Ensures our expanded patterns catch Claude's common searches
-            
-            // Arrange - Create tool with real QueryTypeDetector
-            var queryDetectorLogger = new Mock<ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>>();
-            var queryTypeDetector = new COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector(queryDetectorLogger.Object);
-            
+            // This test is obsolete - QueryTypeDetector has been replaced with the Bun Tree-sitter service
+            // which uses actual AST parsing for type extraction rather than pattern matching.
+            // Keeping test for historical context of what patterns Claude commonly searches for.
+
             // Test patterns Claude commonly uses before writing code
             var claudePatterns = new[]
             {
@@ -646,14 +644,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 "await someService", // Async call
                 "Dictionary<string, object>" // Complex generic
             };
-            
-            // Act & Assert
-            foreach (var pattern in claudePatterns)
-            {
-                var isTypeQuery = queryTypeDetector.IsLikelyTypeQuery(pattern);
-                isTypeQuery.Should().BeTrue($"Pattern '{pattern}' should be detected as type query");
-            }
-            
+
+            // Test skipped - functionality removed
+            Assert.Ignore("QueryTypeDetector has been replaced with Bun Tree-sitter service");
+
             return Task.CompletedTask;
         }
         

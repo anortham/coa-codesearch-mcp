@@ -6,6 +6,8 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <LangVersion>latest</LangVersion>
+    <!-- Exclude obsolete files from compilation -->
+    <DefaultItemExcludes>$(DefaultItemExcludes);**/_obsolete/**</DefaultItemExcludes>
 
     <!-- Enable XML documentation generation for enhanced MCP tool descriptions -->
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
@@ -44,9 +46,6 @@
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
     
-    <!-- Tree-sitter for type extraction -->
-    <PackageReference Include="TreeSitter.DotNet" Version="1.0.1" />
-    
     <!-- Diff/Patch operations -->
     <PackageReference Include="DiffMatchPatch" Version="4.0.0" />
     
@@ -81,11 +80,30 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Embed Tree-sitter query files as resources -->
-    <EmbeddedResource Include="Services\TypeExtraction\Queries\*.scm">
-      <LogicalName>COA.CodeSearch.McpServer.Services.TypeExtraction.Queries.%(Filename).scm</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
+  <!-- Copy Bun Tree-sitter service and dependencies to output -->
+  <Target Name="CopyTreeSitterService" AfterTargets="Build">
+    <ItemGroup>
+      <!-- Copy the entire TreeSitterService folder including node_modules -->
+      <TreeSitterServiceFiles Include="TreeSitterService\**\*.*"
+                               Exclude="TreeSitterService\**\*.ts;TreeSitterService\src\**;TreeSitterService\package*.json;TreeSitterService\tsconfig.json;TreeSitterService\bun.lockb" />
+
+      <!-- Always include the executable -->
+      <TreeSitterExe Include="TreeSitterService\tree-sitter-service.exe" Condition="$([MSBuild]::IsOSPlatform('Windows'))" />
+      <TreeSitterExe Include="TreeSitterService\tree-sitter-service" Condition="!$([MSBuild]::IsOSPlatform('Windows'))" />
+    </ItemGroup>
+
+    <!-- Copy all TreeSitterService files maintaining folder structure -->
+    <Copy SourceFiles="@(TreeSitterServiceFiles)"
+          DestinationFiles="@(TreeSitterServiceFiles->'$(OutputPath)TreeSitterService\%(RecursiveDir)%(Filename)%(Extension)')"
+          SkipUnchangedFiles="true" />
+
+    <!-- Ensure the executable is in the right place -->
+    <Copy SourceFiles="@(TreeSitterExe)"
+          DestinationFolder="$(OutputPath)TreeSitterService\"
+          SkipUnchangedFiles="true"
+          Condition="Exists('@(TreeSitterExe)')" />
+
+    <Message Text="Copied Tree-sitter service and dependencies to output directory" Importance="normal" />
+  </Target>
 
 </Project>

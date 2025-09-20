@@ -35,9 +35,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-            var queryTypeDetectorMock = CreateMock<IQueryTypeDetector>();
             var textSearchLoggerMock = new Mock<ILogger<TextSearchTool>>();
-            
+
             // Create actual TextSearchTool instance
             _textSearchTool = new TextSearchTool(
                 ServiceProvider,
@@ -46,7 +45,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                queryTypeDetectorMock.Object,
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
