@@ -9,7 +9,7 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, and enhanced CamelCase tokenization with full generic type support (finds `McpToolBase<TParams, TResult>` when searching for "McpToolBase")
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
-- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 15+ languages including C#, TypeScript, Python, Java, Rust, C++, Ruby, PHP, Scala, Vue, Razor, and more
+- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 10+ languages including C#, TypeScript, Python, Java, Rust, JavaScript, Bash, JSON, TOML, and more
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
 - **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety
@@ -36,20 +36,24 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 
 ### 🧬 Supported Languages for Type Extraction
 
-The type extraction system supports **15+ programming languages** using Tree-sitter parsers:
+The type extraction system supports **10+ programming languages** using TreeSitter.DotNet:
 
-**✅ Fully Supported:**
-**Systems Languages**: C, C++, Rust  
-**Object-Oriented**: C#, Java, Scala  
-**Scripting**: Python, Ruby, PHP, JavaScript, TypeScript  
-**Web**: Vue.js (SFC), Razor/Blazor, HTML, CSS  
-**Functional**: Haskell, OCaml, Julia  
-**Hardware**: Verilog  
-**Shell**: Bash  
-**Data**: JSON, TOML
+**✅ Fully Supported (with query files):**
+- **C#**: Classes, interfaces, structs, methods, properties
+- **Python**: Classes, functions, modules
+- **Java**: Classes, interfaces, methods
+- **Rust**: Structs, enums, impl blocks, functions
+- **TypeScript**: Interfaces, classes, functions, types
 
-**⚠️ Limited Support (missing Tree-sitter libraries):**
-Go, Swift, Kotlin, R, Objective-C, Lua, Dart, Zig, Elm, Clojure, Elixir  
+**✅ Basic Support (fallback extraction):**
+- **JavaScript**: Functions, classes (no query file)
+- **Bash**: Functions, variables (no query file)
+- **JSON**: Structure analysis
+- **TOML**: Configuration parsing
+
+**⚠️ Known Issues:**
+- **Go**: DLL entry point issue (`tree_sitter_go` not found)
+- **C++, Ruby, PHP, etc.**: May work but not tested at this commit  
 
 **Special Support**:
 - **Vue Single File Components**: Extracts types from `<script>` blocks (TS/JS)
@@ -227,7 +231,7 @@ Unlike basic file search, CodeSearch understands your code:
 - **Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **Structured Line Search**: Better than grep - returns JSON with exact line numbers and context
 - **Safe Bulk Edits**: Preview mode for search/replace prevents accidental changes
-- **Type-Aware**: Extracts and indexes types from 25+ languages for accurate navigation
+- **Type-Aware**: Extracts and indexes types from 10+ languages for accurate navigation
 - **Precise Editing**: Complete line-based editing suite for surgical code modifications without full file reads
 
 ## 🛠️ Available Tools
@@ -352,7 +356,7 @@ Shows inheritance relationships and usage counts
 
 **"Find all classes and interfaces in my project"**
 ```
-Claude will extract types from C#, TypeScript, Python, Java, Rust, C++, Ruby, PHP, Scala, and more
+Claude will extract types from C#, TypeScript, Python, Java, Rust, and other supported languages
 ```
 
 **"Show me all functions and methods in my codebase"**

@@ -4,7 +4,7 @@
 
 Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace indexing with cross-platform support.
 
-**Version**: 2.1.8+ | **Status**: Production Ready | **Warnings**: Zero | **Framework**: Local Dev Mode
+**Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: TreeSitter.DotNet
 
 ### Core Tools (17 available)
 
@@ -145,4 +145,4 @@ mcp__codesearch__recent_files --workspacePath "."
 
 ---
 
-_Updated: 2025-09-08 - Production ready v2.1.8 with zero warnings, enhanced file search, token optimization_
+_Updated: 2025-09-22 - Restored to stable commit 4b32d04 with TreeSitter.DotNet, 117 files/sec performance_
