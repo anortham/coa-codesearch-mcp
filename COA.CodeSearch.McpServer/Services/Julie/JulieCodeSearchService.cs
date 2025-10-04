@@ -154,8 +154,8 @@ public class JulieCodeSearchService : IJulieCodeSearchService
             };
         }
 
-        // Parse output for processed/skipped counts
-        var (processed, skipped) = ParseScanOutput(output);
+        // Parse output for processed/skipped counts (julie-codesearch outputs to stderr)
+        var (processed, skipped) = ParseScanOutput(errorOutput);
 
         _logger.LogInformation("Scan complete: {Processed} processed, {Skipped} skipped in {Elapsed:F2}s",
             processed, skipped, elapsed);
@@ -208,8 +208,8 @@ public class JulieCodeSearchService : IJulieCodeSearchService
             };
         }
 
-        // Parse output for action and symbol count
-        var (action, symbolCount) = ParseUpdateOutput(output);
+        // Parse output for action and symbol count (julie-codesearch outputs to stderr)
+        var (action, symbolCount) = ParseUpdateOutput(errorOutput);
 
         _logger.LogDebug("Update complete: {Action}, {Symbols} symbols in {Elapsed:F2}ms",
             action, symbolCount, elapsed * 1000);

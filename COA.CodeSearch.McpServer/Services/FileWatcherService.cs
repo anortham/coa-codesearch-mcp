@@ -646,11 +646,14 @@ public class FileWatcherService : BackgroundService
                 // Ensure db/ directory exists
                 Directory.CreateDirectory(dbDirectory);
 
+                // Enable detailed logging for debugging
+                var logFilePath = Path.Combine(dbDirectory, "julie-codesearch.log");
+
                 // Update file in SQLite database using julie-codesearch
                 var result = await _julieCodeSearchService.UpdateFileAsync(
                     filePath,
                     sqlitePath,
-                    logFilePath: null,
+                    logFilePath: logFilePath,
                     cancellationToken);
 
                 if (result.Success)

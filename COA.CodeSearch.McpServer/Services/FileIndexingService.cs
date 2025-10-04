@@ -138,11 +138,14 @@ public class FileIndexingService : IFileIndexingService
                     // Ensure db/ directory exists
                     Directory.CreateDirectory(dbDirectory);
 
+                    // Enable detailed logging for debugging
+                    var logFilePath = Path.Combine(dbDirectory, "julie-codesearch.log");
+
                     // Scan workspace with julie-codesearch
                     var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
                         workspacePath,
                         sqlitePath,
-                        logFilePath: null,  // TODO: optionally enable logging for debugging
+                        logFilePath: logFilePath,
                         threads: null,      // Use CPU count
                         cancellationToken);
 
