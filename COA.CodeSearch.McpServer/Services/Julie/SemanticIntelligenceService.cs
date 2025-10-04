@@ -1,0 +1,177 @@
+using System.Diagnostics;
+using System.Text.Json;
+using Microsoft.Extensions.Logging;
+
+namespace COA.CodeSearch.McpServer.Services.Julie;
+
+/// <summary>
+/// Service for invoking julie-semantic CLI to generate embeddings and perform semantic search.
+/// Enables cross-language semantic understanding for smart refactoring and code discovery.
+/// </summary>
+public interface ISemanticIntelligenceService
+{
+    /// <summary>
+    /// Generate embeddings for symbols in a database (demonstrates capability, outputs stats)
+    /// </summary>
+    Task<EmbeddingStats> GenerateEmbeddingsAsync(
+        string symbolsDbPath,
+        string model = "bge-small",
+        int batchSize = 100,
+        int? limit = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Check if julie-semantic is available
+    /// </summary>
+    bool IsAvailable();
+}
+
+public class SemanticIntelligenceService : ISemanticIntelligenceService
+{
+    private readonly ILogger<SemanticIntelligenceService> _logger;
+    private readonly string _julieSemanticPath;
+
+    public SemanticIntelligenceService(ILogger<SemanticIntelligenceService> logger)
+    {
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _julieSemanticPath = FindJulieSemanticBinary();
+    }
+
+    public bool IsAvailable() => !string.IsNullOrEmpty(_julieSemanticPath) && File.Exists(_julieSemanticPath);
+
+    public async Task<EmbeddingStats> GenerateEmbeddingsAsync(
+        string symbolsDbPath,
+        string model = "bge-small",
+        int batchSize = 100,
+        int? limit = null,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAvailable())
+        {
+            throw new InvalidOperationException("julie-semantic binary not found");
+        }
+
+        var limitArg = limit.HasValue ? $"--limit {limit.Value}" : "";
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _julieSemanticPath,
+            Arguments = $"embed --symbols-db \"{symbolsDbPath}\" --model {model} --batch-size {batchSize} {limitArg}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        _logger.LogInformation(
+            "Generating embeddings for {SymbolsDb} with model {Model}",
+            symbolsDbPath,
+            model);
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException("Failed to start julie-semantic process");
+        }
+
+        // Stream stderr for progress updates
+        var progressTask = Task.Run(async () =>
+        {
+            while (!process.StandardError.EndOfStream)
+            {
+                var line = await process.StandardError.ReadLineAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    _logger.LogInformation("julie-semantic: {Progress}", line);
+                }
+            }
+        }, cancellationToken);
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+        await progressTask;
+
+        var output = await outputTask;
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"julie-semantic exited with code {process.ExitCode}");
+        }
+
+        // Parse JSON statistics
+        var stats = JsonSerializer.Deserialize<EmbeddingStats>(output, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? new EmbeddingStats { Success = false };
+
+        _logger.LogInformation(
+            "Embedding generation complete: {SymbolsProcessed} symbols, {Dimensions}D embeddings, {Rate:F1}ms avg",
+            stats.SymbolsProcessed,
+            stats.Dimensions,
+            stats.AvgEmbeddingTimeMs);
+
+        return stats;
+    }
+
+    private string FindJulieSemanticBinary()
+    {
+        // 1. Check bundled binaries (deployed with CodeSearch)
+        var bundledPath = Path.Combine(
+            AppContext.BaseDirectory,
+            "bin",
+            "julie-semantic" + (OperatingSystem.IsWindows() ? ".exe" : ""));
+
+        if (File.Exists(bundledPath))
+        {
+            _logger.LogInformation("Found bundled julie-semantic: {Path}", bundledPath);
+            return bundledPath;
+        }
+
+        // 2. Check development path (Julie project)
+        var devPath = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            "Source",
+            "julie",
+            "target",
+            "release",
+            "julie-semantic" + (OperatingSystem.IsWindows() ? ".exe" : ""));
+
+        if (File.Exists(devPath))
+        {
+            _logger.LogInformation("Found development julie-semantic: {Path}", devPath);
+            return devPath;
+        }
+
+        // 3. Check PATH
+        var pathVar = Environment.GetEnvironmentVariable("PATH");
+        if (!string.IsNullOrEmpty(pathVar))
+        {
+            var paths = pathVar.Split(Path.PathSeparator);
+            foreach (var path in paths)
+            {
+                var fullPath = Path.Combine(path, "julie-semantic" + (OperatingSystem.IsWindows() ? ".exe" : ""));
+                if (File.Exists(fullPath))
+                {
+                    _logger.LogInformation("Found julie-semantic in PATH: {Path}", fullPath);
+                    return fullPath;
+                }
+            }
+        }
+
+        _logger.LogWarning("julie-semantic binary not found");
+        return string.Empty;
+    }
+}
+
+/// <summary>
+/// Statistics from embedding generation
+/// </summary>
+public class EmbeddingStats
+{
+    public bool Success { get; set; }
+    public int SymbolsProcessed { get; set; }
+    public int EmbeddingsGenerated { get; set; }
+    public string Model { get; set; } = string.Empty;
+    public int Dimensions { get; set; }
+    public double AvgEmbeddingTimeMs { get; set; }
+}

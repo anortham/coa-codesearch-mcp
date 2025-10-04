@@ -103,7 +103,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         {
             return await _circuitBreaker.ExecuteAsync($"init-index-{workspaceHash}", async () =>
             {
-                var indexPath = _pathResolution.GetIndexPath(workspacePath);
+                var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
                 var isNewIndex = !System.IO.Directory.Exists(indexPath) || !System.IO.Directory.GetFiles(indexPath).Any();
                 
                 // Create directory with explicit SimpleFSLockFactory for cross-platform consistency
@@ -560,7 +560,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             }
             
             // Step 2: Create new IndexWriter with OpenMode.CREATE to rebuild schema
-            var indexPath = _pathResolution.GetIndexPath(workspacePath);
+            var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
             var directory = _useRamDirectory
                 ? new RAMDirectory() as global::Lucene.Net.Store.Directory
                 : FSDirectory.Open(indexPath);
@@ -684,7 +684,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             return true;
         }
         
-        var indexPath = _pathResolution.GetIndexPath(workspacePath);
+        var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
         return await Task.FromResult(System.IO.Directory.Exists(indexPath) && 
                                      System.IO.Directory.GetFiles(indexPath).Any());
     }
@@ -694,7 +694,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         try
         {
             var workspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath);
-            var indexPath = _pathResolution.GetIndexPath(workspacePath);
+            var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
             
             if (!_indexes.TryGetValue(workspaceHash, out var context))
             {
@@ -752,7 +752,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
     {
         var context = await GetOrCreateContextAsync(workspacePath, cancellationToken);
         var workspaceHash = _pathResolution.ComputeWorkspaceHash(workspacePath);
-        var indexPath = _pathResolution.GetIndexPath(workspacePath);
+        var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
         
         await context.Lock.WaitAsync(TimeSpan.FromSeconds(LOCK_TIMEOUT_SECONDS), cancellationToken);
         try
@@ -967,7 +967,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
         
         try
         {
-            var indexPath = _pathResolution.GetIndexPath(workspacePath);
+            var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
             if (!System.IO.Directory.Exists(indexPath))
             {
                 result.Success = false;

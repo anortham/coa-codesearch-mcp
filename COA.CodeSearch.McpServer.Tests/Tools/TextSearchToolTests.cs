@@ -41,7 +41,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                null, // IQueryTypeDetector is optional
                 smartDocumentationService,
                 VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
@@ -623,40 +622,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var hit = hits!.First();
 // Type enhancement functionality removed - use dedicated type tools for type information
         }
-        
-        [Test]
-        public Task QueryTypeDetector_ShouldCatchClaudePatterns()
-        {
-            // Ensures our expanded patterns catch Claude's common searches
-            
-            // Arrange - Create tool with real QueryTypeDetector
-            var queryDetectorLogger = new Mock<ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>>();
-            var queryTypeDetector = new COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector(queryDetectorLogger.Object);
-            
-            // Test patterns Claude commonly uses before writing code
-            var claudePatterns = new[]
-            {
-                "new LuceneIndexService", // About to instantiate
-                "Task<SearchResult>", // Return type
-                "List<string>", // Collection type
-                "ILuceneIndexService", // Interface reference
-                "SearchAsync(", // Method signature
-                "public async Task", // Method definition
-                ": IDisposable", // Type annotation
-                "await someService", // Async call
-                "Dictionary<string, object>" // Complex generic
-            };
-            
-            // Act & Assert
-            foreach (var pattern in claudePatterns)
-            {
-                var isTypeQuery = queryTypeDetector.IsLikelyTypeQuery(pattern);
-                isTypeQuery.Should().BeTrue($"Pattern '{pattern}' should be detected as type query");
-            }
-            
-            return Task.CompletedTask;
-        }
-        
+
         #endregion Type-First Workflow Tests
     }
 }

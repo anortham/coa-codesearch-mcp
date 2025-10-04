@@ -344,8 +344,8 @@ public class WorkspacePermissionService : IWorkspacePermissionService
     {
         try
         {
-            var indexPath = _pathResolver.GetIndexPath(workspacePath);
-            return Directory.Exists(indexPath) && Directory.GetFiles(indexPath, "*.cfs").Any();
+            var luceneIndexPath = _pathResolver.GetLuceneIndexPath(workspacePath);
+            return Directory.Exists(luceneIndexPath) && Directory.GetFiles(luceneIndexPath, "*.cfs").Any();
         }
         catch
         {

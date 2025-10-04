@@ -35,6 +35,10 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
+    // Phoenix integration: SQLite canonical storage + Julie extraction
+    private readonly Services.Sqlite.ISQLiteSymbolService? _sqliteService;
+    private readonly Services.Julie.IJulieExtractionService? _julieExtractionService;
+
     /// <summary>
     /// Initializes a new instance of the IndexWorkspaceTool with required dependencies.
     /// </summary>
@@ -68,6 +72,10 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
         _fileWatcherService = serviceProvider.GetService<FileWatcherService>();
         _vscode = vscode;
         _logger = logger;
+
+        // Phoenix integration: Optional services (graceful degradation if not available)
+        _sqliteService = serviceProvider.GetService<Services.Sqlite.ISQLiteSymbolService>();
+        _julieExtractionService = serviceProvider.GetService<Services.Julie.IJulieExtractionService>();
     }
 
     /// <summary>
@@ -154,8 +162,66 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                     await _luceneIndexService.ForceRebuildIndexAsync(workspacePath, cancellationToken);
                     _logger.LogInformation("Force rebuild completed - new schema active for workspace: {WorkspacePath}", workspacePath);
                 }
-                
-                // Index all files in the workspace
+
+                // Extract symbols to SQLite using julie-extract (if available)
+                int symbolCount = 0;
+
+                // Explicit symbol extraction availability logging
+                _logger.LogInformation("🔍 Symbol Extraction Availability:");
+                _logger.LogInformation("  - SQLiteService: {Status}", _sqliteService != null ? "Available" : "NULL");
+                _logger.LogInformation("  - JulieExtractionService: {Status}", _julieExtractionService != null ? "Available" : "NULL");
+                if (_julieExtractionService != null)
+                {
+                    var isAvailable = _julieExtractionService.IsAvailable();
+                    _logger.LogInformation("  - julie-extract binary: {Status}", isAvailable ? "Available" : "NOT FOUND");
+                }
+
+                if (_sqliteService != null && _julieExtractionService != null && _julieExtractionService.IsAvailable())
+                {
+                    _logger.LogInformation("Starting SQLite symbol extraction for workspace: {WorkspacePath}", workspacePath);
+                    var extractionStartTime = DateTime.UtcNow;
+
+                    try
+                    {
+                        // Get database path (creates db/ directory but doesn't open connection)
+                        var dbPath = _sqliteService.GetDatabasePath(workspacePath);
+                        _logger.LogInformation("Target SQLite database: {DbPath}", dbPath);
+
+                        // Run julie-extract in bulk mode (creates its own database and schema)
+                        var bulkResult = await _julieExtractionService.BulkExtractDirectoryAsync(
+                            directoryPath: workspacePath,
+                            outputDbPath: dbPath,
+                            threads: null, // Use default (CPU count)
+                            cancellationToken: cancellationToken);
+
+                        if (bulkResult.Success)
+                        {
+                            symbolCount = bulkResult.SymbolCount;
+                            var extractionDuration = DateTime.UtcNow - extractionStartTime;
+                            _logger.LogInformation("Extracted {SymbolCount} symbols to SQLite in {Duration}ms",
+                                symbolCount, extractionDuration.TotalMilliseconds);
+                        }
+                        else
+                        {
+                            _logger.LogWarning("julie-extract bulk extraction reported failure, falling back to standard indexing");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Symbol extraction failed, falling back to standard indexing");
+                    }
+                }
+                else
+                {
+                    if (_sqliteService == null)
+                        _logger.LogDebug("SQLite service not available, skipping symbol extraction");
+                    else if (_julieExtractionService == null)
+                        _logger.LogDebug("Julie extraction service not available, skipping symbol extraction");
+                    else
+                        _logger.LogDebug("julie-extract binary not found, skipping symbol extraction");
+                }
+
+                // Index all files in the workspace (standard Lucene indexing)
                 var indexResult = await _fileIndexingService.IndexWorkspaceAsync(workspacePath, cancellationToken);
                 
                 if (!indexResult.Success)

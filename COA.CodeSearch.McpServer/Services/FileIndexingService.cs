@@ -5,6 +5,7 @@ using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Julie;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -25,6 +26,8 @@ public class FileIndexingService : IFileIndexingService
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IMemoryPressureService _memoryPressureService;
     private readonly ITypeExtractionService _typeExtractionService;
+    private readonly IJulieExtractionService? _julieExtractionService;
+    private readonly IJulieCodeSearchService? _julieCodeSearchService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
@@ -39,7 +42,9 @@ public class FileIndexingService : IFileIndexingService
         ICircuitBreakerService circuitBreakerService,
         IMemoryPressureService memoryPressureService,
         IOptions<MemoryLimitsConfiguration> memoryLimits,
-        ITypeExtractionService typeExtractionService)
+        ITypeExtractionService typeExtractionService,
+        IJulieExtractionService? julieExtractionService = null,
+        IJulieCodeSearchService? julieCodeSearchService = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -50,7 +55,14 @@ public class FileIndexingService : IFileIndexingService
         _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
         _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
-        
+        _julieExtractionService = julieExtractionService;
+        _julieCodeSearchService = julieCodeSearchService;
+
+        // Debug: Log julie service injection
+        _logger.LogInformation("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}",
+            _julieExtractionService?.IsAvailable() ?? false,
+            _julieCodeSearchService?.IsAvailable() ?? false);
+
         // Initialize blacklisted extensions from configuration or defaults
         var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
             ?? PathConstants.DefaultBlacklistedExtensions;
@@ -110,8 +122,79 @@ public class FileIndexingService : IFileIndexingService
             // ForceRebuildIndexAsync handles schema recreation when needed
             // ClearIndexAsync is only used for document removal without schema changes
 
-            // Index all files in the workspace
-            result.IndexedFileCount = await IndexDirectoryAsync(workspacePath, workspacePath, cancellationToken);
+            // PHASE 1: Run julie-codesearch scan to populate SQLite database
+            if (_julieCodeSearchService?.IsAvailable() == true)
+            {
+                var codeSearchStart = DateTime.UtcNow;
+                _logger.LogInformation("🚀 Running julie-codesearch scan for SQLite database population...");
+
+                try
+                {
+                    // Get SQLite database path (alongside Lucene index)
+                    var indexPath = _pathResolution.GetIndexPath(workspacePath);
+                    var sqlitePath = Path.Combine(indexPath, "symbols.db");
+
+                    // Scan workspace with julie-codesearch
+                    var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
+                        workspacePath,
+                        sqlitePath,
+                        logFilePath: null,  // TODO: optionally enable logging for debugging
+                        threads: null,      // Use CPU count
+                        cancellationToken);
+
+                    if (scanResult.Success)
+                    {
+                        var scanDuration = (DateTime.UtcNow - codeSearchStart).TotalSeconds;
+                        _logger.LogInformation("✅ julie-codesearch scan complete: {Processed} files processed, {Skipped} skipped in {Duration:F2}s",
+                            scanResult.ProcessedFiles,
+                            scanResult.SkippedFiles,
+                            scanDuration);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("⚠️  julie-codesearch scan failed: {Error}", scanResult.ErrorMessage);
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "julie-codesearch scan failed, continuing with Lucene-only indexing");
+                }
+            }
+
+            // PHASE 2: Check if bulk mode is available and enabled (julie-extract for Lucene)
+            var julieAvailable = _julieExtractionService?.IsAvailable() == true;
+            var bulkModeConfig = _configuration.GetValue("CodeSearch:TypeExtraction:UseBulkMode", true);
+            _logger.LogWarning("BULK MODE DEBUG: Julie service null? {IsNull}, IsAvailable: {Available}, Config: {Config}",
+                _julieExtractionService == null,
+                julieAvailable,
+                bulkModeConfig);
+
+            var useBulkMode = julieAvailable && bulkModeConfig;
+
+            Dictionary<string, List<JulieSymbol>>? symbolCache = null;
+            if (useBulkMode)
+            {
+                _logger.LogInformation("🚀 Bulk extraction mode enabled - pre-extracting symbols in parallel");
+                var extractStart = DateTime.UtcNow;
+
+                try
+                {
+                    symbolCache = await PreExtractSymbolsAsync(workspacePath, cancellationToken);
+                    var extractDuration = (DateTime.UtcNow - extractStart).TotalSeconds;
+                    _logger.LogInformation("✅ Pre-extracted {SymbolCount} symbols from {FileCount} files in {Duration:F2}s",
+                        symbolCache.Values.Sum(s => s.Count),
+                        symbolCache.Count,
+                        extractDuration);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Bulk extraction failed, falling back to sequential extraction");
+                    symbolCache = null;
+                }
+            }
+
+            // Index all files in the workspace (with optional symbol cache)
+            result.IndexedFileCount = await IndexDirectoryAsync(workspacePath, workspacePath, symbolCache, cancellationToken);
             
             // Commit changes
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
@@ -133,14 +216,74 @@ public class FileIndexingService : IFileIndexingService
             return result;
         }
     }
+    /// <summary>
+    /// Pre-extract symbols from entire workspace using parallel streaming.
+    /// Returns a dictionary mapping file paths to their extracted symbols for fast lookup during indexing.
+    /// </summary>
+    private async Task<Dictionary<string, List<JulieSymbol>>> PreExtractSymbolsAsync(
+        string workspacePath,
+        CancellationToken cancellationToken)
+    {
+        if (_julieExtractionService == null)
+        {
+            return new Dictionary<string, List<JulieSymbol>>();
+        }
 
-    public async Task<int> IndexDirectoryAsync(string workspacePath, string directoryPath, CancellationToken cancellationToken = default)
+        var symbolsByFile = new Dictionary<string, List<JulieSymbol>>(StringComparer.OrdinalIgnoreCase);
+        var fileCount = 0;
+
+        var symbolCount = 0;
+        await foreach (var symbol in _julieExtractionService.StreamExtractDirectoryAsync(
+            workspacePath,
+            threads: null, // Use default (CPU count)
+            cancellationToken))
+        {
+            symbolCount++;
+
+            // Group symbols by file path
+            if (!symbolsByFile.TryGetValue(symbol.FilePath, out var symbols))
+            {
+                symbols = new List<JulieSymbol>();
+                symbolsByFile[symbol.FilePath] = symbols;
+                fileCount++;
+
+                _logger.LogInformation("📁 NEW FILE #{FileNum}: {FilePath} (total symbols so far: {SymbolCount})",
+                    fileCount, symbol.FilePath, symbolCount);
+            }
+
+            symbols.Add(symbol);
+        }
+
+        _logger.LogInformation("Stream complete - processed {SymbolCount} symbols from {FileCount} files",
+            symbolCount, fileCount);
+
+        return symbolsByFile;
+    }
+
+
+
+    // Public interface implementation (delegates to internal optimized version)
+    public async Task<int> IndexDirectoryAsync(
+        string workspacePath,
+        string directoryPath,
+        CancellationToken cancellationToken = default)
+    {
+        return await IndexDirectoryAsync(workspacePath, directoryPath, symbolCache: null, cancellationToken);
+    }
+
+
+
+    public async Task<int> IndexDirectoryAsync(
+        string workspacePath,
+        string directoryPath,
+        Dictionary<string, List<JulieSymbol>>? symbolCache = null,
+        CancellationToken cancellationToken = default)
     {
         var startTime = DateTime.UtcNow;
-        
-        _logger.LogDebug("Starting directory indexing for {DirectoryPath} in workspace {WorkspacePath}", 
+
+        _logger.LogDebug("Starting directory indexing for {DirectoryPath} in workspace {WorkspacePath}",
             directoryPath, workspacePath);
-        
+
         // Check for memory pressure
         if (_memoryPressureService.ShouldThrottleOperation("directory_indexing"))
         {
@@ -157,7 +300,7 @@ public class FileIndexingService : IFileIndexingService
         {
             var files = GetFilesToIndex(directoryPath).ToList(); // Materialize to get count
             _logger.LogDebug("Found {FileCount} files to index in {DirectoryPath}", files.Count, directoryPath);
-            
+
             foreach (var filePath in files)
             {
                 if (cancellationToken.IsCancellationRequested)
@@ -168,7 +311,7 @@ public class FileIndexingService : IFileIndexingService
 
                 try
                 {
-                    var document = await CreateDocumentFromFileAsync(filePath, workspacePath, cancellationToken);
+                    var document = await CreateDocumentFromFileAsync(filePath, workspacePath, symbolCache, cancellationToken);
                     if (document != null)
                     {
                         documents.Add(document);
@@ -226,10 +369,10 @@ public class FileIndexingService : IFileIndexingService
     {
         try
         {
-            _logger.LogDebug("IndexFileAsync called - Workspace: {WorkspacePath}, File: {FilePath}", 
+            _logger.LogDebug("IndexFileAsync called - Workspace: {WorkspacePath}, File: {FilePath}",
                 workspacePath, filePath);
-                
-            var document = await CreateDocumentFromFileAsync(filePath, workspacePath, cancellationToken);
+
+            var document = await CreateDocumentFromFileAsync(filePath, workspacePath, symbolCache: null, cancellationToken);
             if (document != null)
             {
                 await _luceneIndexService.IndexDocumentAsync(workspacePath, document, cancellationToken);
@@ -404,7 +547,11 @@ public class FileIndexingService : IFileIndexingService
         }
     }
 
-    private async Task<Document?> CreateDocumentFromFileAsync(string filePath, string workspacePath, CancellationToken cancellationToken)
+    private async Task<Document?> CreateDocumentFromFileAsync(
+        string filePath,
+        string workspacePath,
+        Dictionary<string, List<JulieSymbol>>? symbolCache = null,
+        CancellationToken cancellationToken = default)
     {
         try
         {
@@ -423,18 +570,28 @@ public class FileIndexingService : IFileIndexingService
                 _logger.LogDebug(ex, "Could not read file as UTF-8, skipping: {FilePath}", filePath);
                 return null;
             }
-            
+
             // Extract type information if enabled
             TypeExtractionResult? typeData = null;
             if (_configuration.GetValue("CodeSearch:TypeExtraction:Enabled", true))
             {
-                try
+                // Check cache first (bulk mode)
+                if (symbolCache != null && symbolCache.TryGetValue(filePath, out var cachedSymbols))
                 {
-                    typeData = await _typeExtractionService.ExtractTypes(content, filePath);
+                    // Convert cached symbols to TypeExtractionResult
+                    typeData = ConvertJulieSymbolsToTypeData(cachedSymbols);
                 }
-                catch (Exception ex)
+                else
                 {
-                    _logger.LogDebug(ex, "Failed to extract types from {FilePath}", filePath);
+                    // Fall back to single-file extraction
+                    try
+                    {
+                        typeData = await _typeExtractionService.ExtractTypes(content, filePath);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to extract types from {FilePath}", filePath);
+                    }
                 }
             }
 
@@ -525,6 +682,68 @@ public class FileIndexingService : IFileIndexingService
             return null;
         }
     }
+
+    /// <summary>
+    /// Convert JulieSymbols from cache to TypeExtractionResult format
+    /// </summary>
+    private TypeExtractionResult ConvertJulieSymbolsToTypeData(List<JulieSymbol> symbols)
+    {
+        var types = new List<TypeInfo>();
+        var methods = new List<TypeExtraction.MethodInfo>();
+
+        foreach (var symbol in symbols)
+        {
+            if (IsTypeSymbol(symbol.Kind))
+            {
+                types.Add(new TypeInfo
+                {
+                    Name = symbol.Name,
+                    Kind = symbol.Kind,
+                    Signature = symbol.Signature ?? symbol.Name,
+                    Line = symbol.StartLine,
+                    Column = symbol.StartColumn,
+                    Modifiers = symbol.Visibility != null ? new List<string> { symbol.Visibility } : new()
+                });
+            }
+            else if (IsMethodSymbol(symbol.Kind))
+            {
+                methods.Add(new TypeExtraction.MethodInfo
+                {
+                    Name = symbol.Name,
+                    Signature = symbol.Signature ?? symbol.Name,
+                    Line = symbol.StartLine,
+                    Column = symbol.StartColumn,
+                    Modifiers = symbol.Visibility != null ? new List<string> { symbol.Visibility } : new()
+                });
+            }
+        }
+
+        return new TypeExtractionResult
+        {
+            Success = true,
+            Types = types,
+            Methods = methods,
+            Language = symbols.FirstOrDefault()?.Language
+        };
+    }
+
+    private static bool IsTypeSymbol(string kind)
+    {
+        return kind.Equals("class", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("interface", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("struct", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("enum", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("trait", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("type", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsMethodSymbol(string kind)
+    {
+        return kind.Equals("method", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("function", StringComparison.OrdinalIgnoreCase) ||
+               kind.Equals("constructor", StringComparison.OrdinalIgnoreCase);
+    }
+
 }
 
 /// <summary>

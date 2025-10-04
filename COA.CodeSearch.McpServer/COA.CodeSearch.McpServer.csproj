@@ -43,10 +43,10 @@
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.QueryParser" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Highlighter" Version="4.8.0-beta00017" />
-    
-    <!-- Tree-sitter for type extraction -->
-    <PackageReference Include="TreeSitter.DotNet" Version="1.0.1" />
-    
+
+    <!-- SQLite for symbol storage -->
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
+
     <!-- Diff/Patch operations -->
     <PackageReference Include="DiffMatchPatch" Version="4.0.0" />
     
@@ -81,11 +81,5 @@
     </EmbeddedResource>
   </ItemGroup>
 
-  <ItemGroup>
-    <!-- Embed Tree-sitter query files as resources -->
-    <EmbeddedResource Include="Services\TypeExtraction\Queries\*.scm">
-      <LogicalName>COA.CodeSearch.McpServer.Services.TypeExtraction.Queries.%(Filename).scm</LogicalName>
-    </EmbeddedResource>
-  </ItemGroup>
 
 </Project>

@@ -10,6 +10,10 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Julie;
+using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Tools;
 using Lucene.Net.Util;
 using Serilog;
@@ -17,7 +21,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using TreeSitter;
 
 namespace COA.CodeSearch.McpServer;
 
@@ -53,7 +56,19 @@ public class Program
         // Register indexing services
         services.AddSingleton<IIndexingMetricsService, IndexingMetricsService>();
         services.AddSingleton<IBatchIndexingService, BatchIndexingService>();
-        services.AddSingleton<IFileIndexingService, FileIndexingService>();
+        services.AddSingleton<IFileIndexingService>(sp => new FileIndexingService(
+            sp.GetRequiredService<ILogger<FileIndexingService>>(),
+            sp.GetRequiredService<IConfiguration>(),
+            sp.GetRequiredService<ILuceneIndexService>(),
+            sp.GetRequiredService<IPathResolutionService>(),
+            sp.GetRequiredService<IIndexingMetricsService>(),
+            sp.GetRequiredService<ICircuitBreakerService>(),
+            sp.GetRequiredService<IMemoryPressureService>(),
+            sp.GetRequiredService<IOptions<MemoryLimitsConfiguration>>(),
+            sp.GetRequiredService<ITypeExtractionService>(),
+            sp.GetRequiredService<IJulieExtractionService>(), // Pass julie-extract service
+            sp.GetRequiredService<IJulieCodeSearchService>()  // Pass julie-codesearch service
+        ));
         
         // Register support services
         services.AddSingleton<IFieldSelectorService, FieldSelectorService>();
@@ -80,15 +95,26 @@ public class Program
             new COA.CodeSearch.McpServer.Services.Analysis.CodeAnalyzer(LuceneVersion.LUCENE_48, 
                 preserveCase: false, splitCamelCase: true));
         
-        // Type extraction services (optional - graceful fallback if not available)
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry,
-                              COA.CodeSearch.McpServer.Services.TypeExtraction.LanguageRegistry>();
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService,
-                              COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>();
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor,
-                              COA.CodeSearch.McpServer.Services.TypeExtraction.QueryBasedExtractor>();
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryTypeDetector,
-                              COA.CodeSearch.McpServer.Services.TypeExtraction.QueryTypeDetector>();
+        // Julie integration services for tree-sitter extraction and semantic search
+        // Register JulieExtractionService as a singleton first
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>();
+
+        // Then register it for both interfaces (pointing to the same instance)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.IJulieExtractionService>(
+            sp => sp.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(
+            sp => sp.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
+
+        // Julie CodeSearch CLI service for SQLite-based indexing (scan + update commands)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.IJulieCodeSearchService,
+                              COA.CodeSearch.McpServer.Services.Julie.JulieCodeSearchService>();
+
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.ISemanticIntelligenceService,
+                              COA.CodeSearch.McpServer.Services.Julie.SemanticIntelligenceService>();
+
+        // SQLite symbol storage (canonical database for symbols)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Sqlite.ISQLiteSymbolService,
+                              COA.CodeSearch.McpServer.Services.Sqlite.SQLiteSymbolService>();
         
         // Documentation services (ProjectKnowledge integration removed)
         services.AddSingleton<SmartDocumentationService>();
@@ -236,9 +262,6 @@ public class Program
 
         // Configure Serilog early - FILE ONLY (no console to avoid breaking STDIO)
         ConfigureSerilog(configuration, args);
-
-        // Configure native resolver for Tree-sitter on macOS (Homebrew/system installs)
-        ConfigureTreeSitterNativeResolver();
 
         try
         {
@@ -677,146 +700,4 @@ This approach is deeply satisfying - you've not just fixed a bug, you've built p
         }
     }
 
-    /// <summary>
-    /// Cross-platform Tree-sitter native library resolver for macOS (.dylib), Linux (.so), and Windows (.dll).
-    /// Probes common system locations so we don't need to bundle native libraries with the package.
-    /// </summary>
-    private static void ConfigureTreeSitterNativeResolver()
-    {
-        // Configure native resolver for all platforms
-        try
-        {
-            var tsAssembly = typeof(Parser).Assembly;
-            NativeLibrary.SetDllImportResolver(tsAssembly, ResolveTreeSitterNative);
-
-            // Also attach resolver for our own assembly so any custom P/Invoke bindings can resolve libraries
-            NativeLibrary.SetDllImportResolver(Assembly.GetExecutingAssembly(), ResolveTreeSitterNative);
-        }
-        catch
-        {
-            // Silent fallback; type extraction will gracefully degrade if loading fails
-        }
-    }
-
-    private static IntPtr ResolveTreeSitterNative(string libraryName, Assembly assembly, DllImportSearchPath? _)
-    {
-        Log.Debug("Tree-sitter resolver: resolving '{LibraryName}' on {Platform}", libraryName, 
-            OperatingSystem.IsMacOS() ? "macOS" : OperatingSystem.IsLinux() ? "Linux" : "Windows");
-
-        var fileNames = new List<string>();
-        var prefixes = new List<string>();
-        var commonSubpaths = new Func<string, IEnumerable<string>>(fn => new[] { Path.Combine("lib", fn) });
-
-        if (OperatingSystem.IsMacOS())
-        {
-            // Tree-sitter grammars are installed as libtree-sitter-<lang>.dylib (and core as libtree-sitter*.dylib)
-            fileNames.Add($"lib{libraryName}.dylib");
-            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
-            {
-                fileNames.Add($"libtree-sitter-{libraryName}.dylib");
-            }
-            
-            // Probe common Homebrew/MacPorts install locations
-            prefixes.AddRange(new[] { "/opt/homebrew", "/usr/local", "/opt/local" });
-            commonSubpaths = fn => new[]
-            {
-                Path.Combine("lib", fn),
-                Path.Combine("opt", "tree-sitter", "lib", fn)
-            };
-        }
-        else if (OperatingSystem.IsLinux())
-        {
-            // Linux: Tree-sitter libraries as .so files
-            fileNames.Add($"lib{libraryName}.so");
-            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
-            {
-                fileNames.Add($"libtree-sitter-{libraryName}.so");
-            }
-            
-            // Probe common Linux library locations
-            prefixes.AddRange(new[] { "/usr", "/usr/local", "/opt" });
-            commonSubpaths = fn => new[]
-            {
-                Path.Combine("lib", fn),
-                Path.Combine("lib", "x86_64-linux-gnu", fn),
-                Path.Combine("lib64", fn)
-            };
-        }
-        else if (OperatingSystem.IsWindows())
-        {
-            // Windows: Tree-sitter libraries as .dll files
-            fileNames.Add($"{libraryName}.dll");
-            if (!libraryName.StartsWith("tree-sitter", StringComparison.OrdinalIgnoreCase))
-            {
-                fileNames.Add($"tree-sitter-{libraryName}.dll");
-            }
-            
-            // Probe common Windows locations
-            var programFiles = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            var programFilesX86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            prefixes.AddRange(new[] { programFiles, programFilesX86 });
-            // Add platform-specific tools directory
-            if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
-            {
-                prefixes.Add(@"C:\tools");
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
-            {
-                prefixes.Add("/usr/local");
-            }
-            else if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
-            {
-                prefixes.Add("/usr/local");
-            }
-            commonSubpaths = fn => new[]
-            {
-                Path.Combine("tree-sitter", "lib", fn),
-                Path.Combine("lib", fn),
-                fn // Direct file in directory
-            };
-        }
-        else
-        {
-            Log.Debug("Tree-sitter resolver: unsupported platform, deferring to default");
-            return IntPtr.Zero;
-        }
-
-        foreach (var prefix in prefixes)
-        {
-            foreach (var fn in fileNames)
-            {
-                foreach (var sub in commonSubpaths(fn))
-                {
-                    var candidate = Path.Combine(prefix, sub);
-                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
-                    {
-                        Log.Debug("Tree-sitter resolver: loaded '{LibraryName}' from '{Path}'", libraryName, candidate);
-                        return handle;
-                    }
-                }
-            }
-        }
-
-        // Allow env override with a list of directories (PATH-like)
-        var extra = Environment.GetEnvironmentVariable("TREE_SITTER_NATIVE_PATHS");
-        if (!string.IsNullOrWhiteSpace(extra))
-        {
-            Log.Debug("Tree-sitter resolver: probing TREE_SITTER_NATIVE_PATHS={Paths}", extra);
-            foreach (var dir in extra.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
-            {
-                foreach (var fn in fileNames)
-                {
-                    var candidate = Path.Combine(dir, fn);
-                    if (File.Exists(candidate) && NativeLibrary.TryLoad(candidate, out var handle))
-                    {
-                        Log.Debug("Tree-sitter resolver: loaded '{LibraryName}' from '{Path}' via TREE_SITTER_NATIVE_PATHS", libraryName, candidate);
-                        return handle;
-                    }
-                }
-            }
-        }
-
-        Log.Debug("Tree-sitter resolver: failed to resolve '{LibraryName}', deferring to default", libraryName);
-        return IntPtr.Zero; // Defer to default resolution if we didn't find it
-    }
 }

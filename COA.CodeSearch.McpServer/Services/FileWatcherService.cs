@@ -20,6 +20,11 @@ public class FileWatcherService : BackgroundService
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
+
+    // Phoenix integration: SQLite canonical storage + Julie extraction
+    private readonly Sqlite.ISQLiteSymbolService? _sqliteService;
+    private readonly Julie.IJulieExtractionService? _julieExtractionService;
+    private readonly Julie.IJulieCodeSearchService? _julieCodeSearchService;
     // Timing configuration
     private readonly TimeSpan _debounceInterval;
     private readonly TimeSpan _deleteQuietPeriod;
@@ -39,13 +44,19 @@ public class FileWatcherService : BackgroundService
         ILogger<FileWatcherService> logger,
         IConfiguration configuration,
         IFileIndexingService fileIndexingService,
-        IPathResolutionService pathResolution)
+        IPathResolutionService pathResolution,
+        IServiceProvider serviceProvider)
     {
         _logger = logger;
         _configuration = configuration;
         _fileIndexingService = fileIndexingService;
         _pathResolution = pathResolution;
-        
+
+        // Phoenix integration: Optional services (graceful degradation if not available)
+        _sqliteService = serviceProvider.GetService<Sqlite.ISQLiteSymbolService>();
+        _julieExtractionService = serviceProvider.GetService<Julie.IJulieExtractionService>();
+        _julieCodeSearchService = serviceProvider.GetService<Julie.IJulieCodeSearchService>();
+
         // Configure timing based on lessons learned
         _debounceInterval = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:DebounceMilliseconds", 500));
         _deleteQuietPeriod = TimeSpan.FromSeconds(configuration.GetValue("CodeSearch:FileWatcher:DeleteQuietPeriodSeconds", 5));
@@ -356,12 +367,15 @@ public class FileWatcherService : BackgroundService
                     var indexed = await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
                     if (indexed)
                     {
-                        _logger.LogDebug("Successfully updated in index: {FilePath} ({ChangeType})", 
+                        _logger.LogDebug("Successfully updated in index: {FilePath} ({ChangeType})",
                             update.FilePath, update.ChangeType);
+
+                        // Phoenix: Update SQLite with symbols from julie-extract
+                        await UpdateSQLiteForFileAsync(workspacePath, update.FilePath, cancellationToken);
                     }
                     else
                     {
-                        _logger.LogWarning("Failed to index file: {FilePath} ({ChangeType})", 
+                        _logger.LogWarning("Failed to index file: {FilePath} ({ChangeType})",
                             update.FilePath, update.ChangeType);
                     }
                 }
@@ -420,6 +434,9 @@ public class FileWatcherService : BackgroundService
                     {
                         await _fileIndexingService.IndexFileAsync(workspace, pending.FilePath, cancellationToken);
                         _logger.LogInformation("Reindexed file that still exists: {FilePath}", pending.FilePath);
+
+                        // Phoenix: Update SQLite
+                        await UpdateSQLiteForFileAsync(workspace, pending.FilePath, cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -438,8 +455,11 @@ public class FileWatcherService : BackgroundService
                     try
                     {
                         await _fileIndexingService.RemoveFileAsync(workspace, pending.FilePath, cancellationToken);
-                        _logger.LogDebug("Deleted from index: {FilePath} (verified after {Seconds:F1}s quiet period)", 
+                        _logger.LogDebug("Deleted from index: {FilePath} (verified after {Seconds:F1}s quiet period)",
                             pending.FilePath, (now - pending.FirstSeenTime).TotalSeconds);
+
+                        // Phoenix: Delete from SQLite
+                        await DeleteFromSQLiteAsync(workspace, pending.FilePath, cancellationToken);
                     }
                     catch (Exception ex)
                     {
@@ -596,7 +616,7 @@ public class FileWatcherService : BackgroundService
         try
         {
             var directoryName = Path.GetFileName(indexDirectory);
-            
+
             // Simply return null - we don't resolve hashes anymore
             // Each workspace manages its own indexes
             return null;
@@ -606,5 +626,151 @@ public class FileWatcherService : BackgroundService
             _logger.LogError(ex, "Error resolving workspace path from: {IndexDir}", indexDirectory);
             return null;
         }
+    }
+
+    /// <summary>
+    /// Phoenix: Update SQLite database with symbols from a changed file using julie-codesearch
+    /// </summary>
+    private async Task UpdateSQLiteForFileAsync(string workspacePath, string filePath, CancellationToken cancellationToken)
+    {
+        // Prefer julie-codesearch (handles everything in one CLI call)
+        if (_julieCodeSearchService?.IsAvailable() == true)
+        {
+            try
+            {
+                // Get SQLite database path
+                var indexPath = _pathResolution.GetIndexPath(workspacePath);
+                var sqlitePath = Path.Combine(indexPath, "symbols.db");
+
+                // Update file in SQLite database using julie-codesearch
+                var result = await _julieCodeSearchService.UpdateFileAsync(
+                    filePath,
+                    sqlitePath,
+                    logFilePath: null,
+                    cancellationToken);
+
+                if (result.Success)
+                {
+                    _logger.LogDebug("Phoenix: julie-codesearch {Action} {FilePath} ({SymbolCount} symbols in {ElapsedMs:F1}ms)",
+                        result.Action,
+                        filePath,
+                        result.SymbolCount,
+                        result.ElapsedMs);
+                }
+                else
+                {
+                    _logger.LogWarning("Phoenix: julie-codesearch update failed for {FilePath}: {Error}",
+                        filePath, result.ErrorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Phoenix: julie-codesearch update failed for {FilePath} - continuing with Lucene only", filePath);
+            }
+        }
+        // Fallback to old approach if julie-codesearch not available
+        else if (_sqliteService != null && _julieExtractionService != null && _julieExtractionService.IsAvailable())
+        {
+            try
+            {
+                // Extract symbols from the single file using julie-extract
+                var symbols = await _julieExtractionService.ExtractSingleFileAsync(filePath, cancellationToken);
+
+                if (symbols.Count == 0)
+                {
+                    _logger.LogTrace("Phoenix: No symbols extracted from {FilePath}", filePath);
+                    return;
+                }
+
+                // Read file content and metadata
+                var fileInfo = new FileInfo(filePath);
+                if (!fileInfo.Exists)
+                {
+                    _logger.LogWarning("Phoenix: File disappeared during symbol extraction: {FilePath}", filePath);
+                    return;
+                }
+
+                var content = await File.ReadAllTextAsync(filePath, cancellationToken);
+                var hash = ComputeFileHash(content);
+                var language = DetectLanguage(filePath);
+
+                // Upsert to SQLite (transaction-safe)
+                await _sqliteService.UpsertFileSymbolsAsync(
+                    workspacePath: workspacePath,
+                    filePath: filePath,
+                    symbols: symbols,
+                    fileContent: content,
+                    language: language,
+                    hash: hash,
+                    size: fileInfo.Length,
+                    lastModified: new DateTimeOffset(fileInfo.LastWriteTimeUtc).ToUnixTimeSeconds(),
+                    cancellationToken: cancellationToken);
+
+                _logger.LogDebug("Phoenix: Updated SQLite with {SymbolCount} symbols from {FilePath}",
+                    symbols.Count, filePath);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Phoenix: Failed to update SQLite for {FilePath} - continuing with Lucene only", filePath);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Phoenix: Delete file and symbols from SQLite database
+    /// </summary>
+    private async Task DeleteFromSQLiteAsync(string workspacePath, string filePath, CancellationToken cancellationToken)
+    {
+        if (_sqliteService == null)
+        {
+            return; // Graceful degradation - SQLite not available
+        }
+
+        try
+        {
+            await _sqliteService.DeleteFileAsync(workspacePath, filePath, cancellationToken);
+            _logger.LogDebug("Phoenix: Deleted from SQLite: {FilePath}", filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Phoenix: Failed to delete from SQLite: {FilePath} - continuing with Lucene only", filePath);
+        }
+    }
+
+    /// <summary>
+    /// Compute SHA256 hash of file content for change detection
+    /// </summary>
+    private static string ComputeFileHash(string content)
+    {
+        using var sha256 = System.Security.Cryptography.SHA256.Create();
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var hash = sha256.ComputeHash(bytes);
+        return Convert.ToHexString(hash).ToLowerInvariant();
+    }
+
+    /// <summary>
+    /// Detect language from file extension
+    /// </summary>
+    private static string DetectLanguage(string filePath)
+    {
+        var extension = Path.GetExtension(filePath).ToLowerInvariant();
+        return extension switch
+        {
+            ".cs" => "csharp",
+            ".js" => "javascript",
+            ".ts" => "typescript",
+            ".py" => "python",
+            ".rs" => "rust",
+            ".go" => "go",
+            ".java" => "java",
+            ".cpp" or ".cc" or ".cxx" => "cpp",
+            ".c" => "c",
+            ".rb" => "ruby",
+            ".php" => "php",
+            ".swift" => "swift",
+            ".kt" => "kotlin",
+            ".scala" => "scala",
+            _ => "unknown"
+        };
     }
 }

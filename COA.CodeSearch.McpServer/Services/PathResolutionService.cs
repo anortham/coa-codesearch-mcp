@@ -66,26 +66,54 @@ public class PathResolutionService : IPathResolutionService
     {
         // Validate input path for security
         ValidateWorkspacePath(workspacePath);
-        
+
         // Get the indexes root directory in primary workspace
         var indexRoot = GetIndexRootPath();
-        
+
         // Compute workspace hash for uniqueness
         var hash = ComputeWorkspaceHash(workspacePath);
-        
+
         // Create a descriptive directory name: "workspacename_hash"
         // This makes debugging easier while hash ensures uniqueness
         var workspaceName = GetSafeWorkspaceName(workspacePath);
         var descriptiveName = $"{workspaceName}_{hash}";
-        
+
         var indexPath = Path.Combine(indexRoot, descriptiveName);
-        
+
         // DO NOT create directory here - only compute the path
         // Directory creation should happen only when actually creating an index
-        
+
         _logger.LogDebug("Resolved index path for {Workspace}: {IndexPath}", workspacePath, indexPath);
-        
+
         return indexPath;
+    }
+
+    public string GetLuceneIndexPath(string workspacePath)
+    {
+        var indexPath = GetIndexPath(workspacePath);
+        var lucenePath = Path.Combine(indexPath, "lucene");
+
+        // Ensure lucene directory exists
+        if (!Directory.Exists(lucenePath))
+        {
+            Directory.CreateDirectory(lucenePath);
+        }
+
+        return lucenePath;
+    }
+
+    public string GetEmbeddingsPath(string workspacePath)
+    {
+        var indexPath = GetIndexPath(workspacePath);
+        var embeddingsPath = Path.Combine(indexPath, "embeddings");
+
+        // Ensure embeddings directory exists
+        if (!Directory.Exists(embeddingsPath))
+        {
+            Directory.CreateDirectory(embeddingsPath);
+        }
+
+        return embeddingsPath;
     }
     
     public string ComputeWorkspaceHash(string workspacePath)

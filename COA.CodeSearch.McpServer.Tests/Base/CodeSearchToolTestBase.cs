@@ -72,24 +72,14 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             
             // Setup default mock behaviors
             SetupDefaultMockBehaviors();
-            
-            // Add logger for TypeExtractionService specifically
-            var typeExtractionLogger = new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>>();
-            services.AddSingleton(typeExtractionLogger.Object);
 
-            // Add mock LanguageRegistry for TypeExtractionService
-            var mockLanguageRegistry = new Mock<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry>();
-            services.AddSingleton(mockLanguageRegistry.Object);
+            // Add JulieExtractionService (using julie-extract for type extraction)
+            var julieLogger = new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>>();
+            services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>(provider =>
+                new COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService(julieLogger.Object));
 
-            // Add TypeExtraction services for tools that need them (e.g., FindPatternsTool)
-            services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor, COA.CodeSearch.McpServer.Services.TypeExtraction.QueryBasedExtractor>();
             services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(provider =>
-            {
-                var logger = provider.GetRequiredService<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService>>();
-                var languageRegistry = provider.GetRequiredService<COA.CodeSearch.McpServer.Services.TypeExtraction.ILanguageRegistry>();
-                var queryBasedExtractor = provider.GetRequiredService<COA.CodeSearch.McpServer.Services.TypeExtraction.IQueryBasedExtractor>();
-                return new COA.CodeSearch.McpServer.Services.TypeExtraction.TypeExtractionService(logger, languageRegistry, queryBasedExtractor);
-            });
+                provider.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
         }
         
         protected override void OnSetUp()

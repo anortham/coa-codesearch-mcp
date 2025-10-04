@@ -22,6 +22,20 @@ public interface IPathResolutionService
     /// <param name="workspacePath">The workspace path to get the index for</param>
     /// <returns>The full path to the index directory</returns>
     string GetIndexPath(string workspacePath);
+
+    /// <summary>
+    /// Gets the Lucene index subdirectory path for a workspace
+    /// </summary>
+    /// <param name="workspacePath">The workspace path</param>
+    /// <returns>The full path to the lucene subdirectory</returns>
+    string GetLuceneIndexPath(string workspacePath);
+
+    /// <summary>
+    /// Gets the embeddings subdirectory path for a workspace
+    /// </summary>
+    /// <param name="workspacePath">The workspace path</param>
+    /// <returns>The full path to the embeddings subdirectory</returns>
+    string GetEmbeddingsPath(string workspacePath);
     
     /// <summary>
     /// Gets the logs directory path
