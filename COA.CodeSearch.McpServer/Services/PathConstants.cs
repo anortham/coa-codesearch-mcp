@@ -24,9 +24,10 @@ public static class PathConstants
     public static readonly string DefaultBasePath = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), BaseDirectoryName, CodeSearchDirectoryName);
     
     // Excluded directories (common across services)
-    public static readonly string[] DefaultExcludedDirectories = 
+    public static readonly string[] DefaultExcludedDirectories =
     {
-        "bin", "obj", "node_modules", ".git", ".vs", "packages", "TestResults", 
+        "bin", "obj", "node_modules", ".git", ".vs", ".vscode", "packages", "TestResults",
+        "target", "dist", "build",
         BaseDirectoryName, CodeSearchDirectoryName, ".codenav"
     };
     

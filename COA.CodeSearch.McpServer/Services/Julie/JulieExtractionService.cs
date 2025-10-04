@@ -63,7 +63,7 @@ public class JulieExtractionService : IJulieExtractionService, ITypeExtractionSe
     public bool IsAvailable()
     {
         var available = !string.IsNullOrEmpty(_julieExtractPath) && File.Exists(_julieExtractPath);
-        _logger.LogInformation("🔍 Julie extraction IsAvailable(): {Available}, Path: {Path}", available, _julieExtractPath ?? "null");
+        _logger.LogDebug("Julie extraction IsAvailable(): {Available}, Path: {Path}", available, _julieExtractPath ?? "null");
         return available;
     }
 

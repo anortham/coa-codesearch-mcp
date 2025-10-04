@@ -12,7 +12,6 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 {
     private readonly ILogger<SQLiteSymbolService> _logger;
     private readonly IPathResolutionService _pathResolution;
-    private const string WorkspaceId = "primary"; // Julie's default workspace ID
 
     public SQLiteSymbolService(
         ILogger<SQLiteSymbolService> logger,
@@ -39,7 +38,9 @@ public class SQLiteSymbolService : ISQLiteSymbolService
     public bool DatabaseExists(string workspacePath)
     {
         var dbPath = GetDatabasePath(workspacePath);
-        return File.Exists(dbPath);
+        var exists = File.Exists(dbPath);
+        _logger.LogDebug("DatabaseExists check: {DbPath} → {Exists}", dbPath, exists);
+        return exists;
     }
 
     public async Task<bool> InitializeDatabaseAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -183,8 +184,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT * FROM symbols WHERE workspace_id = @workspace_id";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT * FROM symbols";
 
         return await ReadSymbolsAsync(cmd, cancellationToken);
     }
@@ -201,8 +201,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT * FROM symbols WHERE workspace_id = @workspace_id AND name = @name";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT * FROM symbols WHERE name = @name";
         cmd.Parameters.AddWithValue("@name", name);
 
         return await ReadSymbolsAsync(cmd, cancellationToken);
@@ -220,8 +219,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT * FROM symbols WHERE workspace_id = @workspace_id AND kind = @kind";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT * FROM symbols WHERE kind = @kind";
         cmd.Parameters.AddWithValue("@kind", kind);
 
         return await ReadSymbolsAsync(cmd, cancellationToken);
@@ -239,8 +237,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT * FROM symbols WHERE workspace_id = @workspace_id AND file_path = @file_path";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT * FROM symbols WHERE file_path = @file_path";
         cmd.Parameters.AddWithValue("@file_path", filePath);
 
         return await ReadSymbolsAsync(cmd, cancellationToken);
@@ -282,7 +279,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                 cmd.Parameters.AddWithValue("@last_indexed", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
                 cmd.Parameters.AddWithValue("@symbol_count", symbols.Count);
                 cmd.Parameters.AddWithValue("@content", fileContent);
-                cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+                cmd.Parameters.AddWithValue("@workspace_id", workspacePath);
 
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
             }
@@ -291,9 +288,8 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             using (var cmd = connection.CreateCommand())
             {
                 cmd.Transaction = transaction;
-                cmd.CommandText = "DELETE FROM symbols WHERE file_path = @file_path AND workspace_id = @workspace_id";
+                cmd.CommandText = "DELETE FROM symbols WHERE file_path = @file_path";
                 cmd.Parameters.AddWithValue("@file_path", filePath);
-                cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
@@ -324,7 +320,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                 cmd.Parameters.AddWithValue("@doc_comment", (object?)symbol.DocComment ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@visibility", (object?)symbol.Visibility ?? DBNull.Value);
                 cmd.Parameters.AddWithValue("@parent_id", (object?)symbol.ParentId ?? DBNull.Value);
-                cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+                cmd.Parameters.AddWithValue("@workspace_id", workspacePath);
                 cmd.Parameters.AddWithValue("@file_hash", hash);
                 cmd.Parameters.AddWithValue("@last_indexed", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
@@ -354,9 +350,8 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "DELETE FROM files WHERE path = @path AND workspace_id = @workspace_id";
+        cmd.CommandText = "DELETE FROM files WHERE path = @path";
         cmd.Parameters.AddWithValue("@path", filePath);
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
 
         await cmd.ExecuteNonQueryAsync(cancellationToken);
 
@@ -377,8 +372,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM files WHERE workspace_id = @workspace_id";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT COUNT(*) FROM files";
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result);
@@ -396,11 +390,45 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM symbols WHERE workspace_id = @workspace_id";
-        cmd.Parameters.AddWithValue("@workspace_id", WorkspaceId);
+        cmd.CommandText = "SELECT COUNT(*) FROM symbols";
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result);
+    }
+
+    public async Task<List<FileRecord>> GetAllFilesAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<FileRecord>();
+        }
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT path, content, language, size, last_modified
+            FROM files
+            ORDER BY path";
+
+        var files = new List<FileRecord>();
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            files.Add(new FileRecord(
+                Path: reader.GetString(reader.GetOrdinal("path")),
+                Content: reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content")),
+                Language: reader.GetString(reader.GetOrdinal("language")),
+                Size: reader.GetInt64(reader.GetOrdinal("size")),
+                LastModified: reader.GetInt64(reader.GetOrdinal("last_modified"))
+            ));
+        }
+
+        _logger.LogDebug("Retrieved {FileCount} files from SQLite database", files.Count);
+        return files;
     }
 
     private async Task<List<JulieSymbol>> ReadSymbolsAsync(SqliteCommand cmd, CancellationToken cancellationToken)

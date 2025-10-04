@@ -12,6 +12,7 @@ using Microsoft.Extensions.Options;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Tools;
@@ -67,7 +68,8 @@ public class Program
             sp.GetRequiredService<IOptions<MemoryLimitsConfiguration>>(),
             sp.GetRequiredService<ITypeExtractionService>(),
             sp.GetRequiredService<IJulieExtractionService>(), // Pass julie-extract service
-            sp.GetRequiredService<IJulieCodeSearchService>()  // Pass julie-codesearch service
+            sp.GetRequiredService<IJulieCodeSearchService>(),  // Pass julie-codesearch service
+            sp.GetRequiredService<ISQLiteSymbolService>()      // Pass SQLite service
         ));
         
         // Register support services

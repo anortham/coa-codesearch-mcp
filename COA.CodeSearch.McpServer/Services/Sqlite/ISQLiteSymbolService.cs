@@ -73,4 +73,19 @@ public interface ISQLiteSymbolService
     /// Get symbol count in database
     /// </summary>
     Task<int> GetSymbolCountAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all file paths from the database (for Lucene indexing from SQLite source of truth)
+    /// </summary>
+    Task<List<FileRecord>> GetAllFilesAsync(string workspacePath, CancellationToken cancellationToken = default);
 }
+
+/// <summary>
+/// Represents a file record from the SQLite database
+/// </summary>
+public record FileRecord(
+    string Path,
+    string? Content,
+    string Language,
+    long Size,
+    long LastModified);

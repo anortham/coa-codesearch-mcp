@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Services.Julie;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using System.Collections.Concurrent;
 using System.Text;
 using System.Text.Json;
@@ -28,6 +29,7 @@ public class FileIndexingService : IFileIndexingService
     private readonly ITypeExtractionService _typeExtractionService;
     private readonly IJulieExtractionService? _julieExtractionService;
     private readonly IJulieCodeSearchService? _julieCodeSearchService;
+    private readonly ISQLiteSymbolService? _sqliteSymbolService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
@@ -44,7 +46,8 @@ public class FileIndexingService : IFileIndexingService
         IOptions<MemoryLimitsConfiguration> memoryLimits,
         ITypeExtractionService typeExtractionService,
         IJulieExtractionService? julieExtractionService = null,
-        IJulieCodeSearchService? julieCodeSearchService = null)
+        IJulieCodeSearchService? julieCodeSearchService = null,
+        ISQLiteSymbolService? sqliteSymbolService = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -57,11 +60,13 @@ public class FileIndexingService : IFileIndexingService
         _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
         _julieExtractionService = julieExtractionService;
         _julieCodeSearchService = julieCodeSearchService;
+        _sqliteSymbolService = sqliteSymbolService;
 
         // Debug: Log julie service injection
-        _logger.LogInformation("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}",
+        _logger.LogDebug("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}, SQLite: {SqliteAvailable}",
             _julieExtractionService?.IsAvailable() ?? false,
-            _julieCodeSearchService?.IsAvailable() ?? false);
+            _julieCodeSearchService?.IsAvailable() ?? false,
+            _sqliteSymbolService != null);
 
         // Initialize blacklisted extensions from configuration or defaults
         var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
@@ -141,10 +146,20 @@ public class FileIndexingService : IFileIndexingService
                     // Enable detailed logging for debugging
                     var logFilePath = Path.Combine(dbDirectory, "julie-codesearch.log");
 
+                    // Build ignore patterns from PathConstants (single source of truth)
+                    var ignorePatterns = new List<string>();
+
+                    // Add excluded directories as glob patterns (e.g., "bin" → "**/bin/**")
+                    ignorePatterns.AddRange(_excludedDirectories.Select(dir => $"**/{dir}/**"));
+
+                    // Add blacklisted extensions as glob patterns (e.g., ".log" → "**/*.log")
+                    ignorePatterns.AddRange(_blacklistedExtensions.Select(ext => $"**/*{ext}"));
+
                     // Scan workspace with julie-codesearch
                     var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
                         workspacePath,
                         sqlitePath,
+                        ignorePatterns: ignorePatterns,
                         logFilePath: logFilePath,
                         threads: null,      // Use CPU count
                         cancellationToken);
@@ -417,6 +432,40 @@ public class FileIndexingService : IFileIndexingService
 
     private IEnumerable<string> GetFilesToIndex(string directoryPath)
     {
+        // PHASE 1: Check if SQLite database exists and use it as source of truth
+        if (_sqliteSymbolService != null && _sqliteSymbolService.DatabaseExists(directoryPath))
+        {
+            _logger.LogInformation("📖 Reading file list from SQLite database (source of truth)");
+            List<FileRecord>? files = null;
+
+            try
+            {
+                // Synchronously get files from SQLite (GetFilesToIndex is synchronous)
+                files = _sqliteSymbolService.GetAllFilesAsync(directoryPath, CancellationToken.None)
+                    .GetAwaiter()
+                    .GetResult();
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to read from SQLite database, falling back to filesystem scan");
+            }
+
+            if (files != null)
+            {
+                _logger.LogInformation("✅ Found {FileCount} files in SQLite database", files.Count);
+
+                foreach (var file in files)
+                {
+                    yield return file.Path;
+                }
+
+                yield break; // Done - SQLite is source of truth
+            }
+        }
+
+        // PHASE 2: Fallback to filesystem scan (legacy mode, only if SQLite unavailable)
+        _logger.LogWarning("⚠️  SQLite database not available, falling back to filesystem scan (not recommended)");
+
         if (!Directory.Exists(directoryPath))
         {
             _logger.LogWarning("Directory does not exist: {DirectoryPath}", directoryPath);

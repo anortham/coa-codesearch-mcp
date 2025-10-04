@@ -16,6 +16,7 @@ public interface IJulieCodeSearchService
     /// </summary>
     /// <param name="directoryPath">Directory to scan recursively</param>
     /// <param name="databasePath">SQLite database path (created if doesn't exist)</param>
+    /// <param name="ignorePatterns">Custom ignore patterns (glob patterns like **/*.log)</param>
     /// <param name="logFilePath">Optional log file for debugging (null = no file logging)</param>
     /// <param name="threads">Number of parallel threads (null = CPU count)</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -23,6 +24,7 @@ public interface IJulieCodeSearchService
     Task<ScanResult> ScanDirectoryAsync(
         string directoryPath,
         string databasePath,
+        IEnumerable<string>? ignorePatterns = null,
         string? logFilePath = null,
         int? threads = null,
         CancellationToken cancellationToken = default);
@@ -111,6 +113,7 @@ public class JulieCodeSearchService : IJulieCodeSearchService
     public async Task<ScanResult> ScanDirectoryAsync(
         string directoryPath,
         string databasePath,
+        IEnumerable<string>? ignorePatterns = null,
         string? logFilePath = null,
         int? threads = null,
         CancellationToken cancellationToken = default)
@@ -128,6 +131,11 @@ public class JulieCodeSearchService : IJulieCodeSearchService
         }
 
         var args = $"scan --dir \"{directoryPath}\" --db \"{databasePath}\"";
+        if (ignorePatterns != null && ignorePatterns.Any())
+        {
+            var patternsStr = string.Join(",", ignorePatterns);
+            args += $" --ignore \"{patternsStr}\"";
+        }
         if (threads.HasValue)
         {
             args += $" --threads {threads.Value}";
