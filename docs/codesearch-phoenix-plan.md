@@ -25,7 +25,7 @@
 - WAL mode enabled for concurrent access
 - Idempotent schema creation (files, symbols, indexes)
 - Get/Upsert/Delete operations for files and symbols
-- Storage location: `.coa/codesearch/indexes/{workspace}/db/metadata.db`
+- Storage location: `.coa/codesearch/indexes/{workspace}/db/workspace.db`
 
 #### **3. Clean Directory Structure** ✅
 ```
@@ -37,16 +37,16 @@
 **Benefits**: `rm -rf lucene/` to rebuild, clear separation, easy debugging
 
 #### **4. Dual-Write Architecture** ✅
-- **IndexWorkspaceTool**: julie-codesearch scan → SQLite (with symbols.db at index root) → Lucene indexing
+- **IndexWorkspaceTool**: julie-codesearch scan → SQLite (db/workspace.db) → Lucene indexing
 - **FileWatcherService**: julie-codesearch update → SQLite incremental → Lucene update
 - Graceful fallback if julie-codesearch unavailable
 - Both indexes stay perfectly synchronized
-- Database location: `.coa/codesearch/indexes/{workspace}_{hash}/symbols.db`
+- Database location: `.coa/codesearch/indexes/{workspace}_{hash}/db/workspace.db`
 
 #### **5. Integration Complete** ✅
 - `JulieCodeSearchService` registered as singleton (wraps julie-codesearch CLI)
 - `SemanticIntelligenceService` registered as singleton (ready for Phase 2)
-- `SQLiteSymbolService` registered as singleton (queries symbols.db)
+- `SQLiteSymbolService` registered as singleton (queries db/workspace.db)
 - Build verified: **Zero errors**
 - End-to-end tested: 7,804 symbols extracted from 250 files
 - **READY FOR TOOL MIGRATION**: SQLite populated, tools still need to switch from Lucene queries
@@ -95,7 +95,7 @@ CodeSearch Phoenix combines:
 │  │  │                     │  │                      │   │  │
 │  │  │  • scan (full)      │  │  • Embed batch       │   │  │
 │  │  │  • update (incr.)   │  │  • Search vectors    │   │  │
-│  │  │  → symbols.db       │  │  • Relate symbols    │   │  │
+│  │  │  → workspace.db       │  │  • Relate symbols    │   │  │
 │  │  └─────────────────────┘  └──────────────────────┘   │  │
 │  └──────────────────────────────────────────────────────┘  │
 │                                                              │
@@ -331,7 +331,7 @@ Phase 1: SQLite Population (Foreground, ~3-5 seconds for typical project)
    - Writes to SQLite in batches (transaction per batch)
    - Smart skip: unchanged files detected via hash
 
-4. SQLite populated → symbols.db ready (7,804 symbols in our test)
+4. SQLite populated → workspace.db ready (7,804 symbols in our test)
 
 Phase 2: Background Index Building (Fire and Forget)
 ====================================================
@@ -901,7 +901,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
     public async Task<bool> InitializeDatabaseAsync(string workspacePath, CancellationToken cancellationToken)
     {
-        var dbPath = GetDatabasePath(workspacePath); // .coa/codesearch/indexes/{hash}/metadata.db
+        var dbPath = GetDatabasePath(workspacePath); // .coa/codesearch/indexes/{hash}/workspace.db
 
         using var connection = new SqliteConnection($"Data Source={dbPath}");
         await connection.OpenAsync(cancellationToken);
@@ -962,7 +962,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 - ✅ Idempotent schema creation (matches Julie's schema exactly)
 - ✅ Transaction-safe file+symbols upsert
 - ✅ Exact queries for symbol lookups (no fuzzy Lucene issues)
-- ✅ Storage: `.coa/codesearch/indexes/{workspace-hash}/metadata.db`
+- ✅ Storage: `.coa/codesearch/indexes/{workspace-hash}/workspace.db`
 
 ### 2.4 Enhanced Index Workspace Tool ⏳ **NEXT STEP**
 
@@ -1307,7 +1307,7 @@ dotnet test --filter "JulieIntegrationTests"
 ### ⏳ Current (Week 3)
 1. ✅ **julie-codesearch Integration Complete**
    - JulieCodeSearchService wraps CLI (scan/update commands)
-   - FileIndexingService integrated (calls scan → symbols.db)
+   - FileIndexingService integrated (calls scan → workspace.db)
    - FileWatcherService integrated (calls update for incremental)
    - Build verified (zero errors)
    - End-to-end tested: 7,804 symbols from 250 files

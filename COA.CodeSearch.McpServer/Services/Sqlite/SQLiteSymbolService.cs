@@ -33,7 +33,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             Directory.CreateDirectory(dbDirectory);
         }
 
-        return Path.Combine(dbDirectory, "metadata.db");
+        return Path.Combine(dbDirectory, "workspace.db");
     }
 
     public bool DatabaseExists(string workspacePath)

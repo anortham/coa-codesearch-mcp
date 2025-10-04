@@ -130,9 +130,9 @@ public class FileIndexingService : IFileIndexingService
 
                 try
                 {
-                    // Get SQLite database path (alongside Lucene index)
+                    // Get SQLite database path (isolated in db/ subdirectory)
                     var indexPath = _pathResolution.GetIndexPath(workspacePath);
-                    var sqlitePath = Path.Combine(indexPath, "symbols.db");
+                    var sqlitePath = Path.Combine(indexPath, "db", "workspace.db");
 
                     // Scan workspace with julie-codesearch
                     var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
