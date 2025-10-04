@@ -640,7 +640,11 @@ public class FileWatcherService : BackgroundService
             {
                 // Get SQLite database path
                 var indexPath = _pathResolution.GetIndexPath(workspacePath);
-                var sqlitePath = Path.Combine(indexPath, "db", "workspace.db");
+                var dbDirectory = Path.Combine(indexPath, "db");
+                var sqlitePath = Path.Combine(dbDirectory, "workspace.db");
+
+                // Ensure db/ directory exists
+                Directory.CreateDirectory(dbDirectory);
 
                 // Update file in SQLite database using julie-codesearch
                 var result = await _julieCodeSearchService.UpdateFileAsync(

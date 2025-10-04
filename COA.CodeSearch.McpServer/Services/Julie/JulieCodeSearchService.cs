@@ -367,9 +367,12 @@ public class JulieCodeSearchService : IJulieCodeSearchService
         // Path to bundled binary: bin/julie-binaries/julie-codesearch-{platform}[.exe]
         var bundledPath = Path.Combine(baseDir, "bin", "julie-binaries", binaryName);
 
+        _logger.LogInformation("🔍 Searching for julie-codesearch: BaseDir={BaseDir}, BinaryName={BinaryName}, FullPath={FullPath}",
+            baseDir, binaryName, bundledPath);
+
         if (File.Exists(bundledPath))
         {
-            _logger.LogDebug("Found bundled binary: {Path}", bundledPath);
+            _logger.LogInformation("✅ Found bundled binary: {Path}", bundledPath);
 
             // Make executable on Unix platforms (Git LFS might lose permissions)
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
@@ -398,7 +401,7 @@ public class JulieCodeSearchService : IJulieCodeSearchService
             return bundledPath;
         }
 
-        _logger.LogDebug("No bundled binary found at {Path}", bundledPath);
+        _logger.LogWarning("❌ No bundled binary found at {Path}", bundledPath);
         return null;
     }
 

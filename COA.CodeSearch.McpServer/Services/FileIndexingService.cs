@@ -132,7 +132,11 @@ public class FileIndexingService : IFileIndexingService
                 {
                     // Get SQLite database path (isolated in db/ subdirectory)
                     var indexPath = _pathResolution.GetIndexPath(workspacePath);
-                    var sqlitePath = Path.Combine(indexPath, "db", "workspace.db");
+                    var dbDirectory = Path.Combine(indexPath, "db");
+                    var sqlitePath = Path.Combine(dbDirectory, "workspace.db");
+
+                    // Ensure db/ directory exists
+                    Directory.CreateDirectory(dbDirectory);
 
                     // Scan workspace with julie-codesearch
                     var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
