@@ -1,6 +1,5 @@
 # Set default behavior to automatically normalize line endings
 * text=auto
-
 # Force batch files to always use CRLF
 *.bat text eol=crlf
 *.cmd text eol=crlf
@@ -25,3 +24,4 @@
 *.pdf binary
 **/tree-sitter-service.exe filter=lfs diff=lfs merge=lfs -text
 **/*.bun-build filter=lfs diff=lfs merge=lfs -text
+bin/julie-binaries/julie-codesearch-* filter=lfs diff=lfs merge=lfs -text

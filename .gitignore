@@ -25,7 +25,11 @@ x86/
 [Aa][Rr][Mm]/
 [Aa][Rr][Mm]64/
 bld/
-[Bb]in/
+# Ignore bin directories (build output)
+[Bb]in/[Dd]ebug/
+[Bb]in/[Rr]elease/
+# But allow bin/julie-binaries/ for LFS tracking
+!bin/julie-binaries/
 [Oo]bj/
 [Ll]og/
 [Ll]ogs/

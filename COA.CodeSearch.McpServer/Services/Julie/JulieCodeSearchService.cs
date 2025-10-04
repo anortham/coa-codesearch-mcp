@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using Microsoft.Extensions.Logging;
 
 namespace COA.CodeSearch.McpServer.Services.Julie;
@@ -324,13 +325,16 @@ public class JulieCodeSearchService : IJulieCodeSearchService
         // Check multiple possible locations for julie-codesearch binary
         var possiblePaths = new[]
         {
+            // 0. Bundled with NuGet package (FIRST - best UX for end users)
+            GetBundledBinaryPath(),
+
             // 1. Configured path (environment variable)
             Environment.GetEnvironmentVariable("JULIE_CODESEARCH_PATH"),
 
             // 2. Sibling to julie-extract (if that's configured/found)
             FindJulieBinarySibling(),
 
-            // 3. Standard locations
+            // 3. Development locations (for local development)
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), "Source", "julie", "target", "release", "julie-codesearch"),
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".cargo", "bin", "julie-codesearch"),
             "/usr/local/bin/julie-codesearch",
@@ -348,8 +352,85 @@ public class JulieCodeSearchService : IJulieCodeSearchService
             }
         }
 
-        _logger.LogWarning("julie-codesearch binary not found in standard locations");
+        _logger.LogWarning("julie-codesearch binary not found in standard locations. Install via NuGet package or build from source.");
         return string.Empty;
+    }
+
+    private string? GetBundledBinaryPath()
+    {
+        // Get the base directory where the tool is installed
+        var baseDir = AppContext.BaseDirectory;
+
+        // Determine runtime identifier (e.g., "osx-arm64", "linux-x64", "win-x64")
+        var rid = GetRuntimeIdentifier();
+
+        // Binary extension based on platform
+        var extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
+
+        // Path to bundled binary: runtimes/{rid}/native/julie-codesearch[.exe]
+        var bundledPath = Path.Combine(baseDir, "runtimes", rid, "native", $"julie-codesearch{extension}");
+
+        if (File.Exists(bundledPath))
+        {
+            _logger.LogDebug("Found bundled binary for {RuntimeId}: {Path}", rid, bundledPath);
+
+            // Make executable on Unix platforms (NuGet package might lose permissions)
+            if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+            {
+                try
+                {
+                    var chmod = new System.Diagnostics.Process
+                    {
+                        StartInfo = new System.Diagnostics.ProcessStartInfo
+                        {
+                            FileName = "chmod",
+                            Arguments = $"+x \"{bundledPath}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    chmod.Start();
+                    chmod.WaitForExit();
+                }
+                catch
+                {
+                    // Ignore chmod errors - binary might already be executable
+                }
+            }
+
+            return bundledPath;
+        }
+
+        _logger.LogDebug("No bundled binary found for {RuntimeId} at {Path}", rid, bundledPath);
+        return null;
+    }
+
+    private string GetRuntimeIdentifier()
+    {
+        // Map RuntimeInformation to NuGet runtime identifiers
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return RuntimeInformation.ProcessArchitecture == Architecture.X64
+                ? "win-x64"
+                : "win-arm64";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return RuntimeInformation.ProcessArchitecture == Architecture.X64
+                ? "linux-x64"
+                : "linux-arm64";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? "osx-arm64"
+                : "osx-x64";
+        }
+
+        // Fallback
+        return "unknown";
     }
 
     private string? FindJulieBinarySibling()
