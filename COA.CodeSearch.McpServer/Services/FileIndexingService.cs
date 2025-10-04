@@ -30,6 +30,7 @@ public class FileIndexingService : IFileIndexingService
     private readonly IJulieExtractionService? _julieExtractionService;
     private readonly IJulieCodeSearchService? _julieCodeSearchService;
     private readonly ISQLiteSymbolService? _sqliteSymbolService;
+    private readonly ISemanticIntelligenceService? _semanticIntelligenceService;
     private readonly MemoryLimitsConfiguration _memoryLimits;
     private readonly HashSet<string> _blacklistedExtensions;
     private readonly HashSet<string> _excludedDirectories;
@@ -47,7 +48,8 @@ public class FileIndexingService : IFileIndexingService
         ITypeExtractionService typeExtractionService,
         IJulieExtractionService? julieExtractionService = null,
         IJulieCodeSearchService? julieCodeSearchService = null,
-        ISQLiteSymbolService? sqliteSymbolService = null)
+        ISQLiteSymbolService? sqliteSymbolService = null,
+        ISemanticIntelligenceService? semanticIntelligenceService = null)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
@@ -61,12 +63,14 @@ public class FileIndexingService : IFileIndexingService
         _julieExtractionService = julieExtractionService;
         _julieCodeSearchService = julieCodeSearchService;
         _sqliteSymbolService = sqliteSymbolService;
+        _semanticIntelligenceService = semanticIntelligenceService;
 
         // Debug: Log julie service injection
-        _logger.LogDebug("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}, SQLite: {SqliteAvailable}",
+        _logger.LogDebug("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}, SQLite: {SqliteAvailable}, Semantic: {SemanticAvailable}",
             _julieExtractionService?.IsAvailable() ?? false,
             _julieCodeSearchService?.IsAvailable() ?? false,
-            _sqliteSymbolService != null);
+            _sqliteSymbolService != null,
+            _semanticIntelligenceService?.IsAvailable() ?? false);
 
         // Initialize blacklisted extensions from configuration or defaults
         var blacklistedExts = configuration.GetSection("CodeSearch:Indexing:BlacklistedExtensions").Get<string[]>() 
@@ -215,9 +219,52 @@ public class FileIndexingService : IFileIndexingService
                 }
             }
 
-            // Index all files in the workspace (with optional symbol cache)
-            result.IndexedFileCount = await IndexDirectoryAsync(workspacePath, workspacePath, symbolCache, cancellationToken);
-            
+            // PHASE 3: Run Lucene indexing and embedding generation in parallel
+            Task<int> luceneTask = IndexDirectoryAsync(workspacePath, workspacePath, symbolCache, cancellationToken);
+            Task embeddingTask = Task.CompletedTask;
+
+            // Start embedding generation if available
+            if (_semanticIntelligenceService?.IsAvailable() == true && _sqliteSymbolService != null)
+            {
+                var indexPath = _pathResolution.GetIndexPath(workspacePath);
+                var sqlitePath = Path.Combine(indexPath, "db", "workspace.db");
+                var vectorsPath = Path.Combine(indexPath, "vectors");
+
+                // Ensure vectors directory exists
+                Directory.CreateDirectory(vectorsPath);
+
+                embeddingTask = Task.Run(async () =>
+                {
+                    try
+                    {
+                        _logger.LogInformation("🧠 Generating embeddings in parallel with Lucene indexing...");
+                        var embeddingStart = DateTime.UtcNow;
+
+                        var stats = await _semanticIntelligenceService.GenerateEmbeddingsAsync(
+                            sqlitePath,
+                            outputPath: vectorsPath,
+                            model: "bge-small",
+                            batchSize: 100,
+                            limit: null, // Process all symbols
+                            cancellationToken);
+
+                        var embeddingDuration = (DateTime.UtcNow - embeddingStart).TotalSeconds;
+                        _logger.LogInformation("✅ Embedding generation complete: {Symbols} symbols, {Embeddings} embeddings in {Duration:F2}s",
+                            stats.SymbolsProcessed,
+                            stats.EmbeddingsGenerated,
+                            embeddingDuration);
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogWarning(ex, "Embedding generation failed, continuing with Lucene-only indexing");
+                    }
+                }, cancellationToken);
+            }
+
+            // Wait for both to complete
+            await Task.WhenAll(luceneTask, embeddingTask);
+            result.IndexedFileCount = await luceneTask;
+
             // Commit changes
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
             

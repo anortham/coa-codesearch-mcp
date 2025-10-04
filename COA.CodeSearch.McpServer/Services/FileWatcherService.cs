@@ -25,6 +25,7 @@ public class FileWatcherService : BackgroundService
     private readonly Sqlite.ISQLiteSymbolService? _sqliteService;
     private readonly Julie.IJulieExtractionService? _julieExtractionService;
     private readonly Julie.IJulieCodeSearchService? _julieCodeSearchService;
+    private readonly Julie.ISemanticIntelligenceService? _semanticIntelligenceService;
     // Timing configuration
     private readonly TimeSpan _debounceInterval;
     private readonly TimeSpan _deleteQuietPeriod;
@@ -56,6 +57,7 @@ public class FileWatcherService : BackgroundService
         _sqliteService = serviceProvider.GetService<Sqlite.ISQLiteSymbolService>();
         _julieExtractionService = serviceProvider.GetService<Julie.IJulieExtractionService>();
         _julieCodeSearchService = serviceProvider.GetService<Julie.IJulieCodeSearchService>();
+        _semanticIntelligenceService = serviceProvider.GetService<Julie.ISemanticIntelligenceService>();
 
         // Configure timing based on lessons learned
         _debounceInterval = TimeSpan.FromMilliseconds(configuration.GetValue("CodeSearch:FileWatcher:DebounceMilliseconds", 500));
@@ -364,20 +366,22 @@ public class FileWatcherService : BackgroundService
                         pendingDelete.Cancelled = true;
                     }
 
+                    // Phoenix: Update SQLite FIRST (source of truth)
+                    await UpdateSQLiteForFileAsync(workspacePath, update.FilePath, cancellationToken);
+
+                    // Then update Lucene (reads from SQLite)
                     var indexed = await _fileIndexingService.IndexFileAsync(workspacePath, update.FilePath, cancellationToken);
                     if (indexed)
                     {
                         _logger.LogDebug("Successfully updated in index: {FilePath} ({ChangeType})",
                             update.FilePath, update.ChangeType);
-
-                        // Phoenix: Update SQLite with symbols from julie-extract
-                        await UpdateSQLiteForFileAsync(workspacePath, update.FilePath, cancellationToken);
                     }
                     else
                     {
                         _logger.LogWarning("Failed to index file: {FilePath} ({ChangeType})",
                             update.FilePath, update.ChangeType);
                     }
+
                 }
                 catch (Exception ex)
                 {
@@ -663,11 +667,49 @@ public class FileWatcherService : BackgroundService
                         filePath,
                         result.SymbolCount,
                         result.ElapsedMs);
+
+                    // Update embeddings incrementally if semantic service is available
+                    if (_semanticIntelligenceService?.IsAvailable() == true)
+                    {
+                        try
+                        {
+                            var vectorsPath = Path.Combine(indexPath, "vectors");
+                            if (Directory.Exists(vectorsPath)) // Only update if embeddings exist
+                            {
+                                _logger.LogDebug("Phoenix: Updating embeddings for {FilePath}...", filePath);
+                                var embStats = await _semanticIntelligenceService.UpdateFileAsync(
+                                    filePath,
+                                    sqlitePath,
+                                    vectorsPath,
+                                    model: "bge-small",
+                                    cancellationToken);
+
+                                if (embStats.Success)
+                                {
+                                    _logger.LogDebug("Phoenix: Updated {Embeddings} embeddings for {FilePath}",
+                                        embStats.EmbeddingsGenerated, filePath);
+                                }
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Phoenix: Embedding update failed for {FilePath} - continuing", filePath);
+                        }
+                    }
                 }
                 else
                 {
-                    _logger.LogWarning("Phoenix: julie-codesearch update failed for {FilePath}: {Error}",
-                        filePath, result.ErrorMessage);
+                    // Database locked is expected with concurrent file changes - not an error
+                    if (result.ErrorMessage?.Contains("database is locked") == true)
+                    {
+                        _logger.LogDebug("Phoenix: julie-codesearch update skipped for {FilePath} (database locked by concurrent process)",
+                            filePath);
+                    }
+                    else
+                    {
+                        _logger.LogWarning("Phoenix: julie-codesearch update failed for {FilePath}: {Error}",
+                            filePath, result.ErrorMessage);
+                    }
                 }
             }
             catch (Exception ex)

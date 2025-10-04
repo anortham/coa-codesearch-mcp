@@ -69,7 +69,8 @@ public class Program
             sp.GetRequiredService<ITypeExtractionService>(),
             sp.GetRequiredService<IJulieExtractionService>(), // Pass julie-extract service
             sp.GetRequiredService<IJulieCodeSearchService>(),  // Pass julie-codesearch service
-            sp.GetRequiredService<ISQLiteSymbolService>()      // Pass SQLite service
+            sp.GetRequiredService<ISQLiteSymbolService>(),      // Pass SQLite service
+            sp.GetRequiredService<ISemanticIntelligenceService>() // Pass semantic service
         ));
         
         // Register support services

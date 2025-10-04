@@ -168,7 +168,28 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                         if (removed)
                         {
                             _logger.LogInformation("Successfully removed stale lock, retrying IndexWriter creation");
-                            context.Writer = new IndexWriter(directory, config);
+
+                            // CRITICAL: Must create NEW config - IndexWriterConfig can only be used once
+                            var retryConfig = new IndexWriterConfig(LUCENE_VERSION, _codeAnalyzer)
+                            {
+                                OpenMode = OpenMode.CREATE_OR_APPEND,
+                                RAMBufferSizeMB = ramBuffer,
+                                MaxBufferedDocs = maxBufferedDocs,
+                                MaxThreadStates = maxThreadStates
+                            };
+
+                            // Reapply merge policy if configured
+                            if (mergePolicyType == "TieredMergePolicy")
+                            {
+                                retryConfig.MergePolicy = new TieredMergePolicy
+                                {
+                                    MaxMergeAtOnce = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergeAtOnce", 10),
+                                    SegmentsPerTier = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:SegmentsPerTier", 10.0),
+                                    MaxMergedSegmentMB = _configuration.GetValue("CodeSearch:Lucene:MergePolicy:MaxMergedSegmentMB", 5120.0)
+                                };
+                            }
+
+                            context.Writer = new IndexWriter(directory, retryConfig);
                         }
                         else
                         {

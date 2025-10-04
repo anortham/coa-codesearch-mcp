@@ -11,13 +11,24 @@ namespace COA.CodeSearch.McpServer.Services.Julie;
 public interface ISemanticIntelligenceService
 {
     /// <summary>
-    /// Generate embeddings for symbols in a database (demonstrates capability, outputs stats)
+    /// Generate embeddings for symbols in a database and save HNSW index
     /// </summary>
     Task<EmbeddingStats> GenerateEmbeddingsAsync(
         string symbolsDbPath,
+        string? outputPath = null,
         string model = "bge-small",
         int batchSize = 100,
         int? limit = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Update embeddings for a single changed file (incremental)
+    /// </summary>
+    Task<EmbeddingStats> UpdateFileAsync(
+        string filePath,
+        string symbolsDbPath,
+        string outputPath,
+        string model = "bge-small",
         CancellationToken cancellationToken = default);
 
     /// <summary>
@@ -41,6 +52,7 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
 
     public async Task<EmbeddingStats> GenerateEmbeddingsAsync(
         string symbolsDbPath,
+        string? outputPath = null,
         string model = "bge-small",
         int batchSize = 100,
         int? limit = null,
@@ -51,11 +63,12 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
             throw new InvalidOperationException("julie-semantic binary not found");
         }
 
+        var outputArg = !string.IsNullOrEmpty(outputPath) ? $"--output \"{outputPath}\"" : "";
         var limitArg = limit.HasValue ? $"--limit {limit.Value}" : "";
         var startInfo = new ProcessStartInfo
         {
             FileName = _julieSemanticPath,
-            Arguments = $"embed --symbols-db \"{symbolsDbPath}\" --model {model} --batch-size {batchSize} {limitArg}",
+            Arguments = $"embed --symbols-db \"{symbolsDbPath}\" {outputArg} --model {model} --batch-size {batchSize} {limitArg}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -211,6 +224,76 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
 
         // Fallback
         return "julie-semantic";
+    }
+
+    public async Task<EmbeddingStats> UpdateFileAsync(
+        string filePath,
+        string symbolsDbPath,
+        string outputPath,
+        string model = "bge-small",
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsAvailable())
+        {
+            throw new InvalidOperationException("julie-semantic binary not found");
+        }
+
+        var startInfo = new ProcessStartInfo
+        {
+            FileName = _julieSemanticPath,
+            Arguments = $"update --file \"{filePath}\" --symbols-db \"{symbolsDbPath}\" --output \"{outputPath}\" --model {model}",
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        _logger.LogInformation("Updating embeddings for {FilePath}", filePath);
+
+        using var process = Process.Start(startInfo);
+        if (process == null)
+        {
+            throw new InvalidOperationException("Failed to start julie-semantic process");
+        }
+
+        // Stream stderr for progress updates
+        var progressTask = Task.Run(async () =>
+        {
+            while (!process.StandardError.EndOfStream)
+            {
+                var line = await process.StandardError.ReadLineAsync(cancellationToken);
+                if (!string.IsNullOrWhiteSpace(line))
+                {
+                    _logger.LogInformation("julie-semantic: {Message}", line);
+                }
+            }
+        }, cancellationToken);
+
+        var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
+
+        await process.WaitForExitAsync(cancellationToken);
+        await progressTask;
+
+        var output = await outputTask;
+
+        if (process.ExitCode != 0)
+        {
+            throw new InvalidOperationException($"julie-semantic exited with code {process.ExitCode}");
+        }
+
+        // Parse JSON statistics
+        var stats = JsonSerializer.Deserialize<EmbeddingStats>(output, new JsonSerializerOptions
+        {
+            PropertyNameCaseInsensitive = true
+        }) ?? new EmbeddingStats { Success = false };
+
+        _logger.LogInformation(
+            "Updated embeddings for {FilePath}: {Symbols} symbols, {Embeddings} embeddings",
+            filePath,
+            stats.SymbolsProcessed,
+            stats.EmbeddingsGenerated);
+
+        return stats;
     }
 }
 
