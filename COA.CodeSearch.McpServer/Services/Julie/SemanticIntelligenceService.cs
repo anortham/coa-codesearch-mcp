@@ -115,15 +115,42 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
 
     private string FindJulieSemanticBinary()
     {
-        // 1. Check bundled binaries (deployed with CodeSearch)
+        // 1. Check bundled binaries (deployed with CodeSearch) - platform-specific names
+        var binaryName = GetPlatformSpecificBinaryName();
         var bundledPath = Path.Combine(
             AppContext.BaseDirectory,
             "bin",
-            "julie-semantic" + (OperatingSystem.IsWindows() ? ".exe" : ""));
+            "julie-binaries",
+            binaryName);
 
         if (File.Exists(bundledPath))
         {
             _logger.LogInformation("Found bundled julie-semantic: {Path}", bundledPath);
+
+            // Make executable on Unix platforms (Git LFS might lose permissions)
+            if (!OperatingSystem.IsWindows())
+            {
+                try
+                {
+                    var chmod = new Process
+                    {
+                        StartInfo = new ProcessStartInfo
+                        {
+                            FileName = "chmod",
+                            Arguments = $"+x \"{bundledPath}\"",
+                            UseShellExecute = false,
+                            CreateNoWindow = true
+                        }
+                    };
+                    chmod.Start();
+                    chmod.WaitForExit();
+                }
+                catch
+                {
+                    // Ignore chmod errors - binary might already be executable
+                }
+            }
+
             return bundledPath;
         }
 
@@ -160,6 +187,30 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
 
         _logger.LogWarning("julie-semantic binary not found");
         return string.Empty;
+    }
+
+    private string GetPlatformSpecificBinaryName()
+    {
+        // Match Git LFS packaged binary naming convention
+        if (OperatingSystem.IsWindows())
+        {
+            return "julie-semantic-windows-x64.exe";
+        }
+
+        if (OperatingSystem.IsLinux())
+        {
+            return "julie-semantic-linux-x64";
+        }
+
+        if (OperatingSystem.IsMacOS())
+        {
+            return System.Runtime.InteropServices.RuntimeInformation.ProcessArchitecture == System.Runtime.InteropServices.Architecture.Arm64
+                ? "julie-semantic-macos-arm64"
+                : "julie-semantic-macos-x64";
+        }
+
+        // Fallback
+        return "julie-semantic";
     }
 }
 

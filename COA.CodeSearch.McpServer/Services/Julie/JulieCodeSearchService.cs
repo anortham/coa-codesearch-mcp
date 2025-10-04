@@ -361,20 +361,17 @@ public class JulieCodeSearchService : IJulieCodeSearchService
         // Get the base directory where the tool is installed
         var baseDir = AppContext.BaseDirectory;
 
-        // Determine runtime identifier (e.g., "osx-arm64", "linux-x64", "win-x64")
-        var rid = GetRuntimeIdentifier();
+        // Determine platform-specific binary name (matching Git LFS packaged binaries)
+        var binaryName = GetPlatformSpecificBinaryName();
 
-        // Binary extension based on platform
-        var extension = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? ".exe" : "";
-
-        // Path to bundled binary: runtimes/{rid}/native/julie-codesearch[.exe]
-        var bundledPath = Path.Combine(baseDir, "runtimes", rid, "native", $"julie-codesearch{extension}");
+        // Path to bundled binary: bin/julie-binaries/julie-codesearch-{platform}[.exe]
+        var bundledPath = Path.Combine(baseDir, "bin", "julie-binaries", binaryName);
 
         if (File.Exists(bundledPath))
         {
-            _logger.LogDebug("Found bundled binary for {RuntimeId}: {Path}", rid, bundledPath);
+            _logger.LogDebug("Found bundled binary: {Path}", bundledPath);
 
-            // Make executable on Unix platforms (NuGet package might lose permissions)
+            // Make executable on Unix platforms (Git LFS might lose permissions)
             if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
             {
                 try
@@ -401,8 +398,32 @@ public class JulieCodeSearchService : IJulieCodeSearchService
             return bundledPath;
         }
 
-        _logger.LogDebug("No bundled binary found for {RuntimeId} at {Path}", rid, bundledPath);
+        _logger.LogDebug("No bundled binary found at {Path}", bundledPath);
         return null;
+    }
+
+    private string GetPlatformSpecificBinaryName()
+    {
+        // Match Git LFS packaged binary naming convention
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        {
+            return "julie-codesearch-windows-x64.exe";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.Linux))
+        {
+            return "julie-codesearch-linux-x64";
+        }
+
+        if (RuntimeInformation.IsOSPlatform(OSPlatform.OSX))
+        {
+            return RuntimeInformation.ProcessArchitecture == Architecture.Arm64
+                ? "julie-codesearch-macos-arm64"
+                : "julie-codesearch-macos-x64";
+        }
+
+        // Fallback
+        return "julie-codesearch";
     }
 
     private string GetRuntimeIdentifier()
