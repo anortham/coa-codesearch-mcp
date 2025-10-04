@@ -25,3 +25,4 @@
 **/tree-sitter-service.exe filter=lfs diff=lfs merge=lfs -text
 **/*.bun-build filter=lfs diff=lfs merge=lfs -text
 bin/julie-binaries/julie-codesearch-* filter=lfs diff=lfs merge=lfs -text
+bin/julie-binaries/julie-semantic-* filter=lfs diff=lfs merge=lfs -text
