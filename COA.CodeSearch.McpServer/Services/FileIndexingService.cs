@@ -857,6 +857,7 @@ public class FileIndexingService : IFileIndexingService
 
     /// <summary>
     /// Read custom ignore patterns from .codesearchignore file in workspace root.
+    /// Auto-creates a template file with examples if it doesn't exist.
     ///
     /// File format:
     /// - One pattern per line
@@ -880,8 +881,9 @@ public class FileIndexingService : IFileIndexingService
 
         if (!File.Exists(ignoreFilePath))
         {
-            _logger.LogDebug("No .codesearchignore file found at {Path}", ignoreFilePath);
-            return patterns;
+            _logger.LogInformation("📝 Creating template .codesearchignore file at {Path}", ignoreFilePath);
+            CreateTemplateIgnoreFile(ignoreFilePath);
+            return patterns; // Template has all examples commented out
         }
 
         try
@@ -905,6 +907,61 @@ public class FileIndexingService : IFileIndexingService
         }
 
         return patterns;
+    }
+
+    /// <summary>
+    /// Create a template .codesearchignore file with helpful examples (all commented out).
+    /// Users can uncomment patterns they want to use.
+    /// </summary>
+    private void CreateTemplateIgnoreFile(string filePath)
+    {
+        try
+        {
+            var template = @"# CodeSearch Ignore Patterns
+#
+# Add patterns below to exclude files/directories from indexing.
+# One pattern per line. Lines starting with # are comments.
+# Supports glob patterns (**, *, ?, etc.)
+#
+# Examples (uncomment to use):
+
+# Ignore all test resource directories
+# **/Tests/Resources/**
+# **/Resources/GoldenMaster/**
+
+# Ignore test projects entirely
+# **/*.Tests/**
+
+# Ignore generated files
+# **/*.g.cs
+# **/*.generated.cs
+# **/*.Designer.cs
+
+# Ignore documentation directories
+# **/docs/**
+# **/documentation/**
+
+# Ignore vendor/third-party code
+# **/vendor/**
+# **/third-party/**
+# **/packages/**
+
+# Ignore specific file types
+# **/*.min.js
+# **/*.min.css
+# **/*.map
+
+# Add your custom patterns below:
+
+";
+
+            File.WriteAllText(filePath, template);
+            _logger.LogInformation("✅ Created .codesearchignore template - edit to customize ignore patterns");
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to create .codesearchignore template at {Path}", filePath);
+        }
     }
 
 }

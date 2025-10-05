@@ -1,18 +1,36 @@
 # CodeSearch Ignore Patterns
-# One pattern per line, supports glob patterns
-# Lines starting with # are comments
+#
+# Add patterns below to exclude files/directories from indexing.
+# One pattern per line. Lines starting with # are comments.
+# Supports glob patterns (**, *, ?, etc.)
+#
+# Examples (uncomment to use):
 
 # Ignore all test resource directories
 **/Tests/Resources/**
 **/Resources/GoldenMaster/**
 
-# Ignore test projects entirely (optional - uncomment if desired)
+# Ignore test projects entirely
 # **/*.Tests/**
 
 # Ignore generated files
 **/*.g.cs
 **/*.generated.cs
+# **/*.Designer.cs
 
-# Ignore build artifacts that might get indexed
-**/obj/**
-**/bin/**
+# Ignore documentation directories
+# **/docs/**
+# **/documentation/**
+
+# Ignore vendor/third-party code
+# **/vendor/**
+# **/third-party/**
+# **/packages/**
+
+# Ignore specific file types
+# **/*.min.js
+# **/*.min.css
+# **/*.map
+
+# Add your custom patterns below:
+
