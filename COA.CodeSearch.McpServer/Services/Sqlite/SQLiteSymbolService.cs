@@ -189,7 +189,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         return await ReadSymbolsAsync(cmd, cancellationToken);
     }
 
-    public async Task<List<JulieSymbol>> GetSymbolsByNameAsync(string workspacePath, string name, CancellationToken cancellationToken = default)
+    public async Task<List<JulieSymbol>> GetSymbolsByNameAsync(string workspacePath, string name, bool caseSensitive = true, CancellationToken cancellationToken = default)
     {
         var dbPath = GetDatabasePath(workspacePath);
         if (!File.Exists(dbPath))
@@ -201,7 +201,10 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = "SELECT * FROM symbols WHERE name = @name";
+        // Use COLLATE NOCASE for case-insensitive searches
+        cmd.CommandText = caseSensitive
+            ? "SELECT * FROM symbols WHERE name = @name"
+            : "SELECT * FROM symbols WHERE name = @name COLLATE NOCASE";
         cmd.Parameters.AddWithValue("@name", name);
 
         return await ReadSymbolsAsync(cmd, cancellationToken);

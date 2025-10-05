@@ -30,9 +30,9 @@ public interface ISQLiteSymbolService
     Task<List<JulieSymbol>> GetAllSymbolsAsync(string workspacePath, CancellationToken cancellationToken = default);
 
     /// <summary>
-    /// Get symbols by name (exact match)
+    /// Get symbols by name with optional case sensitivity
     /// </summary>
-    Task<List<JulieSymbol>> GetSymbolsByNameAsync(string workspacePath, string name, CancellationToken cancellationToken = default);
+    Task<List<JulieSymbol>> GetSymbolsByNameAsync(string workspacePath, string name, bool caseSensitive = true, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Get symbols by kind (class, method, function, etc.)

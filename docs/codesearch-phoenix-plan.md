@@ -14,8 +14,10 @@
 #### **1. Julie CLI Infrastructure** ✅
 - `julie-codesearch` CLI: **NEW UNIFIED TOOL** - Direct SQLite output (scan/update commands)
   - Replaces julie-extract's 3-mode approach with optimized scan+update pattern
-  - Single-pass extraction: file content + Blake3 hash + symbols → SQLite
-  - Performance: ~117 files/sec, incremental updates <5ms
+  - **Two-phase extraction**: Phase 1 (symbols) → Phase 2 (identifiers/references)
+  - Single-pass extraction: file content + Blake3 hash + symbols + identifiers → SQLite
+  - Performance: ~117 files/sec symbols, ~16,000 identifiers/sec
+  - Incremental updates: <5ms symbols, identifier updates follow
 - `julie-semantic` CLI: Embedding generation (Phase 2, ready but not integrated)
 - Zero disruption to Julie MCP server (both build successfully)
 - Release binaries built and validated at `~/Source/julie/target/release/`
@@ -104,8 +106,8 @@ CodeSearch Phoenix combines:
 │  │  • smart_refactor (semantic + structural)            │  │
 │  │  • trace_call_path (cross-language via embeddings)   │  │
 │  │  • find_similar (vector search)                      │  │
-│  │  • goto_definition (precise, 26 languages)           │  │
-│  │  • find_references (complete relationship graph)     │  │
+│  │  • goto_definition (precise, 26 languages) ✅        │  │
+│  │  • find_references (identifiers table) 🔜           │  │
 │  └──────────────────────────────────────────────────────┘  │
 └─────────────────────────────────────────────────────────────┘
           │                                    │
@@ -127,12 +129,20 @@ CodeSearch Phoenix combines:
 
 ### Four Search Tiers - Each Optimized for Different Use Cases
 
-**1. SQLite Symbols Table** - Exact structured queries (<1ms)
+**1. SQLite Symbols + Identifiers Tables** - Exact structured queries (<1ms)
 ```sql
+-- Symbol definitions
 SELECT * FROM symbols WHERE name = 'UserService'
+
+-- Identifier usages (NEW: LSP-quality reference tracking)
+SELECT * FROM identifiers WHERE name = 'calculate' AND kind = 'call'
 ```
-- Use: goto_definition, exact symbol lookups
-- Advantage: Precise results, exact positions, signatures, doc comments
+- Use: goto_definition, find_references, exact symbol lookups
+- **NEW**: Identifiers table stores all references/usages (calls, member_access, etc.)
+  - Unresolved (target_symbol_id = NULL), resolved on-demand for fast incremental updates
+  - ~26 identifiers per symbol extracted (tested: 29,654 identifiers from 1,132 symbols)
+  - Performance: ~16,000 identifiers/sec extraction rate
+- Advantage: Precise results, exact positions, signatures, doc comments, **complete reference graph**
 - Weakness: No fuzzy matching, must know exact symbol name
 
 **2. SQLite FTS5 Trigram** - Literal code pattern search (~5ms)
@@ -306,6 +316,114 @@ After (Multi-tier):
 
 ---
 
+## 🎯 LSP-Quality Reference Tracking (NEW!)
+
+### Identifier Extraction Architecture
+
+**Goal**: Build LSP-quality `find_references` without running 26 language servers
+
+**Design**: Two-phase extraction with on-demand resolution
+
+```
+Phase 1: Symbol Extraction (Definitions)
+=========================================
+- Extract all symbols (classes, functions, methods, variables)
+- Store in symbols table with complete metadata
+- Traditional definition tracking (what we already have)
+
+Phase 2: Identifier Extraction (References/Usages) ✅ NEW!
+===========================================================
+- Extract all identifier usages (function calls, member access, variable refs)
+- Store in identifiers table UNRESOLVED (target_symbol_id = NULL)
+- Link to containing_symbol_id (which function contains this usage)
+- Resolve on-demand during find_references queries
+```
+
+**Why On-Demand Resolution?**
+- ✅ **Fast incremental updates**: Change one file → re-extract that file only
+- ✅ **Simple architecture**: No cross-file dependency tracking
+- ✅ **Always correct**: No stale reference problem
+- ✅ **10-100ms resolution**: Acceptable for find_references queries
+
+**Identifier Kinds Extracted:**
+```rust
+pub enum IdentifierKind {
+    Call,          // Function/method calls: calculate(), user.save()
+    VariableRef,   // Variable usages: let x = value
+    TypeUsage,     // Type annotations, casts
+    MemberAccess,  // Field access: user.name, self.field
+    Import,        // Import/use statements
+}
+```
+
+**Performance Characteristics:**
+- Extraction rate: ~16,000 identifiers/sec
+- Ratio: ~26 identifiers per symbol
+- Example: 28 Rust files → 1,132 symbols + 29,654 identifiers in 1.85s
+- Database overhead: Minimal (~3x storage vs symbols-only)
+
+**SQLite Schema:**
+```sql
+CREATE TABLE identifiers (
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    kind TEXT NOT NULL,  -- call, variable_ref, type_usage, member_access, import
+    language TEXT NOT NULL,
+
+    -- Location
+    file_path TEXT NOT NULL,
+    start_line INTEGER NOT NULL,
+    start_col INTEGER NOT NULL,
+    end_line INTEGER NOT NULL,
+    end_col INTEGER NOT NULL,
+
+    -- Semantic links
+    containing_symbol_id TEXT,      -- Which function/class contains this usage
+    target_symbol_id TEXT,          -- NULL until resolved on-demand
+    confidence REAL DEFAULT 1.0,
+
+    -- 6 indexes for fast queries
+    INDEX idx_identifiers_name,
+    INDEX idx_identifiers_file,
+    INDEX idx_identifiers_containing,
+    INDEX idx_identifiers_target,
+    INDEX idx_identifiers_kind,
+    INDEX idx_identifiers_workspace
+);
+```
+
+**Example Query - Find All References:**
+```sql
+-- Step 1: Find the symbol definition
+SELECT id FROM symbols WHERE name = 'calculate' AND kind = 'function'
+-- Returns: symbol_id = 'abc123'
+
+-- Step 2: Find all usages (on-demand resolution in C#)
+SELECT i.*, s.name as used_in_function
+FROM identifiers i
+JOIN symbols s ON i.containing_symbol_id = s.id
+WHERE i.name = 'calculate'
+  AND i.kind = 'call'
+ORDER BY i.file_path, i.start_line
+```
+
+**Implementation Status:**
+- ✅ Identifiers table schema in SQLite
+- ✅ Tree-sitter identifier extraction (Rust implemented, 25 languages pending)
+- ✅ Bulk insertion with index optimization
+- ✅ Two-phase parallel extraction pipeline
+- 🔜 C# resolution service for on-demand linking
+- 🔜 FindReferencesTool using identifiers table
+- 🔜 TraceCallPathTool for call hierarchy visualization
+
+**Next Steps:**
+1. Add `ISQLiteSymbolService.GetIdentifiersByNameAsync()`
+2. Implement `ReferenceResolverService` for on-demand resolution
+3. Update FindReferencesTool to use identifiers instead of Lucene
+4. Extend identifier extraction to remaining languages (TypeScript, Python, etc.)
+
+---
+
 ## 🚀 Performance-Optimized Data Flow
 
 ### Bulk Indexing (Initial Workspace Scan) - Fire and Forget Strategy
@@ -327,11 +445,13 @@ Phase 1: SQLite Population (Foreground, ~3-5 seconds for typical project)
 3. julie-codesearch (Rust):
    - Walks directory with gitignore-style patterns
    - Parses files in parallel (rayon + tree-sitter)
-   - Single-pass: content + Blake3 hash + symbols
+   - **Phase 1**: Extract symbols → write to SQLite
+   - **Phase 2**: Extract identifiers (using symbols for context) → write to SQLite
+   - Two-pass: content + Blake3 hash + symbols + identifiers
    - Writes to SQLite in batches (transaction per batch)
    - Smart skip: unchanged files detected via hash
 
-4. SQLite populated → workspace.db ready (7,804 symbols in our test)
+4. SQLite populated → workspace.db ready (example: 1,132 symbols + 29,654 identifiers)
 
 Phase 2: Background Index Building (Fire and Forget)
 ====================================================

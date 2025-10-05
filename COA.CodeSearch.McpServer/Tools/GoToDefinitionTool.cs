@@ -14,6 +14,8 @@ using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Services.Analysis;
+using COA.CodeSearch.McpServer.Services.Sqlite;
+using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
@@ -37,6 +39,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     private readonly GoToDefinitionResponseBuilder _responseBuilder;
     private readonly ILogger<GoToDefinitionTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
+    private readonly ISQLiteSymbolService? _sqliteService;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     /// <summary>
@@ -50,6 +53,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     /// <param name="queryProcessor">Smart query preprocessing service</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="sqliteService">Optional SQLite symbol service for fast-path lookups</param>
     public GoToDefinitionTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
@@ -58,7 +62,8 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         ILogger<GoToDefinitionTool> logger,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
+        CodeAnalyzer codeAnalyzer,
+        ISQLiteSymbolService? sqliteService = null) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
         _cacheService = cacheService;
@@ -68,6 +73,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         _responseBuilder = new GoToDefinitionResponseBuilder(logger as ILogger<GoToDefinitionResponseBuilder>, storageService);
         _logger = logger;
         _codeAnalyzer = codeAnalyzer;
+        _sqliteService = sqliteService;
     }
 
     /// <summary>
@@ -129,6 +135,74 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         try
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
+            // Fast path: Try SQLite direct lookup first (< 1ms)
+            if (_sqliteService != null && _sqliteService.DatabaseExists(workspacePath))
+            {
+                try
+                {
+                    _logger.LogDebug("Attempting SQLite fast-path lookup for symbol '{Symbol}' (caseSensitive={CaseSensitive})",
+                        symbolName, parameters.CaseSensitive);
+                    var sqliteSymbols = await _sqliteService.GetSymbolsByNameAsync(
+                        workspacePath,
+                        symbolName,
+                        parameters.CaseSensitive,
+                        cancellationToken);
+
+                    if (sqliteSymbols != null && sqliteSymbols.Count > 0)
+                    {
+                        // Filter for case sensitivity if needed (SQL should have already filtered, this is redundant safety)
+                        var matchingSymbol = FindBestMatch(sqliteSymbols, symbolName, parameters.CaseSensitive);
+
+                        if (matchingSymbol != null)
+                        {
+                            _logger.LogInformation("SQLite fast-path found symbol '{Symbol}' in {Elapsed}ms",
+                                symbolName, stopwatch.ElapsedMilliseconds);
+
+                            var sqliteDefinition = await MapJulieSymbolToDefinitionAsync(
+                                matchingSymbol,
+                                workspacePath,
+                                parameters.ContextLines,
+                                cancellationToken);
+
+                            // Build response
+                            var sqliteContext = new ResponseContext
+                            {
+                                ResponseMode = "adaptive",
+                                TokenLimit = parameters.ContextLines * 50 + 500,
+                                StoreFullResults = false,
+                                ToolName = Name,
+                                CacheKey = cacheKey,
+                                CustomMetadata = new Dictionary<string, object>
+                                {
+                                    ["symbolName"] = symbolName,
+                                    ["source"] = "sqlite"
+                                }
+                            };
+
+                            var sqliteResponse = await _responseBuilder.BuildResponseAsync(sqliteDefinition, sqliteContext);
+
+                            // Cache the response
+                            if (!parameters.NoCache && sqliteResponse.Success)
+                            {
+                                await _cacheService.SetAsync(cacheKey, sqliteResponse, new CacheEntryOptions
+                                {
+                                    AbsoluteExpiration = TimeSpan.FromMinutes(10)
+                                });
+                            }
+
+                            return sqliteResponse;
+                        }
+                    }
+
+                    _logger.LogDebug("SQLite fast-path found no matching symbol '{Symbol}', falling back to Lucene", symbolName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "SQLite fast-path failed for '{Symbol}', falling back to Lucene", symbolName);
+                    // Fall through to Lucene search
+                }
+            }
             
             // Use SmartQueryPreprocessor for optimal field selection and query processing
             // Symbol definitions work best with SearchMode.Symbol targeting type_names field
@@ -315,7 +389,124 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
             };
         }
     }
-    
+
+    /// <summary>
+    /// Finds the best matching symbol from a list based on case sensitivity.
+    /// </summary>
+    private JulieSymbol? FindBestMatch(List<JulieSymbol> symbols, string symbolName, bool caseSensitive)
+    {
+        if (symbols == null || symbols.Count == 0)
+            return null;
+
+        // Filter by case sensitivity
+        var comparisonType = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+        var matches = symbols.Where(s => s.Name.Equals(symbolName, comparisonType)).ToList();
+
+        if (matches.Count == 0)
+            return null;
+
+        // If single match, return it
+        if (matches.Count == 1)
+            return matches[0];
+
+        // Multiple matches: prefer classes/types over methods
+        var typeKinds = new[] { "class", "interface", "struct", "enum" };
+        var typeMatch = matches.FirstOrDefault(s => typeKinds.Contains(s.Kind.ToLowerInvariant()));
+        if (typeMatch != null)
+            return typeMatch;
+
+        // Otherwise return first match
+        return matches[0];
+    }
+
+    /// <summary>
+    /// Maps a JulieSymbol to SymbolDefinition with context extraction.
+    /// </summary>
+    private async Task<SymbolDefinition> MapJulieSymbolToDefinitionAsync(
+        JulieSymbol symbol,
+        string workspacePath,
+        int contextLines,
+        CancellationToken cancellationToken)
+    {
+        var definition = new SymbolDefinition
+        {
+            Name = symbol.Name,
+            Kind = symbol.Kind,
+            Signature = symbol.Signature ?? symbol.Name,
+            FilePath = symbol.FilePath,
+            Line = symbol.StartLine,
+            Column = symbol.StartColumn,
+            Language = symbol.Language,
+            Score = 1.0f // SQLite exact match gets perfect score
+        };
+
+        // Add visibility as modifiers
+        if (!string.IsNullOrEmpty(symbol.Visibility))
+        {
+            definition.Modifiers = new List<string> { symbol.Visibility };
+        }
+
+        // Extract context snippet if requested
+        if (contextLines > 0 && _sqliteService != null)
+        {
+            try
+            {
+                var snippet = await GetContextFromSQLiteAsync(
+                    workspacePath,
+                    symbol.FilePath,
+                    symbol.StartLine,
+                    contextLines,
+                    cancellationToken);
+
+                definition.Snippet = snippet;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Failed to extract context for {Symbol} in {FilePath}",
+                    symbol.Name, symbol.FilePath);
+            }
+        }
+
+        return definition;
+    }
+
+    /// <summary>
+    /// Extracts context snippet from SQLite-stored file content.
+    /// </summary>
+    private async Task<string?> GetContextFromSQLiteAsync(
+        string workspacePath,
+        string filePath,
+        int targetLine,
+        int contextLines,
+        CancellationToken cancellationToken)
+    {
+        if (_sqliteService == null)
+            return null;
+
+        // Get file content from SQLite
+        var files = await _sqliteService.GetAllFilesAsync(workspacePath, cancellationToken);
+        var fileRecord = files.FirstOrDefault(f => f.Path == filePath);
+
+        if (fileRecord == null || string.IsNullOrEmpty(fileRecord.Content))
+        {
+            _logger.LogDebug("No content found in SQLite for {FilePath}", filePath);
+            return null;
+        }
+
+        // Extract context lines
+        var lines = fileRecord.Content.Split('\n');
+        var startLine = Math.Max(0, targetLine - contextLines - 1); // -1 because line numbers are 1-based
+        var endLine = Math.Min(lines.Length - 1, targetLine + contextLines - 1);
+
+        var contextSnippet = new List<string>();
+        for (int i = startLine; i <= endLine; i++)
+        {
+            contextSnippet.Add(lines[i]);
+        }
+
+        return string.Join("\n", contextSnippet);
+    }
+
     private string? GetContextSnippet(SearchHit hit, int targetLine, int contextLines)
     {
         // Try to get context from the hit's stored content
