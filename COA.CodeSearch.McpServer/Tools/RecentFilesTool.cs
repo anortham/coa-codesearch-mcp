@@ -9,17 +9,12 @@ using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.McpServer.Services;
-using COA.CodeSearch.McpServer.Services.Lucene;
-using COA.CodeSearch.McpServer.Services.Analysis;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using COA.VSCodeBridge;
 using COA.VSCodeBridge.Models;
-using Lucene.Net.Search;
-using Lucene.Net.Index;
-using Lucene.Net.QueryParsers.Classic;
-using Lucene.Net.Util;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -28,7 +23,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptimizedResponse<RecentFilesResult>>
 {
-    private readonly ILuceneIndexService _luceneIndexService;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
@@ -36,32 +31,29 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
     private readonly RecentFilesResponseBuilder _responseBuilder;
     private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<RecentFilesTool> _logger;
-    private readonly CodeAnalyzer _codeAnalyzer;
 
     /// <summary>
     /// Initializes a new instance of the RecentFilesTool with required dependencies.
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
-    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="sqliteService">SQLite symbol service for efficient file queries</param>
     /// <param name="pathResolutionService">Path resolution service</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
     /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="logger">Logger instance</param>
-    /// <param name="codeAnalyzer">Code analysis service</param>
     public RecentFilesTool(
         IServiceProvider serviceProvider,
-        ILuceneIndexService luceneIndexService,
+        ISQLiteSymbolService sqliteService,
         IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         COA.VSCodeBridge.IVSCodeBridge vscode,
-        ILogger<RecentFilesTool> logger,
-        CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
+        ILogger<RecentFilesTool> logger) : base(serviceProvider, logger)
     {
-        _luceneIndexService = luceneIndexService;
+        _sqliteService = sqliteService;
         _pathResolutionService = pathResolutionService;
         _cacheService = cacheService;
         _storageService = storageService;
@@ -69,7 +61,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         _responseBuilder = new RecentFilesResponseBuilder(null, storageService);
         _vscode = vscode;
         _logger = logger;
-        _codeAnalyzer = codeAnalyzer;
     }
 
     /// <summary>
@@ -136,84 +127,38 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         
         try
         {
-            // Check if index exists
-            var indexExists = await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken);
-            _logger.LogInformation("Index exists for {Workspace}: {Exists}", workspacePath, indexExists);
-            
-            if (!indexExists)
+            // Check if SQLite database exists
+            var dbExists = _sqliteService.DatabaseExists(workspacePath);
+            _logger.LogInformation("SQLite database exists for {Workspace}: {Exists}", workspacePath, dbExists);
+
+            if (!dbExists)
             {
                 return CreateNoIndexError(workspacePath);
             }
-            
-            // Use NumericRangeQuery for efficient server-side filtering by modification time
+
+            // Query SQLite for recent files (much faster than Lucene!)
             var cutoffTicks = cutoffTime.Ticks;
-            var query = NumericRangeQuery.NewInt64Range("modified", cutoffTicks, long.MaxValue, true, true);
-            
-            COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult;
-            try
+            var fileRecords = await _sqliteService.GetRecentFilesAsync(
+                workspacePath,
+                cutoffTicks,
+                maxResults,
+                parameters.ExtensionFilter,
+                cancellationToken);
+
+            _logger.LogInformation("SQLite query returned {Count} files modified after {CutoffDate}",
+                fileRecords.Count, cutoffTime);
+
+            // Convert FileRecord to RecentFileInfo
+            var recentFiles = fileRecords.Select(record => new RecentFileInfo
             {
-                searchResult = await _luceneIndexService.SearchAsync(
-                    workspacePath,
-                    query,
-                    maxResults, // Use requested max results since we're filtering server-side
-                    false, // No snippets needed for recent files
-                    cancellationToken
-                );
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to execute search query");
-                throw;
-            }
-            
-            // Process results and create recent file entries
-            var recentFiles = new List<RecentFileInfo>();
-            
-            _logger.LogInformation("Search returned {TotalHits} total hits, processing {Count} hits. Query: {Query}, Cutoff: {Cutoff} ({CutoffDate})", 
-                searchResult.TotalHits, searchResult.Hits.Count, query.ToString(), cutoffTime.Ticks, cutoffTime);
-            
-            if (searchResult.Hits.Count == 0 && searchResult.TotalHits > 0)
-            {
-                _logger.LogWarning("Search returned {TotalHits} total hits but Hits collection is empty!", searchResult.TotalHits);
-            }
-            
-            foreach (var hit in searchResult.Hits)
-            {
-                _logger.LogDebug("Hit: FilePath={FilePath}, LastModified={LastMod}, HasLastMod={HasLastMod}", 
-                    hit.FilePath, hit.LastModified, hit.LastModified.HasValue);
-                    
-                if (!string.IsNullOrEmpty(hit.FilePath) && hit.LastModified.HasValue)
-                {
-                    // Apply extension filter if provided
-                    if (!string.IsNullOrEmpty(parameters.ExtensionFilter))
-                    {
-                        var extensions = parameters.ExtensionFilter
-                            .Split(',')
-                            .Select(e => e.Trim().StartsWith('.') ? e.Trim() : "." + e.Trim())
-                            .ToHashSet(StringComparer.OrdinalIgnoreCase);
-                        
-                        var fileExtension = Path.GetExtension(hit.FilePath);
-                        if (!extensions.Contains(fileExtension))
-                            continue;
-                    }
-                    
-                    recentFiles.Add(new RecentFileInfo
-                    {
-                        FilePath = hit.FilePath,
-                        FileName = Path.GetFileName(hit.FilePath),
-                        Directory = Path.GetDirectoryName(hit.FilePath) ?? "",
-                        Extension = Path.GetExtension(hit.FilePath),
-                        LastModified = hit.LastModified.Value,
-                        SizeBytes = hit.Fields.TryGetValue("size", out var sizeStr) && long.TryParse(sizeStr, out var size) ? size : 0,
-                        ModifiedAgo = DateTime.UtcNow - hit.LastModified.Value
-                    });
-                }
-            }
-            
-            // Sort by modification time (most recent first) - Lucene already limited results
-            recentFiles = recentFiles
-                .OrderByDescending(f => f.LastModified)
-                .ToList();
+                FilePath = record.Path,
+                FileName = Path.GetFileName(record.Path),
+                Directory = Path.GetDirectoryName(record.Path) ?? "",
+                Extension = Path.GetExtension(record.Path),
+                LastModified = new DateTime(record.LastModified, DateTimeKind.Utc),
+                SizeBytes = record.Size,
+                ModifiedAgo = DateTime.UtcNow - new DateTime(record.LastModified, DateTimeKind.Utc)
+            }).ToList();
             
             _logger.LogDebug("Found {Count} recent files in the last {TimeFrame}", 
                 recentFiles.Count, timeFrame);
@@ -304,22 +249,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
             };
             return errorResult;
         }
-    }
-    
-    private Query CreateRecentFilesQuery(DateTime cutoffTime)
-    {
-        // Convert to ticks (same format as stored in index)
-        var cutoffTicks = cutoffTime.Ticks;
-        
-        // Create numeric range query for modification date (stored as Int64 ticks)
-        var rangeQuery = NumericRangeQuery.NewInt64Range(
-            "modified",  // Field name matches what's stored in index
-            cutoffTicks, 
-            long.MaxValue, // Up to now
-            true, 
-            true);
-        
-        return rangeQuery;
     }
     
     private TimeSpan ParseTimeFrame(string timeFrame)

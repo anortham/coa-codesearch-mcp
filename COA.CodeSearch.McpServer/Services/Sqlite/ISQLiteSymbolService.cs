@@ -80,6 +80,21 @@ public interface ISQLiteSymbolService
     Task<List<FileRecord>> GetAllFilesAsync(string workspacePath, CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get a single file by path (efficient for getting context snippets)
+    /// </summary>
+    Task<FileRecord?> GetFileByPathAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get recently modified files within a time frame (efficient for recent_files tool)
+    /// </summary>
+    Task<List<FileRecord>> GetRecentFilesAsync(
+        string workspacePath,
+        long cutoffTimestamp,
+        int maxResults,
+        string? extensionFilter = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get identifiers (references/usages) by name for LSP-quality find_references.
     /// Returns all identifier usages of the given name (function calls, variable refs, etc.)
     /// </summary>

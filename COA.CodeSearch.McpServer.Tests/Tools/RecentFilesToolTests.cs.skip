@@ -4,11 +4,10 @@ using Moq;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
-using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
-using Lucene.Net.Search;
 using System.Threading.Tasks;
 using System.Threading;
 using System;
@@ -30,14 +29,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             _tool = new RecentFilesTool(
                 ServiceProvider,
-                LuceneIndexServiceMock.Object,
+                SqliteSymbolServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 VSCodeBridgeMock.Object,
-                ToolLoggerMock.Object,
-                CodeAnalyzer
+                ToolLoggerMock.Object
             );
             return _tool;
         }
@@ -407,29 +405,29 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             file.ModifiedAgo.Should().BeCloseTo(TimeSpan.FromHours(2), TimeSpan.FromMinutes(1));
         }
         
-        // Helper method to create search hits for testing
-        private SearchHit CreateSearchHit(string filePath, DateTime lastModified, long fileSize)
+        // Helper method to create file records for testing
+        private FileRecord CreateFileRecord(string filePath, DateTime lastModified, long fileSize)
         {
-            return new SearchHit
-            {
-                FilePath = Path.Combine(TestWorkspacePath, filePath),
-                LastModified = lastModified,
-                Fields = new Dictionary<string, string>
-                {
-                    ["size"] = fileSize.ToString()
-                },
-                Score = 1.0f
-            };
+            return new FileRecord(
+                Path: Path.Combine(TestWorkspacePath, filePath),
+                Content: null,
+                Language: "csharp",
+                Size: fileSize,
+                LastModified: lastModified.Ticks
+            );
         }
 
-        // Helper method to setup search results with multiple hits
-        private void SetupSearchResultsWithHits(params SearchHit[] hits)
+        // Helper method to setup SQLite query results with multiple file records
+        private void SetupRecentFilesResults(params FileRecord[] fileRecords)
         {
-            SetupSearchResults(TestWorkspacePath, new SearchResult
-            {
-                Hits = hits.ToList(),
-                TotalHits = hits.Length
-            });
+            SqliteSymbolServiceMock
+                .Setup(x => x.GetRecentFilesAsync(
+                    It.IsAny<string>(),
+                    It.IsAny<long>(),
+                    It.IsAny<int>(),
+                    It.IsAny<string?>(),
+                    It.IsAny<CancellationToken>()))
+                .ReturnsAsync(fileRecords.ToList());
         }
     }
 }

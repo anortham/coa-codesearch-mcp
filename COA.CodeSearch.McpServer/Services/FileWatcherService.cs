@@ -164,14 +164,31 @@ public class FileWatcherService : BackgroundService
                 _logger.LogDebug("Cancelled pending delete for {FilePath} due to {ChangeType}", filePath, changeType);
             }
 
-            // Add to queue
-            if (_changeQueue.TryAdd(changeEvent))
+            // Deduplicate using _pendingChanges to prevent duplicate processing
+            if (_pendingChanges.TryGetValue(filePath, out var existingEvent))
             {
-                _logger.LogDebug("Queued {ChangeType} event for: {FilePath}", changeType, filePath);
+                // Update existing event with latest timestamp and change type
+                existingEvent.Timestamp = changeEvent.Timestamp;
+                existingEvent.ChangeType = changeEvent.ChangeType;
+                _logger.LogDebug("Updated pending {ChangeType} event for: {FilePath} (deduped)", changeType, filePath);
             }
             else
             {
-                _logger.LogWarning("Failed to queue {ChangeType} event for: {FilePath}", changeType, filePath);
+                // New file event - add to pending dictionary and queue
+                if (_pendingChanges.TryAdd(filePath, changeEvent))
+                {
+                    // Add to queue to signal batch processor
+                    if (_changeQueue.TryAdd(changeEvent))
+                    {
+                        _logger.LogDebug("Queued {ChangeType} event for: {FilePath}", changeType, filePath);
+                    }
+                    else
+                    {
+                        // Failed to queue - remove from pending
+                        _pendingChanges.TryRemove(filePath, out _);
+                        _logger.LogWarning("Failed to queue {ChangeType} event for: {FilePath}", changeType, filePath);
+                    }
+                }
             }
         }
     }
@@ -382,10 +399,13 @@ public class FileWatcherService : BackgroundService
                             update.FilePath, update.ChangeType);
                     }
 
+                    // Clear from pending changes after successful processing
+                    _pendingChanges.TryRemove(update.FilePath, out _);
                 }
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Failed to update file in index: {FilePath}", update.FilePath);
+                    // Don't clear from pending on error - allow retry
                 }
             }
 

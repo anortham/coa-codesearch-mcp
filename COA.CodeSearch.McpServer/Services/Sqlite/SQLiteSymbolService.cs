@@ -434,6 +434,112 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         return files;
     }
 
+    public async Task<FileRecord?> GetFileByPathAsync(string workspacePath, string filePath, CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return null;
+        }
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT path, content, language, size, last_modified
+            FROM files
+            WHERE path = @filePath";
+        cmd.Parameters.AddWithValue("@filePath", filePath);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        if (await reader.ReadAsync(cancellationToken))
+        {
+            return new FileRecord(
+                Path: reader.GetString(reader.GetOrdinal("path")),
+                Content: reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content")),
+                Language: reader.GetString(reader.GetOrdinal("language")),
+                Size: reader.GetInt64(reader.GetOrdinal("size")),
+                LastModified: reader.GetInt64(reader.GetOrdinal("last_modified"))
+            );
+        }
+
+        return null;
+    }
+
+    public async Task<List<FileRecord>> GetRecentFilesAsync(
+        string workspacePath,
+        long cutoffTimestamp,
+        int maxResults,
+        string? extensionFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<FileRecord>();
+        }
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+
+        // Build query with optional extension filter
+        var whereClause = "WHERE last_modified >= @cutoff";
+        if (!string.IsNullOrEmpty(extensionFilter))
+        {
+            // Parse extension filter (e.g., ".cs,.js" -> [".cs", ".js"])
+            var extensions = extensionFilter
+                .Split(',')
+                .Select(e => e.Trim().StartsWith('.') ? e.Trim() : "." + e.Trim())
+                .ToList();
+
+            // Add extension filter using SQL IN clause
+            var extParams = string.Join(",", extensions.Select((_, i) => $"@ext{i}"));
+            whereClause += $" AND (path LIKE '%' || @ext0";
+            for (int i = 1; i < extensions.Count; i++)
+            {
+                whereClause += $" OR path LIKE '%' || @ext{i}";
+            }
+            whereClause += ")";
+
+            // Add parameters
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                cmd.Parameters.AddWithValue($"@ext{i}", extensions[i]);
+            }
+        }
+
+        cmd.CommandText = $@"
+            SELECT path, content, language, size, last_modified
+            FROM files
+            {whereClause}
+            ORDER BY last_modified DESC
+            LIMIT @limit";
+
+        cmd.Parameters.AddWithValue("@cutoff", cutoffTimestamp);
+        cmd.Parameters.AddWithValue("@limit", maxResults);
+
+        var files = new List<FileRecord>();
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            files.Add(new FileRecord(
+                Path: reader.GetString(reader.GetOrdinal("path")),
+                Content: reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content")),
+                Language: reader.GetString(reader.GetOrdinal("language")),
+                Size: reader.GetInt64(reader.GetOrdinal("size")),
+                LastModified: reader.GetInt64(reader.GetOrdinal("last_modified"))
+            ));
+        }
+
+        _logger.LogDebug("Found {Count} recent files modified after {Cutoff}", files.Count, cutoffTimestamp);
+        return files;
+    }
+
     private async Task<List<JulieSymbol>> ReadSymbolsAsync(SqliteCommand cmd, CancellationToken cancellationToken)
     {
         var symbols = new List<JulieSymbol>();
@@ -596,3 +702,5 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         };
     }
 }
+
+//this is a test

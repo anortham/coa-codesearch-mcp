@@ -344,6 +344,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 {
                     FilePath = doc.Get("path") ?? string.Empty,
                     Score = scoreDoc.Score,
+                    DocId = scoreDoc.Doc, // Lucene document ID for efficient retrieval
                     // Content included in Fields for LineSearchTool
                     Fields = new Dictionary<string, string>()
                 };

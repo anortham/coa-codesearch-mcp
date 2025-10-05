@@ -345,9 +345,8 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         if (_sqliteService == null)
             return null;
 
-        // Get file content from SQLite
-        var files = await _sqliteService.GetAllFilesAsync(workspacePath, cancellationToken);
-        var fileRecord = files.FirstOrDefault(f => f.Path == filePath);
+        // Get single file content from SQLite (efficient query)
+        var fileRecord = await _sqliteService.GetFileByPathAsync(workspacePath, filePath, cancellationToken);
 
         if (fileRecord == null || string.IsNullOrEmpty(fileRecord.Content))
         {

@@ -37,6 +37,12 @@ public class SearchHit
 {
     public string FilePath { get; set; } = string.Empty;
     public float Score { get; set; }
+
+    /// <summary>
+    /// Lucene document ID for efficient retrieval (avoids double-search)
+    /// </summary>
+    public int DocId { get; set; }
+
     // Content removed - loaded on-demand when context is needed
     public Dictionary<string, string> Fields { get; set; } = new();
     public List<string>? HighlightedFragments { get; set; }

@@ -193,30 +193,13 @@ public class SmartSnippetService
     }
 
     /// <summary>
-    /// Get document ID from SearchHit
-    /// TODO: Optimize by storing docId in SearchHit during initial search
+    /// Get document ID from SearchHit (now directly available, no double-search needed!)
     /// </summary>
     private int? GetDocumentId(SearchHit hit, IndexSearcher searcher)
     {
-        try
-        {
-            // Simple approach: search by file path to get document ID
-            // This could be optimized by storing docId in SearchHit during initial search
-            var pathQuery = new TermQuery(new Term("path", hit.FilePath));
-            var topDocs = searcher.Search(pathQuery, 1);
-            
-            if (topDocs.TotalHits > 0)
-            {
-                return topDocs.ScoreDocs[0].Doc;
-            }
-
-            return null;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to find document ID for {FilePath}", hit.FilePath);
-            return null;
-        }
+        // OPTIMIZED: Use the DocId stored during initial search
+        // This eliminates the wasteful second Lucene query
+        return hit.DocId;
     }
 
     /// <summary>
