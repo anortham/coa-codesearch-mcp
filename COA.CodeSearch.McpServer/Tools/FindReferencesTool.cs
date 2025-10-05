@@ -37,6 +37,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     private readonly FindReferencesResponseBuilder _responseBuilder;
     private readonly ILogger<FindReferencesTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
+    private readonly IReferenceResolverService? _referenceResolver;
     private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     /// <summary>
@@ -58,6 +59,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         ICacheKeyGenerator keyGenerator,
         SmartQueryPreprocessor queryProcessor,
         CodeAnalyzer codeAnalyzer,
+        IReferenceResolverService referenceResolver,
         ILogger<FindReferencesTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -66,6 +68,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         _keyGenerator = keyGenerator;
         _queryProcessor = queryProcessor;
         _codeAnalyzer = codeAnalyzer;
+        _referenceResolver = referenceResolver;
         _logger = logger;
         _responseBuilder = new FindReferencesResponseBuilder(logger as ILogger<FindReferencesResponseBuilder>, storageService);
     }
@@ -130,7 +133,85 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         try
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            
+
+            // FAST-PATH: Try identifier-based reference finding first (LSP-quality, <10ms)
+            if (_referenceResolver != null)
+            {
+                try
+                {
+                    var resolvedRefs = await _referenceResolver.FindReferencesAsync(
+                        workspacePath,
+                        symbolName,
+                        caseSensitive: parameters.CaseSensitive,
+                        cancellationToken);
+
+                    if (resolvedRefs.Any())
+                    {
+                        _logger.LogInformation("✅ Found {Count} references using identifier fast-path ({Ms}ms)",
+                            resolvedRefs.Count, stopwatch.ElapsedMilliseconds);
+
+                        // Convert ResolvedReferences to SearchHits
+                        var hits = resolvedRefs.Select(rr => new SearchHit
+                        {
+                            FilePath = rr.Identifier.FilePath,
+                            LineNumber = rr.Identifier.StartLine,
+                            Score = rr.Identifier.Confidence,
+                            Fields = new Dictionary<string, string>
+                            {
+                                ["kind"] = rr.Identifier.Kind,
+                                ["language"] = rr.Identifier.Language,
+                                ["referenceType"] = rr.Identifier.Kind, // call, member_access, etc.
+                                ["containedIn"] = rr.ContainingSymbol?.Name ?? "unknown",
+                                ["containedInKind"] = rr.ContainingSymbol?.Kind ?? "unknown",
+                                ["resolved"] = rr.IsResolved.ToString()
+                            },
+                            ContextLines = rr.Identifier.CodeContext != null
+                                ? rr.Identifier.CodeContext.Split('\n').ToList()
+                                : null
+                        }).ToList();
+
+                        var identifierSearchResult = new SearchResult
+                        {
+                            Hits = hits,
+                            TotalHits = hits.Count,
+                            Query = symbolName
+                        };
+
+                        // Build response using identifier data
+                        var responseContext = new ResponseContext
+                        {
+                            TokenLimit = parameters.MaxTokens,
+                            ResponseMode = "adaptive",
+                            ToolName = Name,
+                            StoreFullResults = false
+                        };
+
+                        var identifierResponse = await _responseBuilder.BuildResponseAsync(
+                            identifierSearchResult,
+                            responseContext);
+
+                        // Cache the result
+                        if (!parameters.NoCache && identifierResponse != null)
+                        {
+                            await _cacheService.SetAsync(cacheKey, identifierResponse);
+                        }
+
+                        return identifierResponse;
+                    }
+                    else
+                    {
+                        _logger.LogDebug("No identifier references found, falling back to Lucene search");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Identifier fast-path failed, falling back to Lucene search");
+                }
+            }
+
+            // FALLBACK: Use Lucene full-text search (original implementation)
+            _logger.LogInformation("Using Lucene fallback for find_references");
+
             // Use SmartQueryPreprocessor for multi-field reference searching
             var searchMode = parameters.IncludePotential ? SearchMode.Standard : SearchMode.Symbol;
             var queryResult = _queryProcessor.Process(symbolName, searchMode);

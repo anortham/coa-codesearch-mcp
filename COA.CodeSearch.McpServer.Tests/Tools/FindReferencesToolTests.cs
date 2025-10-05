@@ -31,7 +31,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Create SmartQueryPreprocessor dependency
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-            
+
+            // Create ReferenceResolverService mock (nullable for fallback to Lucene)
+            var referenceResolverMock = new Mock<IReferenceResolverService>();
+
             _tool = new FindReferencesTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
@@ -40,6 +43,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CacheKeyGeneratorMock.Object,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
+                referenceResolverMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
