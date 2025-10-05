@@ -41,19 +41,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             _sqliteServiceMock = sqliteMock;
 
-            // Create SmartQueryPreprocessor dependency
-            var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
-            var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-
             _tool = new GoToDefinitionTool(
                 ServiceProvider,
-                LuceneIndexServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                smartQueryPreprocessor,
                 ToolLoggerMock.Object,
-                CodeAnalyzer,
                 sqliteMock?.Object
             );
             return _tool;
@@ -74,16 +67,22 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 NavigateToFirstResult = false
             };
 
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            
-            // Setup the IndexExistsAsync to return true
-            LuceneIndexServiceMock
-                .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-            
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
+            var mockSymbols = CreateMockSQLiteSymbols();
+            var mockFile = CreateMockSQLiteFile();
+
+            // Setup SQLite mock
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock
+                .Setup(x => x.DatabaseExists(It.IsAny<string>()))
+                .Returns(true);
+            sqliteMock
+                .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestInterface", false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestInterface").ToList());
+            sqliteMock
+                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<FileRecord> { mockFile });
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             // Act
             var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
@@ -92,15 +91,15 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
             result.Data.Should().NotBeNull();
-            
+
             // Access the Results property which contains the actual SymbolDefinition
             var dataType = result.Data.GetType();
             var resultsProperty = dataType.GetProperty("Results");
             resultsProperty.Should().NotBeNull();
-            
+
             var symbolDef = resultsProperty!.GetValue(result.Data);
             symbolDef.Should().NotBeNull();
-            
+
             // Verify the symbol definition properties using dynamic
             dynamic definition = symbolDef!;
             ((string)definition.Name).Should().Be("TestInterface");
@@ -112,7 +111,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         }
 
         [Test]
-        public async Task ExecuteAsync_SymbolNotFound_ReturnsNoResults()
+        public async Task ExecuteAsync_SymbolNotFound_ReturnsError()
         {
             // Arrange
             var parameters = new GoToDefinitionParameters
@@ -126,41 +125,26 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 NavigateToFirstResult = false
             };
 
-            var emptySearchResults = new SearchResult
-            {
-                Hits = new List<SearchHit>(),
-                TotalHits = 0,
-                SearchTime = TimeSpan.FromMilliseconds(10)
-            };
+            // Setup SQLite mock to return empty list (symbol not found)
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock
+                .Setup(x => x.DatabaseExists(It.IsAny<string>()))
+                .Returns(true);
+            sqliteMock
+                .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "NonExistentClass", false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<JulieSymbol>());
 
-            // Setup the IndexExistsAsync to return true
-            LuceneIndexServiceMock
-                .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-            
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(emptySearchResults);
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             // Act
             var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
 
-            // Assert - When symbol not found, response builder returns Success with null Results
+            // Assert - When symbol not found in SQLite, should return error (no Lucene fallback)
             result.Should().NotBeNull();
-            result.Success.Should().BeTrue(); // GoToDefinitionResponseBuilder returns success even when not found
-            result.Data.Should().NotBeNull();
-            
-            // Access the Results property which should be null
-            var dataType = result.Data.GetType();
-            var resultsProperty = dataType.GetProperty("Results");
-            resultsProperty.Should().NotBeNull();
-            
-            var symbolDef = resultsProperty!.GetValue(result.Data);
-            symbolDef.Should().BeNull(); // No definition found
-            
-            // But we should have insights explaining no results
-            result.Insights.Should().NotBeNull();
-            result.Insights.Should().Contain(i => i.Contains("not found"));
+            result.Success.Should().BeFalse();
+            result.Error.Should().NotBeNull();
+            result.Error!.Code.Should().Be("SYMBOL_NOT_FOUND");
+            result.Error.Message.Should().Contain("NonExistentClass");
         }
 
         [Test]
@@ -200,16 +184,22 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 NavigateToFirstResult = false
             };
 
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            
-            // Setup the IndexExistsAsync to return true
-            LuceneIndexServiceMock
-                .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-            
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
+            var mockSymbols = CreateMockSQLiteSymbols();
+            var mockFile = CreateMockSQLiteFile();
+
+            // Setup SQLite mock
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock
+                .Setup(x => x.DatabaseExists(It.IsAny<string>()))
+                .Returns(true);
+            sqliteMock
+                .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestMethod", false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestMethod").ToList());
+            sqliteMock
+                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<FileRecord> { mockFile });
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             // Act
             var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
@@ -232,9 +222,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             ((string)definition.Name).Should().Be("TestMethod");
             ((string)definition.Kind).Should().Be("method");
             ((string)definition.Signature).Should().Be("void TestMethod();");
-            ((string)definition.ReturnType).Should().Be("void");
-            ((string)definition.ContainingType).Should().Be("TestInterface");
             ((int)definition.Line).Should().Be(12);
+            // Note: ReturnType and ContainingType are not extracted by tree-sitter, only in signature
         }
 
         [Test]
@@ -252,16 +241,22 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 NavigateToFirstResult = false
             };
 
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            
-            // Setup the IndexExistsAsync to return true
-            LuceneIndexServiceMock
-                .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(true);
-            
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
+            var mockSymbols = CreateMockSQLiteSymbols();
+            var mockFile = CreateMockSQLiteFile();
+
+            // Setup SQLite mock
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock
+                .Setup(x => x.DatabaseExists(It.IsAny<string>()))
+                .Returns(true);
+            sqliteMock
+                .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestInterface", false, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestInterface").ToList());
+            sqliteMock
+                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<FileRecord> { mockFile });
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             // Act
             var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
@@ -286,46 +281,46 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             snippet.Should().Contain("interface TestInterface");
         }
 
-        private SearchResult CreateMockSearchResultWithTypeInfo()
+        private List<JulieSymbol> CreateMockSQLiteSymbols()
         {
-            var searchHit = new SearchHit
+            return new List<JulieSymbol>
             {
-                FilePath = @"C:\test\TestInterface.cs",
-                Score = 1.0f,
-                Fields = new Dictionary<string, string>
+                new JulieSymbol
                 {
-                    ["type_info"] = """
-                    {
-                        "Success": true,
-                        "Types": [
-                            {
-                                "Name": "TestInterface",
-                                "Kind": "interface",
-                                "Signature": "public interface TestInterface",
-                                "Line": 10,
-                                "Column": 1,
-                                "Modifiers": ["public"],
-                                "BaseType": null,
-                                "Interfaces": null
-                            }
-                        ],
-                        "Methods": [
-                            {
-                                "Name": "TestMethod",
-                                "Signature": "void TestMethod();",
-                                "ReturnType": "void",
-                                "Line": 12,
-                                "Column": 5,
-                                "ContainingType": "TestInterface",
-                                "Parameters": [],
-                                "Modifiers": []
-                            }
-                        ],
-                        "Language": "c-sharp"
-                    }
-                    """,
-                    ["type_names"] = "TestInterface TestMethod",
-                    ["content"] = """
+                    Id = "test-interface-1",
+                    Name = "TestInterface",
+                    Kind = "interface",
+                    Signature = "public interface TestInterface",
+                    FilePath = @"C:\test\TestInterface.cs",
+                    StartLine = 10,
+                    StartColumn = 1,
+                    EndLine = 14,
+                    EndColumn = 2,
+                    Language = "c-sharp",
+                    Visibility = "public"
+                },
+                new JulieSymbol
+                {
+                    Id = "test-method-1",
+                    Name = "TestMethod",
+                    Kind = "method",
+                    Signature = "void TestMethod();",
+                    FilePath = @"C:\test\TestInterface.cs",
+                    StartLine = 12,
+                    StartColumn = 5,
+                    EndLine = 12,
+                    EndColumn = 30,
+                    Language = "c-sharp",
+                    Visibility = "public"
+                }
+            };
+        }
+
+        private FileRecord CreateMockSQLiteFile()
+        {
+            return new FileRecord(
+                Path: @"C:\test\TestInterface.cs",
+                Content: """
                     namespace TestNamespace
                     {
                         /// <summary>
@@ -336,33 +331,11 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                             void TestMethod();
                         }
                     }
-                    """
-                },
-                // Provide context lines for snippet generation
-                ContextLines = new List<string>
-                {
-                    "namespace TestNamespace",
-                    "{",
-                    "    /// <summary>",
-                    "    /// Test interface for unit testing",
-                    "    /// </summary>",
-                    "    public interface TestInterface",
-                    "    {",
-                    "        void TestMethod();",
-                    "    }",
-                    "}"
-                },
-                StartLine = 8,
-                EndLine = 17,
-                LineNumber = 10
-            };
-
-            return new SearchResult
-            {
-                Hits = new List<SearchHit> { searchHit },
-                TotalHits = 1,
-                SearchTime = TimeSpan.FromMilliseconds(10)
-            };
+                    """,
+                Language: "c-sharp",
+                Size: 300,
+                LastModified: DateTimeOffset.UtcNow.ToUnixTimeSeconds()
+            );
         }
 
         #region SQLite Integration Tests
@@ -432,9 +405,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         }
 
         [Test]
-        public async Task ExecuteAsync_SQLiteNotAvailable_FallsBackToLucene()
+        public async Task ExecuteAsync_SQLiteNotAvailable_ReturnsError()
         {
-            // Arrange - SQLite not available, should fall back to Lucene
+            // Arrange - SQLite not available, should return error (no fallback)
             var parameters = new GoToDefinitionParameters
             {
                 Symbol = "TestInterface",
@@ -450,26 +423,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             var sqliteMock = new Mock<ISQLiteSymbolService>();
             sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(false);
 
-            // Setup Lucene mock to return results (existing behavior)
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
-
             // Create tool with SQLite mock that returns false
             var tool = CreateToolWithSQLite(sqliteMock);
 
             // Act
             var result = await tool.ExecuteAsync(parameters, CancellationToken.None);
 
-            // Assert - Should find symbol via Lucene fallback
+            // Assert - Should return error since workspace not indexed
             result.Should().NotBeNull();
-            result.Success.Should().BeTrue();
-
-            // Verify Lucene was called
-            LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-                Times.Once);
+            result.Success.Should().BeFalse();
+            result.Error.Should().NotBeNull();
+            result.Error!.Code.Should().Be("WORKSPACE_NOT_INDEXED");
         }
 
         [Test]
@@ -530,90 +494,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             ((string)definition.Name).Should().Be("TestClass");
         }
 
-        [Test]
-        public async Task ExecuteAsync_SQLiteSymbolNotFound_FallsBackToLucene()
-        {
-            // Arrange - SQLite returns empty list, should fall back to Lucene
-            var parameters = new GoToDefinitionParameters
-            {
-                Symbol = "NonExistentClass",
-                WorkspacePath = TestWorkspacePath,
-                IncludeFullContext = false,
-                ContextLines = 5,
-                NoCache = true,
-                CaseSensitive = false,
-                NavigateToFirstResult = false
-            };
-
-            // Setup SQLite mock to return empty list
-            var sqliteMock = new Mock<ISQLiteSymbolService>();
-            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
-            sqliteMock.Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "NonExistentClass", It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new List<JulieSymbol>()); // Empty list
-
-            // Setup Lucene fallback
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
-
-            // Create tool with SQLite mock
-            var tool = CreateToolWithSQLite(sqliteMock);
-
-            // Act
-            var result = await tool.ExecuteAsync(parameters, CancellationToken.None);
-
-            // Assert - Should fall back to Lucene when SQLite finds nothing
-            result.Should().NotBeNull();
-
-            // Verify Lucene was called as fallback
-            LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
-
-        [Test]
-        public async Task ExecuteAsync_SQLiteThrowsException_FallsBackToLuceneGracefully()
-        {
-            // Arrange - SQLite throws exception, should catch and fall back
-            var parameters = new GoToDefinitionParameters
-            {
-                Symbol = "TestClass",
-                WorkspacePath = TestWorkspacePath,
-                IncludeFullContext = false,
-                ContextLines = 5,
-                NoCache = true,
-                CaseSensitive = false,
-                NavigateToFirstResult = false
-            };
-
-            // Setup SQLite mock to throw exception
-            var sqliteMock = new Mock<ISQLiteSymbolService>();
-            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
-            sqliteMock.Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestClass", It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ThrowsAsync(new Exception("Database error"));
-
-            // Setup Lucene fallback
-            var mockSearchResults = CreateMockSearchResultWithTypeInfo();
-            LuceneIndexServiceMock
-                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(mockSearchResults);
-
-            // Create tool with SQLite mock
-            var tool = CreateToolWithSQLite(sqliteMock);
-
-            // Act
-            var result = await tool.ExecuteAsync(parameters, CancellationToken.None);
-
-            // Assert - Should not throw, should fall back gracefully
-            result.Should().NotBeNull();
-            result.Success.Should().BeTrue();
-
-            // Verify Lucene was called as fallback
-            LuceneIndexServiceMock.Verify(
-                x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<bool>(), It.IsAny<CancellationToken>()),
-                Times.Once);
-        }
+        // Tests for Lucene fallback removed - GoToDefinitionTool now uses SQLite only (source of truth)
+        // Lucene index cannot exist without SQLite data, so fallback is impossible and was dead code
 
         [Test]
         public async Task ExecuteAsync_SQLiteMultipleMatches_ReturnsFirstMatch()

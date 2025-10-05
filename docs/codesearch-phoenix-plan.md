@@ -408,19 +408,29 @@ ORDER BY i.file_path, i.start_line
 ```
 
 **Implementation Status:**
-- ✅ Identifiers table schema in SQLite
-- ✅ Tree-sitter identifier extraction (Rust implemented, 25 languages pending)
-- ✅ Bulk insertion with index optimization
-- ✅ Two-phase parallel extraction pipeline
-- 🔜 C# resolution service for on-demand linking
-- 🔜 FindReferencesTool using identifiers table
-- 🔜 TraceCallPathTool for call hierarchy visualization
+- ✅ Identifiers table schema in SQLite (COMPLETE)
+- ✅ Tree-sitter identifier extraction (Rust ONLY - 1 of 26 languages)
+- ✅ Bulk insertion with index optimization (COMPLETE)
+- ✅ Two-phase parallel extraction pipeline (COMPLETE)
+- ✅ C# resolution service for on-demand linking (ReferenceResolverService COMPLETE)
+- ✅ ISQLiteSymbolService.GetIdentifiersByNameAsync() (COMPLETE)
+- ✅ FindReferencesTool using identifiers table (Fast-path implemented, tested, working)
+- 🔜 TraceCallPathTool for call hierarchy visualization (Not started)
+- 🔜 Extend identifier extraction to remaining 25 languages (CRITICAL - only 0.6% of codebase covered)
+
+**Test Results:**
+- ✅ 126 identifiers extracted from Rust files (6 references to User::new found in 11ms)
+- ✅ Identifier fast-path verified working (exact references, no false positives)
+- ✅ On-demand resolution working (containing symbols correctly identified)
+- ⚠️ **Only Rust supported** - C# (67% of codebase) falls back to Lucene
 
 **Next Steps:**
-1. Add `ISQLiteSymbolService.GetIdentifiersByNameAsync()`
-2. Implement `ReferenceResolverService` for on-demand resolution
-3. Update FindReferencesTool to use identifiers instead of Lucene
-4. Extend identifier extraction to remaining languages (TypeScript, Python, etc.)
+1. ⚠️ **URGENT**: Implement identifier extraction for remaining 25 languages
+   - Priority: C# (5,252 symbols), Python (1,162), JavaScript (1,048), TypeScript, Java, Go
+   - Pattern established in `~/Source/julie/src/extractors/rust.rs` (lines 1244-1323)
+   - Estimated: ~20 minutes per language with tree-sitter node types
+2. Remove `.rs` file filter in `julie-codesearch scan` (line 503)
+3. Add TraceCallPathTool using recursive CTEs on identifiers table
 
 ---
 

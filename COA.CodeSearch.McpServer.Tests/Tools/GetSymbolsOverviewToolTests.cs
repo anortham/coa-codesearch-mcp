@@ -4,7 +4,8 @@ using Moq;
 using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Tools.Models;
-using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Sqlite;
+using COA.CodeSearch.McpServer.Services.Julie;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
@@ -13,6 +14,8 @@ using System.Threading.Tasks;
 using System.Threading;
 using System.IO;
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
@@ -20,22 +23,25 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
     public class GetSymbolsOverviewToolTests : CodeSearchToolTestBase<GetSymbolsOverviewTool>
     {
         private GetSymbolsOverviewTool _tool = null!;
-        private Mock<ITypeExtractionService> _typeExtractionServiceMock = null!;
+        private Mock<ISQLiteSymbolService>? _sqliteServiceMock;
         private string _testFilePath = null!;
 
         protected override GetSymbolsOverviewTool CreateTool()
         {
-            _typeExtractionServiceMock = CreateMock<ITypeExtractionService>();
-            
+            return CreateToolWithSQLite(null);
+        }
+
+        private GetSymbolsOverviewTool CreateToolWithSQLite(Mock<ISQLiteSymbolService>? sqliteMock)
+        {
+            _sqliteServiceMock = sqliteMock;
+
             _tool = new GetSymbolsOverviewTool(
                 ServiceProvider,
-                _typeExtractionServiceMock.Object,
-                LuceneIndexServiceMock.Object,
-                CodeAnalyzer,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                ToolLoggerMock.Object
+                ToolLoggerMock.Object,
+                sqliteMock?.Object
             );
             return _tool;
         }
@@ -142,11 +148,18 @@ namespace TestNamespace
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = CreateMockSQLiteSymbolsForFile();
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeMethods = true,
                 IncludeInheritance = true,
                 IncludeLineNumbers = true
@@ -161,7 +174,7 @@ namespace TestNamespace
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data!.Results.Should().NotBeNull();
-            
+
             var overview = result.Result.Data.Results;
             overview.FilePath.Should().Be(_testFilePath);
             overview.Language.Should().Be("csharp");
@@ -178,27 +191,28 @@ public class TestClass { }
 public interface ITestInterface { }
 public struct TestStruct { }
 public enum TestEnum { }";
-            
+
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
-                {
-                    Success = true,
-                    Language = "csharp",
-                    Types = new List<TypeInfo>
-                    {
-                        new TypeInfo { Name = "TestClass", Kind = "class", Signature = "public class TestClass", Line = 2 },
-                        new TypeInfo { Name = "ITestInterface", Kind = "interface", Signature = "public interface ITestInterface", Line = 3 },
-                        new TypeInfo { Name = "TestStruct", Kind = "struct", Signature = "public struct TestStruct", Line = 4 },
-                        new TypeInfo { Name = "TestEnum", Kind = "enum", Signature = "public enum TestEnum", Line = 5 }
-                    },
-                    Methods = new List<MethodInfo>()
-                });
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol { Name = "TestClass", Kind = "class", Signature = "public class TestClass", StartLine = 2, StartColumn = 1, Language = "csharp", FilePath = _testFilePath },
+                new JulieSymbol { Name = "ITestInterface", Kind = "interface", Signature = "public interface ITestInterface", StartLine = 3, StartColumn = 1, Language = "csharp", FilePath = _testFilePath },
+                new JulieSymbol { Name = "TestStruct", Kind = "struct", Signature = "public struct TestStruct", StartLine = 4, StartColumn = 1, Language = "csharp", FilePath = _testFilePath },
+                new JulieSymbol { Name = "TestEnum", Kind = "enum", Signature = "public enum TestEnum", StartLine = 5, StartColumn = 1, Language = "csharp", FilePath = _testFilePath }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeMethods = true,
                 IncludeLineNumbers = true
             };
@@ -210,21 +224,21 @@ public enum TestEnum { }";
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
+
             overview.Classes.Should().HaveCount(1);
             overview.Classes[0].Name.Should().Be("TestClass");
             overview.Classes[0].Kind.Should().Be("class");
             overview.Classes[0].Line.Should().Be(2);
-            
+
             overview.Interfaces.Should().HaveCount(1);
             overview.Interfaces[0].Name.Should().Be("ITestInterface");
-            
+
             overview.Structs.Should().HaveCount(1);
             overview.Structs[0].Name.Should().Be("TestStruct");
-            
+
             overview.Enums.Should().HaveCount(1);
             overview.Enums[0].Name.Should().Be("TestEnum");
-            
+
             overview.TotalSymbols.Should().Be(4);
         }
 
@@ -240,62 +254,65 @@ public class TestClass
 }
 
 public static void GlobalMethod() { }";
-            
+
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
+            // Note: Julie returns flat symbols - methods are NOT nested inside classes
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol
                 {
-                    Success = true,
+                    Name = "TestClass",
+                    Kind = "class",
+                    Signature = "public class TestClass",
+                    StartLine = 2,
+                    StartColumn = 1,
                     Language = "csharp",
-                    Types = new List<TypeInfo>
-                    {
-                        new TypeInfo 
-                        { 
-                            Name = "TestClass", 
-                            Kind = "class", 
-                            Line = 2,
-                            Signature = "public class TestClass"
-                        }
-                    },
-                    Methods = new List<MethodInfo>
-                    {
-                        new MethodInfo 
-                        { 
-                            Name = "Method1", 
-                            ContainingType = "TestClass", 
-                            Line = 4,
-                            Signature = "public void Method1()",
-                            ReturnType = "void",
-                            Parameters = new List<string>(),
-                            Modifiers = new List<string> { "public" }
-                        },
-                        new MethodInfo 
-                        { 
-                            Name = "Method2", 
-                            ContainingType = "TestClass", 
-                            Line = 5,
-                            Signature = "private int Method2(string param)",
-                            ReturnType = "int",
-                            Parameters = new List<string> { "string param" },
-                            Modifiers = new List<string> { "private" }
-                        },
-                        new MethodInfo 
-                        { 
-                            Name = "GlobalMethod", 
-                            ContainingType = "", 
-                            Line = 8,
-                            Signature = "public static void GlobalMethod()",
-                            ReturnType = "void",
-                            Parameters = new List<string>(),
-                            Modifiers = new List<string> { "public", "static" }
-                        }
-                    }
-                });
+                    FilePath = _testFilePath
+                },
+                new JulieSymbol
+                {
+                    Name = "Method1",
+                    Kind = "method",
+                    Signature = "public void Method1()",
+                    StartLine = 4,
+                    StartColumn = 5,
+                    Language = "csharp",
+                    FilePath = _testFilePath
+                },
+                new JulieSymbol
+                {
+                    Name = "Method2",
+                    Kind = "method",
+                    Signature = "private int Method2(string param)",
+                    StartLine = 5,
+                    StartColumn = 5,
+                    Language = "csharp",
+                    FilePath = _testFilePath
+                },
+                new JulieSymbol
+                {
+                    Name = "GlobalMethod",
+                    Kind = "function",
+                    Signature = "public static void GlobalMethod()",
+                    StartLine = 8,
+                    StartColumn = 1,
+                    Language = "csharp",
+                    FilePath = _testFilePath
+                }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeMethods = true,
                 IncludeLineNumbers = true
             };
@@ -307,25 +324,18 @@ public static void GlobalMethod() { }";
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
-            // Class should have 2 methods
+
+            // Julie returns flat symbols - methods are separate, not nested
             overview.Classes.Should().HaveCount(1);
-            overview.Classes[0].Methods.Should().HaveCount(2);
-            overview.Classes[0].MethodCount.Should().Be(2);
-            
-            var method1 = overview.Classes[0].Methods.First(m => m.Name == "Method1");
-            method1.ReturnType.Should().Be("void");
-            method1.Line.Should().Be(4);
-            method1.Modifiers.Should().Contain("public");
-            
-            var method2 = overview.Classes[0].Methods.First(m => m.Name == "Method2");
-            method2.ReturnType.Should().Be("int");
-            method2.Parameters.Should().Contain("string param");
-            
-            // Should have 1 standalone method
-            overview.Methods.Should().HaveCount(1);
-            overview.Methods[0].Name.Should().Be("GlobalMethod");
-            overview.Methods[0].ContainingType.Should().BeNullOrEmpty();
+            overview.Classes[0].Name.Should().Be("TestClass");
+            overview.Classes[0].Methods.Should().BeEmpty(); // No nested methods in Julie output
+            overview.Classes[0].MethodCount.Should().Be(0);
+
+            // All methods appear at top level (2 methods + 1 function)
+            overview.Methods.Should().HaveCount(3);
+            overview.Methods.Should().Contain(m => m.Name == "Method1");
+            overview.Methods.Should().Contain(m => m.Name == "Method2");
+            overview.Methods.Should().Contain(m => m.Name == "GlobalMethod");
         }
 
         [Test]
@@ -339,11 +349,23 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol { Name = "TestClass", Kind = "class", Signature = "public class TestClass", StartLine = 2, StartColumn = 1, Language = "csharp", FilePath = _testFilePath },
+                new JulieSymbol { Name = "Method1", Kind = "method", Signature = "public void Method1()", StartLine = 4, StartColumn = 5, Language = "csharp", FilePath = _testFilePath }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeMethods = false // Don't include methods
             };
 
@@ -354,10 +376,10 @@ public class TestClass
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
+
             overview.Classes[0].Methods.Should().BeEmpty();
             overview.Classes[0].MethodCount.Should().Be(0);
-            overview.Methods.Should().BeEmpty();
+            overview.Methods.Should().BeEmpty(); // Methods excluded when IncludeMethods=false
         }
 
         [Test]
@@ -370,29 +392,32 @@ public class TestClass : BaseClass, ITestInterface
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
+            // Note: Julie doesn't extract BaseType or Interfaces - only in signature
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol
                 {
-                    Success = true,
+                    Name = "TestClass",
+                    Kind = "class",
+                    Signature = "public class TestClass : BaseClass, ITestInterface",
+                    StartLine = 2,
+                    StartColumn = 1,
                     Language = "csharp",
-                    Types = new List<TypeInfo>
-                    {
-                        new TypeInfo 
-                        { 
-                            Name = "TestClass", 
-                            Kind = "class", 
-                            Signature = "public class TestClass : BaseClass, ITestInterface",
-                            Line = 2,
-                            BaseType = "BaseClass",
-                            Interfaces = new List<string> { "ITestInterface" }
-                        }
-                    },
-                    Methods = new List<MethodInfo>()
-                });
+                    FilePath = _testFilePath
+                }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeInheritance = true
             };
 
@@ -403,9 +428,13 @@ public class TestClass : BaseClass, ITestInterface
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
-            overview.Classes[0].BaseType.Should().Be("BaseClass");
-            overview.Classes[0].Interfaces.Should().Contain("ITestInterface");
+
+            // Julie doesn't extract BaseType/Interfaces separately - only in signature
+            // IncludeInheritance parameter doesn't affect Julie output (always null)
+            overview.Classes[0].BaseType.Should().BeNull();
+            overview.Classes[0].Interfaces.Should().BeNull();
+            overview.Classes[0].Signature.Should().Contain("BaseClass");
+            overview.Classes[0].Signature.Should().Contain("ITestInterface");
         }
 
         [Test]
@@ -418,11 +447,31 @@ public class TestClass : BaseClass, ITestInterface
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol
+                {
+                    Name = "TestClass",
+                    Kind = "class",
+                    Signature = "public class TestClass : BaseClass, ITestInterface",
+                    StartLine = 2,
+                    StartColumn = 1,
+                    Language = "csharp",
+                    FilePath = _testFilePath
+                }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeInheritance = false // Don't include inheritance
             };
 
@@ -433,7 +482,8 @@ public class TestClass : BaseClass, ITestInterface
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
+
+            // Julie doesn't extract BaseType/Interfaces separately (always null)
             overview.Classes[0].BaseType.Should().BeNull();
             overview.Classes[0].Interfaces.Should().BeNull();
         }
@@ -449,11 +499,23 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol { Name = "TestClass", Kind = "class", Signature = "public class TestClass", StartLine = 2, StartColumn = 1, Language = "csharp", FilePath = _testFilePath },
+                new JulieSymbol { Name = "Method1", Kind = "method", Signature = "public void Method1()", StartLine = 4, StartColumn = 5, Language = "csharp", FilePath = _testFilePath }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 IncludeLineNumbers = false, // Don't include line numbers
                 IncludeMethods = true
             };
@@ -465,27 +527,35 @@ public class TestClass
             // Assert
             result.Success.Should().BeTrue();
             var overview = result.Result!.Data!.Results;
-            
+
             overview.Classes[0].Line.Should().Be(0);
             overview.Classes[0].Column.Should().Be(0);
-            overview.Classes[0].Methods[0].Line.Should().Be(0);
+            overview.Methods[0].Line.Should().Be(0); // Julie returns flat symbols, methods not nested
         }
 
         [Test]
         public async Task ExecuteAsync_Should_Handle_File_Read_Error()
         {
-            // Arrange - Use a file path that exists but will cause read error
+            // Arrange - Test that file read errors are handled gracefully
+            // Note: With SQLite-only architecture, file read errors would occur during SQLite query
+            // This test now verifies the workspace must be indexed first
             var lockedFilePath = Path.Combine(TestWorkspacePath, "locked-file.cs");
-            
+
             // Create the file
             await File.WriteAllTextAsync(lockedFilePath, "test content");
-            
-            // Lock the file by opening it exclusively
-            using var fileStream = File.Open(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.None);
-            
+
+            // SQLite mock returns database exists but throws on query
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), lockedFilePath, It.IsAny<CancellationToken>()))
+                .ThrowsAsync(new IOException("File read error"));
+
+            _tool = CreateToolWithSQLite(sqliteMock);
+
             var parameters = new GetSymbolsOverviewParameters
             {
-                FilePath = lockedFilePath
+                FilePath = lockedFilePath,
+                WorkspacePath = TestWorkspacePath
             };
 
             // Act
@@ -496,26 +566,27 @@ public class TestClass
             result.Success.Should().BeTrue();
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeFalse();
-            result.Result.Error!.Code.Should().Be("FILE_READ_ERROR");
+            result.Result.Error!.Code.Should().Be("SYMBOLS_OVERVIEW_ERROR");
+            result.Result.Error.Message.Should().Contain("File read error");
         }
 
         [Test]
-        public async Task ExecuteAsync_Should_Handle_Type_Extraction_Failure()
+        public async Task ExecuteAsync_Should_Handle_Workspace_Not_Indexed()
         {
             // Arrange
-            var testCode = "invalid code that cannot be parsed";
+            var testCode = "public class TestClass { }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
-                {
-                    Success = false,
-                    Language = "csharp"
-                });
+            // SQLite database doesn't exist
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(false);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
-                FilePath = _testFilePath
+                FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath
             };
 
             // Act
@@ -526,8 +597,8 @@ public class TestClass
             result.Success.Should().BeTrue();
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeFalse();
-            result.Result.Error!.Code.Should().Be("TYPE_EXTRACTION_FAILED");
-            result.Result.Error.Recovery!.Steps.Should().Contain("Check if the file contains valid code");
+            result.Result.Error!.Code.Should().Be("WORKSPACE_NOT_INDEXED");
+            result.Result.Error.Recovery!.Steps.Should().Contain(s => s.Contains("index_workspace"));
         }
 
         [Test]
@@ -536,6 +607,12 @@ public class TestClass
             // Arrange
             var testCode = @"public class TestClass { }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
+
+            // Setup SQLite mock (won't be called if cache is hit)
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var cachedResult = new AIOptimizedResponse<SymbolsOverviewResult>
             {
@@ -547,8 +624,8 @@ public class TestClass
                     {
                         FilePath = _testFilePath,
                         Language = "csharp",
-                        Classes = new List<TypeOverview> 
-                        { 
+                        Classes = new List<TypeOverview>
+                        {
                             new TypeOverview { Name = "CachedClass" }
                         },
                         TotalSymbols = 1
@@ -558,13 +635,14 @@ public class TestClass
 
             CacheKeyGeneratorMock.Setup(x => x.GenerateKey(It.IsAny<string>(), It.IsAny<object>()))
                 .Returns("test-cache-key");
-            
+
             ResponseCacheServiceMock.Setup(x => x.GetAsync<AIOptimizedResponse<SymbolsOverviewResult>>("test-cache-key"))
                 .ReturnsAsync(cachedResult);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 NoCache = false // Enable caching
             };
 
@@ -577,9 +655,9 @@ public class TestClass
             result.Result!.Success.Should().BeTrue();
             result.Result.Message.Should().Be("Cached result");
             result.Result.Data!.Results.Classes[0].Name.Should().Be("CachedClass");
-            
-            // Verify type extraction service was not called (cache was used)
-            _typeExtractionServiceMock.Verify(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()), Times.Never);
+
+            // Verify SQLite was not called (cache was used)
+            sqliteMock.Verify(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()), Times.Never);
         }
 
         [Test]
@@ -589,11 +667,22 @@ public class TestClass
             var testCode = @"public class TestClass { }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol { Name = "TestClass", Kind = "class", Signature = "public class TestClass", StartLine = 1, StartColumn = 1, Language = "csharp", FilePath = _testFilePath }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), _testFilePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
                 FilePath = _testFilePath,
+                WorkspacePath = TestWorkspacePath,
                 NoCache = true // Disable caching
             };
 
@@ -603,7 +692,7 @@ public class TestClass
 
             // Assert
             result.Success.Should().BeTrue();
-            
+
             // Verify cache was not checked or set
             ResponseCacheServiceMock.Verify(x => x.GetAsync<AIOptimizedResponse<SymbolsOverviewResult>>(It.IsAny<string>()), Times.Never);
             ResponseCacheServiceMock.Verify(x => x.SetAsync(It.IsAny<string>(), It.IsAny<object>(), It.IsAny<CacheEntryOptions>()), Times.Never);
@@ -614,14 +703,26 @@ public class TestClass
         {
             // Arrange
             var relativePath = "test-symbols.cs";
+            var absolutePath = Path.GetFullPath(relativePath);
             var testCode = @"public class TestClass { }";
-            await File.WriteAllTextAsync(Path.Combine(Environment.CurrentDirectory, relativePath), testCode);
+            await File.WriteAllTextAsync(absolutePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            var mockSymbols = new List<JulieSymbol>
+            {
+                new JulieSymbol { Name = "TestClass", Kind = "class", Signature = "public class TestClass", StartLine = 1, StartColumn = 1, Language = "csharp", FilePath = absolutePath }
+            };
+
+            var sqliteMock = new Mock<ISQLiteSymbolService>();
+            sqliteMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            sqliteMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), absolutePath, It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockSymbols);
+
+            _tool = CreateToolWithSQLite(sqliteMock);
 
             var parameters = new GetSymbolsOverviewParameters
             {
-                FilePath = relativePath // Relative path
+                FilePath = relativePath, // Relative path
+                WorkspacePath = TestWorkspacePath
             };
 
             // Act
@@ -630,44 +731,62 @@ public class TestClass
 
             // Assert
             result.Success.Should().BeTrue();
-            result.Result!.Data!.Results.FilePath.Should().Be(Path.GetFullPath(relativePath));
-            
+            result.Result!.Data!.Results.FilePath.Should().Be(absolutePath);
+
             // Cleanup
-            File.Delete(Path.Combine(Environment.CurrentDirectory, relativePath));
+            File.Delete(absolutePath);
         }
 
-        private void SetupSuccessfulTypeExtraction()
+        /// <summary>
+        /// Creates mock SQLite symbols for file-level symbol extraction tests
+        /// </summary>
+        private List<JulieSymbol> CreateMockSQLiteSymbolsForFile()
         {
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
+            return new List<JulieSymbol>
+            {
+                new JulieSymbol
                 {
-                    Success = true,
+                    Id = "test-class-1",
+                    Name = "TestClass",
+                    Kind = "class",
+                    Signature = "public class TestClass",
+                    FilePath = _testFilePath,
+                    StartLine = 5,
+                    StartColumn = 1,
+                    EndLine = 15,
+                    EndColumn = 2,
                     Language = "csharp",
-                    Types = new List<TypeInfo>
-                    {
-                        new TypeInfo 
-                        { 
-                            Name = "TestClass", 
-                            Kind = "class", 
-                            Line = 2,
-                            Signature = "public class TestClass",
-                            Modifiers = new List<string> { "public" }
-                        }
-                    },
-                    Methods = new List<MethodInfo>
-                    {
-                        new MethodInfo 
-                        { 
-                            Name = "TestMethod", 
-                            ContainingType = "TestClass", 
-                            Line = 4,
-                            Signature = "public void TestMethod()",
-                            ReturnType = "void",
-                            Parameters = new List<string>(),
-                            Modifiers = new List<string> { "public" }
-                        }
-                    }
-                });
+                    Visibility = "public"
+                },
+                new JulieSymbol
+                {
+                    Id = "test-interface-1",
+                    Name = "ITestInterface",
+                    Kind = "interface",
+                    Signature = "public interface ITestInterface",
+                    FilePath = _testFilePath,
+                    StartLine = 17,
+                    StartColumn = 1,
+                    EndLine = 20,
+                    EndColumn = 2,
+                    Language = "csharp",
+                    Visibility = "public"
+                },
+                new JulieSymbol
+                {
+                    Id = "test-method-1",
+                    Name = "TestMethod",
+                    Kind = "method",
+                    Signature = "public void TestMethod(string parameter)",
+                    FilePath = _testFilePath,
+                    StartLine = 7,
+                    StartColumn = 5,
+                    EndLine = 10,
+                    EndColumn = 5,
+                    Language = "csharp",
+                    Visibility = "public"
+                }
+            };
         }
     }
 }
