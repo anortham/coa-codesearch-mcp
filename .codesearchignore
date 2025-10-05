@@ -1,0 +1,18 @@
+# CodeSearch Ignore Patterns
+# One pattern per line, supports glob patterns
+# Lines starting with # are comments
+
+# Ignore all test resource directories
+**/Tests/Resources/**
+**/Resources/GoldenMaster/**
+
+# Ignore test projects entirely (optional - uncomment if desired)
+# **/*.Tests/**
+
+# Ignore generated files
+**/*.g.cs
+**/*.generated.cs
+
+# Ignore build artifacts that might get indexed
+**/obj/**
+**/bin/**

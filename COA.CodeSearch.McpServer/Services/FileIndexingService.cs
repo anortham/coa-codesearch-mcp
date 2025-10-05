@@ -159,6 +159,14 @@ public class FileIndexingService : IFileIndexingService
                     // Add blacklisted extensions as glob patterns (e.g., ".log" → "**/*.log")
                     ignorePatterns.AddRange(_blacklistedExtensions.Select(ext => $"**/*{ext}"));
 
+                    // Add project-specific ignore patterns from .codesearchignore file
+                    var customPatterns = ReadCustomIgnorePatterns(workspacePath);
+                    if (customPatterns.Any())
+                    {
+                        _logger.LogInformation("📝 Loaded {Count} custom ignore patterns from .codesearchignore", customPatterns.Count);
+                        ignorePatterns.AddRange(customPatterns);
+                    }
+
                     // Scan workspace with julie-codesearch
                     var scanResult = await _julieCodeSearchService.ScanDirectoryAsync(
                         workspacePath,
@@ -316,7 +324,7 @@ public class FileIndexingService : IFileIndexingService
                 symbolsByFile[symbol.FilePath] = symbols;
                 fileCount++;
 
-                _logger.LogInformation("📁 NEW FILE #{FileNum}: {FilePath} (total symbols so far: {SymbolCount})",
+                _logger.LogDebug("📁 NEW FILE #{FileNum}: {FilePath} (total symbols so far: {SymbolCount})",
                     fileCount, symbol.FilePath, symbolCount);
             }
 
@@ -845,6 +853,58 @@ public class FileIndexingService : IFileIndexingService
         return kind.Equals("method", StringComparison.OrdinalIgnoreCase) ||
                kind.Equals("function", StringComparison.OrdinalIgnoreCase) ||
                kind.Equals("constructor", StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Read custom ignore patterns from .codesearchignore file in workspace root.
+    ///
+    /// File format:
+    /// - One pattern per line
+    /// - Lines starting with # are comments
+    /// - Empty lines are ignored
+    /// - Supports glob patterns (e.g., **/test/**, **/*.log)
+    /// - Patterns are relative to workspace root
+    ///
+    /// Example .codesearchignore:
+    ///   # Ignore all test directories
+    ///   **/Tests/**
+    ///   **/Resources/**
+    ///
+    ///   # Ignore specific files
+    ///   **/*.generated.cs
+    /// </summary>
+    private List<string> ReadCustomIgnorePatterns(string workspacePath)
+    {
+        var patterns = new List<string>();
+        var ignoreFilePath = Path.Combine(workspacePath, ".codesearchignore");
+
+        if (!File.Exists(ignoreFilePath))
+        {
+            _logger.LogDebug("No .codesearchignore file found at {Path}", ignoreFilePath);
+            return patterns;
+        }
+
+        try
+        {
+            var lines = File.ReadAllLines(ignoreFilePath);
+            foreach (var line in lines)
+            {
+                var trimmed = line.Trim();
+
+                // Skip empty lines and comments
+                if (string.IsNullOrWhiteSpace(trimmed) || trimmed.StartsWith('#'))
+                    continue;
+
+                patterns.Add(trimmed);
+                _logger.LogDebug("Added custom ignore pattern: {Pattern}", trimmed);
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to read .codesearchignore file at {Path}", ignoreFilePath);
+        }
+
+        return patterns;
     }
 
 }
