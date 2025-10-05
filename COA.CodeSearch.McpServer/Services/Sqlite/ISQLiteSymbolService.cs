@@ -95,6 +95,16 @@ public interface ISQLiteSymbolService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Search files using FTS5 full-text search (efficient grep replacement for line_search tool)
+    /// </summary>
+    Task<List<FileRecord>> SearchWithFTS5Async(
+        string workspacePath,
+        string searchPattern,
+        int maxResults = 100,
+        string? filePattern = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get identifiers (references/usages) by name for LSP-quality find_references.
     /// Returns all identifier usages of the given name (function calls, variable refs, etc.)
     /// </summary>

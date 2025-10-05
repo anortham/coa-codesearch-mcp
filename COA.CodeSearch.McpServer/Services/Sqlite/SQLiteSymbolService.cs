@@ -540,6 +540,70 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         return files;
     }
 
+    public async Task<List<FileRecord>> SearchWithFTS5Async(
+        string workspacePath,
+        string searchPattern,
+        int maxResults = 100,
+        string? filePattern = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<FileRecord>();
+        }
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+
+        // Build FTS5 MATCH query
+        // Join with files table to get full file information
+        var whereClause = "WHERE files_fts MATCH @pattern";
+
+        // Add file pattern filter if specified (e.g., "*.cs")
+        if (!string.IsNullOrEmpty(filePattern))
+        {
+            // Convert glob pattern to SQL LIKE pattern
+            var likePattern = filePattern.Replace("*", "%").Replace("?", "_");
+            whereClause += " AND files.path LIKE @filePattern";
+        }
+
+        cmd.CommandText = $@"
+            SELECT files.rowid, files.path, files.content, files.language, files.size, files.last_modified
+            FROM files_fts
+            JOIN files ON files_fts.rowid = files.rowid
+            {whereClause}
+            LIMIT @limit";
+
+        cmd.Parameters.AddWithValue("@pattern", searchPattern);
+        cmd.Parameters.AddWithValue("@limit", maxResults);
+
+        if (!string.IsNullOrEmpty(filePattern))
+        {
+            var likePattern = filePattern.Replace("*", "%").Replace("?", "_");
+            cmd.Parameters.AddWithValue("@filePattern", likePattern);
+        }
+
+        var files = new List<FileRecord>();
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            files.Add(new FileRecord(
+                Path: reader.GetString(reader.GetOrdinal("path")),
+                Content: reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content")),
+                Language: reader.GetString(reader.GetOrdinal("language")),
+                Size: reader.GetInt64(reader.GetOrdinal("size")),
+                LastModified: reader.GetInt64(reader.GetOrdinal("last_modified"))
+            ));
+        }
+
+        _logger.LogDebug("FTS5 search for '{Pattern}' found {Count} files", searchPattern, files.Count);
+        return files;
+    }
+
     private async Task<List<JulieSymbol>> ReadSymbolsAsync(SqliteCommand cmd, CancellationToken cancellationToken)
     {
         var symbols = new List<JulieSymbol>();
