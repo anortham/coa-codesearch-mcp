@@ -923,6 +923,13 @@ public class FileIndexingService : IFileIndexingService
 # One pattern per line. Lines starting with # are comments.
 # Supports glob patterns (**, *, ?, etc.)
 #
+# NOTE: CodeSearch already ignores common directories by default:
+#   - node_modules, .git, .svn, .hg
+#   - bin, obj, .vs, .vscode, .idea
+#   - dist, build, coverage, .next, .nuxt
+#   - __pycache__, .pytest_cache, .mypy_cache
+#   - .coa (CodeSearch's own index directory)
+#
 # Examples (uncomment to use):
 
 # Ignore all test resource directories
