@@ -118,7 +118,11 @@ public class Program
         // SQLite symbol storage (canonical database for symbols)
         services.AddSingleton<COA.CodeSearch.McpServer.Services.Sqlite.ISQLiteSymbolService,
                               COA.CodeSearch.McpServer.Services.Sqlite.SQLiteSymbolService>();
-        
+
+        // Reference resolution (on-demand identifier → symbol resolution for find_references)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.IReferenceResolverService,
+                              COA.CodeSearch.McpServer.Services.ReferenceResolverService>();
+
         // Documentation services (ProjectKnowledge integration removed)
         services.AddSingleton<SmartDocumentationService>();
         

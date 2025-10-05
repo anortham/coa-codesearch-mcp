@@ -461,4 +461,138 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         return symbols;
     }
+
+    public async Task<List<JulieIdentifier>> GetIdentifiersByNameAsync(
+        string workspacePath,
+        string name,
+        bool caseSensitive = true,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("Database not found at {Path}", dbPath);
+            return new List<JulieIdentifier>();
+        }
+
+        var identifiers = new List<JulieIdentifier>();
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        var query = caseSensitive
+            ? "SELECT * FROM identifiers WHERE name = @name"
+            : "SELECT * FROM identifiers WHERE name = @name COLLATE NOCASE";
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = query;
+        cmd.Parameters.AddWithValue("@name", name);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            identifiers.Add(new JulieIdentifier
+            {
+                Id = reader.GetString(reader.GetOrdinal("id")),
+                Name = reader.GetString(reader.GetOrdinal("name")),
+                Kind = reader.GetString(reader.GetOrdinal("kind")),
+                Language = reader.GetString(reader.GetOrdinal("language")),
+                FilePath = reader.GetString(reader.GetOrdinal("file_path")),
+                StartLine = reader.GetInt32(reader.GetOrdinal("start_line")),
+                StartColumn = reader.GetInt32(reader.GetOrdinal("start_col")),
+                EndLine = reader.GetInt32(reader.GetOrdinal("end_line")),
+                EndColumn = reader.GetInt32(reader.GetOrdinal("end_col")),
+                StartByte = reader.IsDBNull(reader.GetOrdinal("start_byte")) ? null : reader.GetInt32(reader.GetOrdinal("start_byte")),
+                EndByte = reader.IsDBNull(reader.GetOrdinal("end_byte")) ? null : reader.GetInt32(reader.GetOrdinal("end_byte")),
+                ContainingSymbolId = reader.IsDBNull(reader.GetOrdinal("containing_symbol_id")) ? null : reader.GetString(reader.GetOrdinal("containing_symbol_id")),
+                TargetSymbolId = reader.IsDBNull(reader.GetOrdinal("target_symbol_id")) ? null : reader.GetString(reader.GetOrdinal("target_symbol_id")),
+                Confidence = reader.GetFloat(reader.GetOrdinal("confidence")),
+                CodeContext = reader.IsDBNull(reader.GetOrdinal("code_context")) ? null : reader.GetString(reader.GetOrdinal("code_context"))
+            });
+        }
+
+        return identifiers;
+    }
+
+    public async Task<List<JulieIdentifier>> GetIdentifiersByKindAsync(
+        string workspacePath,
+        string kind,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("Database not found at {Path}", dbPath);
+            return new List<JulieIdentifier>();
+        }
+
+        var identifiers = new List<JulieIdentifier>();
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT * FROM identifiers WHERE kind = @kind";
+        cmd.Parameters.AddWithValue("@kind", kind);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            identifiers.Add(ReadIdentifierFromReader(reader));
+        }
+
+        return identifiers;
+    }
+
+    public async Task<List<JulieIdentifier>> GetIdentifiersForFileAsync(
+        string workspacePath,
+        string filePath,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("Database not found at {Path}", dbPath);
+            return new List<JulieIdentifier>();
+        }
+
+        var identifiers = new List<JulieIdentifier>();
+
+        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT * FROM identifiers WHERE file_path = @filePath";
+        cmd.Parameters.AddWithValue("@filePath", filePath);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            identifiers.Add(ReadIdentifierFromReader(reader));
+        }
+
+        return identifiers;
+    }
+
+    private JulieIdentifier ReadIdentifierFromReader(SqliteDataReader reader)
+    {
+        return new JulieIdentifier
+        {
+            Id = reader.GetString(reader.GetOrdinal("id")),
+            Name = reader.GetString(reader.GetOrdinal("name")),
+            Kind = reader.GetString(reader.GetOrdinal("kind")),
+            Language = reader.GetString(reader.GetOrdinal("language")),
+            FilePath = reader.GetString(reader.GetOrdinal("file_path")),
+            StartLine = reader.GetInt32(reader.GetOrdinal("start_line")),
+            StartColumn = reader.GetInt32(reader.GetOrdinal("start_col")),
+            EndLine = reader.GetInt32(reader.GetOrdinal("end_line")),
+            EndColumn = reader.GetInt32(reader.GetOrdinal("end_col")),
+            StartByte = reader.IsDBNull(reader.GetOrdinal("start_byte")) ? null : reader.GetInt32(reader.GetOrdinal("start_byte")),
+            EndByte = reader.IsDBNull(reader.GetOrdinal("end_byte")) ? null : reader.GetInt32(reader.GetOrdinal("end_byte")),
+            ContainingSymbolId = reader.IsDBNull(reader.GetOrdinal("containing_symbol_id")) ? null : reader.GetString(reader.GetOrdinal("containing_symbol_id")),
+            TargetSymbolId = reader.IsDBNull(reader.GetOrdinal("target_symbol_id")) ? null : reader.GetString(reader.GetOrdinal("target_symbol_id")),
+            Confidence = reader.GetFloat(reader.GetOrdinal("confidence")),
+            CodeContext = reader.IsDBNull(reader.GetOrdinal("code_context")) ? null : reader.GetString(reader.GetOrdinal("code_context"))
+        };
+    }
 }

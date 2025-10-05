@@ -78,6 +78,32 @@ public interface ISQLiteSymbolService
     /// Get all file paths from the database (for Lucene indexing from SQLite source of truth)
     /// </summary>
     Task<List<FileRecord>> GetAllFilesAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get identifiers (references/usages) by name for LSP-quality find_references.
+    /// Returns all identifier usages of the given name (function calls, variable refs, etc.)
+    /// </summary>
+    Task<List<JulieIdentifier>> GetIdentifiersByNameAsync(
+        string workspacePath,
+        string name,
+        bool caseSensitive = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get identifiers by kind (call, member_access, variable_ref, etc.)
+    /// </summary>
+    Task<List<JulieIdentifier>> GetIdentifiersByKindAsync(
+        string workspacePath,
+        string kind,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all identifiers for a specific file (for incremental updates)
+    /// </summary>
+    Task<List<JulieIdentifier>> GetIdentifiersForFileAsync(
+        string workspacePath,
+        string filePath,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

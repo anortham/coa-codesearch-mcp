@@ -423,6 +423,50 @@ public class JulieSymbol
 }
 
 /// <summary>
+/// Represents an identifier (reference/usage) from Julie extraction.
+/// Used for LSP-quality find_references functionality.
+/// </summary>
+public class JulieIdentifier
+{
+    public string Id { get; set; } = string.Empty;
+    public string Name { get; set; } = string.Empty;
+    public string Kind { get; set; } = string.Empty; // call, variable_ref, type_usage, member_access
+    public string Language { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("file_path")]
+    public string FilePath { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("start_line")]
+    public int StartLine { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("start_col")]
+    public int StartColumn { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("end_line")]
+    public int EndLine { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("end_col")]
+    public int EndColumn { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("start_byte")]
+    public int? StartByte { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("end_byte")]
+    public int? EndByte { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("containing_symbol_id")]
+    public string? ContainingSymbolId { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("target_symbol_id")]
+    public string? TargetSymbolId { get; set; }
+
+    public float Confidence { get; set; } = 1.0f;
+
+    [System.Text.Json.Serialization.JsonPropertyName("code_context")]
+    public string? CodeContext { get; set; }
+}
+
+/// <summary>
 /// Result from bulk extraction operation
 /// </summary>
 public class BulkExtractionResult
