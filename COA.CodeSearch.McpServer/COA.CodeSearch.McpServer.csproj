@@ -170,4 +170,12 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup Label="ONNX Model Files for Semantic Search">
+    <!-- Bundle bge-small-en-v1.5 ONNX model (tokenizers auto-included by SDK) -->
+    <!-- ONNX model file (INT8 quantized, 32MB) - must be explicit as .onnx not in default patterns -->
+    <Content Include="Models\bge-small-en-v1.5\model.onnx" Condition="Exists('Models\bge-small-en-v1.5\model.onnx')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
+  </ItemGroup>
+
 </Project>
