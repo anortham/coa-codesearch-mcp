@@ -119,6 +119,10 @@ public class Program
         services.AddSingleton<COA.CodeSearch.McpServer.Services.Sqlite.ISQLiteSymbolService,
                               COA.CodeSearch.McpServer.Services.Sqlite.SQLiteSymbolService>();
 
+        // SQLite vec extension for semantic vector search
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Sqlite.ISqliteVecExtensionService,
+                              COA.CodeSearch.McpServer.Services.Sqlite.SqliteVecExtensionService>();
+
         // Reference resolution (on-demand identifier → symbol resolution for find_references)
         services.AddSingleton<COA.CodeSearch.McpServer.Services.IReferenceResolverService,
                               COA.CodeSearch.McpServer.Services.ReferenceResolverService>();
