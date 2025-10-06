@@ -218,12 +218,22 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             try
             {
                 using var cmd = connection.CreateCommand();
+
+                // Create vec0 virtual table (only contains embedding vectors)
                 cmd.CommandText = @"
-                    CREATE VIRTUAL TABLE IF NOT EXISTS symbol_embeddings USING vec0(
-                        symbol_id TEXT PRIMARY KEY,
+                    CREATE VIRTUAL TABLE IF NOT EXISTS symbol_embeddings_vec USING vec0(
                         embedding FLOAT[384]
                     )";
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
+
+                // Create mapping table (symbol_id -> rowid in vec table)
+                cmd.CommandText = @"
+                    CREATE TABLE IF NOT EXISTS symbol_embeddings (
+                        symbol_id TEXT PRIMARY KEY,
+                        vec_rowid INTEGER NOT NULL
+                    )";
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+
                 _logger.LogInformation("✅ Created symbol_embeddings vector table for semantic search");
             }
             catch (Exception ex)
@@ -402,10 +412,20 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                     using (var cmd = connection.CreateCommand())
                     {
                         cmd.Transaction = transaction;
+                        // First delete from vec table using the mapping
+                        cmd.CommandText = @"
+                            DELETE FROM symbol_embeddings_vec
+                            WHERE rowid IN (
+                                SELECT vec_rowid FROM symbol_embeddings
+                                WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = @file_path)
+                            )";
+                        cmd.Parameters.AddWithValue("@file_path", filePath);
+                        await cmd.ExecuteNonQueryAsync(cancellationToken);
+
+                        // Then delete from mapping table
                         cmd.CommandText = @"
                             DELETE FROM symbol_embeddings
                             WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = @file_path)";
-                        cmd.Parameters.AddWithValue("@file_path", filePath);
                         await cmd.ExecuteNonQueryAsync(cancellationToken);
                     }
 
@@ -416,19 +436,34 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                         var embeddingText = BuildSymbolEmbeddingText(symbol);
                         var embedding = await _embeddingService.GenerateEmbeddingAsync(embeddingText, cancellationToken);
 
-                        // Insert embedding
-                        using var cmd = connection.CreateCommand();
-                        cmd.Transaction = transaction;
-                        cmd.CommandText = @"
-                            INSERT INTO symbol_embeddings (symbol_id, embedding)
-                            VALUES (@symbol_id, @embedding)";
-                        cmd.Parameters.AddWithValue("@symbol_id", symbol.Id);
-
-                        // Serialize embedding as JSON array for vec0
+                        // Insert embedding into vec0 virtual table
+                        using var vecCmd = connection.CreateCommand();
+                        vecCmd.Transaction = transaction;
                         var embeddingJson = "[" + string.Join(",", embedding) + "]";
-                        cmd.Parameters.AddWithValue("@embedding", embeddingJson);
+                        vecCmd.CommandText = @"
+                            INSERT INTO symbol_embeddings_vec (embedding)
+                            VALUES (@embedding)";
+                        vecCmd.Parameters.AddWithValue("@embedding", embeddingJson);
+                        await vecCmd.ExecuteNonQueryAsync(cancellationToken);
 
-                        await cmd.ExecuteNonQueryAsync(cancellationToken);
+                        // Get the rowid of the inserted vector
+                        long vecRowid;
+                        using (var rowidCmd = connection.CreateCommand())
+                        {
+                            rowidCmd.Transaction = transaction;
+                            rowidCmd.CommandText = "SELECT last_insert_rowid()";
+                            vecRowid = (long)(await rowidCmd.ExecuteScalarAsync(cancellationToken) ?? 0L);
+                        }
+
+                        // Insert mapping into symbol_embeddings table
+                        using var mapCmd = connection.CreateCommand();
+                        mapCmd.Transaction = transaction;
+                        mapCmd.CommandText = @"
+                            INSERT INTO symbol_embeddings (symbol_id, vec_rowid)
+                            VALUES (@symbol_id, @vec_rowid)";
+                        mapCmd.Parameters.AddWithValue("@symbol_id", symbol.Id);
+                        mapCmd.Parameters.AddWithValue("@vec_rowid", vecRowid);
+                        await mapCmd.ExecuteNonQueryAsync(cancellationToken);
                     }
 
                     _logger.LogDebug("Generated embeddings for {SymbolCount} symbols in {FilePath}", symbols.Count, filePath);
@@ -1128,9 +1163,10 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             SELECT
                 s.*,
                 distance
-            FROM symbol_embeddings se
+            FROM symbol_embeddings_vec v
+            JOIN symbol_embeddings se ON v.rowid = se.vec_rowid
             JOIN symbols s ON se.symbol_id = s.id
-            WHERE se.embedding MATCH @query_embedding
+            WHERE v.embedding MATCH @query_embedding
               AND k = @limit
             ORDER BY distance";
 
