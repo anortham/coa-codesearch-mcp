@@ -41,15 +41,26 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         {
             // Pooling=true is default, but explicit for clarity
             // Cache=Shared enables shared page cache across connections
-            // BusyTimeout=5000 matches julie-codesearch timeout for concurrent access
-            return $"Data Source={dbPath};Cache=Shared;BusyTimeout=5000";
+            return $"Data Source={dbPath};Cache=Shared";
         }
         else
         {
             // Disable pooling for initialization/cleanup operations
-            // Still need BusyTimeout for concurrent access with julie-codesearch
-            return $"Data Source={dbPath};Pooling=false;BusyTimeout=5000";
+            return $"Data Source={dbPath};Pooling=false";
         }
+    }
+
+    /// <summary>
+    /// Configures a connection with appropriate timeout for concurrent access.
+    /// Sets busy_timeout to 5000ms to match julie-codesearch.
+    /// </summary>
+    private void ConfigureConnection(SqliteConnection connection)
+    {
+        // Use PRAGMA to set busy_timeout (in milliseconds)
+        // 5000ms = 5 seconds, matches julie-codesearch to prevent "database is locked" errors
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "PRAGMA busy_timeout = 5000";
+        cmd.ExecuteNonQuery();
     }
 
     public string GetDatabasePath(string workspacePath)
@@ -96,6 +107,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         var connectionString = GetConnectionString(dbPath, enablePooling: false);
         using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         // Enable WAL mode for concurrent access
         using (var walCmd = connection.CreateCommand())
@@ -257,6 +269,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM symbols";
@@ -274,6 +287,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         // Use COLLATE NOCASE for case-insensitive searches
@@ -295,6 +309,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM symbols WHERE kind = @kind";
@@ -313,6 +328,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM symbols WHERE file_path = @file_path";
@@ -335,6 +351,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         var dbPath = GetDatabasePath(workspacePath);
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         // Load vec0 extension for semantic search embeddings (idempotent, safe to call multiple times)
         if (_vecExtension.IsAvailable())
@@ -443,6 +460,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "DELETE FROM files WHERE path = @path";
@@ -465,6 +483,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM files";
@@ -483,6 +502,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT COUNT(*) FROM symbols";
@@ -500,6 +520,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
         _vecExtension.LoadExtension(connection);
 
         _logger.LogInformation("📖 Reading embeddings from julie-semantic's BLOB storage...");
@@ -629,6 +650,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
         _vecExtension.LoadExtension(connection);
 
         _logger.LogInformation("📖 Reading embeddings for {FilePath} from BLOB storage...", filePath);
@@ -784,6 +806,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
@@ -819,6 +842,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"
@@ -858,6 +882,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
 
@@ -930,6 +955,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
 
@@ -1015,6 +1041,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         // Convert glob pattern to SQL LIKE pattern (replace * with %, ? with _)
         var patternLower = pattern.ToLowerInvariant();
@@ -1085,6 +1112,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
 
@@ -1175,6 +1203,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = caseSensitive
@@ -1204,6 +1233,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         var query = caseSensitive
             ? "SELECT * FROM identifiers WHERE name = @name"
@@ -1255,6 +1285,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM identifiers WHERE kind = @kind";
@@ -1285,6 +1316,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM identifiers WHERE file_path = @filePath";
@@ -1315,6 +1347,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM identifiers WHERE containing_symbol_id = @containingSymbolId";
@@ -1382,6 +1415,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
 
         // Load vec extension (idempotent, safe to call multiple times)
         _vecExtension.LoadExtension(connection);
