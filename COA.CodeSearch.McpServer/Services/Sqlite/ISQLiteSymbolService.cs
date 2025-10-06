@@ -187,6 +187,17 @@ public interface ISQLiteSymbolService
     /// Check if semantic search is available (requires sqlite-vec extension and embedding service)
     /// </summary>
     bool IsSemanticSearchAvailable();
+
+    /// <summary>
+    /// Generate embeddings for ALL symbols in workspace in ONE batch for maximum performance
+    /// </summary>
+    Task BulkGenerateEmbeddingsAsync(string workspacePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Copy embeddings for a single file's symbols from julie-semantic's BLOB storage to vec0.
+    /// Used for incremental updates when a file changes.
+    /// </summary>
+    Task CopyFileEmbeddingsToVec0Async(string workspacePath, string filePath, CancellationToken cancellationToken = default);
 }
 
 /// <summary>

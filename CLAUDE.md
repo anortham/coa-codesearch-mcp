@@ -1,5 +1,12 @@
 # CodeSearch MCP Server - Developer Guide
 
+## ⚠️ NON-NEGOTIABLE REQUIREMENTS
+
+**SEMANTIC SEARCH IS A CORE FEATURE - NEVER SUGGEST REMOVING IT**
+- 3-tier search architecture: SQLite → Lucene → Semantic (vec0/HNSW)
+- Semantic search is the tentpole feature - focus on making it FAST, not removing it
+- If performance is an issue, optimize the implementation, don't remove functionality
+
 ## 🎯 Quick Reference
 
 Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace indexing with cross-platform support.
@@ -78,9 +85,54 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 ## 🏗️ Architecture
 
 **Index Storage**: `.coa/codesearch/indexes/{workspace-hash}/` (local per workspace)
+- `lucene/` - Lucene.NET full-text search index
+- `db/` - SQLite canonical symbol database (workspace.db)
+- `vectors/` - HNSW semantic search index (julie-semantic)
+
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
 **Test Framework**: NUnit (528+ tests, zero warnings)
 **Framework**: Local project references for active development
+
+### 3-Tier Search Architecture
+
+**Tier 1: SQLite Exact Lookups** (~1ms)
+- Symbol definitions (classes, methods, interfaces)
+- Identifier usages (calls, references) via LSP-quality extraction
+- Use: `goto_definition`, `find_references`, exact symbol queries
+
+**Tier 2: Lucene Fuzzy Search** (~20ms)
+- Full-text code search with CamelCase tokenization
+- Smart scoring: type definitions boosted 10x, test files de-prioritized
+- Use: `text_search`, `symbol_search`, fuzzy matching
+
+**Tier 3: Semantic Search** (~47ms) ✅ **PRODUCTION READY**
+- Vector similarity via sqlite-vec (vec0) + HNSW index
+- 384-dimensional embeddings (bge-small-en-v1.5 model)
+- Cross-language semantic code discovery
+- Use: Finding conceptually similar code, semantic refactoring
+
+### Semantic Search Pipeline
+
+**Bulk Indexing** (~40.6s total):
+1. julie-semantic generates embeddings with ONNX (~40s)
+2. Writes f32 vectors as BLOBs to SQL (~0.05s)
+3. C# copies BLOBs to vec0 for fast KNN search (~0.6s)
+
+**Incremental Updates** (~0.6s per file):
+1. julie-semantic update --write-db regenerates embeddings (~0.4s)
+2. C# copies updated BLOBs to vec0 (~0.2s)
+3. Semantic search stays current automatically
+
+**Query Time**:
+- Search queries converted to vectors via C# ONNX (instant, <10ms)
+- vec0 KNN search finds top matches (~47ms for 5074 symbols)
+- Results enriched with symbol metadata from SQLite
+
+**Key Components**:
+- `julie-semantic` (Rust): ONNX inference, HNSW indexing, BLOB storage
+- `SqliteVecExtensionService.cs`: Loads vec0 extension for vector operations
+- `SQLiteSymbolService.BulkGenerateEmbeddingsAsync`: Copies BLOBs to vec0
+- `SQLiteSymbolService.SearchSymbolsSemanticAsync`: Executes KNN queries
 
 ## 🚀 Recent Improvements (v2.1.8+)
 

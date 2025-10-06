@@ -68,7 +68,7 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
         var startInfo = new ProcessStartInfo
         {
             FileName = _julieSemanticPath,
-            Arguments = $"embed --symbols-db \"{symbolsDbPath}\" {outputArg} --model {model} --batch-size {batchSize} {limitArg}",
+            Arguments = $"embed --symbols-db \"{symbolsDbPath}\" {outputArg} --write-db --model {model} --batch-size {batchSize} {limitArg}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -111,10 +111,11 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
             throw new InvalidOperationException($"julie-semantic exited with code {process.ExitCode}");
         }
 
-        // Parse JSON statistics
+        // Parse JSON statistics (julie-semantic outputs snake_case)
         var stats = JsonSerializer.Deserialize<EmbeddingStats>(output, new JsonSerializerOptions
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
         }) ?? new EmbeddingStats { Success = false };
 
         _logger.LogInformation(
@@ -241,7 +242,7 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
         var startInfo = new ProcessStartInfo
         {
             FileName = _julieSemanticPath,
-            Arguments = $"update --file \"{filePath}\" --symbols-db \"{symbolsDbPath}\" --output \"{outputPath}\" --model {model}",
+            Arguments = $"update --file \"{filePath}\" --symbols-db \"{symbolsDbPath}\" --output \"{outputPath}\" --write-db --model {model}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -281,11 +282,20 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
             throw new InvalidOperationException($"julie-semantic exited with code {process.ExitCode}");
         }
 
-        // Parse JSON statistics
+        // DEBUG: Log raw output to diagnose parsing issues
+        _logger.LogDebug("julie-semantic update stdout: {Output}", output);
+
+        // Parse JSON statistics (julie-semantic outputs snake_case)
         var stats = JsonSerializer.Deserialize<EmbeddingStats>(output, new JsonSerializerOptions
         {
-            PropertyNameCaseInsensitive = true
+            PropertyNameCaseInsensitive = true,
+            PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
         }) ?? new EmbeddingStats { Success = false };
+
+        if (!stats.Success || stats.EmbeddingsGenerated == 0)
+        {
+            _logger.LogWarning("Failed to parse julie-semantic update output or got 0 embeddings. Raw: {Output}", output);
+        }
 
         _logger.LogInformation(
             "Updated embeddings for {FilePath}: {Symbols} symbols, {Embeddings} embeddings",

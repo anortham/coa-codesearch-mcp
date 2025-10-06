@@ -275,6 +275,18 @@ public class FileIndexingService : IFileIndexingService
                             stats.SymbolsProcessed,
                             stats.EmbeddingsGenerated,
                             embeddingDuration);
+
+                        // Copy embeddings from julie's BLOB storage to vec0 for semantic search
+                        if (_sqliteSymbolService != null && _sqliteSymbolService.IsSemanticSearchAvailable())
+                        {
+                            _logger.LogInformation("📋 Copying {Count} embeddings from BLOB storage to vec0...", stats.EmbeddingsGenerated);
+                            var copyStart = DateTime.UtcNow;
+
+                            await _sqliteSymbolService.BulkGenerateEmbeddingsAsync(workspacePath, cancellationToken);
+
+                            var copyDuration = (DateTime.UtcNow - copyStart).TotalSeconds;
+                            _logger.LogInformation("✅ vec0 copy complete in {Duration:F2}s", copyDuration);
+                        }
                     }
                     catch (Exception ex)
                     {

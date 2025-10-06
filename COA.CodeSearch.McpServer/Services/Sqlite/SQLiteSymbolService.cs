@@ -416,80 +416,9 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
             }
 
-            // Generate embeddings for semantic search (if available)
-            if (_embeddingService.IsAvailable() && symbols.Count > 0)
-            {
-                try
-                {
-                    // Delete old embeddings for this file's symbols
-                    using (var cmd = connection.CreateCommand())
-                    {
-                        cmd.Transaction = transaction;
-                        // First delete from vec table using the mapping
-                        cmd.CommandText = @"
-                            DELETE FROM symbol_embeddings_vec
-                            WHERE rowid IN (
-                                SELECT vec_rowid FROM symbol_embeddings
-                                WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = @file_path)
-                            )";
-                        cmd.Parameters.AddWithValue("@file_path", filePath);
-                        await cmd.ExecuteNonQueryAsync(cancellationToken);
-
-                        // Then delete from mapping table
-                        cmd.CommandText = @"
-                            DELETE FROM symbol_embeddings
-                            WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = @file_path)";
-                        await cmd.ExecuteNonQueryAsync(cancellationToken);
-                    }
-
-                    // Generate all embeddings in one batch (much faster than one-by-one)
-                    var embeddingTexts = symbols.Select(s => BuildSymbolEmbeddingText(s)).ToList();
-                    var embeddings = await _embeddingService.GenerateBatchEmbeddingsAsync(embeddingTexts, cancellationToken);
-
-                    // Bulk insert embeddings and mappings
-                    for (int i = 0; i < symbols.Count; i++)
-                    {
-                        var symbol = symbols[i];
-                        var embedding = embeddings[i];
-
-                        // Insert embedding into vec0 virtual table
-                        using var vecCmd = connection.CreateCommand();
-                        vecCmd.Transaction = transaction;
-                        var embeddingJson = "[" + string.Join(",", embedding) + "]";
-                        vecCmd.CommandText = @"
-                            INSERT INTO symbol_embeddings_vec (embedding)
-                            VALUES (@embedding)";
-                        vecCmd.Parameters.AddWithValue("@embedding", embeddingJson);
-                        await vecCmd.ExecuteNonQueryAsync(cancellationToken);
-
-                        // Get the rowid of the inserted vector
-                        long vecRowid;
-                        using (var rowidCmd = connection.CreateCommand())
-                        {
-                            rowidCmd.Transaction = transaction;
-                            rowidCmd.CommandText = "SELECT last_insert_rowid()";
-                            vecRowid = (long)(await rowidCmd.ExecuteScalarAsync(cancellationToken) ?? 0L);
-                        }
-
-                        // Insert mapping into symbol_embeddings table
-                        using var mapCmd = connection.CreateCommand();
-                        mapCmd.Transaction = transaction;
-                        mapCmd.CommandText = @"
-                            INSERT INTO symbol_embeddings (symbol_id, vec_rowid)
-                            VALUES (@symbol_id, @vec_rowid)";
-                        mapCmd.Parameters.AddWithValue("@symbol_id", symbol.Id);
-                        mapCmd.Parameters.AddWithValue("@vec_rowid", vecRowid);
-                        await mapCmd.ExecuteNonQueryAsync(cancellationToken);
-                    }
-
-                    _logger.LogDebug("Generated embeddings for {SymbolCount} symbols in {FilePath}", symbols.Count, filePath);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to generate embeddings for {FilePath} - continuing without semantic search", filePath);
-                    // Don't fail the whole transaction if embeddings fail
-                }
-            }
+            // NOTE: Embeddings for incremental updates are now handled by julie-semantic + FileWatcherService
+            // Bulk embeddings are handled by BulkGenerateEmbeddingsAsync (called from FileIndexingService)
+            // Both use julie-semantic with --write-db flag to write BLOBs, then copy to vec0 for search
 
             await transaction.CommitAsync(cancellationToken);
 
@@ -558,6 +487,288 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         var result = await cmd.ExecuteScalarAsync(cancellationToken);
         return Convert.ToInt32(result);
+    }
+
+    /// <summary>
+    /// Copy embeddings from julie-semantic's BLOB storage to vec0 for fast similarity search
+    /// </summary>
+    public async Task BulkGenerateEmbeddingsAsync(string workspacePath, CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+        _vecExtension.LoadExtension(connection);
+
+        _logger.LogInformation("📖 Reading embeddings from julie-semantic's BLOB storage...");
+        var readStart = DateTime.UtcNow;
+
+        // Read all embeddings from julie's tables
+        var symbolEmbeddings = new List<(string symbolId, float[] embedding)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = @"
+                SELECT e.symbol_id, ev.vector_data, ev.dimensions
+                FROM embeddings e
+                JOIN embedding_vectors ev ON e.vector_id = ev.vector_id
+                WHERE e.model_name = 'bge-small'
+                ORDER BY e.symbol_id";
+
+            using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var symbolId = reader.GetString(0);
+                var blob = (byte[])reader[1];
+                var dimensions = reader.GetInt32(2);
+
+                // Convert BLOB to float array (julie stores as f32 little-endian bytes)
+                var embedding = new float[dimensions];
+                Buffer.BlockCopy(blob, 0, embedding, 0, blob.Length);
+
+                symbolEmbeddings.Add((symbolId, embedding));
+            }
+        }
+
+        var readDuration = (DateTime.UtcNow - readStart).TotalSeconds;
+        _logger.LogInformation("✅ Read {Count} embeddings in {Duration:F2}s", symbolEmbeddings.Count, readDuration);
+
+        if (symbolEmbeddings.Count == 0)
+        {
+            _logger.LogWarning("No embeddings found - julie-semantic may not have run with --write-db flag");
+            return;
+        }
+
+        // Clear existing embeddings
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            using (var delCmd = connection.CreateCommand())
+            {
+                delCmd.Transaction = transaction;
+                delCmd.CommandText = "DELETE FROM symbol_embeddings";
+                await delCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            using (var delVecCmd = connection.CreateCommand())
+            {
+                delVecCmd.Transaction = transaction;
+                delVecCmd.CommandText = "DELETE FROM symbol_embeddings_vec";
+                await delVecCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            _logger.LogInformation("💾 Copying {Count} vectors to vec0...", symbolEmbeddings.Count);
+            var insertStart = DateTime.UtcNow;
+
+            // Bulk insert vectors to vec0 - chunk to avoid SQL statement size limits
+            const int chunkSize = 500;
+            long currentRowid = 1; // vec0 rowids start at 1
+
+            for (int chunkStart = 0; chunkStart < symbolEmbeddings.Count; chunkStart += chunkSize)
+            {
+                var chunkEnd = Math.Min(chunkStart + chunkSize, symbolEmbeddings.Count);
+                var chunkCount = chunkEnd - chunkStart;
+
+                var valuesClauses = new List<string>();
+                for (int i = chunkStart; i < chunkEnd; i++)
+                {
+                    var embeddingJson = "[" + string.Join(",", symbolEmbeddings[i].embedding) + "]";
+                    valuesClauses.Add($"('{embeddingJson.Replace("'", "''")}')");
+                }
+
+                using var vecCmd = connection.CreateCommand();
+                vecCmd.Transaction = transaction;
+                vecCmd.CommandText = $@"
+                    INSERT INTO symbol_embeddings_vec (embedding)
+                    VALUES {string.Join(",", valuesClauses)}";
+                await vecCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                // Bulk insert mappings for this chunk
+                var mappingClauses = new List<string>();
+                for (int i = chunkStart; i < chunkEnd; i++)
+                {
+                    var vecRowid = currentRowid + (i - chunkStart);
+                    mappingClauses.Add($"('{symbolEmbeddings[i].symbolId.Replace("'", "''")}', {vecRowid})");
+                }
+
+                using var mapCmd = connection.CreateCommand();
+                mapCmd.Transaction = transaction;
+                mapCmd.CommandText = $@"
+                    INSERT INTO symbol_embeddings (symbol_id, vec_rowid)
+                    VALUES {string.Join(",", mappingClauses)}";
+                await mapCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                currentRowid += chunkCount;
+            }
+
+            await transaction.CommitAsync(cancellationToken);
+
+            var insertDuration = (DateTime.UtcNow - insertStart).TotalSeconds;
+            _logger.LogInformation("✅ Copy complete: {Count} vectors to vec0 in {Duration:F2}s", symbolEmbeddings.Count, insertDuration);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Copy embeddings for a single file's symbols from julie-semantic's BLOB storage to vec0.
+    /// Used for incremental updates when a file changes.
+    /// </summary>
+    public async Task CopyFileEmbeddingsToVec0Async(string workspacePath, string filePath, CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("Database not found, skipping embedding copy for {FilePath}", filePath);
+            return;
+        }
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+        _vecExtension.LoadExtension(connection);
+
+        _logger.LogInformation("📖 Reading embeddings for {FilePath} from BLOB storage...", filePath);
+
+        // Get all symbol IDs for this file
+        var symbolIds = new List<string>();
+        using (var cmd = connection.CreateCommand())
+        {
+            cmd.CommandText = "SELECT id FROM symbols WHERE file_path = @file_path";
+            cmd.Parameters.AddWithValue("@file_path", filePath);
+            using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                symbolIds.Add(reader.GetString(0));
+            }
+        }
+
+        if (symbolIds.Count == 0)
+        {
+            _logger.LogInformation("No symbols found for {FilePath}, skipping embedding copy", filePath);
+            return;
+        }
+
+        // Read embeddings for these symbols
+        var symbolEmbeddings = new List<(string symbolId, float[] embedding)>();
+        using (var cmd = connection.CreateCommand())
+        {
+            var symbolIdParams = string.Join(",", symbolIds.Select((_, i) => $"@id{i}"));
+            cmd.CommandText = $@"
+                SELECT e.symbol_id, ev.vector_data, ev.dimensions
+                FROM embeddings e
+                JOIN embedding_vectors ev ON e.vector_id = ev.vector_id
+                WHERE e.model_name = 'bge-small'
+                  AND e.symbol_id IN ({symbolIdParams})
+                ORDER BY e.symbol_id";
+
+            for (int i = 0; i < symbolIds.Count; i++)
+            {
+                cmd.Parameters.AddWithValue($"@id{i}", symbolIds[i]);
+            }
+
+            using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+            while (await reader.ReadAsync(cancellationToken))
+            {
+                var symbolId = reader.GetString(0);
+                var blob = (byte[])reader[1];
+                var dimensions = reader.GetInt32(2);
+
+                var embedding = new float[dimensions];
+                Buffer.BlockCopy(blob, 0, embedding, 0, blob.Length);
+
+                symbolEmbeddings.Add((symbolId, embedding));
+            }
+        }
+
+        if (symbolEmbeddings.Count == 0)
+        {
+            _logger.LogInformation("No embeddings found for {FilePath}", filePath);
+            return;
+        }
+
+        _logger.LogInformation("💾 Copying {Count} embeddings for {FilePath} to vec0...", symbolEmbeddings.Count, filePath);
+
+        using var transaction = connection.BeginTransaction();
+        try
+        {
+            // Delete old vec0 entries for this file's symbols
+            using (var delCmd = connection.CreateCommand())
+            {
+                delCmd.Transaction = transaction;
+                var symbolIdParams = string.Join(",", symbolIds.Select((_, i) => $"@id{i}"));
+
+                // Delete from vec table
+                delCmd.CommandText = $@"
+                    DELETE FROM symbol_embeddings_vec
+                    WHERE rowid IN (
+                        SELECT vec_rowid FROM symbol_embeddings
+                        WHERE symbol_id IN ({symbolIdParams})
+                    )";
+                for (int i = 0; i < symbolIds.Count; i++)
+                {
+                    delCmd.Parameters.AddWithValue($"@id{i}", symbolIds[i]);
+                }
+                await delCmd.ExecuteNonQueryAsync(cancellationToken);
+
+                // Delete from mapping table
+                delCmd.Parameters.Clear();
+                delCmd.CommandText = $@"
+                    DELETE FROM symbol_embeddings
+                    WHERE symbol_id IN ({symbolIdParams})";
+                for (int i = 0; i < symbolIds.Count; i++)
+                {
+                    delCmd.Parameters.AddWithValue($"@id{i}", symbolIds[i]);
+                }
+                await delCmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Insert new vectors to vec0
+            var valuesClauses = new List<string>();
+            foreach (var (_, embedding) in symbolEmbeddings)
+            {
+                var embeddingJson = "[" + string.Join(",", embedding) + "]";
+                valuesClauses.Add($"('{embeddingJson.Replace("'", "''")}')");
+            }
+
+            using var vecCmd = connection.CreateCommand();
+            vecCmd.Transaction = transaction;
+            vecCmd.CommandText = $@"
+                INSERT INTO symbol_embeddings_vec (embedding)
+                VALUES {string.Join(",", valuesClauses)}";
+            await vecCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            // Get the starting rowid for the inserted vectors
+            using var rowidCmd = connection.CreateCommand();
+            rowidCmd.Transaction = transaction;
+            rowidCmd.CommandText = "SELECT last_insert_rowid()";
+            var startRowid = (long)(await rowidCmd.ExecuteScalarAsync(cancellationToken) ?? 0);
+            startRowid = startRowid - symbolEmbeddings.Count + 1; // SQLite returns last rowid, calculate first
+
+            // Insert mappings
+            var mappingClauses = new List<string>();
+            for (int i = 0; i < symbolEmbeddings.Count; i++)
+            {
+                var vecRowid = startRowid + i;
+                mappingClauses.Add($"('{symbolEmbeddings[i].symbolId.Replace("'", "''")}', {vecRowid})");
+            }
+
+            using var mapCmd = connection.CreateCommand();
+            mapCmd.Transaction = transaction;
+            mapCmd.CommandText = $@"
+                INSERT INTO symbol_embeddings (symbol_id, vec_rowid)
+                VALUES {string.Join(",", mappingClauses)}";
+            await mapCmd.ExecuteNonQueryAsync(cancellationToken);
+
+            await transaction.CommitAsync(cancellationToken);
+            _logger.LogInformation("✅ Copied {Count} embeddings for {FilePath} to vec0", symbolEmbeddings.Count, filePath);
+        }
+        catch
+        {
+            await transaction.RollbackAsync(cancellationToken);
+            throw;
+        }
     }
 
     public async Task<List<FileRecord>> GetAllFilesAsync(string workspacePath, CancellationToken cancellationToken = default)
@@ -1140,7 +1351,8 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
     public bool IsSemanticSearchAvailable()
     {
-        return _vecExtension.IsAvailable() && _embeddingService.IsAvailable();
+        // Only need vec0 for semantic search - embeddings come from julie-semantic now
+        return _vecExtension.IsAvailable();
     }
 
     public async Task<List<SemanticSymbolMatch>> SearchSymbolsSemanticAsync(

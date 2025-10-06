@@ -234,63 +234,9 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                                 await _sqliteService.InitializeDatabaseAsync(workspacePath, cancellationToken);
                                 _logger.LogDebug("Initialized SQLite database schema (vec0 table created if available)");
 
-                                // Generate embeddings for all symbols if semantic search is available
-                                if (_sqliteService.IsSemanticSearchAvailable())
-                                {
-                                    _logger.LogInformation("Generating embeddings for {SymbolCount} symbols...", symbolCount);
-                                    var embeddingStart = DateTime.UtcNow;
-
-                                    // Get all files and regenerate embeddings in parallel
-                                    var allFiles = await _sqliteService.GetAllFilesAsync(workspacePath, cancellationToken);
-                                    int embeddedCount = 0;
-                                    var embeddedCountLock = new object();
-
-                                    // Process files in parallel with max concurrency
-                                    var options = new ParallelOptions
-                                    {
-                                        MaxDegreeOfParallelism = Environment.ProcessorCount,
-                                        CancellationToken = cancellationToken
-                                    };
-
-                                    await Parallel.ForEachAsync(allFiles, options, async (fileRecord, ct) =>
-                                    {
-                                        try
-                                        {
-                                            var fileSymbols = await _sqliteService.GetSymbolsForFileAsync(workspacePath, fileRecord.Path, ct);
-                                            if (fileSymbols.Any())
-                                            {
-                                                // Re-upsert to trigger embedding generation
-                                                await _sqliteService.UpsertFileSymbolsAsync(
-                                                    workspacePath,
-                                                    fileRecord.Path,
-                                                    fileSymbols,
-                                                    fileRecord.Content ?? "",
-                                                    fileRecord.Language,
-                                                    "", // hash - not needed for embedding update
-                                                    fileRecord.Size,
-                                                    fileRecord.LastModified,
-                                                    ct);
-
-                                                lock (embeddedCountLock)
-                                                {
-                                                    embeddedCount += fileSymbols.Count;
-                                                }
-                                            }
-                                        }
-                                        catch (Exception ex)
-                                        {
-                                            _logger.LogWarning(ex, "Failed to generate embeddings for {File}", fileRecord.Path);
-                                        }
-                                    });
-
-                                    var embeddingDuration = DateTime.UtcNow - embeddingStart;
-                                    _logger.LogInformation("Generated embeddings for {Count} symbols in {Duration}ms",
-                                        embeddedCount, embeddingDuration.TotalMilliseconds);
-                                }
-                                else
-                                {
-                                    _logger.LogDebug("Semantic search not available - skipping embedding generation");
-                                }
+                                // Embeddings are generated in background by FileIndexingService after julie-semantic completes
+                                // and then copied to vec0 via BulkGenerateEmbeddingsAsync (see FileIndexingService.cs)
+                                _logger.LogDebug("Semantic embedding pipeline handled in FileIndexingService background task");
                             }
                             catch (Exception ex)
                             {

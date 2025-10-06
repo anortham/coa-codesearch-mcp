@@ -706,8 +706,21 @@ public class FileWatcherService : BackgroundService
 
                                 if (embStats.Success)
                                 {
-                                    _logger.LogDebug("Phoenix: Updated {Embeddings} embeddings for {FilePath}",
+                                    _logger.LogInformation("Phoenix: Updated {Embeddings} embeddings for {FilePath}",
                                         embStats.EmbeddingsGenerated, filePath);
+
+                                    // Copy embeddings from BLOB storage to vec0 for semantic search
+                                    try
+                                    {
+                                        await _sqliteService.CopyFileEmbeddingsToVec0Async(
+                                            workspacePath,
+                                            filePath,
+                                            cancellationToken);
+                                    }
+                                    catch (Exception vecEx)
+                                    {
+                                        _logger.LogWarning(vecEx, "Phoenix: Failed to copy embeddings to vec0 for {FilePath}", filePath);
+                                    }
                                 }
                             }
                         }
