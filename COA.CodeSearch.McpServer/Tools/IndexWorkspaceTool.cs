@@ -227,6 +227,63 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                             var extractionDuration = DateTime.UtcNow - extractionStartTime;
                             _logger.LogInformation("Extracted {SymbolCount} symbols to SQLite in {Duration}ms",
                                 symbolCount, extractionDuration.TotalMilliseconds);
+
+                            // Initialize database to create vec0 table for semantic search
+                            try
+                            {
+                                await _sqliteService.InitializeDatabaseAsync(workspacePath, cancellationToken);
+                                _logger.LogDebug("Initialized SQLite database schema (vec0 table created if available)");
+
+                                // Generate embeddings for all symbols if semantic search is available
+                                if (_sqliteService.IsSemanticSearchAvailable())
+                                {
+                                    _logger.LogInformation("Generating embeddings for {SymbolCount} symbols...", symbolCount);
+                                    var embeddingStart = DateTime.UtcNow;
+
+                                    // Get all files and regenerate embeddings
+                                    var allFiles = await _sqliteService.GetAllFilesAsync(workspacePath, cancellationToken);
+                                    int embeddedCount = 0;
+
+                                    foreach (var fileRecord in allFiles)
+                                    {
+                                        try
+                                        {
+                                            var fileSymbols = await _sqliteService.GetSymbolsForFileAsync(workspacePath, fileRecord.Path, cancellationToken);
+                                            if (fileSymbols.Any())
+                                            {
+                                                // Re-upsert to trigger embedding generation
+                                                await _sqliteService.UpsertFileSymbolsAsync(
+                                                    workspacePath,
+                                                    fileRecord.Path,
+                                                    fileSymbols,
+                                                    fileRecord.Content ?? "",
+                                                    fileRecord.Language,
+                                                    "", // hash - not needed for embedding update
+                                                    fileRecord.Size,
+                                                    fileRecord.LastModified,
+                                                    cancellationToken);
+                                                embeddedCount += fileSymbols.Count;
+                                            }
+                                        }
+                                        catch (Exception ex)
+                                        {
+                                            _logger.LogWarning(ex, "Failed to generate embeddings for {File}", fileRecord.Path);
+                                        }
+                                    }
+
+                                    var embeddingDuration = DateTime.UtcNow - embeddingStart;
+                                    _logger.LogInformation("Generated embeddings for {Count} symbols in {Duration}ms",
+                                        embeddedCount, embeddingDuration.TotalMilliseconds);
+                                }
+                                else
+                                {
+                                    _logger.LogDebug("Semantic search not available - skipping embedding generation");
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to initialize database schema extensions (semantic search may not work)");
+                            }
                         }
                         else
                         {
