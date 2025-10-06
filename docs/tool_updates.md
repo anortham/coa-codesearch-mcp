@@ -253,16 +253,6 @@ Once we migrate to SQLite:
 - **Impact**: Minimal
 - **Notes**: Probably leave as-is
 
-#### ☐ **SimilarFilesTool** (`SimilarFilesTool.cs`)
-- **Current**: Content-based similarity (hash? text comparison?)
-- **Potential**:
-  - **Semantic embeddings**: Find semantically similar files
-  - Vector similarity search via HNSW
-  - Cross-language similar patterns
-- **Impact**: True semantic similarity vs text-based
-- **Priority**: ⭐⭐ MEDIUM - Great showcase for embeddings
-- **Notes**: Check current implementation first
-
 ---
 
 ### 🔧 File Editing Tools
@@ -342,9 +332,8 @@ Once we migrate to SQLite:
 7. **FindReferencesTool** - Verify optimization, add semantic layer
 
 ### Phase 3: Advanced Features (Week 3)
-8. **SimilarFilesTool** - Semantic similarity via embeddings
-9. **TraceCallPathTool** - SQLite recursive queries
-10. **SearchAndReplaceTool** - FTS5 for match finding
+8. **TraceCallPathTool** - SQLite recursive queries
+9. **SearchAndReplaceTool** - FTS5 for match finding
 
 ### Phase 4: Architecture Review (Week 4)
 11. **IndexWorkspaceTool** - Review Lucene necessity (might delete entirely!)

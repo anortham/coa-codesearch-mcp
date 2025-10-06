@@ -24,7 +24,6 @@ Every analysis and recommendation you provide MUST follow this complete MCP tool
 - Find all test references: `mcp__codesearch__find_references`
 - Search for test patterns: `mcp__codesearch__text_search`
 - Get test class overview: `mcp__codesearch__get_symbols_overview`
-- Find similar test implementations: `mcp__codesearch__similar_files`
 
 **Test Infrastructure Investigation:**
 - Locate test files: `mcp__codesearch__file_search` 

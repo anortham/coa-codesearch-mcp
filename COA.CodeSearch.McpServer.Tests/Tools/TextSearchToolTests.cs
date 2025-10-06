@@ -37,6 +37,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new TextSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                SQLiteSymbolServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,

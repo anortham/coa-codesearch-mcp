@@ -18,8 +18,7 @@ public static class ToolNames
     // File and directory operations
     public const string DirectorySearch = "directory_search";
     public const string RecentFiles = "recent_files";
-    public const string SimilarFiles = "similar_files";
-    
+
     // Navigation tools (from CodeNav consolidation)
     public const string SymbolSearch = "symbol_search";
     public const string FindReferences = "find_references";

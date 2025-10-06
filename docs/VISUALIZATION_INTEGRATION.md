@@ -34,7 +34,6 @@ This guide documents how VS Code Bridge visualization was integrated into CodeSe
 - ✅ **RecentFilesTool** - Timeline visualization implemented
 - ✅ **FileSearchTool** - File opening with `OpenFileAsync` (appropriate for this tool)
 - ➖ **DirectorySearchTool** - No visualization needed (simple directory listing)
-- ➖ **SimilarFilesTool** - No visualization implemented (bridge available if needed)
 - ➖ **BatchOperationsTool** - No visualization needed (delegates to other tools)
 - ➖ **IndexWorkspaceTool** - No visualization needed (background operation)
 
@@ -223,12 +222,6 @@ if ((parameters.OpenFirstResult ?? false) && _vscode.IsConnected && result.Succe
 **Current Implementation:** Background operation, no visualization needed
 
 IndexWorkspaceTool is a background operation that doesn't benefit from visualization. It has IVSCodeBridge available but doesn't use it, which is the correct design. Progress reporting for long-running indexing operations could be added in the future if needed.
-
-### SimilarFilesTool - NO VISUALIZATION ➖
-
-**Current Implementation:** No visualization implemented
-
-SimilarFilesTool has IVSCodeBridge available but currently doesn't use visualization. The tool returns similarity scores and file lists through the standard AI-optimized response. A hierarchy or similarity visualization could be added in the future if there's a clear user benefit.
 
 ## Testing Approach
 

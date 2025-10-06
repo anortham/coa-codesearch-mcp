@@ -10,6 +10,7 @@ using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -35,6 +36,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -51,6 +53,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="sqliteService">SQLite symbol service for semantic search</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -63,6 +66,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     public TextSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
+        ISQLiteSymbolService sqliteService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -74,6 +78,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         ILogger<TextSearchTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
+        _sqliteService = sqliteService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -309,7 +314,79 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                     _logger.LogInformation("Fallback search found {HitCount} results for '{Query}'", searchResult.TotalHits, query);
                 }
             }
-            
+
+            // TIER 3: Semantic search fallback (if few results and semantic search available)
+            if (searchResult.TotalHits < 5 && _sqliteService.IsSemanticSearchAvailable())
+            {
+                _logger.LogDebug("Lucene returned {Count} results, trying Tier 3 semantic search", searchResult.TotalHits);
+
+                try
+                {
+                    var semanticStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var semanticResults = await _sqliteService.SearchSymbolsSemanticAsync(
+                        workspacePath,
+                        query,
+                        limit: maxResults,
+                        cancellationToken);
+                    semanticStopwatch.Stop();
+
+                    if (semanticResults.Any())
+                    {
+                        _logger.LogInformation("✅ Tier 3 HIT: Found {Count} semantic matches in {Ms}ms",
+                            semanticResults.Count, semanticStopwatch.ElapsedMilliseconds);
+
+                        // Convert semantic results to SearchHit format
+                        var semanticHits = semanticResults.Select(sr => new SearchHit
+                        {
+                            FilePath = sr.Symbol.FilePath,
+                            LineNumber = sr.Symbol.StartLine,
+                            Score = sr.SimilarityScore, // Use similarity score (0-1, higher is better)
+                            Snippet = sr.Symbol.DocComment ?? sr.Symbol.Signature ?? $"{sr.Symbol.Kind} {sr.Symbol.Name}",
+                            Fields = new Dictionary<string, string>
+                            {
+                                ["name"] = sr.Symbol.Name,
+                                ["kind"] = sr.Symbol.Kind,
+                                ["signature"] = sr.Symbol.Signature ?? "",
+                                ["language"] = sr.Symbol.Language,
+                                ["similarity_score"] = sr.SimilarityScore.ToString("F3"),
+                                ["search_tier"] = "semantic"
+                            }
+                        }).ToList();
+
+                        // Merge with existing results (semantic as supplement, not replacement)
+                        // Only add semantic results that aren't already in the result set
+                        if (searchResult.Hits == null)
+                        {
+                            searchResult.Hits = new List<SearchHit>();
+                        }
+
+                        var existingPaths = searchResult.Hits
+                            .Select(h => $"{h.FilePath}:{h.LineNumber}")
+                            .ToHashSet();
+
+                        var newSemanticHits = semanticHits
+                            .Where(h => !existingPaths.Contains($"{h.FilePath}:{h.LineNumber}"))
+                            .ToList();
+
+                        if (newSemanticHits.Any())
+                        {
+                            searchResult.Hits.AddRange(newSemanticHits);
+                            searchResult.TotalHits += newSemanticHits.Count;
+                            _logger.LogInformation("Added {Count} new semantic results to {Existing} existing results",
+                                newSemanticHits.Count, existingPaths.Count);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Tier 3 MISS: No semantic matches found");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tier 3 semantic search failed, continuing with Lucene results");
+                }
+            }
+
 
             // Build response context
             var context = new ResponseContext

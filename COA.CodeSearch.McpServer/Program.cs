@@ -310,7 +310,6 @@ public class Program
             builder.Services.AddScoped<ResponseBuilders.IndexResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.RecentFilesResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.DirectorySearchResponseBuilder>();
-            builder.Services.AddScoped<ResponseBuilders.SimilarFilesResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.LineSearchResponseBuilder>();
             builder.Services.AddScoped<ResponseBuilders.SearchAndReplaceResponseBuilder>();
             
@@ -325,7 +324,6 @@ public class Program
             builder.Services.AddScoped<BatchOperationsTool>(); // Batch operations for multiple searches
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
-            builder.Services.AddScoped<SimilarFilesTool>(); // New! Find similar files using MoreLikeThis
             builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
             builder.Services.AddScoped<SearchAndReplaceTool>(); // Enhanced! Uses DiffMatchPatch and workspace permissions
             
@@ -355,7 +353,7 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "similar_files", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
@@ -368,7 +366,6 @@ public class Program
                     {"search_and_replace", 70},
                     {"recent_files", 65},
                     {"directory_search", 60},
-                    {"similar_files", 55},
                     {"batch_operations", 85},
                     {"index_workspace", 100},
                     {"insert_at_line", 90},
@@ -504,15 +501,6 @@ public class Program
                         BuiltInTool = "ls/find commands",
                         Limitation = "Manual filesystem navigation, no pattern matching, tedious",
                         PerformanceMetric = "Structured directory discovery vs command-line traversal"
-                    },
-                    ["Code similarity analysis"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Code similarity analysis",
-                        ServerTool = "mcp__codesearch__similar_files",
-                        Advantage = "BEFORE implementing features - Find existing similar code to reuse or learn from",
-                        BuiltInTool = "Manual code browsing",
-                        Limitation = "Time-consuming manual exploration, miss related implementations",
-                        PerformanceMetric = "Algorithmic similarity detection vs manual code review"
                     },
                     ["Workspace initialization"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {
