@@ -55,6 +55,9 @@ public class SqliteVecExtensionService : ISqliteVecExtensionService
 
         try
         {
+            // Enable extension loading (required by Microsoft.Data.Sqlite)
+            connection.EnableExtensions(true);
+
             // Load extension without entry point (uses default sqlite3_vec_init)
             connection.LoadExtension(_extensionPath!);
             _extensionLoaded = true;
