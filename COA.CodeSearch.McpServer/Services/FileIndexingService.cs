@@ -183,6 +183,20 @@ public class FileIndexingService : IFileIndexingService
                             scanResult.ProcessedFiles,
                             scanResult.SkippedFiles,
                             scanDuration);
+
+                        // Initialize vec0 tables for semantic search (after julie-codesearch creates base schema)
+                        if (_sqliteSymbolService != null)
+                        {
+                            try
+                            {
+                                await _sqliteSymbolService.InitializeDatabaseAsync(workspacePath, cancellationToken);
+                                _logger.LogInformation("✅ Initialized SQLite database schema extensions (vec0 tables)");
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "Failed to initialize vec0 tables - semantic search may not work");
+                            }
+                        }
                     }
                     else
                     {
