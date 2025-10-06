@@ -206,7 +206,19 @@ public class JulieCodeSearchService : IJulieCodeSearchService
 
         if (exitCode != 0)
         {
-            _logger.LogError("julie-codesearch update failed (exit {ExitCode}): {Error}", exitCode, errorOutput);
+            // Database lock errors are expected during bulk operations - log as warning
+            var isDatabaseLockError = errorOutput.Contains("database is locked", StringComparison.OrdinalIgnoreCase) ||
+                                     errorOutput.Contains("Error code 5", StringComparison.OrdinalIgnoreCase);
+
+            if (isDatabaseLockError)
+            {
+                _logger.LogWarning("julie-codesearch update skipped (database busy): {File}", filePath);
+            }
+            else
+            {
+                _logger.LogError("julie-codesearch update failed (exit {ExitCode}): {Error}", exitCode, errorOutput);
+            }
+
             return new UpdateResult
             {
                 Success = false,

@@ -252,47 +252,85 @@ public class FileIndexingService : IFileIndexingService
                 var sqlitePath = Path.Combine(indexPath, "db", "workspace.db");
                 var vectorsPath = Path.Combine(indexPath, "vectors");
 
-                // Ensure vectors directory exists
-                Directory.CreateDirectory(vectorsPath);
+                // Check if embeddings already exist AND SQLite database is not fresh
+                var hnswIndexPath = Path.Combine(vectorsPath, "hnsw_index.bin");
+                var embeddingsExist = File.Exists(hnswIndexPath);
 
-                embeddingTask = Task.Run(async () =>
+                // Also check if SQLite database is fresh (created in last 5 minutes)
+                // If fresh, we need to regenerate embeddings even if HNSW exists
+                var sqliteIsFresh = File.Exists(sqlitePath) &&
+                    (DateTime.UtcNow - File.GetLastWriteTimeUtc(sqlitePath)).TotalMinutes < 5;
+
+                if (embeddingsExist && !sqliteIsFresh)
                 {
-                    try
+                    _logger.LogInformation("✅ Embeddings already exist - skipping regeneration (Lucene-only rebuild)");
+
+                    // Still need to ensure vec0 tables are populated from existing embeddings
+                    if (_sqliteSymbolService.IsSemanticSearchAvailable())
                     {
-                        _logger.LogInformation("🧠 Generating embeddings in parallel with Lucene indexing...");
-                        var embeddingStart = DateTime.UtcNow;
-
-                        var stats = await _semanticIntelligenceService.GenerateEmbeddingsAsync(
-                            sqlitePath,
-                            outputPath: vectorsPath,
-                            model: "bge-small",
-                            batchSize: 100,
-                            limit: null, // Process all symbols
-                            cancellationToken);
-
-                        var embeddingDuration = (DateTime.UtcNow - embeddingStart).TotalSeconds;
-                        _logger.LogInformation("✅ Embedding generation complete: {Symbols} symbols, {Embeddings} embeddings in {Duration:F2}s",
-                            stats.SymbolsProcessed,
-                            stats.EmbeddingsGenerated,
-                            embeddingDuration);
-
-                        // Copy embeddings from julie's BLOB storage to vec0 for semantic search
-                        if (_sqliteSymbolService != null && _sqliteSymbolService.IsSemanticSearchAvailable())
+                        embeddingTask = Task.Run(async () =>
                         {
-                            _logger.LogInformation("📋 Copying {Count} embeddings from BLOB storage to vec0...", stats.EmbeddingsGenerated);
-                            var copyStart = DateTime.UtcNow;
+                            try
+                            {
+                                _logger.LogInformation("📋 Syncing existing embeddings to vec0...");
+                                var copyStart = DateTime.UtcNow;
 
-                            await _sqliteSymbolService.BulkGenerateEmbeddingsAsync(workspacePath, cancellationToken);
+                                await _sqliteSymbolService.BulkGenerateEmbeddingsAsync(workspacePath, cancellationToken);
 
-                            var copyDuration = (DateTime.UtcNow - copyStart).TotalSeconds;
-                            _logger.LogInformation("✅ vec0 copy complete in {Duration:F2}s", copyDuration);
-                        }
+                                var copyDuration = (DateTime.UtcNow - copyStart).TotalSeconds;
+                                _logger.LogInformation("✅ vec0 sync complete in {Duration:F2}s", copyDuration);
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogWarning(ex, "vec0 sync failed");
+                            }
+                        }, cancellationToken);
                     }
-                    catch (Exception ex)
+                }
+                else
+                {
+                    // Generate embeddings from scratch
+                    Directory.CreateDirectory(vectorsPath);
+
+                    embeddingTask = Task.Run(async () =>
                     {
-                        _logger.LogWarning(ex, "Embedding generation failed, continuing with Lucene-only indexing");
-                    }
-                }, cancellationToken);
+                        try
+                        {
+                            _logger.LogInformation("🧠 Generating embeddings in parallel with Lucene indexing...");
+                            var embeddingStart = DateTime.UtcNow;
+
+                            var stats = await _semanticIntelligenceService.GenerateEmbeddingsAsync(
+                                sqlitePath,
+                                outputPath: vectorsPath,
+                                model: "bge-small",
+                                batchSize: 100,
+                                limit: null, // Process all symbols
+                                cancellationToken);
+
+                            var embeddingDuration = (DateTime.UtcNow - embeddingStart).TotalSeconds;
+                            _logger.LogInformation("✅ Embedding generation complete: {Symbols} symbols, {Embeddings} embeddings in {Duration:F2}s",
+                                stats.SymbolsProcessed,
+                                stats.EmbeddingsGenerated,
+                                embeddingDuration);
+
+                            // Copy embeddings from julie's BLOB storage to vec0 for semantic search
+                            if (_sqliteSymbolService != null && _sqliteSymbolService.IsSemanticSearchAvailable())
+                            {
+                                _logger.LogInformation("📋 Copying {Count} embeddings from BLOB storage to vec0...", stats.EmbeddingsGenerated);
+                                var copyStart = DateTime.UtcNow;
+
+                                await _sqliteSymbolService.BulkGenerateEmbeddingsAsync(workspacePath, cancellationToken);
+
+                                var copyDuration = (DateTime.UtcNow - copyStart).TotalSeconds;
+                                _logger.LogInformation("✅ vec0 copy complete in {Duration:F2}s", copyDuration);
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Embedding generation failed, continuing with Lucene-only indexing");
+                        }
+                    }, cancellationToken);
+                }
             }
 
             // Wait for Lucene indexing to complete
@@ -436,6 +474,11 @@ public class FileIndexingService : IFileIndexingService
                             await _luceneIndexService.IndexDocumentsAsync(workspacePath, documents, cancellationToken);
                             indexedCount += documents.Count;
                             documents.Clear();
+
+                            // Commit after each batch to persist merges to disk (prevents corruption on macOS)
+                            // This ensures crash recovery works even if process is killed during indexing
+                            await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+                            _logger.LogDebug("Committed batch {IndexedCount} files", indexedCount);
                         }
                     }
                     else
@@ -457,6 +500,10 @@ public class FileIndexingService : IFileIndexingService
                 _logger.LogDebug("Indexing final batch of {BatchSize} documents", documents.Count);
                 await _luceneIndexService.IndexDocumentsAsync(workspacePath, documents, cancellationToken);
                 indexedCount += documents.Count;
+
+                // Commit final batch to persist merges (prevents corruption on macOS)
+                await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);
+                _logger.LogDebug("Committed final batch - total {IndexedCount} files", indexedCount);
             }
             
             // Record metrics

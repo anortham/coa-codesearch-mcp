@@ -20,6 +20,8 @@ public class FileWatcherService : BackgroundService
     private readonly ConcurrentDictionary<string, FileChangeEvent> _pendingChanges = new();
     private readonly ConcurrentDictionary<string, PendingDelete> _pendingDeletes = new();
     private readonly BlockingCollection<FileChangeEvent> _changeQueue = new();
+    private readonly ConcurrentQueue<RetryQueueItem> _retryQueue = new();
+    private Timer? _retryTimer;
 
     // Phoenix integration: SQLite canonical storage + Julie extraction
     private readonly Sqlite.ISQLiteSymbolService? _sqliteService;
@@ -77,6 +79,9 @@ public class FileWatcherService : BackgroundService
         
         _logger.LogInformation("FileWatcher configured - Debounce: {Debounce}ms, Delete quiet: {DeleteQuiet}s, Atomic window: {AtomicWindow}ms",
             _debounceInterval.TotalMilliseconds, _deleteQuietPeriod.TotalSeconds, _atomicWriteWindow.TotalMilliseconds);
+
+        // Start retry timer (process locked updates every 2 seconds)
+        _retryTimer = new Timer(ProcessRetryQueue, null, TimeSpan.FromSeconds(2), TimeSpan.FromSeconds(2));
     }
 
     public void StartWatching(string workspacePath)
@@ -595,7 +600,8 @@ public class FileWatcherService : BackgroundService
         {
             StopWatching(workspace);
         }
-        
+
+        _retryTimer?.Dispose();
         _changeQueue?.Dispose();
         base.Dispose();
     }
@@ -735,11 +741,18 @@ public class FileWatcherService : BackgroundService
                 }
                 else
                 {
-                    // Database locked is expected with concurrent file changes - not an error
+                    // Database locked is expected with concurrent file changes - add to retry queue
                     if (result.ErrorMessage?.Contains("database is locked") == true)
                     {
-                        _logger.LogDebug("Phoenix: julie-codesearch update skipped for {FilePath} (database locked by concurrent process)",
-                            filePath);
+                        _retryQueue.Enqueue(new RetryQueueItem
+                        {
+                            FilePath = filePath,
+                            WorkspacePath = workspacePath,
+                            AttemptCount = 1,
+                            LastAttempt = DateTime.UtcNow
+                        });
+                        _logger.LogDebug("Phoenix: julie-codesearch update locked for {FilePath} - added to retry queue (queue size: {QueueSize})",
+                            filePath, _retryQueue.Count);
                     }
                     else
                     {
@@ -858,4 +871,95 @@ public class FileWatcherService : BackgroundService
             _ => "unknown"
         };
     }
+
+    /// <summary>
+    /// Process retry queue for files that failed due to database locks
+    /// </summary>
+    private async void ProcessRetryQueue(object? state)
+    {
+        const int MaxRetries = 3;
+        var itemsToRetry = new List<RetryQueueItem>();
+
+        // Collect items to retry (don't retry while dequeuing)
+        while (_retryQueue.TryDequeue(out var item))
+        {
+            if (item.AttemptCount >= MaxRetries)
+            {
+                _logger.LogWarning("Phoenix: Gave up retrying {FilePath} after {Attempts} attempts",
+                    item.FilePath, item.AttemptCount);
+                continue;
+            }
+
+            // Only retry if file still exists (no point retrying deleted files)
+            if (File.Exists(item.FilePath))
+            {
+                itemsToRetry.Add(item);
+            }
+        }
+
+        if (itemsToRetry.Count == 0)
+            return;
+
+        _logger.LogDebug("Phoenix: Processing {Count} items from retry queue", itemsToRetry.Count);
+
+        foreach (var item in itemsToRetry)
+        {
+            try
+            {
+                if (_julieCodeSearchService == null)
+                    continue;
+
+                var indexPath = _pathResolution.GetIndexPath(item.WorkspacePath);
+                var dbDirectory = Path.Combine(indexPath, "db");
+                var sqlitePath = Path.Combine(dbDirectory, "workspace.db");
+                var logFilePath = Path.Combine(dbDirectory, "julie-codesearch.log");
+
+                var result = await _julieCodeSearchService.UpdateFileAsync(
+                    item.FilePath,
+                    sqlitePath,
+                    logFilePath: logFilePath,
+                    CancellationToken.None);
+
+                if (result.Success)
+                {
+                    _logger.LogInformation("Phoenix: Retry succeeded for {FilePath} (attempt {Attempt})",
+                        item.FilePath, item.AttemptCount);
+                }
+                else if (result.ErrorMessage?.Contains("database is locked") == true)
+                {
+                    // Still locked - re-enqueue with incremented count
+                    _retryQueue.Enqueue(new RetryQueueItem
+                    {
+                        FilePath = item.FilePath,
+                        WorkspacePath = item.WorkspacePath,
+                        AttemptCount = item.AttemptCount + 1,
+                        LastAttempt = DateTime.UtcNow
+                    });
+                    _logger.LogDebug("Phoenix: Retry {Attempt} for {FilePath} still locked - re-queued",
+                        item.AttemptCount, item.FilePath);
+                }
+                else
+                {
+                    _logger.LogWarning("Phoenix: Retry failed for {FilePath}: {Error}",
+                        item.FilePath, result.ErrorMessage);
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Phoenix: Exception during retry for {FilePath}", item.FilePath);
+            }
+        }
+    }
+
+}
+
+/// <summary>
+/// Represents an item in the retry queue for database lock conflicts
+/// </summary>
+internal class RetryQueueItem
+{
+    public required string FilePath { get; init; }
+    public required string WorkspacePath { get; init; }
+    public int AttemptCount { get; init; }
+    public DateTime LastAttempt { get; init; }
 }
