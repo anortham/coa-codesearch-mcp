@@ -84,7 +84,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. Returns: signatures, documentation, inheritance, usage counts.";
+    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. 3-tier search: SQLite exact (0-1ms) → Lucene fuzzy (10-100ms) → Semantic similarity (~100ms). Returns: signatures, documentation, inheritance, usage counts.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -335,7 +335,66 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 .ToList();
             
             _logger.LogInformation("Final symbols count after sorting and limiting: {Count}", symbols.Count);
-            
+
+            // TIER 3: Semantic search fallback (if few results and semantic search available)
+            if (symbols.Count < 3 && _sqliteService.IsSemanticSearchAvailable())
+            {
+                _logger.LogDebug("Tier 2 returned {Count} results, trying Tier 3 semantic search", symbols.Count);
+
+                try
+                {
+                    var semanticStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    var semanticResults = await _sqliteService.SearchSymbolsSemanticAsync(
+                        workspacePath,
+                        symbolName,
+                        limit: parameters.MaxResults,
+                        cancellationToken);
+                    semanticStopwatch.Stop();
+
+                    if (semanticResults.Any())
+                    {
+                        _logger.LogInformation("✅ Tier 3 HIT: Found {Count} semantic matches in {Ms}ms",
+                            semanticResults.Count, semanticStopwatch.ElapsedMilliseconds);
+
+                        // Convert semantic results to SymbolDefinition
+                        var semanticSymbols = semanticResults.Select(sr => new SymbolDefinition
+                        {
+                            Name = sr.Symbol.Name,
+                            Kind = sr.Symbol.Kind,
+                            Signature = sr.Symbol.Signature ?? "",
+                            FilePath = sr.Symbol.FilePath,
+                            Line = sr.Symbol.StartLine,
+                            Column = sr.Symbol.StartColumn,
+                            Language = sr.Symbol.Language,
+                            Score = sr.SimilarityScore, // Use similarity score (0-1, higher is better)
+                            Snippet = sr.Symbol.DocComment // Use doc comment as snippet
+                        }).ToList();
+
+                        // Merge with existing results (semantic as fallback)
+                        // Only add semantic results that aren't already in symbols
+                        var existingIds = symbols.Select(s => $"{s.FilePath}:{s.Name}").ToHashSet();
+                        var newSemanticSymbols = semanticSymbols
+                            .Where(s => !existingIds.Contains($"{s.FilePath}:{s.Name}"))
+                            .ToList();
+
+                        if (newSemanticSymbols.Any())
+                        {
+                            symbols.AddRange(newSemanticSymbols);
+                            _logger.LogInformation("Added {Count} new semantic results to {Existing} existing results",
+                                newSemanticSymbols.Count, existingIds.Count);
+                        }
+                    }
+                    else
+                    {
+                        _logger.LogDebug("Tier 3 MISS: No semantic matches found");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tier 3 semantic search failed, continuing with Tier 2 results");
+                }
+            }
+
             // Optionally get reference counts
             if (parameters.IncludeReferences)
             {
