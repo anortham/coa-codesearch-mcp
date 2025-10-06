@@ -84,7 +84,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. 3-tier search: SQLite exact (0-1ms) → Lucene fuzzy (10-100ms) → Semantic similarity (~100ms). Returns: signatures, documentation, inheritance, usage counts.";
+    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. Multi-tier parallel search: Tier 1 (SQLite exact 0-1ms) → Tier 2+4 PARALLEL (Lucene fuzzy ~20ms + Semantic similarity ~47ms). Returns: signatures, documentation, inheritance, usage counts with tier breakdown.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -163,201 +163,163 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 return tierOneResult;
             }
 
-            _logger.LogDebug("Tier 1 MISS: No exact SQLite match, falling back to Lucene fuzzy search");
+            _logger.LogDebug("Tier 1 MISS: No exact SQLite match, starting parallel Tier 2 (Lucene) + Tier 4 (Semantic) search");
 
-            // Use SmartQueryPreprocessor to determine optimal field and processing
-            // Symbols benefit from SearchMode.Symbol which targets content_symbols field
-            var queryResult = _queryProcessor.Process(symbolName, SearchMode.Symbol);
-            var targetField = queryResult.TargetField;
-            var processedQuery = queryResult.ProcessedQuery;
-            
-            _logger.LogInformation("Searching for symbol: {Symbol} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
-                symbolName, targetField, processedQuery, queryResult.Reason);
-            
-            // Build Lucene query using the preprocessor's field selection
-            var analyzer = _codeAnalyzer;
-            Query query;
-            
-            if (parameters.CaseSensitive)
+            // TIER 2: Lucene fuzzy search task
+            var luceneTask = Task.Run(async () =>
             {
-                // For case-sensitive, we still need to use the analyzer since fields are analyzed
-                // Note: CodeAnalyzer with preserveCase=false always lowercases, so true case-sensitive isn't possible
-                var parser = new QueryParser(LUCENE_VERSION, targetField, analyzer);
-                query = parser.Parse(processedQuery);
-            }
-            else
-            {
-                // Case-insensitive search using QueryParser with CodeAnalyzer
-                var parser = new QueryParser(LUCENE_VERSION, targetField, analyzer);
-                query = parser.Parse(processedQuery);
-            }
-            
-            _logger.LogInformation("Generated Lucene query: {Query}", query.ToString());
-            
-            // Optionally boost if searching for specific type
-            if (!string.IsNullOrEmpty(parameters.SymbolType))
-            {
-                var typeBoostQuery = new BooleanQuery();
-                typeBoostQuery.Add(query, Occur.MUST);
-                typeBoostQuery.Add(new TermQuery(new Term("type_info", parameters.SymbolType.ToLowerInvariant())), Occur.SHOULD);
-                query = typeBoostQuery;
-            }
-            
-            // Perform the search
-            var searchResult = await _luceneIndexService.SearchAsync(
-                workspacePath, 
-                query, 
-                parameters.MaxResults * 2, // Get more to filter by exact matches
-                cancellationToken);
-            
-            stopwatch.Stop();
-            
-            _logger.LogInformation("Search returned {HitCount} hits for symbol: {Symbol}", 
-                searchResult.Hits?.Count ?? 0, symbolName);
-            
-            // Process results to extract symbol definitions
-            var symbols = new List<SymbolDefinition>();
-            
-            if (searchResult.Hits != null)
-            {
-                _logger.LogInformation("Processing {Count} hits to extract symbols", searchResult.Hits.Count);
-                
-                foreach (var hit in searchResult.Hits)
-                {
-                    _logger.LogDebug("Processing hit for file: {FilePath}", hit.FilePath);
-                    _logger.LogDebug("Hit.Fields is null: {IsNull}, Count: {Count}", 
-                        hit.Fields == null, hit.Fields?.Count ?? 0);
-                    
-                    if (hit.Fields != null)
-                    {
-                        _logger.LogDebug("Available fields: {Fields}", string.Join(", ", hit.Fields.Keys));
-                    }
-                    
-                    // Get the stored type_info JSON from Fields dictionary
-                    var typeInfoJson = hit.Fields?.ContainsKey("type_info") == true ? hit.Fields["type_info"] : null;
-                    
-                    if (string.IsNullOrEmpty(typeInfoJson))
-                    {
-                        _logger.LogWarning("No type_info field found for {FilePath}", hit.FilePath);
-                        continue;
-                    }
-                    
-                    _logger.LogDebug("Found type_info for {FilePath}, length: {Length}", 
-                        hit.FilePath, typeInfoJson.Length);
-                    
-                    try
-                    {
-                        // Deserialize using shared options from TypeExtractionResult
-                        var typeData = JsonSerializer.Deserialize<TypeExtractionResult>(
-                            typeInfoJson, 
-                            TypeExtractionResult.DeserializationOptions);
-                        if (typeData == null)
-                            continue;
-                        
-                        // Extract matching types
-                        if (typeData.Types != null)
-                        {
-                            _logger.LogDebug("Checking {Count} types for matches", typeData.Types.Count);
-                            foreach (var type in typeData.Types)
-                            {
-                                _logger.LogDebug("Checking type: {TypeName} against symbol: {SymbolName}", 
-                                    type.Name, symbolName);
-                                    
-                                if (MatchesSymbol(type.Name, symbolName, parameters.CaseSensitive))
-                                {
-                                    _logger.LogInformation("Found matching type: {TypeName} in {FilePath}", 
-                                        type.Name, hit.FilePath);
-                                    
-                                    symbols.Add(new SymbolDefinition
-                                    {
-                                        Name = type.Name,
-                                        Kind = type.Kind,
-                                        Signature = type.Signature,
-                                        FilePath = hit.FilePath ?? "",
-                                        Line = type.Line,
-                                        Column = type.Column,
-                                        Language = typeData.Language,
-                                        Modifiers = type.Modifiers,
-                                        BaseType = type.BaseType,
-                                        Interfaces = type.Interfaces,
-                                        Score = hit.Score,
-                                        Snippet = GetSnippet(hit.ContextLines)
-                                    });
-                                    
-                                    // If we found an exact match in this file, don't look for methods
-                                    if (type.Name.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
-                                        break;
-                                }
-                            }
-                        }
-                        
-                        // Extract matching methods
-                        if (typeData.Methods != null)
-                        {
-                            foreach (var method in typeData.Methods)
-                            {
-                                if (MatchesSymbol(method.Name, symbolName, parameters.CaseSensitive))
-                                {
-                                    symbols.Add(new SymbolDefinition
-                                    {
-                                        Name = method.Name,
-                                        Kind = "method",
-                                        Signature = method.Signature,
-                                        FilePath = hit.FilePath ?? "",
-                                        Line = method.Line,
-                                        Column = method.Column,
-                                        Language = typeData.Language,
-                                        Modifiers = method.Modifiers,
-                                        ContainingType = method.ContainingType,
-                                        ReturnType = method.ReturnType,
-                                        Parameters = method.Parameters,
-                                        Score = hit.Score,
-                                        Snippet = GetSnippet(hit.ContextLines)
-                                    });
-                                }
-                            }
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogDebug(ex, "Failed to parse type_info for {FilePath}", hit.FilePath);
-                    }
-                }
-            }
-            
-            _logger.LogInformation("Total symbols found before sorting: {Count}", symbols.Count);
-            
-            // Sort by relevance (exact matches first, then by score)
-            symbols = symbols
-                .OrderByDescending(s => s.Name.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
-                .ThenByDescending(s => s.Score)
-                .Take(parameters.MaxResults)
-                .ToList();
-            
-            _logger.LogInformation("Final symbols count after sorting and limiting: {Count}", symbols.Count);
-
-            // TIER 3: Semantic search fallback (if few results and semantic search available)
-            if (symbols.Count < 3 && _sqliteService.IsSemanticSearchAvailable())
-            {
-                _logger.LogDebug("Tier 2 returned {Count} results, trying Tier 3 semantic search", symbols.Count);
+                var luceneStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                var symbols = new List<SymbolDefinition>();
 
                 try
                 {
-                    var semanticStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                    // Use SmartQueryPreprocessor to determine optimal field and processing
+                    var queryResult = _queryProcessor.Process(symbolName, SearchMode.Symbol);
+                    var targetField = queryResult.TargetField;
+                    var processedQuery = queryResult.ProcessedQuery;
+
+                    _logger.LogInformation("Tier 2 Lucene: {Symbol} -> Field: {Field}, Query: {Query}",
+                        symbolName, targetField, processedQuery);
+
+                    // Build Lucene query
+                    var analyzer = _codeAnalyzer;
+                    Query query;
+
+                    var parser = new QueryParser(LUCENE_VERSION, targetField, analyzer);
+                    query = parser.Parse(processedQuery);
+
+                    // Optionally boost if searching for specific type
+                    if (!string.IsNullOrEmpty(parameters.SymbolType))
+                    {
+                        var typeBoostQuery = new BooleanQuery();
+                        typeBoostQuery.Add(query, Occur.MUST);
+                        typeBoostQuery.Add(new TermQuery(new Term("type_info", parameters.SymbolType.ToLowerInvariant())), Occur.SHOULD);
+                        query = typeBoostQuery;
+                    }
+
+                    // Perform the search
+                    var searchResult = await _luceneIndexService.SearchAsync(
+                        workspacePath,
+                        query,
+                        parameters.MaxResults * 2,
+                        cancellationToken);
+
+                    // Process results to extract symbol definitions
+                    if (searchResult.Hits != null)
+                    {
+                        foreach (var hit in searchResult.Hits)
+                        {
+                            var typeInfoJson = hit.Fields?.ContainsKey("type_info") == true ? hit.Fields["type_info"] : null;
+                            if (string.IsNullOrEmpty(typeInfoJson))
+                                continue;
+
+                            try
+                            {
+                                var typeData = JsonSerializer.Deserialize<TypeExtractionResult>(
+                                    typeInfoJson,
+                                    TypeExtractionResult.DeserializationOptions);
+                                if (typeData == null)
+                                    continue;
+
+                                // Extract matching types
+                                if (typeData.Types != null)
+                                {
+                                    foreach (var type in typeData.Types)
+                                    {
+                                        if (MatchesSymbol(type.Name, symbolName, parameters.CaseSensitive))
+                                        {
+                                            symbols.Add(new SymbolDefinition
+                                            {
+                                                Name = type.Name,
+                                                Kind = type.Kind,
+                                                Signature = type.Signature,
+                                                FilePath = hit.FilePath ?? "",
+                                                Line = type.Line,
+                                                Column = type.Column,
+                                                Language = typeData.Language,
+                                                Modifiers = type.Modifiers,
+                                                BaseType = type.BaseType,
+                                                Interfaces = type.Interfaces,
+                                                Score = hit.Score,
+                                                Snippet = GetSnippet(hit.ContextLines)
+                                            });
+
+                                            if (type.Name.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
+                                                break;
+                                        }
+                                    }
+                                }
+
+                                // Extract matching methods
+                                if (typeData.Methods != null)
+                                {
+                                    foreach (var method in typeData.Methods)
+                                    {
+                                        if (MatchesSymbol(method.Name, symbolName, parameters.CaseSensitive))
+                                        {
+                                            symbols.Add(new SymbolDefinition
+                                            {
+                                                Name = method.Name,
+                                                Kind = "method",
+                                                Signature = method.Signature,
+                                                FilePath = hit.FilePath ?? "",
+                                                Line = method.Line,
+                                                Column = method.Column,
+                                                Language = typeData.Language,
+                                                Modifiers = method.Modifiers,
+                                                ContainingType = method.ContainingType,
+                                                ReturnType = method.ReturnType,
+                                                Parameters = method.Parameters,
+                                                Score = hit.Score,
+                                                Snippet = GetSnippet(hit.ContextLines)
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                            catch (Exception ex)
+                            {
+                                _logger.LogDebug(ex, "Failed to parse type_info for {FilePath}", hit.FilePath);
+                            }
+                        }
+                    }
+
+                    luceneStopwatch.Stop();
+                    _logger.LogInformation("✅ Tier 2 Lucene: Found {Count} symbols in {Ms}ms",
+                        symbols.Count, luceneStopwatch.ElapsedMilliseconds);
+                }
+                catch (Exception ex)
+                {
+                    luceneStopwatch.Stop();
+                    _logger.LogWarning(ex, "❌ Tier 2 Lucene failed in {Ms}ms", luceneStopwatch.ElapsedMilliseconds);
+                }
+
+                return symbols;
+            }, cancellationToken);
+
+            // TIER 4: Semantic search task (parallel with Lucene)
+            var semanticTask = Task.Run(async () =>
+            {
+                var semanticSymbols = new List<SymbolDefinition>();
+
+                if (!_sqliteService.IsSemanticSearchAvailable())
+                {
+                    _logger.LogDebug("⏭️ Tier 4 SKIP: Semantic search not available");
+                    return semanticSymbols;
+                }
+
+                var semanticStopwatch = System.Diagnostics.Stopwatch.StartNew();
+                try
+                {
                     var semanticResults = await _sqliteService.SearchSymbolsSemanticAsync(
                         workspacePath,
                         symbolName,
                         limit: parameters.MaxResults,
                         cancellationToken);
-                    semanticStopwatch.Stop();
 
                     if (semanticResults.Any())
                     {
-                        _logger.LogInformation("✅ Tier 3 HIT: Found {Count} semantic matches in {Ms}ms",
-                            semanticResults.Count, semanticStopwatch.ElapsedMilliseconds);
-
-                        // Convert semantic results to SymbolDefinition
-                        var semanticSymbols = semanticResults.Select(sr => new SymbolDefinition
+                        semanticSymbols = semanticResults.Select(sr => new SymbolDefinition
                         {
                             Name = sr.Symbol.Name,
                             Kind = sr.Symbol.Kind,
@@ -366,34 +328,77 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                             Line = sr.Symbol.StartLine,
                             Column = sr.Symbol.StartColumn,
                             Language = sr.Symbol.Language,
-                            Score = sr.SimilarityScore, // Use similarity score (0-1, higher is better)
-                            Snippet = sr.Symbol.DocComment // Use doc comment as snippet
+                            Score = sr.SimilarityScore, // Semantic similarity score (0-1)
+                            Snippet = sr.Symbol.DocComment
                         }).ToList();
 
-                        // Merge with existing results (semantic as fallback)
-                        // Only add semantic results that aren't already in symbols
-                        var existingIds = symbols.Select(s => $"{s.FilePath}:{s.Name}").ToHashSet();
-                        var newSemanticSymbols = semanticSymbols
-                            .Where(s => !existingIds.Contains($"{s.FilePath}:{s.Name}"))
-                            .ToList();
-
-                        if (newSemanticSymbols.Any())
-                        {
-                            symbols.AddRange(newSemanticSymbols);
-                            _logger.LogInformation("Added {Count} new semantic results to {Existing} existing results",
-                                newSemanticSymbols.Count, existingIds.Count);
-                        }
+                        semanticStopwatch.Stop();
+                        _logger.LogInformation("✅ Tier 4 Semantic: Found {Count} matches in {Ms}ms",
+                            semanticSymbols.Count, semanticStopwatch.ElapsedMilliseconds);
                     }
                     else
                     {
-                        _logger.LogDebug("Tier 3 MISS: No semantic matches found");
+                        semanticStopwatch.Stop();
+                        _logger.LogDebug("⏭️ Tier 4 MISS: No semantic matches in {Ms}ms", semanticStopwatch.ElapsedMilliseconds);
                     }
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogWarning(ex, "Tier 3 semantic search failed, continuing with Tier 2 results");
+                    semanticStopwatch.Stop();
+                    _logger.LogWarning(ex, "❌ Tier 4 Semantic failed in {Ms}ms", semanticStopwatch.ElapsedMilliseconds);
+                }
+
+                return semanticSymbols;
+            }, cancellationToken);
+
+            // Wait for both tiers to complete
+            await Task.WhenAll(luceneTask, semanticTask);
+
+            var luceneSymbols = await luceneTask;
+            var semanticSymbols = await semanticTask;
+
+            // Merge results intelligently (deduplicate by file:name, keep highest score)
+            var mergedSymbols = new Dictionary<string, SymbolDefinition>();
+            var tier2Count = 0;
+            var tier4Count = 0;
+
+            // Add Lucene results first (Tier 2)
+            foreach (var symbol in luceneSymbols)
+            {
+                var key = $"{symbol.FilePath}:{symbol.Name}";
+                mergedSymbols[key] = symbol;
+                tier2Count++;
+            }
+
+            // Add semantic results, deduplicating with Lucene (Tier 4)
+            foreach (var symbol in semanticSymbols)
+            {
+                var key = $"{symbol.FilePath}:{symbol.Name}";
+                if (!mergedSymbols.ContainsKey(key))
+                {
+                    mergedSymbols[key] = symbol;
+                    tier4Count++;
+                }
+                else
+                {
+                    // Symbol exists in both - keep the one with higher score
+                    if (symbol.Score > mergedSymbols[key].Score)
+                    {
+                        mergedSymbols[key] = symbol;
+                    }
                 }
             }
+
+            // Sort by relevance (exact matches first, then by score)
+            var symbols = mergedSymbols.Values
+                .OrderByDescending(s => s.Name.Equals(symbolName, StringComparison.OrdinalIgnoreCase))
+                .ThenByDescending(s => s.Score)
+                .Take(parameters.MaxResults)
+                .ToList();
+
+            stopwatch.Stop();
+            _logger.LogInformation("🎯 Multi-tier complete: {Total} symbols ({Tier2} Lucene, {Tier4} Semantic unique) in {Ms}ms",
+                symbols.Count, tier2Count, tier4Count, stopwatch.ElapsedMilliseconds);
 
             // Optionally get reference counts
             if (parameters.IncludeReferences)
@@ -401,13 +406,16 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 await AddReferenceCounts(workspacePath, symbols, cancellationToken);
             }
             
-            // Create the result
+            // Create the result with tier breakdown
             var result = new SymbolSearchResult
             {
                 Symbols = symbols,
                 TotalCount = symbols.Count,
                 SearchTime = stopwatch.Elapsed,
-                Query = symbolName
+                Query = symbolName,
+                Tier1Count = 0, // Tier 1 already returned earlier if it matched
+                Tier2Count = tier2Count,
+                Tier4Count = tier4Count
             };
             
             // Build response context
@@ -575,7 +583,10 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 Symbols = symbols,
                 TotalCount = symbols.Count,
                 SearchTime = TimeSpan.Zero,
-                Query = symbolName
+                Query = symbolName,
+                Tier1Count = symbols.Count, // All from Tier 1
+                Tier2Count = 0,
+                Tier4Count = 0
             };
         }
         catch (Exception ex)

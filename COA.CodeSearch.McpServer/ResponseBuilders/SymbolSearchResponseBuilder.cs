@@ -118,7 +118,7 @@ public class SymbolSearchResponseBuilder : BaseResponseBuilder<SymbolSearchResul
     protected override List<string> GenerateInsights(SymbolSearchResult data, string responseMode)
     {
         var insights = new List<string>();
-        
+
         if (data.Symbols.Count == 0)
         {
             insights.Add("No exact matches found - try broader search with text_search");
@@ -126,12 +126,24 @@ public class SymbolSearchResponseBuilder : BaseResponseBuilder<SymbolSearchResul
         else
         {
             insights.Add($"Found {data.TotalCount} symbols matching '{data.Query}'");
-            
+
+            // Multi-tier search breakdown
+            var tierCounts = new List<string>();
+            if (data.Tier1Count.HasValue && data.Tier1Count.Value > 0)
+                tierCounts.Add($"{data.Tier1Count} exact (SQLite)");
+            if (data.Tier2Count.HasValue && data.Tier2Count.Value > 0)
+                tierCounts.Add($"{data.Tier2Count} fuzzy (Lucene)");
+            if (data.Tier4Count.HasValue && data.Tier4Count.Value > 0)
+                tierCounts.Add($"{data.Tier4Count} semantic");
+
+            if (tierCounts.Any())
+                insights.Add($"🎯 Multi-tier results: {string.Join(" + ", tierCounts)}");
+
             // Language distribution
             var languages = data.Symbols.Where(s => s.Language != null).Select(s => s.Language!).Distinct();
             if (languages.Any())
                 insights.Add($"Languages: {string.Join(", ", languages)}");
-            
+
             // Type distribution
             var typeGroups = data.Symbols.GroupBy(s => s.Kind);
             if (typeGroups.Count() > 1)
@@ -139,17 +151,17 @@ public class SymbolSearchResponseBuilder : BaseResponseBuilder<SymbolSearchResul
                 var summary = string.Join(", ", typeGroups.Select(g => $"{g.Count()} {g.Key}(s)"));
                 insights.Add($"Symbol types: {summary}");
             }
-            
+
             // Inheritance insights
             var hasInheritance = data.Symbols.Any(s => !string.IsNullOrEmpty(s.BaseType));
             if (hasInheritance)
                 insights.Add("Some types have inheritance relationships");
-            
+
             var hasInterfaces = data.Symbols.Any(s => s.Interfaces?.Any() == true);
             if (hasInterfaces)
                 insights.Add("Some types implement interfaces");
         }
-        
+
         return insights;
     }
     

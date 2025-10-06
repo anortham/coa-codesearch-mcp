@@ -26,6 +26,21 @@ public class SymbolSearchResult
     /// The original search query
     /// </summary>
     public string Query { get; set; } = string.Empty;
+
+    /// <summary>
+    /// Number of symbols from Tier 1 (SQLite exact match)
+    /// </summary>
+    public int? Tier1Count { get; set; }
+
+    /// <summary>
+    /// Number of symbols from Tier 2 (Lucene fuzzy match)
+    /// </summary>
+    public int? Tier2Count { get; set; }
+
+    /// <summary>
+    /// Number of symbols from Tier 4 (Semantic similarity)
+    /// </summary>
+    public int? Tier4Count { get; set; }
 }
 
 /// <summary>
