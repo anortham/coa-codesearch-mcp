@@ -75,18 +75,21 @@ public class EmbeddingService : IEmbeddingService, IDisposable
         // Create input tensors
         var inputIds = new DenseTensor<long>(new[] { 1, tokens.InputIds.Length });
         var attentionMask = new DenseTensor<long>(new[] { 1, tokens.AttentionMask.Length });
+        var tokenTypeIds = new DenseTensor<long>(new[] { 1, tokens.InputIds.Length }); // All zeros for single sentence
 
         for (int i = 0; i < tokens.InputIds.Length; i++)
         {
             inputIds[0, i] = tokens.InputIds[i];
             attentionMask[0, i] = tokens.AttentionMask[i];
+            tokenTypeIds[0, i] = 0; // All zeros for single-sentence embedding
         }
 
         // Run inference
         var inputs = new List<NamedOnnxValue>
         {
             NamedOnnxValue.CreateFromTensor("input_ids", inputIds),
-            NamedOnnxValue.CreateFromTensor("attention_mask", attentionMask)
+            NamedOnnxValue.CreateFromTensor("attention_mask", attentionMask),
+            NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIds)
         };
 
         using var results = await Task.Run(() => _session!.Run(inputs), cancellationToken);
