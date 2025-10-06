@@ -331,11 +331,10 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         CancellationToken cancellationToken = default)
     {
         var dbPath = GetDatabasePath(workspacePath);
-        // Disable pooling for vec0 operations (extensions don't persist across pooled connections)
-        using var connection = new SqliteConnection(GetConnectionString(dbPath, enablePooling: false));
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
-        // Load vec0 extension for semantic search embeddings
+        // Load vec0 extension for semantic search embeddings (idempotent, safe to call multiple times)
         if (_vecExtension.IsAvailable())
         {
             try
@@ -1164,11 +1163,10 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
         var queryEmbeddingJson = "[" + string.Join(",", queryEmbedding) + "]";
 
-        // Disable pooling for vec0 operations (extensions don't persist across pooled connections)
-        using var connection = new SqliteConnection(GetConnectionString(dbPath, enablePooling: false));
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
-        // Load vec extension
+        // Load vec extension (idempotent, safe to call multiple times)
         _vecExtension.LoadExtension(connection);
 
         var results = new List<SemanticSymbolMatch>();

@@ -25,7 +25,8 @@ public class SqliteVecExtensionService : ISqliteVecExtensionService
 {
     private readonly ILogger<SqliteVecExtensionService> _logger;
     private readonly string? _extensionPath;
-    private bool _extensionLoaded;
+    private readonly HashSet<int> _loadedConnections = new();
+    private readonly object _lock = new();
 
     public SqliteVecExtensionService(ILogger<SqliteVecExtensionService> logger)
     {
@@ -40,10 +41,15 @@ public class SqliteVecExtensionService : ISqliteVecExtensionService
         if (connection == null)
             throw new ArgumentNullException(nameof(connection));
 
-        if (_extensionLoaded)
+        // Track per-connection to avoid redundant loads on same connection
+        var connectionId = connection.GetHashCode();
+        lock (_lock)
         {
-            _logger.LogDebug("sqlite-vec extension already loaded");
-            return;
+            if (_loadedConnections.Contains(connectionId))
+            {
+                _logger.LogDebug("sqlite-vec extension already loaded on connection {ConnectionId}", connectionId);
+                return;
+            }
         }
 
         if (!IsAvailable())
@@ -60,9 +66,13 @@ public class SqliteVecExtensionService : ISqliteVecExtensionService
 
             // Load extension without entry point (uses default sqlite3_vec_init)
             connection.LoadExtension(_extensionPath!);
-            _extensionLoaded = true;
 
-            _logger.LogInformation("✅ Loaded sqlite-vec extension from {Path}", _extensionPath);
+            lock (_lock)
+            {
+                _loadedConnections.Add(connectionId);
+            }
+
+            _logger.LogInformation("✅ Loaded sqlite-vec extension from {Path} on connection {ConnectionId}", _extensionPath, connectionId);
         }
         catch (SqliteException ex)
         {
