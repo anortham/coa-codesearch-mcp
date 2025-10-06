@@ -269,9 +269,18 @@ public class FileIndexingService : IFileIndexingService
                 }, cancellationToken);
             }
 
-            // Wait for both to complete
-            await Task.WhenAll(luceneTask, embeddingTask);
+            // Wait for Lucene indexing to complete
             result.IndexedFileCount = await luceneTask;
+
+            // Fire-and-forget: Let embeddings continue in background without blocking
+            // (Embeddings can take 40-60s; no need to block user-facing indexing operations)
+            _ = embeddingTask.ContinueWith(t =>
+            {
+                if (t.IsFaulted)
+                {
+                    _logger.LogWarning(t.Exception, "Background embedding generation encountered errors");
+                }
+            }, TaskScheduler.Default);
 
             // Commit changes
             await _luceneIndexService.CommitAsync(workspacePath, cancellationToken);

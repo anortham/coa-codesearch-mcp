@@ -9,6 +9,7 @@ using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -28,43 +29,38 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>>, IPrioritizedTool
 {
-    private readonly ILuceneIndexService _luceneIndexService;
+    private readonly ICallPathTracerService _callPathTracer;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
-    private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly TraceCallPathResponseBuilder _responseBuilder;
     private readonly ILogger<TraceCallPathTool> _logger;
-    private readonly CodeAnalyzer _codeAnalyzer;
-    private const LuceneVersion LUCENE_VERSION = LuceneVersion.LUCENE_48;
 
     /// <summary>
     /// Initializes a new instance of the TraceCallPathTool with required dependencies.
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
-    /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="callPathTracer">Call path tracing service</param>
+    /// <param name="sqliteService">SQLite symbol service for fast exact matching</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
-    /// <param name="queryProcessor">Smart query preprocessing service</param>
-    /// <param name="codeAnalyzer">Code analysis service</param>
     /// <param name="logger">Logger instance</param>
     public TraceCallPathTool(
         IServiceProvider serviceProvider,
-        ILuceneIndexService luceneIndexService,
+        ICallPathTracerService callPathTracer,
+        ISQLiteSymbolService sqliteService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        SmartQueryPreprocessor queryProcessor,
-        CodeAnalyzer codeAnalyzer,
         ILogger<TraceCallPathTool> logger) : base(serviceProvider, logger)
     {
-        _luceneIndexService = luceneIndexService;
+        _callPathTracer = callPathTracer;
+        _sqliteService = sqliteService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
-        _queryProcessor = queryProcessor;
-        _codeAnalyzer = codeAnalyzer;
         _logger = logger;
         _responseBuilder = new TraceCallPathResponseBuilder(logger as ILogger<TraceCallPathResponseBuilder>, storageService);
     }
@@ -128,8 +124,21 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
         try
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            
-            _logger.LogInformation("Tracing call path for symbol: {Symbol}, direction: {Direction}, maxDepth: {MaxDepth}", 
+
+            // TIER 1: Verify symbol exists via SQLite (0-1ms) - fast validation before expensive call tracing
+            var symbolExists = await TryVerifySymbolExistsAsync(workspacePath, symbolName, parameters.CaseSensitive, cancellationToken);
+            if (symbolExists)
+            {
+                _logger.LogInformation("✅ Tier 1 HIT: Symbol '{Symbol}' found in SQLite in {Ms}ms",
+                    symbolName, stopwatch.ElapsedMilliseconds);
+            }
+            else
+            {
+                _logger.LogInformation("⏭️ Tier 1 MISS: Symbol '{Symbol}' not found in SQLite, attempting fuzzy call trace",
+                    symbolName);
+            }
+
+            _logger.LogInformation("Tracing call path for symbol: {Symbol}, direction: {Direction}, maxDepth: {MaxDepth}",
                 symbolName, parameters.Direction, parameters.MaxDepth);
 
             // Start with finding references (upward tracing)
@@ -214,7 +223,7 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
     }
 
     /// <summary>
-    /// Trace calls based on direction parameter
+    /// Trace calls based on direction parameter using SQLite-based call path tracer
     /// </summary>
     private async Task<COA.CodeSearch.McpServer.Services.Lucene.SearchResult> TraceCallsAsync(
         string symbolName,
@@ -222,114 +231,166 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
         TraceCallPathParameters parameters,
         CancellationToken cancellationToken)
     {
-        // For now, implement upward tracing (who calls this symbol)
-        // Future enhancement will add downward tracing and both directions
-        
-        // Use SmartQueryPreprocessor for multi-field reference searching
-        var searchMode = SearchMode.Symbol;
-        var queryResult = _queryProcessor.Process(symbolName, searchMode);
-        
-        _logger.LogInformation("Trace call path: {Symbol} -> Field: {Field}, Query: {Query}, Reason: {Reason}", 
-            symbolName, queryResult.TargetField, queryResult.ProcessedQuery, queryResult.Reason);
-        
-        // Build strict reference query for exact symbol references
-        var parser = new QueryParser(LUCENE_VERSION, queryResult.TargetField, _codeAnalyzer);
-        var query = parser.Parse(queryResult.ProcessedQuery);
-        
-        // Perform the search  
-        var searchResult = await _luceneIndexService.SearchAsync(
-            workspacePath, 
-            query, 
-            100, // Default max results for call tracing
-            true, // Include snippets for context
-            cancellationToken);
-        
-        // Post-process results with call path analysis
-        if (searchResult.Hits != null)
+        List<CallPathNode> callPathNodes;
+
+        // Use direction parameter to determine tracing direction
+        switch (parameters.Direction.ToLowerInvariant())
         {
-            foreach (var hit in searchResult.Hits)
-            {
-                // Add call path metadata
-                if (hit.Fields == null)
-                    hit.Fields = new Dictionary<string, string>();
-                
-                hit.Fields["trace_direction"] = parameters.Direction;
-                hit.Fields["trace_symbol"] = symbolName;
-                hit.Fields["call_depth"] = "1"; // Start at depth 1
-                
-                // Detect entry points (controllers, main methods, etc.)
-                var isEntryPoint = DetectEntryPoint(hit);
-                hit.Fields["is_entry_point"] = isEntryPoint.ToString().ToLowerInvariant();
-                
-                // Enhance context to highlight the symbol reference
-                if (hit.ContextLines != null && hit.ContextLines.Count > 0)
-                {
-                    hit.ContextLines = HighlightSymbolInContext(hit.ContextLines, symbolName);
-                }
-            }
+            case "up":
+            case "upward":
+                callPathNodes = await _callPathTracer.TraceUpwardAsync(
+                    workspacePath,
+                    symbolName,
+                    parameters.MaxDepth,
+                    parameters.CaseSensitive,
+                    cancellationToken);
+                break;
+
+            case "down":
+            case "downward":
+                callPathNodes = await _callPathTracer.TraceDownwardAsync(
+                    workspacePath,
+                    symbolName,
+                    parameters.MaxDepth,
+                    parameters.CaseSensitive,
+                    cancellationToken);
+                break;
+
+            case "both":
+                var bothResult = await _callPathTracer.TraceBothDirectionsAsync(
+                    workspacePath,
+                    symbolName,
+                    parameters.MaxDepth,
+                    parameters.CaseSensitive,
+                    cancellationToken);
+                // Combine callers and callees
+                callPathNodes = bothResult.Callers.Concat(bothResult.Callees).ToList();
+                break;
+
+            default:
+                // Default to upward tracing
+                callPathNodes = await _callPathTracer.TraceUpwardAsync(
+                    workspacePath,
+                    symbolName,
+                    parameters.MaxDepth,
+                    parameters.CaseSensitive,
+                    cancellationToken);
+                break;
         }
-        
-        return searchResult;
+
+        // Convert CallPathNodes to SearchHits for compatibility with response builder
+        var hits = ConvertCallPathNodesToSearchHits(callPathNodes, symbolName, parameters.Direction);
+
+        return new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+        {
+            TotalHits = hits.Count,
+            Hits = hits,
+            Query = $"trace_call_path:{symbolName}",
+            SearchTime = TimeSpan.Zero
+        };
     }
 
     /// <summary>
-    /// Detect if a hit represents an entry point (controller, main method, etc.)
+    /// Convert CallPathNodes to SearchHits for response builder compatibility
     /// </summary>
-    private bool DetectEntryPoint(SearchHit hit)
+    private List<SearchHit> ConvertCallPathNodesToSearchHits(
+        List<CallPathNode> nodes,
+        string symbolName,
+        string direction)
+    {
+        var hits = new List<SearchHit>();
+
+        void ProcessNode(CallPathNode node, int hierarchyLevel)
+        {
+            var contextLines = node.Identifier.CodeContext != null
+                ? new List<string> { node.Identifier.CodeContext }
+                : new List<string>();
+
+            var hit = new SearchHit
+            {
+                FilePath = node.Identifier.FilePath,
+                LineNumber = node.Identifier.StartLine,
+                Snippet = node.Identifier.CodeContext ?? string.Empty,
+                ContextLines = contextLines,
+                Score = 1.0f - (node.Depth * 0.1f), // Higher score for shallower depth
+                Fields = new Dictionary<string, string>
+                {
+                    ["trace_direction"] = direction,
+                    ["trace_symbol"] = symbolName,
+                    ["call_depth"] = node.Depth.ToString(),
+                    ["hierarchy_level"] = hierarchyLevel.ToString(),
+                    ["identifier_kind"] = node.Identifier.Kind,
+                    ["is_semantic_match"] = node.IsSemanticMatch.ToString().ToLowerInvariant(),
+                    ["confidence"] = node.Confidence.ToString("F2"),
+                    ["column_number"] = node.Identifier.StartColumn.ToString()
+                }
+            };
+
+            if (node.ContainingSymbol != null)
+            {
+                hit.Fields["containing_symbol"] = node.ContainingSymbol.Name;
+                hit.Fields["containing_symbol_kind"] = node.ContainingSymbol.Kind;
+                hit.Fields["is_entry_point"] = DetectEntryPoint(node.ContainingSymbol).ToString().ToLowerInvariant();
+            }
+
+            if (node.TargetSymbol != null)
+            {
+                hit.Fields["target_symbol"] = node.TargetSymbol.Name;
+                hit.Fields["target_symbol_kind"] = node.TargetSymbol.Kind;
+            }
+
+            hits.Add(hit);
+
+            // Recursively process children
+            foreach (var child in node.Children)
+            {
+                ProcessNode(child, hierarchyLevel + 1);
+            }
+        }
+
+        foreach (var node in nodes)
+        {
+            ProcessNode(node, 0);
+        }
+
+        return hits;
+    }
+
+    /// <summary>
+    /// Detect if a symbol represents an entry point (controller, main method, etc.)
+    /// </summary>
+    private bool DetectEntryPoint(Services.Julie.JulieSymbol symbol)
     {
         try
         {
-            var fileName = Path.GetFileNameWithoutExtension(hit.FilePath)?.ToLowerInvariant();
-            var filePath = hit.FilePath.ToLowerInvariant();
-            
+            var fileName = Path.GetFileNameWithoutExtension(symbol.FilePath)?.ToLowerInvariant();
+            var symbolName = symbol.Name.ToLowerInvariant();
+            var symbolKind = symbol.Kind.ToLowerInvariant();
+
             // Entry point patterns
-            var entryPointPatterns = new[] { 
+            var entryPointPatterns = new[] {
                 "controller", "handler", "service", "main", "program", "startup", "app"
             };
-            
-            // Check file name patterns
-            if (entryPointPatterns.Any(pattern => fileName?.Contains(pattern) == true))
-                return true;
-            
-            // Check if it's in a Controllers folder
-            if (filePath.Contains("controller") || filePath.Contains("handlers"))
-                return true;
-            
-            // Check context for method signatures that look like entry points
-            if (hit.ContextLines != null)
+
+            // Check symbol name or file name patterns
+            if (entryPointPatterns.Any(pattern =>
+                symbolName.Contains(pattern) || fileName?.Contains(pattern) == true))
             {
-                var context = string.Join(" ", hit.ContextLines).ToLowerInvariant();
-                if (context.Contains("public static void main") || 
-                    context.Contains("[httpget]") || 
-                    context.Contains("[httppost]") ||
-                    context.Contains("async task<"))
-                {
-                    return true;
-                }
+                return true;
             }
-            
+
+            // Check if it's a main method
+            if (symbolName == "main" && symbolKind == "method")
+            {
+                return true;
+            }
+
             return false;
         }
         catch
         {
             return false;
         }
-    }
-
-    /// <summary>
-    /// Highlight symbol references in context lines
-    /// </summary>
-    private List<string> HighlightSymbolInContext(List<string> contextLines, string symbolName)
-    {
-        return contextLines.Select(line =>
-        {
-            // Simple highlighting - wrap symbol references with markers
-            if (line.Contains(symbolName, StringComparison.OrdinalIgnoreCase))
-            {
-                return line.Replace(symbolName, $"«{symbolName}»", StringComparison.OrdinalIgnoreCase);
-            }
-            return line;
-        }).ToList();
     }
 
     /// <summary>
@@ -341,8 +402,37 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
         {
             return $"No {direction} call path found for '{symbolName}'";
         }
-        
+
         var fileCount = searchResult.Hits?.Select(h => h.FilePath).Distinct().Count() ?? 0;
         return $"Call path trace ({direction}): {searchResult.TotalHits} references to '{symbolName}' across {fileCount} files";
+    }
+
+    /// <summary>
+    /// TIER 1: Verify symbol exists in SQLite for fast validation (0-1ms)
+    /// This prevents expensive call path tracing for non-existent symbols
+    /// </summary>
+    private async Task<bool> TryVerifySymbolExistsAsync(
+        string workspacePath,
+        string symbolName,
+        bool caseSensitive,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Query SQLite for exact symbol name match
+            var sqliteSymbols = await _sqliteService.GetSymbolsByNameAsync(
+                workspacePath,
+                symbolName,
+                caseSensitive,
+                cancellationToken);
+
+            return sqliteSymbols != null && sqliteSymbols.Any();
+        }
+        catch (Exception ex)
+        {
+            // Log but don't fail - fall back to full call tracing
+            _logger.LogDebug(ex, "Failed to verify symbol existence in SQLite for '{Symbol}'", symbolName);
+            return false; // Assume symbol might exist, proceed with call tracing
+        }
     }
 }

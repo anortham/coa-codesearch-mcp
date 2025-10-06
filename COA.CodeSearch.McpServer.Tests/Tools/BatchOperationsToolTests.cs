@@ -51,11 +51,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CodeAnalyzer,
                 textSearchLoggerMock.Object);
                 
-            // Create actual FileSearchTool instance  
+            // Create actual FileSearchTool instance
             var fileSearchLoggerMock = new Mock<ILogger<FileSearchTool>>();
             _fileSearchTool = new FileSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                SQLiteSymbolServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,

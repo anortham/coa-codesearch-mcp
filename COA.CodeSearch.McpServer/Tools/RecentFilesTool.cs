@@ -137,10 +137,11 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
             }
 
             // Query SQLite for recent files (much faster than Lucene!)
-            var cutoffTicks = cutoffTime.Ticks;
+            // Convert to Unix seconds (database stores timestamps as Unix epochs, not .NET Ticks)
+            var cutoffUnixSeconds = new DateTimeOffset(cutoffTime).ToUnixTimeSeconds();
             var fileRecords = await _sqliteService.GetRecentFilesAsync(
                 workspacePath,
-                cutoffTicks,
+                cutoffUnixSeconds,
                 maxResults,
                 parameters.ExtensionFilter,
                 cancellationToken);
@@ -149,15 +150,16 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
                 fileRecords.Count, cutoffTime);
 
             // Convert FileRecord to RecentFileInfo
+            // Note: record.LastModified is stored as Unix seconds, not .NET Ticks
             var recentFiles = fileRecords.Select(record => new RecentFileInfo
             {
                 FilePath = record.Path,
                 FileName = Path.GetFileName(record.Path),
                 Directory = Path.GetDirectoryName(record.Path) ?? "",
                 Extension = Path.GetExtension(record.Path),
-                LastModified = new DateTime(record.LastModified, DateTimeKind.Utc),
+                LastModified = DateTimeOffset.FromUnixTimeSeconds(record.LastModified).UtcDateTime,
                 SizeBytes = record.Size,
-                ModifiedAgo = DateTime.UtcNow - new DateTime(record.LastModified, DateTimeKind.Utc)
+                ModifiedAgo = DateTime.UtcNow - DateTimeOffset.FromUnixTimeSeconds(record.LastModified).UtcDateTime
             }).ToList();
             
             _logger.LogDebug("Found {Count} recent files in the last {TimeFrame}", 

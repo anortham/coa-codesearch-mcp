@@ -15,6 +15,7 @@ using COA.Mcp.Framework.TokenOptimization;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using FrameworkErrorInfo = COA.Mcp.Framework.Models.ErrorInfo;
 using FrameworkRecoveryInfo = COA.Mcp.Framework.Models.RecoveryInfo;
@@ -38,6 +39,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
 {
     private readonly IPathResolutionService _pathResolutionService;
     private readonly ILuceneIndexService _luceneService;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -59,6 +61,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="pathResolutionService">Path resolution service</param>
     /// <param name="luceneService">Lucene index service for search operations</param>
+    /// <param name="sqliteService">SQLite symbol service for fast path queries</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -69,6 +72,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         ILuceneIndexService luceneService,
+        ISQLiteSymbolService sqliteService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -79,6 +83,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
     {
         _pathResolutionService = pathResolutionService;
         _luceneService = luceneService;
+        _sqliteService = sqliteService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -143,11 +148,89 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
                 return cached;
             }
         }
-        
+
         var stopwatch = Stopwatch.StartNew();
-        
+
         try
         {
+            // TIER 1: Try SQLite fast path for simple directory pattern searches (0-5ms)
+            if (_sqliteService.DatabaseExists(workspacePath))
+            {
+                try
+                {
+                    var sqliteDirs = await _sqliteService.SearchDirectoriesByPatternAsync(
+                        workspacePath,
+                        pattern,
+                        includeHidden: parameters.IncludeHidden ?? false,
+                        maxResults: maxResults,
+                        cancellationToken);
+
+                    if (sqliteDirs.Any())
+                    {
+                        stopwatch.Stop();
+                        _logger.LogInformation("✅ Tier 1 HIT: Found {Count} directories via SQLite in {Ms}ms",
+                            sqliteDirs.Count, stopwatch.ElapsedMilliseconds);
+
+                        // Convert string paths to DirectoryMatch objects
+                        var directoryMatches = sqliteDirs.Select(dirPath =>
+                        {
+                            var name = Path.GetFileName(dirPath.TrimEnd('/')) ?? dirPath;
+                            var parentPath = Path.GetDirectoryName(dirPath) ?? "";
+                            var isHidden = name.StartsWith('.');
+
+                            return new DirectoryMatch
+                            {
+                                Path = dirPath,
+                                Name = name,
+                                ParentPath = parentPath,
+                                RelativePath = dirPath,
+                                IsHidden = isHidden,
+                                Depth = dirPath.Split('/', StringSplitOptions.RemoveEmptyEntries).Length,
+                                FileCount = 0,  // SQLite query doesn't provide this info
+                                SubdirectoryCount = 0  // SQLite query doesn't provide this info
+                            };
+                        }).ToList();
+
+                        // Create DirectorySearchResult for response builder
+                        var tier1Result = new DirectorySearchResult
+                        {
+                            Directories = directoryMatches,
+                            TotalMatches = directoryMatches.Count,
+                            Pattern = pattern,
+                            WorkspacePath = workspacePath,
+                            SearchTimeMs = stopwatch.ElapsedMilliseconds,
+                            IncludedSubdirectories = true
+                        };
+
+                        // Build response context
+                        var tier1Context = new ResponseContext
+                        {
+                            ResponseMode = parameters.ResponseMode ?? "adaptive",
+                            TokenLimit = parameters.MaxTokens ?? 8000,
+                            StoreFullResults = true,
+                            ToolName = Name,
+                            CacheKey = cacheKey
+                        };
+
+                        // Use response builder to create optimized response
+                        var tier1Response = await _responseBuilder.BuildResponseAsync(tier1Result, tier1Context);
+
+                        if (!parameters.NoCache)
+                        {
+                            await _cacheService.SetAsync(cacheKey, tier1Response);
+                        }
+
+                        return tier1Response;
+                    }
+
+                    _logger.LogDebug("⏭️ Tier 1 MISS: SQLite found 0 directories, falling back to Lucene");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tier 1 SQLite search failed for pattern '{Pattern}', falling back to Lucene", pattern);
+                }
+            }
+
             // Build Lucene query for directory search
             var includeHidden = parameters.IncludeHidden ?? false;
             var useRegex = parameters.UseRegex ?? false;

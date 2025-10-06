@@ -11,6 +11,7 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Models;
 using Lucene.Net.Search;
@@ -29,6 +30,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimizedResponse<FileSearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IPathResolutionService _pathResolutionService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
@@ -43,6 +45,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="sqliteService">SQLite symbol service for fast file pattern queries</param>
     /// <param name="pathResolutionService">Path resolution service</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
@@ -53,6 +56,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     public FileSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
+        ISQLiteSymbolService sqliteService,
         IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
@@ -62,6 +66,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
+        _sqliteService = sqliteService;
         _pathResolutionService = pathResolutionService;
         _cacheService = cacheService;
         _storageService = storageService;
@@ -129,17 +134,84 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         
         try
         {
-            // Check if index exists
-            if (!await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken))
-            {
-                return CreateNoIndexError(workspacePath);
-            }
-            
+            var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+
             // Determine if this pattern requires path-based search (contains ** or /)
             // For regex patterns, only check for actual path separators, not escape sequences
             var requiresPathSearch = parameters.UseRegex == true
                 ? pattern.Contains("/")  // For regex, only forward slash indicates path search
                 : pattern.Contains("**") || pattern.Contains("/") || pattern.Contains("\\");
+
+            // TIER 1: Try SQLite fast path for simple file pattern searches (0-5ms)
+            if (_sqliteService.DatabaseExists(workspacePath))
+            {
+                try
+                {
+                    var sqliteFiles = await _sqliteService.SearchFilesByPatternAsync(
+                        workspacePath,
+                        pattern,
+                        searchFullPath: requiresPathSearch,
+                        extensionFilter: parameters.ExtensionFilter,
+                        maxResults: maxResults,
+                        cancellationToken);
+
+                    if (sqliteFiles.Any())
+                    {
+                        stopwatch.Stop();
+                        _logger.LogInformation("✅ Tier 1 HIT: Found {Count} files via SQLite in {Ms}ms",
+                            sqliteFiles.Count, stopwatch.ElapsedMilliseconds);
+
+                        // Create FileSearchResult for response builder (matching Lucene pattern)
+                        var tier1Result = new ResponseBuilders.FileSearchResult
+                        {
+                            Files = sqliteFiles.Select(f => new ResponseBuilders.FileInfo
+                            {
+                                Path = f.Path,
+                                Size = f.Size,
+                                LastModified = DateTimeOffset.FromUnixTimeSeconds(f.LastModified).UtcDateTime,
+                                IsDirectory = false
+                            }).ToList(),
+                            TotalFiles = sqliteFiles.Count,
+                            Pattern = pattern,
+                            SearchPath = workspacePath
+                        };
+
+                        // Build response context
+                        var tier1Context = new ResponseContext
+                        {
+                            ResponseMode = parameters.ResponseMode ?? "adaptive",
+                            TokenLimit = parameters.MaxTokens ?? 8000,
+                            StoreFullResults = true,
+                            ToolName = Name,
+                            CacheKey = cacheKey
+                        };
+
+                        // Use response builder to create optimized response
+                        var tier1Response = await _responseBuilder.BuildResponseAsync(tier1Result, tier1Context);
+
+                        if (!parameters.NoCache)
+                        {
+                            await _cacheService.SetAsync(cacheKey, tier1Response);
+                        }
+
+                        return tier1Response;
+                    }
+
+                    _logger.LogDebug("⏭️ Tier 1 MISS: SQLite found 0 files, falling back to Lucene");
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Tier 1 SQLite search failed for pattern '{Pattern}', falling back to Lucene", pattern);
+                }
+            }
+
+
+            // Check if index exists
+            if (!await _luceneIndexService.IndexExistsAsync(workspacePath, cancellationToken))
+            {
+                return CreateNoIndexError(workspacePath);
+            }
+
             var searchField = requiresPathSearch ? "path" : "filename_lower";
             var searchPattern = requiresPathSearch ? pattern : pattern.ToLowerInvariant();
             

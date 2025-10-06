@@ -25,6 +25,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new FileSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                SQLiteSymbolServiceMock.Object,
                 PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,

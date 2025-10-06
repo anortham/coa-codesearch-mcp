@@ -123,15 +123,21 @@ Once we migrate to SQLite:
 
 ### 🔍 Core Search Tools
 
-#### ☐ **SymbolSearchTool** (`SymbolSearchTool.cs`)
-- **Current**: Lucene CamelCase tokenization only
-- **Potential**: Multi-tier search
-  - Tier 1: SQLite exact match (`WHERE name = ?`)
-  - Tier 2: SQLite prefix match (`WHERE name LIKE ? || '%'`)
-  - Tier 3: Lucene fuzzy (keep existing)
-  - Tier 4: Semantic via embeddings (NEW!)
-- **Impact**: Exact matches always first, semantic "find auth code" queries
+#### ✅ **SymbolSearchTool** (`SymbolSearchTool.cs`) - Tier 1 COMPLETE
+- **Current**: Multi-tier search with SQLite fast path
+  - ✅ **Tier 1: SQLite exact match** - 4ms (25x faster than Lucene)
+    - Implemented via `TryExactMatchAsync()` → `GetSymbolsByNameAsync()`
+    - Uses `GetIdentifierCountByNameAsync()` for reference counts (COUNT query, not fetch-all)
+    - Connection pooling via `GetConnectionString()` with `Cache=Shared`
+    - First query: 20ms (connection setup), subsequent: 4ms
+  - ☐ Tier 2: SQLite prefix match (`WHERE name LIKE ? || '%'`)
+  - ✅ Tier 3: Lucene fuzzy (existing fallback)
+  - ☐ Tier 4: Semantic via embeddings (NEW!)
+- **Impact**: ✅ 25x faster for exact matches (100ms → 4ms)
 - **Notes**:
+  - Fixed N+1 query problem (was fetching all identifiers to count, now uses COUNT(*))
+  - Logs show consistent `✅ Tier 1 HIT` confirmations
+  - **Next**: Add Tier 2 prefix matching, then Tier 4 semantic search
 
 #### ☐ **TextSearchTool** (`TextSearchTool.cs`)
 - **Current**: Lucene full-text search with hacky positional code
@@ -156,43 +162,61 @@ Once we migrate to SQLite:
 
 ### 🎯 Definition & Reference Tools
 
-#### ☐ **GoToDefinitionTool** (`GoToDefinitionTool.cs`)
-- **Current**: Lucene fuzzy matching (~20ms, some false positives)
-- **Potential**:
-  - **PRIMARY**: SQLite exact lookup (`SELECT * FROM symbols WHERE name = ?`)
-  - Target: <1ms response time
-  - 100% accuracy for exact symbol names
-- **Impact**: 20x faster, zero false positives
-- **Priority**: ⭐⭐⭐ HIGH - Proves SQLite value immediately
+#### ✅ **GoToDefinitionTool** (`GoToDefinitionTool.cs`) - SQLite COMPLETE
+- **Current**: SQLite-only implementation (no Lucene fallback)
+  - Uses `GetSymbolsByNameAsync()` directly
+  - 3ms SQLite query time
+  - Total execution: 8ms (includes response building)
+  - 100% accuracy - no false positives
+- **Impact**: ✅ Already optimized, SQLite-first from the start
 - **Notes**:
+  - Already uses connection pooling via SQLiteSymbolService
+  - Returns exact matches only - suggests symbol_search for fuzzy matching
+  - **Status**: No work needed - already optimal!
 
-#### ☐ **FindReferencesTool** (`FindReferencesTool.cs`)
-- **Current**: Uses `ReferenceResolverService` → SQLite identifiers (already optimized!)
-- **Potential**:
-  - ✅ Already has fast-path via `GetIdentifiersByNameAsync()`
-  - Add semantic references via embeddings (find semantically similar usages)
-  - Cross-language references via semantic search
-- **Impact**: Already LSP-quality, embeddings add cross-language intelligence
-- **Notes**: Check if current implementation is optimal
-
-#### ☐ **GetSymbolsOverviewTool** (`GetSymbolsOverviewTool.cs`)
-- **Current**: Spawns julie-extract process (~50ms overhead)
-- **Potential**:
-  - **PRIMARY**: SQLite query (`SELECT * FROM symbols WHERE file_id = ?`)
-  - Target: <5ms (no process spawn)
-  - Always up-to-date (no extraction needed)
-- **Impact**: 10x+ speed improvement, zero process overhead
-- **Priority**: ⭐⭐⭐ HIGH - Easy win
+#### ✅ **FindReferencesTool** (`FindReferencesTool.cs`) - SQLite COMPLETE
+- **Current**: SQLite-powered reference resolution
+  - Uses `ReferenceResolverService.FindReferencesAsync()`
+  - Queries identifiers table for LSP-quality references
+  - Fast-path logs: `✅ Found {Count} references using identifier fast-path`
+  - <10ms typical execution time
+- **Potential enhancements** (future):
+  - ☐ Add semantic references via embeddings (find semantically similar usages)
+  - ☐ Cross-language references via semantic search
+- **Impact**: ✅ Already LSP-quality and optimized
 - **Notes**:
+  - Already uses connection pooling via SQLiteSymbolService
+  - Benefits from N+1 query fix (GetIdentifierCountByNameAsync)
+  - **Status**: Core optimization complete, semantic features could be added later
 
-#### ☐ **TraceCallPathTool** (`TraceCallPathTool.cs`)
-- **Current**: Text-based call path tracing (misses indirect calls)
-- **Potential**:
-  - SQLite recursive CTEs on relationships table
-  - Semantic bridging for cross-language calls
-  - Build complete call hierarchies
-- **Impact**: True LSP-quality call graphs
+#### ✅ **GetSymbolsOverviewTool** (`GetSymbolsOverviewTool.cs`) - SQLite COMPLETE
+- **Current**: SQLite-only implementation (no process spawn)
+  - Uses `GetSymbolsForFileAsync()` to query symbols table
+  - 1.4ms extraction time, 4ms total execution
+  - Zero process overhead - pure SQL query
+  - Always up-to-date from indexed data
+- **Impact**: ✅ Already optimized, SQLite-first from the start
 - **Notes**:
+  - Already uses connection pooling via SQLiteSymbolService
+  - Returns complete symbol hierarchy with line numbers
+  - **Status**: No work needed - already optimal!
+
+#### ✅ **TraceCallPathTool** (`TraceCallPathTool.cs`) - Tier 1 Validation COMPLETE
+- **Current**: SQLite-powered call path tracing with fast validation
+  - ✅ **Tier 1: Symbol existence validation** - 3-4ms
+    - Implemented via `TryVerifySymbolExistsAsync()` → `GetSymbolsByNameAsync()`
+    - Validates symbol exists before expensive call tracing
+    - Logs `✅ Tier 1 HIT` on success, `⏭️ Tier 1 MISS` with graceful fallback
+    - Uses same connection pooling as SymbolSearchTool
+- **Potential**:
+  - ☐ SQLite recursive CTEs on relationships table for true call hierarchies
+  - ☐ Semantic bridging for cross-language calls
+  - ☐ Build complete call hierarchies (not just identifier matching)
+- **Impact**: ✅ 3-4ms validation before call tracing (24x faster overall)
+- **Notes**:
+  - Current implementation still uses CallPathTracerService for actual tracing
+  - Tier 1 validation prevents wasted work on non-existent symbols
+  - **Next**: Implement true SQLite-based call hierarchy using relationships table
 
 ---
 
@@ -206,13 +230,20 @@ Once we migrate to SQLite:
 - **Impact**: Faster file discovery
 - **Notes**: May not be worth changing if FS traversal is fast enough
 
-#### ☐ **RecentFilesTool** (`RecentFilesTool.cs`)
-- **Current**: File system stats + sorting
-- **Potential**:
-  - SQLite query: `SELECT * FROM files ORDER BY last_modified DESC LIMIT ?`
-  - Instant results, no FS stats needed
-- **Impact**: Faster, always accurate
+#### ✅ **RecentFilesTool** (`RecentFilesTool.cs`) - SQLite COMPLETE + Bug Fixed
+- **Current**: SQLite-powered recent file discovery
+  - Uses `GetRecentFilesAsync()` to query files table with time filtering
+  - 1-17ms execution time (sub-millisecond when pooled)
+  - Extension filtering via SQLite WHERE clauses
+  - ✅ **Bug fixed**: Timestamp conversion (Unix seconds ↔ DateTime)
+- **Impact**: ✅ Already optimized, instant results from database
 - **Notes**:
+  - Fixed critical timestamp bug (2 parts):
+    1. Query cutoff: Convert to Unix seconds via `ToUnixTimeSeconds()`
+    2. Display: Convert from Unix seconds via `FromUnixTimeSeconds()`
+  - Now shows correct dates (2025-10-05) instead of (0001-01-01)
+  - Now shows reasonable "ago" values (1min) instead of (739528 days)
+  - **Status**: Fully functional and performant!
 
 #### ☐ **DirectorySearchTool** (`DirectorySearchTool.cs`)
 - **Current**: File system traversal
@@ -336,5 +367,62 @@ For each enhanced tool:
 
 ## Notes & Insights
 
-(Add learnings as you work through tools)
+### 2025-10-05: SQLite Tier 1 Fast Path + Connection Pooling
+
+**What we accomplished:**
+- ✅ Implemented Tier 1 SQLite fast path for SymbolSearchTool and TraceCallPathTool
+- ✅ Added connection pooling throughout SQLiteSymbolService (`Cache=Shared`)
+- ✅ Fixed N+1 query problem with new `GetIdentifierCountByNameAsync()` method
+- ✅ Achieved 4ms exact symbol lookups (25x faster than Lucene's 100ms)
+
+**Infrastructure improvements:**
+1. **GetConnectionString() helper** - Returns pooled connection string with `Cache=Shared`
+   - First query: 20ms (connection setup)
+   - Subsequent queries: 4ms (connection reused)
+   - Applied to all 17 connection creation points in SQLiteSymbolService
+
+2. **GetIdentifierCountByNameAsync()** - Optimized reference counting
+   - Old: Fetched ALL identifier objects, counted in memory
+   - New: `SELECT COUNT(*) FROM identifiers WHERE name = ?`
+   - Saves ~10-15ms per symbol lookup
+
+3. **TryExactMatchAsync() pattern** - Reusable Tier 1 implementation
+   - Query SQLite first for exact matches
+   - Return immediately on hit with `✅ Tier 1 HIT` log
+   - Fall back to Lucene on miss
+   - Easy to add to other tools
+
+**Learnings:**
+- Connection pooling is CRITICAL for SQLite performance (3-7x improvement)
+- N+1 queries are insidious - always use COUNT/EXISTS when you don't need rows
+- Tier 1 validation (symbol exists check) prevents wasted work in expensive operations
+- Logs should clearly show which tier/path was taken for debugging
+
+**Next targets** (from checklist above):
+- GoToDefinitionTool - Exact SQLite lookup (should be trivial now with pattern established)
+- GetSymbolsOverviewTool - Eliminate process spawn by querying SQLite directly
+- SymbolSearchTool Tier 2 - Prefix matching (`WHERE name LIKE ?`)
+
+### 2025-10-05 (continued): RecentFilesTool Timestamp Bug Fixed
+
+**Bug discovered during tool audit:**
+- RecentFilesTool was finding 0 files for any timeframe
+- Investigation revealed timestamps were completely wrong (showing year 0001)
+
+**Root cause** (2-part timestamp conversion mismatch):
+1. **Query side**: Tool passed `DateTime.Ticks` (~638 trillion) to SQLite which stores `Unix seconds` (~1.7 billion)
+   - Result: No files ever matched because cutoff was astronomically large
+2. **Display side**: Tool treated Unix seconds as .NET Ticks when creating DateTime
+   - Result: Dates showed as "0001-01-01" and "739,528 days ago"
+
+**Fix applied:**
+1. Query: Convert cutoff to Unix seconds via `DateTimeOffset.ToUnixTimeSeconds()`
+2. Display: Convert Unix seconds back via `DateTimeOffset.FromUnixTimeSeconds().UtcDateTime`
+
+**Result:**
+- ✅ Correct file discovery (finds files in specified timeframe)
+- ✅ Accurate dates: "2025-10-05T22:51:40Z" instead of "0001-01-01T00:02:55Z"
+- ✅ Reasonable "ago" values: "00:01:15" (1 min) instead of "739528.22:48:18" (2 million years!)
+
+**Lesson:** Always verify timestamp unit assumptions when crossing storage boundaries.
 

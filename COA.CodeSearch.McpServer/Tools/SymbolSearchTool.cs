@@ -10,6 +10,8 @@ using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
+using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Services.Analysis;
 using COA.CodeSearch.McpServer.Tools.Models;
@@ -30,6 +32,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOptimizedResponse<SymbolSearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly ISQLiteSymbolService _sqliteService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -44,6 +47,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="sqliteService">SQLite symbol service for fast exact/prefix matching</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -53,6 +57,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     public SymbolSearchTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
+        ISQLiteSymbolService sqliteService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -61,6 +66,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         ILogger<SymbolSearchTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
+        _sqliteService = sqliteService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -130,7 +136,35 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         try
         {
             var stopwatch = System.Diagnostics.Stopwatch.StartNew();
-            
+
+            // TIER 1: Try exact match via SQLite (0-1ms) - fastest path for exact symbol names
+            var exactMatch = await TryExactMatchAsync(workspacePath, symbolName, parameters, cancellationToken);
+            if (exactMatch != null)
+            {
+                stopwatch.Stop();
+                _logger.LogInformation("✅ Tier 1 HIT: Found exact SQLite match for '{Symbol}' in {Ms}ms",
+                    symbolName, stopwatch.ElapsedMilliseconds);
+
+                // Build and cache the response
+                var tierOneContext = new ResponseContext
+                {
+                    ResponseMode = "adaptive",
+                    TokenLimit = parameters.MaxTokens,
+                    StoreFullResults = true,
+                    ToolName = Name,
+                    CacheKey = cacheKey
+                };
+
+                var tierOneResult = await _responseBuilder.BuildResponseAsync(exactMatch, tierOneContext);
+                if (!parameters.NoCache)
+                {
+                    await _cacheService.SetAsync(cacheKey, tierOneResult);
+                }
+                return tierOneResult;
+            }
+
+            _logger.LogDebug("Tier 1 MISS: No exact SQLite match, falling back to Lucene fuzzy search");
+
             // Use SmartQueryPreprocessor to determine optimal field and processing
             // Symbols benefit from SearchMode.Symbol which targets content_symbols field
             var queryResult = _queryProcessor.Process(symbolName, SearchMode.Symbol);
@@ -394,7 +428,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 // Search for the symbol name in content
                 var parser = new QueryParser(LUCENE_VERSION, "content", _codeAnalyzer);
                 var query = parser.Parse(symbol.Name);
-                
+
                 var result = await _luceneIndexService.SearchAsync(workspacePath, query, 1, cancellationToken);
                 symbol.ReferenceCount = result.TotalHits;
             }
@@ -403,6 +437,92 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
                 // Ignore errors in reference counting
                 symbol.ReferenceCount = null;
             }
+        }
+    }
+
+    /// <summary>
+    /// Tier 1: Try exact match via SQLite symbols table (0-1ms)
+    /// </summary>
+    private async Task<SymbolSearchResult?> TryExactMatchAsync(
+        string workspacePath,
+        string symbolName,
+        SymbolSearchParameters parameters,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            // Query SQLite for exact symbol name match
+            var sqliteSymbols = await _sqliteService.GetSymbolsByNameAsync(
+                workspacePath,
+                symbolName,
+                parameters.CaseSensitive,
+                cancellationToken);
+
+            if (sqliteSymbols == null || !sqliteSymbols.Any())
+            {
+                return null; // No exact match found
+            }
+
+            // Convert JulieSymbol to SymbolDefinition
+            var symbols = new List<SymbolDefinition>();
+            foreach (var julieSymbol in sqliteSymbols)
+            {
+                // Get reference count from identifiers table (optimized COUNT query, not full fetch)
+                var referenceCount = await _sqliteService.GetIdentifierCountByNameAsync(
+                    workspacePath,
+                    julieSymbol.Name,
+                    caseSensitive: false, // Count all references regardless of case
+                    cancellationToken);
+
+                symbols.Add(new SymbolDefinition
+                {
+                    Name = julieSymbol.Name,
+                    Kind = julieSymbol.Kind,
+                    Signature = julieSymbol.Signature ?? $"{julieSymbol.Kind} {julieSymbol.Name}",
+                    FilePath = julieSymbol.FilePath,
+                    Line = julieSymbol.StartLine,
+                    Column = julieSymbol.StartColumn,
+                    Language = julieSymbol.Language,
+                    Modifiers = julieSymbol.Visibility != null ? new List<string> { julieSymbol.Visibility } : new List<string>(),
+                    ReferenceCount = referenceCount,
+                    Score = 1.0f // Exact match gets perfect score
+                });
+            }
+
+            // Apply type filter if specified
+            if (!string.IsNullOrEmpty(parameters.SymbolType))
+            {
+                symbols = symbols
+                    .Where(s => s.Kind.Equals(parameters.SymbolType, StringComparison.OrdinalIgnoreCase))
+                    .ToList();
+
+                if (!symbols.Any())
+                {
+                    return null; // No symbols match the type filter
+                }
+            }
+
+            // Limit results
+            if (symbols.Count > parameters.MaxResults)
+            {
+                symbols = symbols
+                    .OrderByDescending(s => s.ReferenceCount ?? 0) // Sort by popularity
+                    .Take(parameters.MaxResults)
+                    .ToList();
+            }
+
+            return new SymbolSearchResult
+            {
+                Symbols = symbols,
+                TotalCount = symbols.Count,
+                SearchTime = TimeSpan.Zero,
+                Query = symbolName
+            };
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Tier 1 exact match failed for '{Symbol}', will fall back to Lucene", symbolName);
+            return null; // Fall back to Lucene on error
         }
     }
 }

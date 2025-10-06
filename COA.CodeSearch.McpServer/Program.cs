@@ -123,6 +123,10 @@ public class Program
         services.AddSingleton<COA.CodeSearch.McpServer.Services.IReferenceResolverService,
                               COA.CodeSearch.McpServer.Services.ReferenceResolverService>();
 
+        // Call path tracing (recursive call hierarchy analysis)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.ICallPathTracerService,
+                              COA.CodeSearch.McpServer.Services.CallPathTracerService>();
+
         // Documentation services (ProjectKnowledge integration removed)
         services.AddSingleton<SmartDocumentationService>();
         

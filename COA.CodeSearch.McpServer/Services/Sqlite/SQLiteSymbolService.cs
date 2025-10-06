@@ -1,3 +1,5 @@
+using System.IO;
+using System.Text.RegularExpressions;
 using COA.CodeSearch.McpServer.Services.Julie;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -19,6 +21,25 @@ public class SQLiteSymbolService : ISQLiteSymbolService
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
+    }
+
+    /// <summary>
+    /// Creates an optimized connection string with connection pooling enabled.
+    /// Cache=Shared allows multiple connections to share the same page cache for better performance.
+    /// </summary>
+    private string GetConnectionString(string dbPath, bool enablePooling = true)
+    {
+        if (enablePooling)
+        {
+            // Pooling=true is default, but explicit for clarity
+            // Cache=Shared enables shared page cache across connections
+            return $"Data Source={dbPath};Cache=Shared";
+        }
+        else
+        {
+            // Disable pooling for initialization/cleanup operations
+            return $"Data Source={dbPath};Pooling=false";
+        }
     }
 
     public string GetDatabasePath(string workspacePath)
@@ -62,7 +83,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         // Open connection and ensure schema exists (idempotent)
         // Disable pooling to ensure clean connection close
-        var connectionString = $"Data Source={dbPath};Pooling=false";
+        var connectionString = GetConnectionString(dbPath, enablePooling: false);
         using var connection = new SqliteConnection(connectionString);
         await connection.OpenAsync(cancellationToken);
 
@@ -180,7 +201,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<JulieSymbol>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -197,7 +218,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<JulieSymbol>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -218,7 +239,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<JulieSymbol>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -236,7 +257,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<JulieSymbol>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -258,7 +279,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         CancellationToken cancellationToken = default)
     {
         var dbPath = GetDatabasePath(workspacePath);
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var transaction = connection.BeginTransaction();
@@ -349,7 +370,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return;
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -371,7 +392,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return 0;
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -389,7 +410,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return 0;
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -408,7 +429,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<FileRecord>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -443,7 +464,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return null;
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -482,7 +503,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<FileRecord>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -539,6 +560,161 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         _logger.LogDebug("Found {Count} recent files modified after {Cutoff}", files.Count, cutoffTimestamp);
         return files;
     }
+    public async Task<List<FileRecord>> SearchFilesByPatternAsync(
+        string workspacePath,
+        string pattern,
+        bool searchFullPath = true,
+        string? extensionFilter = null,
+        int maxResults = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<FileRecord>();
+        }
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+
+        // Build WHERE clause for pattern matching
+        // Use GLOB for case-sensitive pattern matching with *, ?, etc.
+        // For cross-platform consistency, convert pattern to lowercase and use LIKE with LOWER()
+        var patternLower = pattern.ToLowerInvariant();
+        
+        // Convert glob pattern to SQL LIKE pattern (replace * with %, ? with _)
+        var sqlPattern = patternLower.Replace("*", "%").Replace("?", "_");
+        
+        string whereClause;
+        if (searchFullPath)
+        {
+            whereClause = "WHERE LOWER(path) LIKE @pattern";
+        }
+        else
+        {
+            // Extract filename from path and match against it
+            // SQLite doesn't have a built-in basename(), so we need to use clever substring
+            // For simplicity, we'll just search the path and ensure pattern doesn't contain /
+            whereClause = "WHERE (LOWER(path) LIKE '%/' || @pattern OR LOWER(path) LIKE @pattern)";
+        }
+
+        // Add extension filter if provided
+        if (!string.IsNullOrEmpty(extensionFilter))
+        {
+            var extensions = extensionFilter
+                .Split(',')
+                .Select(e => e.Trim().StartsWith('.') ? e.Trim() : "." + e.Trim())
+                .ToList();
+
+            whereClause += " AND (";
+            for (int i = 0; i < extensions.Count; i++)
+            {
+                if (i > 0) whereClause += " OR ";
+                whereClause += $"LOWER(path) LIKE '%' || LOWER(@ext{i})";
+                cmd.Parameters.AddWithValue($"@ext{i}", extensions[i]);
+            }
+            whereClause += ")";
+        }
+
+        cmd.CommandText = $@"
+            SELECT path, content, language, size, last_modified
+            FROM files
+            {whereClause}
+            ORDER BY path
+            LIMIT @limit";
+
+        cmd.Parameters.AddWithValue("@pattern", sqlPattern);
+        cmd.Parameters.AddWithValue("@limit", maxResults);
+
+        var files = new List<FileRecord>();
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            files.Add(new FileRecord(
+                Path: reader.GetString(reader.GetOrdinal("path")),
+                Content: reader.IsDBNull(reader.GetOrdinal("content")) ? null : reader.GetString(reader.GetOrdinal("content")),
+                Language: reader.GetString(reader.GetOrdinal("language")),
+                Size: reader.GetInt64(reader.GetOrdinal("size")),
+                LastModified: reader.GetInt64(reader.GetOrdinal("last_modified"))
+            ));
+        }
+
+        _logger.LogDebug("Found {Count} files matching pattern '{Pattern}'", files.Count, pattern);
+        return files;
+    }
+
+    public async Task<List<string>> SearchDirectoriesByPatternAsync(
+        string workspacePath,
+        string pattern,
+        bool includeHidden = false,
+        int maxResults = 100,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<string>();
+        }
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+
+        // Convert glob pattern to SQL LIKE pattern (replace * with %, ? with _)
+        var patternLower = pattern.ToLowerInvariant();
+        var sqlPattern = patternLower.Replace("*", "%").Replace("?", "_");
+
+        // Query all file paths and extract directories in C# (simpler and more reliable than complex SQL)
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT path FROM files WHERE path LIKE '%/%' ORDER BY path";
+
+        var directories = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var filePath = reader.GetString(0);
+            var dirPath = Path.GetDirectoryName(filePath)?.Replace('\\', '/');
+
+            if (!string.IsNullOrWhiteSpace(dirPath))
+            {
+                // Check if directory matches pattern (using simple wildcard matching)
+                if (MatchesPattern(dirPath, sqlPattern))
+                {
+                    // Filter hidden directories if needed
+                    if (!includeHidden && IsHiddenDirectory(dirPath))
+                        continue;
+
+                    directories.Add(dirPath);
+
+                    if (directories.Count >= maxResults)
+                        break;
+                }
+            }
+        }
+
+        var result = directories.OrderBy(d => d).ToList();
+        _logger.LogDebug("Found {Count} directories matching pattern '{Pattern}'", result.Count, pattern);
+        return result;
+    }
+
+    private static bool MatchesPattern(string text, string pattern)
+    {
+        // Convert SQL LIKE pattern to regex for matching
+        var regexPattern = "^" + Regex.Escape(pattern)
+            .Replace("%", ".*")
+            .Replace("_", ".") + "$";
+        return Regex.IsMatch(text, regexPattern, RegexOptions.IgnoreCase);
+    }
+
+    private static bool IsHiddenDirectory(string dirPath)
+    {
+        // Check if any segment of the path starts with '.'
+        return dirPath.Split('/', StringSplitOptions.RemoveEmptyEntries)
+            .Any(segment => segment.StartsWith('.'));
+    }
 
     public async Task<List<FileRecord>> SearchWithFTS5Async(
         string workspacePath,
@@ -554,7 +730,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             return new List<FileRecord>();
         }
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -632,6 +808,32 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         return symbols;
     }
 
+    public async Task<int> GetIdentifierCountByNameAsync(
+        string workspacePath,
+        string name,
+        bool caseSensitive = true,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            return 0;
+        }
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = caseSensitive
+            ? "SELECT COUNT(*) FROM identifiers WHERE name = @name"
+            : "SELECT COUNT(*) FROM identifiers WHERE name = @name COLLATE NOCASE";
+        cmd.Parameters.AddWithValue("@name", name);
+
+        var result = await cmd.ExecuteScalarAsync(cancellationToken);
+        return result != null ? Convert.ToInt32(result) : 0;
+    }
+
+
     public async Task<List<JulieIdentifier>> GetIdentifiersByNameAsync(
         string workspacePath,
         string name,
@@ -647,7 +849,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         var identifiers = new List<JulieIdentifier>();
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         var query = caseSensitive
@@ -698,7 +900,7 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         var identifiers = new List<JulieIdentifier>();
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
@@ -728,12 +930,42 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
         var identifiers = new List<JulieIdentifier>();
 
-        using var connection = new SqliteConnection($"Data Source={dbPath}");
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
         using var cmd = connection.CreateCommand();
         cmd.CommandText = "SELECT * FROM identifiers WHERE file_path = @filePath";
         cmd.Parameters.AddWithValue("@filePath", filePath);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            identifiers.Add(ReadIdentifierFromReader(reader));
+        }
+
+        return identifiers;
+    }
+
+    public async Task<List<JulieIdentifier>> GetIdentifiersByContainingSymbolAsync(
+        string workspacePath,
+        string containingSymbolId,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("Database not found at {Path}", dbPath);
+            return new List<JulieIdentifier>();
+        }
+
+        var identifiers = new List<JulieIdentifier>();
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT * FROM identifiers WHERE containing_symbol_id = @containingSymbolId";
+        cmd.Parameters.AddWithValue("@containingSymbolId", containingSymbolId);
 
         using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
         while (await reader.ReadAsync(cancellationToken))

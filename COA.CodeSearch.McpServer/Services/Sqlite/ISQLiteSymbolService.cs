@@ -95,6 +95,30 @@ public interface ISQLiteSymbolService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Search files by glob pattern (efficient for file_search tool).
+    /// Supports wildcards: * (any chars), ? (single char), ** (recursive path match).
+    /// </summary>
+    Task<List<FileRecord>> SearchFilesByPatternAsync(
+        string workspacePath,
+        string pattern,
+        bool searchFullPath = true,
+        string? extensionFilter = null,
+        int maxResults = 100,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Search directories by glob pattern (efficient for directory_search tool).
+    /// Supports wildcards: * (any chars), ? (single char).
+    /// Returns unique directory paths from indexed files.
+    /// </summary>
+    Task<List<string>> SearchDirectoriesByPatternAsync(
+        string workspacePath,
+        string pattern,
+        bool includeHidden = false,
+        int maxResults = 100,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Search files using FTS5 full-text search (efficient grep replacement for line_search tool)
     /// </summary>
     Task<List<FileRecord>> SearchWithFTS5Async(
@@ -115,6 +139,16 @@ public interface ISQLiteSymbolService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get reference count for a symbol name without fetching all identifier objects.
+    /// Much faster than GetIdentifiersByNameAsync when you only need the count.
+    /// </summary>
+    Task<int> GetIdentifierCountByNameAsync(
+        string workspacePath,
+        string name,
+        bool caseSensitive = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Get identifiers by kind (call, member_access, variable_ref, etc.)
     /// </summary>
     Task<List<JulieIdentifier>> GetIdentifiersByKindAsync(
@@ -128,6 +162,15 @@ public interface ISQLiteSymbolService
     Task<List<JulieIdentifier>> GetIdentifiersForFileAsync(
         string workspacePath,
         string filePath,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Get all identifiers contained within a specific symbol (for call path downward tracing).
+    /// Returns all calls/references made from within the given symbol.
+    /// </summary>
+    Task<List<JulieIdentifier>> GetIdentifiersByContainingSymbolAsync(
+        string workspacePath,
+        string containingSymbolId,
         CancellationToken cancellationToken = default);
 }
 

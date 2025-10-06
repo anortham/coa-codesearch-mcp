@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
@@ -31,17 +32,16 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
     
     protected override TraceCallPathTool CreateTool()
     {
-        var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
-        var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-        
+        var callPathTracerMock = new Mock<ICallPathTracerService>();
+        var sqliteServiceMock = new Mock<ISQLiteSymbolService>();
+
         _tool = new TraceCallPathTool(
             ServiceProvider,
-            LuceneIndexServiceMock.Object,
+            callPathTracerMock.Object,
+            sqliteServiceMock.Object,
             ResponseCacheServiceMock.Object,
             ResourceStorageServiceMock.Object,
             CacheKeyGeneratorMock.Object,
-            smartQueryPreprocessor,
-            CodeAnalyzer,
             ToolLoggerMock.Object
         );
         return _tool;

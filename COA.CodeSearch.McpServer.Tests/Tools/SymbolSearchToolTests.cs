@@ -6,6 +6,7 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using Microsoft.Extensions.Logging;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
@@ -30,10 +31,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             // Create SmartQueryPreprocessor dependency
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-            
+
+            // Create SQLite mock
+            var sqliteServiceMock = new Mock<ISQLiteSymbolService>();
+
             _tool = new SymbolSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                sqliteServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,

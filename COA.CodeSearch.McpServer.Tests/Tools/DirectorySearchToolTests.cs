@@ -28,6 +28,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
                 LuceneIndexServiceMock.Object,
+                SQLiteSymbolServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,

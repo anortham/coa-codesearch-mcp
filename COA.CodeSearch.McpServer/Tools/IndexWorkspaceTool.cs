@@ -159,8 +159,35 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                 // Force rebuild with new schema if explicitly requested
                 if (parameters.ForceRebuild == true && !initResult.IsNewIndex)
                 {
+                    // Step 1: Rebuild Lucene index
                     await _luceneIndexService.ForceRebuildIndexAsync(workspacePath, cancellationToken);
-                    _logger.LogInformation("Force rebuild completed - new schema active for workspace: {WorkspacePath}", workspacePath);
+                    _logger.LogInformation("Force rebuild: Lucene index rebuilt for workspace: {WorkspacePath}", workspacePath);
+
+                    // Step 2: Delete SQLite database to force fresh extraction
+                    if (_sqliteService != null)
+                    {
+                        try
+                        {
+                            var dbPath = _sqliteService.GetDatabasePath(workspacePath);
+                            if (File.Exists(dbPath))
+                            {
+                                File.Delete(dbPath);
+                                _logger.LogInformation("Force rebuild: Deleted SQLite database: {DbPath}", dbPath);
+                            }
+
+                            // Also delete WAL and SHM files if they exist
+                            var walPath = $"{dbPath}-wal";
+                            var shmPath = $"{dbPath}-shm";
+                            if (File.Exists(walPath)) File.Delete(walPath);
+                            if (File.Exists(shmPath)) File.Delete(shmPath);
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogWarning(ex, "Failed to delete SQLite database during force rebuild - will attempt fresh extraction anyway");
+                        }
+                    }
+
+                    _logger.LogInformation("Force rebuild completed - ready for fresh extraction");
                 }
 
                 // Extract symbols to SQLite using julie-extract (if available)

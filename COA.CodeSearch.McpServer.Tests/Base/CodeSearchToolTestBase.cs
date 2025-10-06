@@ -1,6 +1,7 @@
 using COA.Mcp.Framework.Testing.Base;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Lucene;
+using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Models;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.Mcp.Framework.TokenOptimization.Caching;
@@ -28,6 +29,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
     {
         // Service mocks
         protected Mock<ILuceneIndexService> LuceneIndexServiceMock { get; private set; } = null!;
+        protected Mock<ISQLiteSymbolService> SQLiteSymbolServiceMock { get; private set; } = null!;
         protected Mock<IPathResolutionService> PathResolutionServiceMock { get; private set; } = null!;
         protected Mock<IWorkspaceRegistryService> WorkspaceRegistryServiceMock { get; private set; } = null!;
         protected Mock<IResponseCacheService> ResponseCacheServiceMock { get; private set; } = null!;
@@ -50,6 +52,7 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             
             // Create service mocks
             LuceneIndexServiceMock = CreateMock<ILuceneIndexService>();
+            SQLiteSymbolServiceMock = CreateMock<ISQLiteSymbolService>();
             PathResolutionServiceMock = CreateMock<IPathResolutionService>();
             WorkspaceRegistryServiceMock = CreateMock<IWorkspaceRegistryService>();
             ResponseCacheServiceMock = CreateMock<IResponseCacheService>();
