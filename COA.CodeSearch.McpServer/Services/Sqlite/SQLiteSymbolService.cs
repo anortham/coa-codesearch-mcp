@@ -41,12 +41,14 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         {
             // Pooling=true is default, but explicit for clarity
             // Cache=Shared enables shared page cache across connections
-            return $"Data Source={dbPath};Cache=Shared";
+            // BusyTimeout=5000 matches julie-codesearch timeout for concurrent access
+            return $"Data Source={dbPath};Cache=Shared;BusyTimeout=5000";
         }
         else
         {
             // Disable pooling for initialization/cleanup operations
-            return $"Data Source={dbPath};Pooling=false";
+            // Still need BusyTimeout for concurrent access with julie-codesearch
+            return $"Data Source={dbPath};Pooling=false;BusyTimeout=5000";
         }
     }
 
