@@ -334,6 +334,19 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         using var connection = new SqliteConnection(GetConnectionString(dbPath));
         await connection.OpenAsync(cancellationToken);
 
+        // Load vec0 extension for semantic search embeddings
+        if (_vecExtension.IsAvailable())
+        {
+            try
+            {
+                _vecExtension.LoadExtension(connection);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load vec0 extension for embeddings - semantic search disabled for this file");
+            }
+        }
+
         using var transaction = connection.BeginTransaction();
 
         try
