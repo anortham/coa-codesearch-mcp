@@ -172,6 +172,21 @@ public interface ISQLiteSymbolService
         string workspacePath,
         string containingSymbolId,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Search for symbols using semantic similarity (Tier 3 - semantic search).
+    /// Returns symbols semantically similar to the query text, ordered by similarity score.
+    /// </summary>
+    Task<List<SemanticSymbolMatch>> SearchSymbolsSemanticAsync(
+        string workspacePath,
+        string query,
+        int limit = 10,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Check if semantic search is available (requires sqlite-vec extension and embedding service)
+    /// </summary>
+    bool IsSemanticSearchAvailable();
 }
 
 /// <summary>
@@ -183,3 +198,10 @@ public record FileRecord(
     string Language,
     long Size,
     long LastModified);
+
+/// <summary>
+/// Represents a symbol match from semantic search with similarity score
+/// </summary>
+public record SemanticSymbolMatch(
+    JulieSymbol Symbol,
+    float SimilarityScore);

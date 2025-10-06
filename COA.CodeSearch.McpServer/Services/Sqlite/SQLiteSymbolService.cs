@@ -1,5 +1,6 @@
 using System.IO;
 using System.Text.RegularExpressions;
+using COA.CodeSearch.McpServer.Services.Embeddings;
 using COA.CodeSearch.McpServer.Services.Julie;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -9,18 +10,25 @@ namespace COA.CodeSearch.McpServer.Services.Sqlite;
 /// <summary>
 /// Service for managing SQLite symbol database (Julie's schema).
 /// Works with databases created by julie-extract CLI or creates schema manually.
+/// Supports semantic search via sqlite-vec extension and ONNX embeddings.
 /// </summary>
 public class SQLiteSymbolService : ISQLiteSymbolService
 {
     private readonly ILogger<SQLiteSymbolService> _logger;
     private readonly IPathResolutionService _pathResolution;
+    private readonly ISqliteVecExtensionService _vecExtension;
+    private readonly IEmbeddingService _embeddingService;
 
     public SQLiteSymbolService(
         ILogger<SQLiteSymbolService> logger,
-        IPathResolutionService pathResolution)
+        IPathResolutionService pathResolution,
+        ISqliteVecExtensionService vecExtension,
+        IEmbeddingService embeddingService)
     {
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _pathResolution = pathResolution ?? throw new ArgumentNullException(nameof(pathResolution));
+        _vecExtension = vecExtension ?? throw new ArgumentNullException(nameof(vecExtension));
+        _embeddingService = embeddingService ?? throw new ArgumentNullException(nameof(embeddingService));
     }
 
     /// <summary>
@@ -116,6 +124,20 @@ public class SQLiteSymbolService : ISQLiteSymbolService
 
     private async Task CreateSchemaAsync(SqliteConnection connection, CancellationToken cancellationToken)
     {
+        // Load sqlite-vec extension for semantic search
+        if (_vecExtension.IsAvailable())
+        {
+            try
+            {
+                _vecExtension.LoadExtension(connection);
+                _logger.LogInformation("✅ sqlite-vec extension loaded for semantic search");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to load sqlite-vec extension - semantic search disabled");
+            }
+        }
+
         // Create files table (matches Julie's schema)
         using (var cmd = connection.CreateCommand())
         {
@@ -188,6 +210,26 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                 CREATE INDEX IF NOT EXISTS idx_symbols_parent ON symbols(parent_id);
                 CREATE INDEX IF NOT EXISTS idx_symbols_workspace ON symbols(workspace_id);";
             await cmd.ExecuteNonQueryAsync(cancellationToken);
+        }
+
+        // Create vector table for semantic search (if extension loaded)
+        if (_vecExtension.IsAvailable() && _embeddingService.IsAvailable())
+        {
+            try
+            {
+                using var cmd = connection.CreateCommand();
+                cmd.CommandText = @"
+                    CREATE VIRTUAL TABLE IF NOT EXISTS symbol_embeddings USING vec0(
+                        symbol_id TEXT PRIMARY KEY,
+                        embedding FLOAT[384]
+                    )";
+                await cmd.ExecuteNonQueryAsync(cancellationToken);
+                _logger.LogInformation("✅ Created symbol_embeddings vector table for semantic search");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to create symbol_embeddings vector table");
+            }
         }
 
         _logger.LogDebug("SQLite schema initialized");
@@ -349,6 +391,53 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                 cmd.Parameters.AddWithValue("@last_indexed", DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 
                 await cmd.ExecuteNonQueryAsync(cancellationToken);
+            }
+
+            // Generate embeddings for semantic search (if available)
+            if (_embeddingService.IsAvailable() && symbols.Count > 0)
+            {
+                try
+                {
+                    // Delete old embeddings for this file's symbols
+                    using (var cmd = connection.CreateCommand())
+                    {
+                        cmd.Transaction = transaction;
+                        cmd.CommandText = @"
+                            DELETE FROM symbol_embeddings
+                            WHERE symbol_id IN (SELECT id FROM symbols WHERE file_path = @file_path)";
+                        cmd.Parameters.AddWithValue("@file_path", filePath);
+                        await cmd.ExecuteNonQueryAsync(cancellationToken);
+                    }
+
+                    // Generate embeddings for each symbol
+                    foreach (var symbol in symbols)
+                    {
+                        // Create embedding text from symbol info
+                        var embeddingText = BuildSymbolEmbeddingText(symbol);
+                        var embedding = await _embeddingService.GenerateEmbeddingAsync(embeddingText, cancellationToken);
+
+                        // Insert embedding
+                        using var cmd = connection.CreateCommand();
+                        cmd.Transaction = transaction;
+                        cmd.CommandText = @"
+                            INSERT INTO symbol_embeddings (symbol_id, embedding)
+                            VALUES (@symbol_id, @embedding)";
+                        cmd.Parameters.AddWithValue("@symbol_id", symbol.Id);
+
+                        // Serialize embedding as JSON array for vec0
+                        var embeddingJson = "[" + string.Join(",", embedding) + "]";
+                        cmd.Parameters.AddWithValue("@embedding", embeddingJson);
+
+                        await cmd.ExecuteNonQueryAsync(cancellationToken);
+                    }
+
+                    _logger.LogDebug("Generated embeddings for {SymbolCount} symbols in {FilePath}", symbols.Count, filePath);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Failed to generate embeddings for {FilePath} - continuing without semantic search", filePath);
+                    // Don't fail the whole transaction if embeddings fail
+                }
             }
 
             await transaction.CommitAsync(cancellationToken);
@@ -996,6 +1085,122 @@ public class SQLiteSymbolService : ISQLiteSymbolService
             Confidence = reader.GetFloat(reader.GetOrdinal("confidence")),
             CodeContext = reader.IsDBNull(reader.GetOrdinal("code_context")) ? null : reader.GetString(reader.GetOrdinal("code_context"))
         };
+    }
+
+    public bool IsSemanticSearchAvailable()
+    {
+        return _vecExtension.IsAvailable() && _embeddingService.IsAvailable();
+    }
+
+    public async Task<List<SemanticSymbolMatch>> SearchSymbolsSemanticAsync(
+        string workspacePath,
+        string query,
+        int limit = 10,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsSemanticSearchAvailable())
+        {
+            _logger.LogWarning("Semantic search not available - sqlite-vec or embedding service missing");
+            return new List<SemanticSymbolMatch>();
+        }
+
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<SemanticSymbolMatch>();
+        }
+
+        // Generate query embedding
+        var queryEmbedding = await _embeddingService.GenerateEmbeddingAsync(query, cancellationToken);
+        var queryEmbeddingJson = "[" + string.Join(",", queryEmbedding) + "]";
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+
+        // Load vec extension
+        _vecExtension.LoadExtension(connection);
+
+        var results = new List<SemanticSymbolMatch>();
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"
+            SELECT
+                s.*,
+                distance
+            FROM symbol_embeddings se
+            JOIN symbols s ON se.symbol_id = s.id
+            WHERE se.embedding MATCH @query_embedding
+              AND k = @limit
+            ORDER BY distance";
+
+        cmd.Parameters.AddWithValue("@query_embedding", queryEmbeddingJson);
+        cmd.Parameters.AddWithValue("@limit", limit);
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var symbol = new JulieSymbol
+            {
+                Id = reader.GetString(reader.GetOrdinal("id")),
+                Name = reader.GetString(reader.GetOrdinal("name")),
+                Kind = reader.GetString(reader.GetOrdinal("kind")),
+                Language = reader.GetString(reader.GetOrdinal("language")),
+                FilePath = reader.GetString(reader.GetOrdinal("file_path")),
+                Signature = reader.IsDBNull(reader.GetOrdinal("signature")) ? null : reader.GetString(reader.GetOrdinal("signature")),
+                StartLine = reader.GetInt32(reader.GetOrdinal("start_line")),
+                StartColumn = reader.GetInt32(reader.GetOrdinal("start_col")),
+                EndLine = reader.GetInt32(reader.GetOrdinal("end_line")),
+                EndColumn = reader.GetInt32(reader.GetOrdinal("end_col")),
+                DocComment = reader.IsDBNull(reader.GetOrdinal("doc_comment")) ? null : reader.GetString(reader.GetOrdinal("doc_comment")),
+                Visibility = reader.IsDBNull(reader.GetOrdinal("visibility")) ? null : reader.GetString(reader.GetOrdinal("visibility")),
+                ParentId = reader.IsDBNull(reader.GetOrdinal("parent_id")) ? null : reader.GetString(reader.GetOrdinal("parent_id"))
+            };
+
+            var distance = reader.GetFloat(reader.GetOrdinal("distance"));
+            // Convert distance to similarity score (0-1, higher is better)
+            // sqlite-vec returns cosine distance (0 = identical, 2 = opposite)
+            var similarity = 1.0f - (distance / 2.0f);
+
+            results.Add(new SemanticSymbolMatch(symbol, similarity));
+        }
+
+        _logger.LogDebug("Semantic search for '{Query}' found {Count} results", query, results.Count);
+        return results;
+    }
+
+    private static string BuildSymbolEmbeddingText(JulieSymbol symbol)
+    {
+        // Build rich text representation for embedding
+        // Include: kind, name, signature, doc comments
+        var parts = new List<string>();
+
+        // Add kind
+        parts.Add(symbol.Kind);
+
+        // Add name
+        parts.Add(symbol.Name);
+
+        // Add signature if available
+        if (!string.IsNullOrEmpty(symbol.Signature))
+        {
+            parts.Add(symbol.Signature);
+        }
+
+        // Add doc comment if available
+        if (!string.IsNullOrEmpty(symbol.DocComment))
+        {
+            // Clean up doc comment (remove comment markers)
+            var cleanDoc = symbol.DocComment
+                .Replace("///", "")
+                .Replace("//", "")
+                .Replace("/*", "")
+                .Replace("*/", "")
+                .Trim();
+            parts.Add(cleanDoc);
+        }
+
+        return string.Join(" ", parts);
     }
 }
 
