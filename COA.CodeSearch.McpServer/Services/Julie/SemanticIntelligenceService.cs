@@ -292,9 +292,13 @@ public class SemanticIntelligenceService : ISemanticIntelligenceService
             PropertyNamingPolicy = JsonNamingPolicy.SnakeCaseLower
         }) ?? new EmbeddingStats { Success = false };
 
-        if (!stats.Success || stats.EmbeddingsGenerated == 0)
+        if (!stats.Success)
         {
-            _logger.LogWarning("Failed to parse julie-semantic update output or got 0 embeddings. Raw: {Output}", output);
+            _logger.LogWarning("julie-semantic update failed. Raw: {Output}", output);
+        }
+        else if (stats.EmbeddingsGenerated == 0)
+        {
+            _logger.LogDebug("No embeddings generated for file (may have no symbols). Raw: {Output}", output);
         }
 
         _logger.LogInformation(

@@ -89,6 +89,8 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 - `db/` - SQLite canonical symbol database (workspace.db)
 - `vectors/` - HNSW semantic search index (julie-semantic)
 
+**Logs**: `.coa/codesearch/logs/` (workspace-specific logging)
+
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
 **Test Framework**: NUnit (528+ tests, zero warnings)
 **Framework**: Local project references for active development

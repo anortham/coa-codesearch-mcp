@@ -585,7 +585,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
             var indexPath = _pathResolution.GetLuceneIndexPath(workspacePath);
             var directory = _useRamDirectory
                 ? new RAMDirectory() as global::Lucene.Net.Store.Directory
-                : FSDirectory.Open(indexPath);
+                : FSDirectory.Open(indexPath, new SimpleFSLockFactory(indexPath));
             
             // Create new context
             var context = new IndexContext(workspacePath, workspaceHash, indexPath, directory);
@@ -1022,8 +1022,8 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 _indexes.TryRemove(workspaceHash, out _);
             }
             
-            // Use CheckIndex to repair
-            using var directory = FSDirectory.Open(indexPath);
+            // Use CheckIndex to repair (use SimpleFSLockFactory for consistent cross-platform behavior)
+            using var directory = FSDirectory.Open(indexPath, new SimpleFSLockFactory(indexPath));
             var checkIndex = new CheckIndex(directory);
             
             var status = checkIndex.DoCheckIndex();
