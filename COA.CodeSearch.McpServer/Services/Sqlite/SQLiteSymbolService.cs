@@ -1420,6 +1420,19 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         // Load vec extension (idempotent, safe to call multiple times)
         _vecExtension.LoadExtension(connection);
 
+        // Check if embeddings table exists and has data
+        using (var checkCmd = connection.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='symbol_embeddings_vec'";
+            var tableExists = (long)(await checkCmd.ExecuteScalarAsync(cancellationToken) ?? 0L) > 0;
+
+            if (!tableExists)
+            {
+                _logger.LogDebug("Semantic search skipped - symbol_embeddings_vec table not found (run BulkGenerateEmbeddingsAsync first)");
+                return new List<SemanticSymbolMatch>();
+            }
+        }
+
         var results = new List<SemanticSymbolMatch>();
 
         using var cmd = connection.CreateCommand();
@@ -1501,6 +1514,237 @@ public class SQLiteSymbolService : ISQLiteSymbolService
         }
 
         return string.Join(" ", parts);
+    }
+
+    public async Task<List<CallPathCTEResult>> TraceCallPathUpwardAsync(
+        string workspacePath,
+        string symbolName,
+        int maxDepth = 10,
+        bool caseSensitive = false,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<CallPathCTEResult>();
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
+
+        // SQL Recursive CTE for upward tracing (who calls this symbol)
+        // This is MUCH faster than C# recursion - database does the heavy lifting
+        var sql = @"
+WITH RECURSIVE call_chain AS (
+  -- Base case: Find all direct callers of the target symbol
+  SELECT
+    i.id as identifier_id,
+    i.name,
+    i.file_path,
+    i.start_line,
+    i.start_col,
+    i.end_line,
+    i.end_col,
+    i.kind,
+    i.code_context,
+    i.containing_symbol_id,
+    s.name as containing_symbol_name,
+    s.kind as containing_symbol_kind,
+    0 as depth,
+    i.id as path  -- Track visited nodes for cycle detection
+  FROM identifiers i
+  LEFT JOIN symbols s ON i.containing_symbol_id = s.id
+  WHERE i.name " + (caseSensitive ? "=" : "LIKE") + @" @symbol_name
+    AND i.kind = 'call'
+
+  UNION ALL
+
+  -- Recursive case: Find callers of the callers
+  SELECT
+    i2.id,
+    i2.name,
+    i2.file_path,
+    i2.start_line,
+    i2.start_col,
+    i2.end_line,
+    i2.end_col,
+    i2.kind,
+    i2.code_context,
+    i2.containing_symbol_id,
+    s2.name,
+    s2.kind,
+    cc.depth + 1,
+    cc.path || '|' || i2.id  -- Pipe-separated path for cycle detection
+  FROM identifiers i2
+  LEFT JOIN symbols s2 ON i2.containing_symbol_id = s2.id
+  INNER JOIN call_chain cc ON i2.name " + (caseSensitive ? "=" : "LIKE") + @" cc.containing_symbol_name
+  WHERE
+    cc.depth < @max_depth  -- Prevent runaway queries
+    AND i2.kind = 'call'
+    AND instr(cc.path, i2.id) = 0  -- Cycle detection: skip if already in path
+)
+SELECT * FROM call_chain
+ORDER BY depth, file_path, start_line
+LIMIT 1000;";
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.CommandTimeout = 30; // 30 second timeout for upward trace
+        cmd.Parameters.AddWithValue("@symbol_name", symbolName);
+        cmd.Parameters.AddWithValue("@max_depth", maxDepth);
+
+        var results = new List<CallPathCTEResult>();
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var result = new CallPathCTEResult
+            {
+                IdentifierId = reader.GetString(0),
+                Name = reader.GetString(1),
+                FilePath = reader.GetString(2),
+                StartLine = reader.GetInt32(3),
+                StartColumn = reader.GetInt32(4),
+                EndLine = reader.GetInt32(5),
+                EndColumn = reader.GetInt32(6),
+                Kind = reader.GetString(7),
+                CodeContext = reader.IsDBNull(8) ? null : reader.GetString(8),
+                ContainingSymbolId = reader.IsDBNull(9) ? null : reader.GetString(9),
+                ContainingSymbolName = reader.IsDBNull(10) ? null : reader.GetString(10),
+                ContainingSymbolKind = reader.IsDBNull(11) ? null : reader.GetString(11),
+                Depth = reader.GetInt32(12),
+                Path = reader.GetString(13)
+            };
+
+            results.Add(result);
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "⚡ CTE Upward trace for '{SymbolName}': {Count} results in {Ms}ms (depth: {MaxDepth})",
+            symbolName, results.Count, sw.ElapsedMilliseconds, maxDepth);
+
+        return results;
+    }
+
+    public async Task<List<CallPathCTEResult>> TraceCallPathDownwardAsync(
+        string workspacePath,
+        string symbolName,
+        int maxDepth = 10,
+        bool caseSensitive = false,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new List<CallPathCTEResult>();
+        }
+
+        var sw = System.Diagnostics.Stopwatch.StartNew();
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
+
+        // SQL Recursive CTE for downward tracing (what does this symbol call)
+        // Returns flattened hierarchy of all calls made by the target symbol and its callees
+        var sql = @"
+WITH RECURSIVE call_chain AS (
+  -- Base case: Find the target symbol and its direct calls
+  SELECT
+    i.id as identifier_id,
+    i.name,
+    i.file_path,
+    i.start_line,
+    i.start_col,
+    i.end_line,
+    i.end_col,
+    i.kind,
+    i.code_context,
+    i.containing_symbol_id,
+    s.name as containing_symbol_name,
+    s.kind as containing_symbol_kind,
+    0 as depth,
+    i.id as path
+  FROM symbols target
+  INNER JOIN identifiers i ON i.containing_symbol_id = target.id
+  LEFT JOIN symbols s ON i.containing_symbol_id = s.id
+  WHERE target.name " + (caseSensitive ? "=" : "LIKE") + @" @symbol_name
+    AND i.kind = 'call'
+
+  UNION ALL
+
+  -- Recursive case: Find what the callees call
+  SELECT
+    i2.id,
+    i2.name,
+    i2.file_path,
+    i2.start_line,
+    i2.start_col,
+    i2.end_line,
+    i2.end_col,
+    i2.kind,
+    i2.code_context,
+    i2.containing_symbol_id,
+    target2.name,
+    target2.kind,
+    cc.depth + 1,
+    cc.path || '|' || i2.id
+  FROM call_chain cc
+  INNER JOIN symbols target2 ON target2.name " + (caseSensitive ? "=" : "LIKE") + @" cc.name
+  INNER JOIN identifiers i2 ON i2.containing_symbol_id = target2.id
+  WHERE
+    cc.depth < @max_depth
+    AND i2.kind = 'call'
+    AND instr(cc.path, i2.id) = 0  -- Cycle detection
+)
+SELECT * FROM call_chain
+ORDER BY depth, file_path, start_line
+LIMIT 1000;";
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+        cmd.CommandTimeout = 30; // 30 second timeout for downward trace
+        cmd.Parameters.AddWithValue("@symbol_name", symbolName);
+        cmd.Parameters.AddWithValue("@max_depth", maxDepth);
+
+        var results = new List<CallPathCTEResult>();
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var result = new CallPathCTEResult
+            {
+                IdentifierId = reader.GetString(0),
+                Name = reader.GetString(1),
+                FilePath = reader.GetString(2),
+                StartLine = reader.GetInt32(3),
+                StartColumn = reader.GetInt32(4),
+                EndLine = reader.GetInt32(5),
+                EndColumn = reader.GetInt32(6),
+                Kind = reader.GetString(7),
+                CodeContext = reader.IsDBNull(8) ? null : reader.GetString(8),
+                ContainingSymbolId = reader.IsDBNull(9) ? null : reader.GetString(9),
+                ContainingSymbolName = reader.IsDBNull(10) ? null : reader.GetString(10),
+                ContainingSymbolKind = reader.IsDBNull(11) ? null : reader.GetString(11),
+                Depth = reader.GetInt32(12),
+                Path = reader.GetString(13)
+            };
+
+            results.Add(result);
+        }
+
+        sw.Stop();
+        _logger.LogInformation(
+            "⚡ CTE Downward trace for '{SymbolName}': {Count} results in {Ms}ms (depth: {MaxDepth})",
+            symbolName, results.Count, sw.ElapsedMilliseconds, maxDepth);
+
+        return results;
     }
 }
 

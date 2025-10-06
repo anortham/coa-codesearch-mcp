@@ -198,6 +198,42 @@ public interface ISQLiteSymbolService
     /// Used for incremental updates when a file changes.
     /// </summary>
     Task CopyFileEmbeddingsToVec0Async(string workspacePath, string filePath, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Trace call path UPWARD using SQL recursive CTE (who calls this symbol).
+    /// Much faster than C# recursion - database handles the traversal with built-in cycle detection.
+    /// Returns a flat list of call path nodes that can be reconstructed into a hierarchy.
+    /// </summary>
+    /// <param name="workspacePath">Workspace path for database lookup</param>
+    /// <param name="symbolName">Name of the symbol to find callers for</param>
+    /// <param name="maxDepth">Maximum recursion depth (prevents runaway queries)</param>
+    /// <param name="caseSensitive">Whether symbol name matching is case sensitive</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of call path entries ordered by depth</returns>
+    Task<List<CallPathCTEResult>> TraceCallPathUpwardAsync(
+        string workspacePath,
+        string symbolName,
+        int maxDepth = 10,
+        bool caseSensitive = false,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Trace call path DOWNWARD using SQL recursive CTE (what does this symbol call).
+    /// Much faster than C# recursion - database handles the traversal with built-in cycle detection.
+    /// Returns a flat list of call path nodes that can be reconstructed into a hierarchy.
+    /// </summary>
+    /// <param name="workspacePath">Workspace path for database lookup</param>
+    /// <param name="symbolName">Name of the symbol to find callees for</param>
+    /// <param name="maxDepth">Maximum recursion depth (prevents runaway queries)</param>
+    /// <param name="caseSensitive">Whether symbol name matching is case sensitive</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>List of call path entries ordered by depth</returns>
+    Task<List<CallPathCTEResult>> TraceCallPathDownwardAsync(
+        string workspacePath,
+        string symbolName,
+        int maxDepth = 10,
+        bool caseSensitive = false,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -216,3 +252,80 @@ public record FileRecord(
 public record SemanticSymbolMatch(
     JulieSymbol Symbol,
     float SimilarityScore);
+
+/// <summary>
+/// Represents a single entry in the call path CTE result.
+/// Contains flattened hierarchy data that can be reconstructed into a tree.
+/// </summary>
+public record CallPathCTEResult
+{
+    /// <summary>
+    /// Identifier ID (unique identifier for this call reference)
+    /// </summary>
+    public required string IdentifierId { get; init; }
+
+    /// <summary>
+    /// Name of the identifier (method/function being called)
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// File path where this call occurs
+    /// </summary>
+    public required string FilePath { get; init; }
+
+    /// <summary>
+    /// Starting line number
+    /// </summary>
+    public required int StartLine { get; init; }
+
+    /// <summary>
+    /// Starting column number
+    /// </summary>
+    public required int StartColumn { get; init; }
+
+    /// <summary>
+    /// Ending line number
+    /// </summary>
+    public required int EndLine { get; init; }
+
+    /// <summary>
+    /// Ending column number
+    /// </summary>
+    public required int EndColumn { get; init; }
+
+    /// <summary>
+    /// Kind of identifier (e.g., "call", "member_access")
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>
+    /// Code context (surrounding code snippet)
+    /// </summary>
+    public string? CodeContext { get; init; }
+
+    /// <summary>
+    /// ID of the symbol that contains this identifier
+    /// </summary>
+    public string? ContainingSymbolId { get; init; }
+
+    /// <summary>
+    /// Name of the containing symbol
+    /// </summary>
+    public string? ContainingSymbolName { get; init; }
+
+    /// <summary>
+    /// Kind of the containing symbol (e.g., "method", "function")
+    /// </summary>
+    public string? ContainingSymbolKind { get; init; }
+
+    /// <summary>
+    /// Depth in the call hierarchy (0 = direct call, 1 = caller of caller, etc.)
+    /// </summary>
+    public required int Depth { get; init; }
+
+    /// <summary>
+    /// Path tracking for cycle detection (pipe-separated list of identifier IDs)
+    /// </summary>
+    public required string Path { get; init; }
+}

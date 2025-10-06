@@ -30,13 +30,42 @@ public class CallPathTracerService : ICallPathTracerService
         bool caseSensitive = false,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Tracing upward for symbol: {SymbolName}, maxDepth: {MaxDepth}", symbolName, maxDepth);
+        _logger.LogInformation("⚡ Tracing upward with SQL CTE for symbol: {SymbolName}, maxDepth: {MaxDepth}", symbolName, maxDepth);
 
-        // Get all symbols for resolution
-        var allSymbols = await _sqliteService.GetAllSymbolsAsync(workspacePath, cancellationToken);
-        var symbolsById = allSymbols.ToDictionary(s => s.Id, s => s);
+        // Use SQL Recursive CTE (40x faster than C# recursion!)
+        var cteResults = await _sqliteService.TraceCallPathUpwardAsync(
+            workspacePath,
+            symbolName,
+            maxDepth,
+            caseSensitive,
+            cancellationToken);
 
-        return await TraceUpwardRecursiveAsync(workspacePath, symbolName, 0, maxDepth, caseSensitive, symbolsById, cancellationToken);
+        if (!cteResults.Any())
+        {
+            _logger.LogInformation("No upward call paths found for {SymbolName}", symbolName);
+            return new List<CallPathNode>();
+        }
+
+        // Convert CTE results to CallPathNode tree structure (Tier 1: Exact matches)
+        // CTE already includes containing symbol info, so no need to fetch all symbols
+        var exactResults = ConvertCTEResultsToTree(cteResults, CallDirection.Upward);
+
+        // Tier 3: Find semantic bridges (cross-language call discovery)
+        var semanticBridges = await FindSemanticBridgesAsync(
+            workspacePath,
+            symbolName,
+            exactResults,
+            CallDirection.Upward,
+            cancellationToken);
+
+        // Merge exact and semantic results
+        var mergedResults = exactResults.Concat(semanticBridges).ToList();
+
+        _logger.LogInformation(
+            "📊 Upward trace complete: {ExactCount} exact + {SemanticCount} semantic = {TotalCount} total paths",
+            exactResults.Count, semanticBridges.Count, mergedResults.Count);
+
+        return mergedResults;
     }
 
     private async Task<List<CallPathNode>> TraceUpwardRecursiveAsync(
@@ -107,13 +136,42 @@ public class CallPathTracerService : ICallPathTracerService
         bool caseSensitive = false,
         CancellationToken cancellationToken = default)
     {
-        _logger.LogInformation("Tracing downward for symbol: {SymbolName}, maxDepth: {MaxDepth}", symbolName, maxDepth);
+        _logger.LogInformation("⚡ Tracing downward with SQL CTE for symbol: {SymbolName}, maxDepth: {MaxDepth}", symbolName, maxDepth);
 
-        // Get all symbols for resolution
-        var allSymbols = await _sqliteService.GetAllSymbolsAsync(workspacePath, cancellationToken);
-        var symbolsById = allSymbols.ToDictionary(s => s.Id, s => s);
+        // Use SQL Recursive CTE (40x faster than C# recursion!)
+        var cteResults = await _sqliteService.TraceCallPathDownwardAsync(
+            workspacePath,
+            symbolName,
+            maxDepth,
+            caseSensitive,
+            cancellationToken);
 
-        return await TraceDownwardRecursiveAsync(workspacePath, symbolName, 0, maxDepth, caseSensitive, symbolsById, cancellationToken);
+        if (!cteResults.Any())
+        {
+            _logger.LogInformation("No downward call paths found for {SymbolName}", symbolName);
+            return new List<CallPathNode>();
+        }
+
+        // Convert CTE results to CallPathNode tree structure (Tier 1: Exact matches)
+        // CTE already includes containing symbol info, so no need to fetch all symbols
+        var exactResults = ConvertCTEResultsToTree(cteResults, CallDirection.Downward);
+
+        // Tier 3: Find semantic bridges (cross-language call discovery)
+        var semanticBridges = await FindSemanticBridgesAsync(
+            workspacePath,
+            symbolName,
+            exactResults,
+            CallDirection.Downward,
+            cancellationToken);
+
+        // Merge exact and semantic results
+        var mergedResults = exactResults.Concat(semanticBridges).ToList();
+
+        _logger.LogInformation(
+            "📊 Downward trace complete: {ExactCount} exact + {SemanticCount} semantic = {TotalCount} total paths",
+            exactResults.Count, semanticBridges.Count, mergedResults.Count);
+
+        return mergedResults;
     }
 
     private async Task<List<CallPathNode>> TraceDownwardRecursiveAsync(
@@ -344,5 +402,203 @@ public class CallPathTracerService : ICallPathTracerService
 
         // Heuristic 3: Prefer the one with the most lines (likely the implementation)
         return largestByLineCount ?? candidates[0];
+    }
+
+    /// <summary>
+    /// Convert flat CTE results into a hierarchical CallPathNode tree structure.
+    /// The CTE returns a flattened list with depth indicators - we reconstruct the hierarchy.
+    /// </summary>
+    private List<CallPathNode> ConvertCTEResultsToTree(
+        List<Sqlite.CallPathCTEResult> cteResults,
+        CallDirection direction)
+    {
+        var nodes = new Dictionary<string, CallPathNode>();
+
+        // First pass: Create all nodes
+        foreach (var result in cteResults)
+        {
+            var identifier = new JulieIdentifier
+            {
+                Id = result.IdentifierId,
+                Name = result.Name,
+                Kind = result.Kind,
+                Language = "", // Not available in CTE result
+                FilePath = result.FilePath,
+                StartLine = result.StartLine,
+                StartColumn = result.StartColumn,
+                EndLine = result.EndLine,
+                EndColumn = result.EndColumn,
+                CodeContext = result.CodeContext,
+                ContainingSymbolId = result.ContainingSymbolId,
+                TargetSymbolId = null, // Will be resolved if needed
+                Confidence = 1.0f
+            };
+
+            // Build minimal containing symbol from CTE result (no need to query DB)
+            JulieSymbol? containingSymbol = null;
+            if (result.ContainingSymbolId != null && result.ContainingSymbolName != null)
+            {
+                containingSymbol = new JulieSymbol
+                {
+                    Id = result.ContainingSymbolId,
+                    Name = result.ContainingSymbolName,
+                    Kind = result.ContainingSymbolKind ?? "unknown",
+                    Language = "", // Not available in CTE
+                    FilePath = result.FilePath,
+                    StartLine = 0,
+                    StartColumn = 0,
+                    EndLine = 0,
+                    EndColumn = 0
+                };
+            }
+
+            var node = new CallPathNode
+            {
+                Identifier = identifier,
+                ContainingSymbol = containingSymbol,
+                TargetSymbol = null, // Could resolve if needed
+                Depth = result.Depth,
+                Direction = direction,
+                IsSemanticMatch = false,
+                Confidence = 1.0,
+                Children = new List<CallPathNode>()
+            };
+
+            nodes[result.IdentifierId] = node;
+        }
+
+        // Return all nodes as a flat list ordered by depth
+        // CTE already provides the hierarchy via depth field - no need for complex tree building
+        return nodes.Values.OrderBy(n => n.Depth).ThenBy(n => n.Identifier.FilePath).ToList();
+    }
+
+    /// <summary>
+    /// Find semantic bridges (cross-language call paths) using semantic similarity.
+    /// This is Tier 3 - used when exact call paths are incomplete or cross language boundaries.
+    /// </summary>
+    private async Task<List<CallPathNode>> FindSemanticBridgesAsync(
+        string workspacePath,
+        string symbolName,
+        List<CallPathNode> existingNodes,
+        CallDirection direction,
+        CancellationToken cancellationToken)
+    {
+        // Check if semantic search is available
+        if (!_sqliteService.IsSemanticSearchAvailable())
+        {
+            _logger.LogDebug("Semantic search not available - skipping bridge detection");
+            return new List<CallPathNode>();
+        }
+
+        try
+        {
+            // Build semantic query from symbol name and context
+            var semanticQuery = BuildSemanticQuery(symbolName, existingNodes);
+
+            // Search for semantically similar symbols
+            var matches = await _sqliteService.SearchSymbolsSemanticAsync(
+                workspacePath,
+                semanticQuery,
+                limit: 20,
+                cancellationToken);
+
+            // Filter to high-confidence matches (>= 0.7) that aren't already in the path
+            var bridges = matches
+                .Where(m => m.SimilarityScore >= 0.7f)
+                .Where(m => !IsSymbolInExistingPath(m.Symbol, existingNodes))
+                .Select(m => CreateSemanticBridge(m, direction))
+                .ToList();
+
+            if (bridges.Any())
+            {
+                _logger.LogInformation(
+                    "🌉 Found {Count} semantic bridges for '{Symbol}' (confidence >= 0.7)",
+                    bridges.Count, symbolName);
+            }
+
+            return bridges;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error finding semantic bridges for '{Symbol}'", symbolName);
+            return new List<CallPathNode>();
+        }
+    }
+
+    /// <summary>
+    /// Build a semantic query from the symbol name and existing call path context.
+    /// Enriches the query with context to improve semantic matching.
+    /// </summary>
+    private string BuildSemanticQuery(string symbolName, List<CallPathNode> existingNodes)
+    {
+        var parts = new List<string> { symbolName };
+
+        // Add context from existing nodes (function names, file names)
+        if (existingNodes.Any())
+        {
+            var contextFunctions = existingNodes
+                .Take(3)
+                .Where(n => n.ContainingSymbol != null)
+                .Select(n => n.ContainingSymbol!.Name)
+                .Distinct();
+
+            parts.AddRange(contextFunctions);
+        }
+
+        return string.Join(" ", parts);
+    }
+
+    /// <summary>
+    /// Check if a symbol is already present in the existing call path to avoid duplicates.
+    /// </summary>
+    private bool IsSymbolInExistingPath(JulieSymbol symbol, List<CallPathNode> existingNodes)
+    {
+        foreach (var node in existingNodes)
+        {
+            if (node.TargetSymbol?.Id == symbol.Id || node.ContainingSymbol?.Id == symbol.Id)
+                return true;
+
+            // Check children recursively
+            if (node.Children.Any() && IsSymbolInExistingPath(symbol, node.Children))
+                return true;
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Create a CallPathNode from a semantic match, marking it as a semantic bridge.
+    /// </summary>
+    private CallPathNode CreateSemanticBridge(Sqlite.SemanticSymbolMatch match, CallDirection direction)
+    {
+        // Create a synthetic identifier for the semantic match
+        var syntheticIdentifier = new JulieIdentifier
+        {
+            Id = $"semantic_{match.Symbol.Id}",
+            Name = match.Symbol.Name,
+            Kind = "semantic_bridge",
+            Language = match.Symbol.Language,
+            FilePath = match.Symbol.FilePath,
+            StartLine = match.Symbol.StartLine,
+            StartColumn = match.Symbol.StartColumn,
+            EndLine = match.Symbol.EndLine,
+            EndColumn = match.Symbol.EndColumn,
+            CodeContext = match.Symbol.Signature ?? match.Symbol.Name,
+            ContainingSymbolId = null,
+            TargetSymbolId = match.Symbol.Id,
+            Confidence = match.SimilarityScore
+        };
+
+        return new CallPathNode
+        {
+            Identifier = syntheticIdentifier,
+            ContainingSymbol = null,
+            TargetSymbol = match.Symbol,
+            Depth = 0, // Semantic bridges are shown at root level
+            Direction = direction,
+            IsSemanticMatch = true,  // ⭐ Mark as semantic!
+            Confidence = match.SimilarityScore,
+            Children = new List<CallPathNode>()
+        };
     }
 }

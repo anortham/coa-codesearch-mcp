@@ -168,20 +168,55 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
                 response.Data.ExtensionData["maxDepth"] = parameters.MaxDepth;
             }
             
-            // Add specific insights for call path tracing
+            // Add specific insights for call path tracing (3-tier architecture showcase!)
             if (response.Insights != null)
             {
-                response.Insights.Insert(0, $"Traced {parameters.Direction} call path for '{symbolName}' - found {searchResult.TotalHits} references");
-                
+                response.Insights.Insert(0, $"⚡ Traced {parameters.Direction} call path for '{symbolName}' - found {searchResult.TotalHits} references");
+
                 if (searchResult.Hits != null)
                 {
+                    // Count exact vs semantic matches
+                    var exactMatches = searchResult.Hits.Where(h => h.Fields?.GetValueOrDefault("is_semantic_match") != "true").Count();
+                    var semanticMatches = searchResult.Hits.Where(h => h.Fields?.GetValueOrDefault("is_semantic_match") == "true").Count();
+
+                    if (exactMatches > 0 && semanticMatches > 0)
+                    {
+                        response.Insights.Add($"🎯 3-Tier Results: {exactMatches} exact (SQL CTE) + {semanticMatches} semantic bridges");
+                    }
+                    else if (exactMatches > 0)
+                    {
+                        response.Insights.Add($"🎯 Tier 1 (SQL CTE): {exactMatches} exact call paths");
+                    }
+
+                    if (semanticMatches > 0)
+                    {
+                        response.Insights.Add($"🌉 Cross-language bridges: {semanticMatches} semantic matches (confidence >= 0.7)");
+                    }
+
                     var fileCount = searchResult.Hits.Select(h => h.FilePath).Distinct().Count();
-                    response.Insights.Add($"Call path spans {fileCount} files");
-                    
+                    var languageCount = searchResult.Hits
+                        .Select(h => System.IO.Path.GetExtension(h.FilePath).ToLowerInvariant())
+                        .Distinct()
+                        .Count();
+
+                    response.Insights.Add($"📂 Call path spans {fileCount} files across {languageCount} languages");
+
                     var entryPoints = searchResult.Hits.Where(h => h.Fields?.GetValueOrDefault("is_entry_point") == "true").Count();
                     if (entryPoints > 0)
                     {
-                        response.Insights.Add($"Found {entryPoints} entry points (controllers, main methods, etc.)");
+                        response.Insights.Add($"🚪 Found {entryPoints} entry points (controllers, main methods, etc.)");
+                    }
+
+                    // Show max depth reached
+                    var maxDepthReached = searchResult.Hits
+                        .Where(h => h.Fields?.ContainsKey("call_depth") == true)
+                        .Select(h => int.TryParse(h.Fields["call_depth"], out var d) ? d : 0)
+                        .DefaultIfEmpty(0)
+                        .Max();
+
+                    if (maxDepthReached > 0)
+                    {
+                        response.Insights.Add($"📊 Call hierarchy depth: {maxDepthReached + 1} levels (0-{maxDepthReached})");
                     }
                 }
             }
