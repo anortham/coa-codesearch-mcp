@@ -156,7 +156,8 @@ public class Utf8EmojiTests
         
         // Find the replaced line in context
         var contextLines = result.Data.Results.ContextLines;
-        var replacedLine = contextLines.FirstOrDefault(line => line.StartsWith("+ "));
+        contextLines.Should().NotBeNull();
+        var replacedLine = contextLines!.FirstOrDefault(line => line.StartsWith("+ "));
         replacedLine.Should().NotBeNull();
         
         // These now pass - complex emoji sequences are preserved

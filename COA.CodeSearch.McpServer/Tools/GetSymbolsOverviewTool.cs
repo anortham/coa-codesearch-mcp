@@ -322,7 +322,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
                 {
                     Name = symbol.Name,
                     Signature = symbol.Signature ?? symbol.Name,
-                    ReturnType = null, // Not extracted by Julie
+                    ReturnType = "void", // Not extracted by Julie
                     Line = parameters.IncludeLineNumbers ? symbol.StartLine : 0,
                     Column = parameters.IncludeLineNumbers ? symbol.StartColumn : 0,
                     Modifiers = new List<string>(),

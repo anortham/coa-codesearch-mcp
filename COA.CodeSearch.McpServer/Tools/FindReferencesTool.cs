@@ -50,6 +50,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     /// <param name="keyGenerator">Cache key generator</param>
     /// <param name="queryProcessor">Smart query preprocessing service</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
+    /// <param name="referenceResolver">Reference resolver service for identifier lookup</param>
     /// <param name="logger">Logger instance</param>
     public FindReferencesTool(
         IServiceProvider serviceProvider,
@@ -196,7 +197,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
                             await _cacheService.SetAsync(cacheKey, identifierResponse);
                         }
 
-                        return identifierResponse;
+                        return identifierResponse!; // BuildResponseAsync never returns null for valid input
                     }
                     else
                     {

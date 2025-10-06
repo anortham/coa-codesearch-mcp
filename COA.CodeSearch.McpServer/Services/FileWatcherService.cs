@@ -710,16 +710,19 @@ public class FileWatcherService : BackgroundService
                                         embStats.EmbeddingsGenerated, filePath);
 
                                     // Copy embeddings from BLOB storage to vec0 for semantic search
-                                    try
+                                    if (_sqliteService != null)
                                     {
-                                        await _sqliteService.CopyFileEmbeddingsToVec0Async(
-                                            workspacePath,
-                                            filePath,
-                                            cancellationToken);
-                                    }
-                                    catch (Exception vecEx)
-                                    {
-                                        _logger.LogWarning(vecEx, "Phoenix: Failed to copy embeddings to vec0 for {FilePath}", filePath);
+                                        try
+                                        {
+                                            await _sqliteService.CopyFileEmbeddingsToVec0Async(
+                                                workspacePath,
+                                                filePath,
+                                                cancellationToken);
+                                        }
+                                        catch (Exception vecEx)
+                                        {
+                                            _logger.LogWarning(vecEx, "Phoenix: Failed to copy embeddings to vec0 for {FilePath}", filePath);
+                                        }
                                     }
                                 }
                             }

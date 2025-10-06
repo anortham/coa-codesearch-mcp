@@ -35,8 +35,8 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
                 It.IsAny<LogLevel>(),
                 It.IsAny<EventId>(),
                 It.IsAny<It.IsAnyType>(),
-                It.IsAny<Exception>(),
-                (Func<It.IsAnyType, Exception, string>)It.IsAny<object>()))
+                It.IsAny<Exception?>(),
+                (Func<It.IsAnyType, Exception?, string>)It.IsAny<object>()))
             .Callback(new InvocationAction(invocation =>
             {
                 var logLevel = (LogLevel)invocation.Arguments[0];
