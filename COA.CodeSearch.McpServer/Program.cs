@@ -115,6 +115,10 @@ public class Program
         services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.ISemanticIntelligenceService,
                               COA.CodeSearch.McpServer.Services.Julie.SemanticIntelligenceService>();
 
+        // Embedding service for generating vectors (replaces julie-semantic CLI)
+        services.AddSingleton<COA.CodeSearch.McpServer.Services.Embeddings.IEmbeddingService,
+                              COA.CodeSearch.McpServer.Services.Embeddings.EmbeddingService>();
+
         // SQLite symbol storage (canonical database for symbols)
         services.AddSingleton<COA.CodeSearch.McpServer.Services.Sqlite.ISQLiteSymbolService,
                               COA.CodeSearch.McpServer.Services.Sqlite.SQLiteSymbolService>();

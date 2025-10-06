@@ -49,6 +49,7 @@
 
     <!-- Diff/Patch operations -->
     <PackageReference Include="DiffMatchPatch" Version="4.0.0" />
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.23.0" />
     
     <!-- Logging -->
     <PackageReference Include="Serilog" Version="4.2.0" />
