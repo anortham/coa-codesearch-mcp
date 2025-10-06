@@ -240,15 +240,23 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                                     _logger.LogInformation("Generating embeddings for {SymbolCount} symbols...", symbolCount);
                                     var embeddingStart = DateTime.UtcNow;
 
-                                    // Get all files and regenerate embeddings
+                                    // Get all files and regenerate embeddings in parallel
                                     var allFiles = await _sqliteService.GetAllFilesAsync(workspacePath, cancellationToken);
                                     int embeddedCount = 0;
+                                    var embeddedCountLock = new object();
 
-                                    foreach (var fileRecord in allFiles)
+                                    // Process files in parallel with max concurrency
+                                    var options = new ParallelOptions
+                                    {
+                                        MaxDegreeOfParallelism = Environment.ProcessorCount,
+                                        CancellationToken = cancellationToken
+                                    };
+
+                                    await Parallel.ForEachAsync(allFiles, options, async (fileRecord, ct) =>
                                     {
                                         try
                                         {
-                                            var fileSymbols = await _sqliteService.GetSymbolsForFileAsync(workspacePath, fileRecord.Path, cancellationToken);
+                                            var fileSymbols = await _sqliteService.GetSymbolsForFileAsync(workspacePath, fileRecord.Path, ct);
                                             if (fileSymbols.Any())
                                             {
                                                 // Re-upsert to trigger embedding generation
@@ -261,15 +269,19 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                                                     "", // hash - not needed for embedding update
                                                     fileRecord.Size,
                                                     fileRecord.LastModified,
-                                                    cancellationToken);
-                                                embeddedCount += fileSymbols.Count;
+                                                    ct);
+
+                                                lock (embeddedCountLock)
+                                                {
+                                                    embeddedCount += fileSymbols.Count;
+                                                }
                                             }
                                         }
                                         catch (Exception ex)
                                         {
                                             _logger.LogWarning(ex, "Failed to generate embeddings for {File}", fileRecord.Path);
                                         }
-                                    }
+                                    });
 
                                     var embeddingDuration = DateTime.UtcNow - embeddingStart;
                                     _logger.LogInformation("Generated embeddings for {Count} symbols in {Duration}ms",

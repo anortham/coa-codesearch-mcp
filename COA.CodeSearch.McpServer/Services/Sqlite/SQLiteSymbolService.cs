@@ -442,12 +442,15 @@ public class SQLiteSymbolService : ISQLiteSymbolService
                         await cmd.ExecuteNonQueryAsync(cancellationToken);
                     }
 
-                    // Generate embeddings for each symbol
-                    foreach (var symbol in symbols)
+                    // Generate all embeddings in one batch (much faster than one-by-one)
+                    var embeddingTexts = symbols.Select(s => BuildSymbolEmbeddingText(s)).ToList();
+                    var embeddings = await _embeddingService.GenerateBatchEmbeddingsAsync(embeddingTexts, cancellationToken);
+
+                    // Bulk insert embeddings and mappings
+                    for (int i = 0; i < symbols.Count; i++)
                     {
-                        // Create embedding text from symbol info
-                        var embeddingText = BuildSymbolEmbeddingText(symbol);
-                        var embedding = await _embeddingService.GenerateEmbeddingAsync(embeddingText, cancellationToken);
+                        var symbol = symbols[i];
+                        var embedding = embeddings[i];
 
                         // Insert embedding into vec0 virtual table
                         using var vecCmd = connection.CreateCommand();

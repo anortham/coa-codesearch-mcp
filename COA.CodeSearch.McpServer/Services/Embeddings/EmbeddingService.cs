@@ -108,15 +108,58 @@ public class EmbeddingService : IEmbeddingService, IDisposable
         IEnumerable<string> texts,
         CancellationToken cancellationToken = default)
     {
-        var embeddings = new List<float[]>();
+        if (!IsAvailable())
+            throw new InvalidOperationException("Embedding service not available");
 
-        foreach (var text in texts)
+        var textList = texts.ToList();
+        if (textList.Count == 0)
+            return new List<float[]>();
+
+        // Tokenize all texts
+        var allTokens = textList.Select(text => _tokenizer!.Tokenize(text, _maxLength)).ToList();
+        var batchSize = allTokens.Count;
+        var maxSeqLength = allTokens.Max(t => t.InputIds.Length);
+
+        // Create batched tensors with padding
+        var inputIds = new DenseTensor<long>(new[] { batchSize, maxSeqLength });
+        var attentionMask = new DenseTensor<long>(new[] { batchSize, maxSeqLength });
+        var tokenTypeIds = new DenseTensor<long>(new[] { batchSize, maxSeqLength });
+
+        for (int i = 0; i < batchSize; i++)
         {
-            if (cancellationToken.IsCancellationRequested)
-                break;
+            var tokens = allTokens[i];
+            for (int j = 0; j < tokens.InputIds.Length; j++)
+            {
+                inputIds[i, j] = tokens.InputIds[j];
+                attentionMask[i, j] = tokens.AttentionMask[j];
+                tokenTypeIds[i, j] = 0;
+            }
+            // Rest is already 0 (padding)
+        }
 
-            var embedding = await GenerateEmbeddingAsync(text, cancellationToken);
-            embeddings.Add(embedding);
+        // Run batched inference
+        var inputs = new List<NamedOnnxValue>
+        {
+            NamedOnnxValue.CreateFromTensor("input_ids", inputIds),
+            NamedOnnxValue.CreateFromTensor("attention_mask", attentionMask),
+            NamedOnnxValue.CreateFromTensor("token_type_ids", tokenTypeIds)
+        };
+
+        using var results = await Task.Run(() => _session!.Run(inputs), cancellationToken);
+        var output = results.First().AsEnumerable<float>().ToArray();
+
+        // Extract embeddings for each item in batch
+        var embeddings = new List<float[]>();
+        const int dim = 384;
+
+        for (int i = 0; i < batchSize; i++)
+        {
+            var startIdx = i * maxSeqLength * dim;
+            var batchOutput = new float[maxSeqLength * dim];
+            Array.Copy(output, startIdx, batchOutput, 0, maxSeqLength * dim);
+
+            var embedding = MeanPooling(batchOutput, allTokens[i].AttentionMask);
+            embeddings.Add(Normalize(embedding));
         }
 
         return embeddings;
