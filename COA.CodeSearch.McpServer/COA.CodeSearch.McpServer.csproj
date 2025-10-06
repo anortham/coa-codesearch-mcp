@@ -134,4 +134,40 @@
     </Content>
   </ItemGroup>
 
+  <ItemGroup Label="sqlite-vec Extension Binaries">
+    <!-- Bundle sqlite-vec extension binaries for all platforms -->
+    <!-- These are precompiled SQLite extensions for vector similarity search -->
+    <!-- Copied to bin/sqlite-vec/ in output directory -->
+
+    <!-- macOS ARM64 (M1/M2/M3 Macs) -->
+    <Content Include="bin\sqlite-vec\macos-arm64\vec0.dylib" Condition="Exists('bin\sqlite-vec\macos-arm64\vec0.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bin/sqlite-vec/macos-arm64/vec0.dylib</Link>
+    </Content>
+
+    <!-- macOS x64 (Intel Macs) -->
+    <Content Include="bin\sqlite-vec\macos-x64\vec0.dylib" Condition="Exists('bin\sqlite-vec\macos-x64\vec0.dylib')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bin/sqlite-vec/macos-x64/vec0.dylib</Link>
+    </Content>
+
+    <!-- Linux x64 -->
+    <Content Include="bin\sqlite-vec\linux-x64\vec0.so" Condition="Exists('bin\sqlite-vec\linux-x64\vec0.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bin/sqlite-vec/linux-x64/vec0.so</Link>
+    </Content>
+
+    <!-- Linux ARM64 -->
+    <Content Include="bin\sqlite-vec\linux-arm64\vec0.so" Condition="Exists('bin\sqlite-vec\linux-arm64\vec0.so')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bin/sqlite-vec/linux-arm64/vec0.so</Link>
+    </Content>
+
+    <!-- Windows x64 -->
+    <Content Include="bin\sqlite-vec\windows-x64\vec0.dll" Condition="Exists('bin\sqlite-vec\windows-x64\vec0.dll')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>bin/sqlite-vec/windows-x64/vec0.dll</Link>
+    </Content>
+  </ItemGroup>
+
 </Project>
