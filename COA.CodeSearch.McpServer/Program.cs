@@ -339,7 +339,10 @@ public class Program
             builder.Services.AddScoped<InsertAtLineTool>(); // Insert content at specific line numbers
             builder.Services.AddScoped<ReplaceLinesTool>(); // Replace line ranges with new content
             builder.Services.AddScoped<DeleteLinesTool>(); // Delete line ranges with surgical precision
-            
+
+            // Refactoring tools (AST-aware semantic refactoring)
+            builder.Services.AddScoped<SmartRefactorTool>(); // Smart refactoring with symbol-aware transformations
+
             // Advanced semantic tools (Tree-sitter + Lucene powered)
             builder.Services.AddScoped<GetSymbolsOverviewTool>(); // Extract all symbols from files
             builder.Services.AddScoped<FindPatternsTool>(); // Semantic pattern detection for code quality
@@ -353,11 +356,11 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
-                    {"find_references", 95}, 
+                    {"find_references", 95},
                     {"trace_call_path", 92},
                     {"text_search", 90},
                     {"symbol_search", 85},
@@ -371,6 +374,7 @@ public class Program
                     {"insert_at_line", 90},
                     {"replace_lines", 90},
                     {"delete_lines", 90},
+                    {"smart_refactor", 95},
                     {"get_symbols_overview", 95}
                 },
                 EnforcementLevel = COA.Mcp.Framework.Configuration.WorkflowEnforcement.StronglyUrge,

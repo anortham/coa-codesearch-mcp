@@ -33,4 +33,7 @@ public static class ToolNames
     // Advanced semantic tools
     public const string GetSymbolsOverview = "get_symbols_overview";
     public const string FindPatterns = "find_patterns";
+
+    // Refactoring tools
+    public const string SmartRefactor = "smart_refactor";
 }
