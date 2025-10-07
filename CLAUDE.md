@@ -13,7 +13,7 @@ Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace
 
 **Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: TreeSitter.DotNet
 
-### Core Tools (17 available)
+### Core Tools (19 available)
 
 ```bash
 # Essential Search
@@ -30,8 +30,11 @@ directory_search    # Find directories by pattern
 
 # Advanced Search
 line_search         # Line-by-line search (replaces grep/rg)
-search_and_replace  # Bulk find & replace with preview
+search_and_replace  # Bulk find & replace with preview + fuzzy matching
 batch_operations    # Multiple searches in parallel
+
+# Refactoring
+smart_refactor      # AST-aware symbol renaming (byte-offset precision)
 
 # Code Editing
 insert_at_line      # Insert code at specific line numbers
@@ -138,6 +141,24 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 
 ## 🚀 Recent Improvements (v2.1.8+)
 
+**SmartRefactorTool - AST-Aware Symbol Renaming** (Latest)
+
+- ✅ Byte-offset replacement using SQLite identifiers table (AST-validated positions)
+- ✅ ReferenceResolverService for LSP-quality reference finding
+- ✅ Last-to-first replacement algorithm preserves byte offsets during replacement
+- ✅ Dry run mode by default for safe preview before applying changes
+- ✅ Token-optimized responses with insights and next actions
+- ✅ Operations supported: `rename_symbol` (more coming: extract_function, inline_variable)
+
+**Fuzzy Matching Mode for SearchAndReplaceTool** (Latest)
+
+- ✅ Google's DiffMatchPatch fuzzy matching (battle-tested since 2006)
+- ✅ Configurable threshold (0.0-1.0) and distance (100-10000 chars)
+- ✅ Finds ALL fuzzy matches across files (not just first occurrence)
+- ✅ Handles typos, spacing variations, and imperfect matches
+- ✅ Infinite loop protection with forced progress guarantee
+- ✅ Example: Finds `getUserData()`, `getUserDat()` (typo), `getUserData ()` (spacing)
+
 **SmartQueryPreprocessor Integration**
 
 - ✅ Comprehensive test suite: 35 unit tests with full coverage
@@ -199,4 +220,4 @@ mcp__codesearch__recent_files --workspacePath "."
 
 ---
 
-_Updated: 2025-09-22 - Restored to stable commit 4b32d04 with TreeSitter.DotNet, 117 files/sec performance_
+_Updated: 2025-10-06 - Added SmartRefactorTool (AST-aware renaming) and fuzzy matching mode to SearchAndReplaceTool_

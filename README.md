@@ -12,7 +12,8 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 - **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 10+ languages including C#, TypeScript, Python, Java, Rust, JavaScript, Bash, JSON, TOML, and more
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
-- **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety
+- **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety, plus fuzzy matching for handling typos and variations
+- **🔧 Smart Refactoring**: AST-aware symbol renaming using byte-offset replacement - safer than text search/replace
 - **✏️ Surgical Line Editing**: Insert, replace, or delete specific line ranges without reading entire files
 - **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
@@ -261,7 +262,13 @@ Unlike basic file search, CodeSearch understands your code:
 | Tool | Purpose | Parameters |
 |------|---------|------------|
 | `line_search` | Get ALL occurrences with line numbers | `pattern`, `workspacePath`, `contextLines`, `maxResultsPerFile` |
-| `search_and_replace` | Replace patterns across files with preview | `searchPattern`, `replacePattern`, `workspacePath`, `preview` |
+| `search_and_replace` | Replace patterns across files with preview and fuzzy matching | `searchPattern`, `replacePattern`, `workspacePath`, `matchMode`, `fuzzyThreshold`, `preview` |
+
+### Refactoring Tools
+
+| Tool | Purpose | Parameters |
+|------|---------|------------|
+| `smart_refactor` | AST-aware symbol renaming with byte-offset precision | `operation`, `params`, `workspacePath`, `dryRun`, `maxFiles` |
 
 ### Editing Tools
 
@@ -444,6 +451,37 @@ Shows what will change before applying modifications
 ```
 Claude will find and replace copyright patterns across all files
 Supports regex patterns for complex replacements
+```
+
+### Fuzzy Matching Examples
+
+**"Replace getUserData() even with typos using fuzzy matching"**
+```
+Claude will use fuzzy mode with threshold 0.7-0.8
+Finds: getUserData(), getUserDat() (typo), getUserData () (spacing), getUserDatta() (double-t)
+Perfect for cleaning up inconsistent code patterns
+```
+
+**"Fix method name variations across the codebase"**
+```
+Claude will use fuzzy search to find all similar variations
+Handles typos, spacing issues, and minor differences automatically
+```
+
+### Smart Refactoring Examples
+
+**"Rename UserService to AccountService everywhere"**
+```
+Claude will use smart_refactor with AST-aware symbol renaming
+Finds all usages via SQLite identifiers table (LSP-quality)
+Uses byte-offset replacement for precise, safe refactoring
+```
+
+**"Refactor UpdateUser method name to UpdateUserAccount"**
+```
+Claude will find ALL references using symbol analysis
+Replaces at exact byte positions (not regex)
+Preview mode shows exactly what will change before applying
 ```
 
 
