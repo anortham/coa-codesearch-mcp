@@ -178,7 +178,9 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
                         PreviewMode = parameters.Preview,
                         MatchMode = parameters.MatchMode ?? "literal",
                         CaseSensitive = parameters.CaseSensitive,
-                        ContextLines = parameters.ContextLines
+                        ContextLines = parameters.ContextLines,
+                        FuzzyThreshold = parameters.FuzzyThreshold,
+                        FuzzyDistance = parameters.FuzzyDistance
                     };
 
                     // Apply search and replace using UnifiedFileEditService

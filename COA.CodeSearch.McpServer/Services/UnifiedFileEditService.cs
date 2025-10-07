@@ -146,7 +146,7 @@ public class UnifiedFileEditService
             
             case "fuzzy":
             case "semantic":
-                return ApplySemanticReplacement(content, searchPattern, replacement);
+                return ApplyFuzzyReplacement(content, searchPattern, replacement, options);
             
             default:
                 // Default to literal replacement for safety
@@ -168,19 +168,63 @@ public class UnifiedFileEditService
         return Regex.Replace(content, searchPattern, replacement, options);
     }
 
-    private string ApplySemanticReplacement(string content, string searchPattern, string replacement)
+    private string ApplyFuzzyReplacement(string content, string searchPattern, string replacement, EditOptions options)
     {
-        // Use DiffMatchPatch's fuzzy matching capabilities
-        var matches = _dmp.match_main(content, searchPattern, 0);
-        
-        if (matches == -1)
-            return content; // No match found
-        
-        // Apply replacement at the found position
-        var beforeMatch = content.Substring(0, matches);
-        var afterMatch = content.Substring(matches + searchPattern.Length);
-        
-        return beforeMatch + replacement + afterMatch;
+        // Configure DMP with user-specified fuzzy parameters
+        var originalThreshold = _dmp.Match_Threshold;
+        var originalDistance = _dmp.Match_Distance;
+
+        try
+        {
+            _dmp.Match_Threshold = options.FuzzyThreshold;
+            _dmp.Match_Distance = options.FuzzyDistance;
+
+            // Find ALL fuzzy matches in the content
+            var matchPositions = new List<int>();
+            var searchStart = 0;
+            var lastMatchPos = -1;
+
+            while (searchStart < content.Length)
+            {
+                var matchPos = _dmp.match_main(content, searchPattern, searchStart);
+
+                if (matchPos == -1)
+                    break; // No more matches
+
+                // Prevent infinite loop - if we found the same position, advance by 1
+                if (matchPos == lastMatchPos)
+                {
+                    searchStart++;
+                    continue;
+                }
+
+                matchPositions.Add(matchPos);
+                lastMatchPos = matchPos;
+
+                // Move search position forward to find next match
+                // Advance by pattern length OR at least 1 character to ensure progress
+                searchStart = matchPos + Math.Max(1, searchPattern.Length);
+            }
+
+            if (matchPositions.Count == 0)
+                return content; // No matches found
+
+            // Apply replacements from END to START to preserve positions
+            var result = new StringBuilder(content);
+            foreach (var pos in matchPositions.OrderByDescending(p => p))
+            {
+                result.Remove(pos, searchPattern.Length);
+                result.Insert(pos, replacement);
+            }
+
+            return result.ToString();
+        }
+        finally
+        {
+            // Restore original DMP settings
+            _dmp.Match_Threshold = originalThreshold;
+            _dmp.Match_Distance = originalDistance;
+        }
     }
 
     /// <summary>

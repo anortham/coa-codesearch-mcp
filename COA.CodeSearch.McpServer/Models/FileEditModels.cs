@@ -31,6 +31,18 @@ public class EditOptions
     /// Number of context lines to include in results
     /// </summary>
     public int ContextLines { get; set; } = 3;
+
+    /// <summary>
+    /// Fuzzy match threshold (0.0-1.0) - only used when MatchMode = "fuzzy"
+    /// 0.0 = perfect match, 0.8 = high tolerance (default), 1.0 = match anything
+    /// </summary>
+    public float FuzzyThreshold { get; set; } = 0.8f;
+
+    /// <summary>
+    /// Fuzzy match distance in characters - only used when MatchMode = "fuzzy"
+    /// Higher = slower but more comprehensive search
+    /// </summary>
+    public int FuzzyDistance { get; set; } = 1000;
 }
 
 /// <summary>

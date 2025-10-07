@@ -64,6 +64,24 @@ public class SearchAndReplaceParams
         public string MatchMode { get; set; } = "exact";
 
     /// <summary>
+    /// Fuzzy match threshold (0.0-1.0) - only used when matchMode = "fuzzy"
+    /// 0.0 = perfect match only, 0.5 = moderate tolerance, 0.8 = high tolerance (default), 1.0 = match anything
+    /// </summary>
+    [JsonPropertyName("fuzzyThreshold")]
+    [Description("Fuzzy match threshold 0.0-1.0 (default: 0.8, only for fuzzy mode)")]
+    [Range(0.0, 1.0)]
+    public float FuzzyThreshold { get; set; } = 0.8f;
+
+    /// <summary>
+    /// Fuzzy match distance - how far to search in characters (only used when matchMode = "fuzzy")
+    /// Higher = slower but more comprehensive. Default: 1000 characters
+    /// </summary>
+    [JsonPropertyName("fuzzyDistance")]
+    [Description("Fuzzy search distance in characters (default: 1000, only for fuzzy mode)")]
+    [Range(100, 10000)]
+    public int FuzzyDistance { get; set; } = 1000;
+
+    /// <summary>
     /// Case sensitive search
     /// </summary>
     [JsonPropertyName("caseSensitive")]
