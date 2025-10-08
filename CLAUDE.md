@@ -13,7 +13,7 @@ Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace
 
 **Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: TreeSitter.DotNet
 
-### Core Tools (19 available)
+### Core Tools (16 available) - **Now with Smart Defaults!** 🎯
 
 ```bash
 # Essential Search
@@ -23,10 +23,9 @@ goto_definition     # Jump to exact symbol definitions
 find_references     # Find ALL usages (critical before refactoring)
 
 # File Discovery
-file_search         # Pattern-based file finding (supports **/*.ext)
+search_files        # 🆕 Unified file/directory search (replaces file_search + directory_search)
 recent_files        # Recent modifications (great for context)
 similar_files       # Find similar code patterns
-directory_search    # Find directories by pattern
 
 # Advanced Search
 line_search         # Line-by-line search (replaces grep/rg)
@@ -37,9 +36,7 @@ batch_operations    # Multiple searches in parallel
 smart_refactor      # AST-aware symbol renaming (byte-offset precision)
 
 # Code Editing
-insert_at_line      # Insert code at specific line numbers
-replace_lines       # Replace line ranges with new content
-delete_lines        # Delete line ranges precisely
+edit_lines          # 🆕 Unified line editing (insert/replace/delete - replaces 3 tools)
 
 # Semantic Analysis
 get_symbols_overview # Extract all symbols from files (classes, methods, etc.)
@@ -48,6 +45,10 @@ find_patterns       # Detect code patterns and quality issues
 # System
 index_workspace     # Build/update search index (REQUIRED FIRST)
 ```
+
+**Note:** Tools now have smart defaults - most calls need only 1-2 parameters!
+**Deprecated:** `insert_at_line`, `replace_lines`, `delete_lines` → use `edit_lines`
+**Deprecated:** `file_search`, `directory_search` → use `search_files`
 
 ## 🚨 Development Workflow
 
@@ -60,29 +61,50 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 
 **Never run:** `dotnet run -- stdio` (creates orphaned processes)
 
-## 🔍 Usage Essentials
+## 🔍 Usage Essentials - **Minimal Parameters!** ✨
 
 **Always start with:**
 
 ```bash
+# Index with just the path (or omit for current directory)
 mcp__codesearch__index_workspace --workspacePath "."
 ```
 
-**Common patterns:**
+**Common patterns (now with smart defaults):**
 
 ```bash
-# Search code
+# Search - just the query! (workspace defaults to current directory)
 mcp__codesearch__text_search --query "class UserService"
 
-# Verify types before coding
+# Verify types - just the symbol name!
 mcp__codesearch__goto_definition --symbol "UserService"
 
-# Check impact before refactoring
+# Check impact - just the symbol!
 mcp__codesearch__find_references --symbol "UpdateUser"
 
-# File patterns (simple and recursive)
-mcp__codesearch__file_search --pattern "*Controller.cs"
-mcp__codesearch__file_search --pattern "**/*.csproj"
+# Find files - just the pattern! (defaults to files, current workspace)
+mcp__codesearch__search_files --pattern "*.cs"
+mcp__codesearch__search_files --pattern "**/*.csproj"
+
+# Find directories - specify resourceType
+mcp__codesearch__search_files --pattern "test*" --resourceType "directory"
+
+# Edit code - operation + line + content
+mcp__codesearch__edit_lines --filePath "User.cs" --operation "insert" --startLine 42 --content "// TODO"
+mcp__codesearch__edit_lines --filePath "User.cs" --operation "replace" --startLine 10 --endLine 15 --content "refactored code"
+mcp__codesearch__edit_lines --filePath "User.cs" --operation "delete" --startLine 20 --endLine 25
+```
+
+### ⚡ Before vs After
+
+**Before (8+ parameters):**
+```bash
+text_search --workspacePath "." --query "UserService" --searchMode "auto" --searchType "standard" --caseSensitive false --maxTokens 8000 --noCache false --documentFindings false --autoDetectPatterns false
+```
+
+**After (1 parameter!):**
+```bash
+text_search --query "UserService"  # All other params have smart defaults!
 ```
 
 ## 🏗️ Architecture
@@ -139,9 +161,19 @@ mcp__codesearch__file_search --pattern "**/*.csproj"
 - `SQLiteSymbolService.BulkGenerateEmbeddingsAsync`: Copies BLOBs to vec0
 - `SQLiteSymbolService.SearchSymbolsSemanticAsync`: Executes KNN queries
 
-## 🚀 Recent Improvements (v2.1.8+)
+## 🚀 Recent Improvements (v2.1.9+)
 
-**SmartRefactorTool - AST-Aware Symbol Renaming** (Latest)
+**🆕 Smart Defaults & Tool Consolidation** (Latest - v2.1.9)
+
+- ✅ **Tool consolidation**: 18 tools → 16 tools (-11% reduction)
+  - `edit_lines`: Replaces insert_at_line, replace_lines, delete_lines (3→1)
+  - `search_files`: Replaces file_search, directory_search (2→1)
+- ✅ **Smart defaults**: All tools now have optional `workspacePath` (defaults to current workspace)
+- ✅ **Minimal usage**: Most tools need only 1-2 parameters instead of 8+
+- ✅ **Parameter descriptions**: All defaults clearly documented in descriptions
+- ✅ **Zero breaking changes**: All existing code continues to work
+
+**SmartRefactorTool - AST-Aware Symbol Renaming** (v2.1.8)
 
 - ✅ Byte-offset replacement using SQLite identifiers table (AST-validated positions)
 - ✅ ReferenceResolverService for LSP-quality reference finding
@@ -220,4 +252,4 @@ mcp__codesearch__recent_files --workspacePath "."
 
 ---
 
-_Updated: 2025-10-06 - Added SmartRefactorTool (AST-aware renaming) and fuzzy matching mode to SearchAndReplaceTool_
+_Updated: 2025-10-07 - Added tool consolidation (edit_lines, search_files) and smart defaults across all tools - most calls now need only 1-2 parameters!_

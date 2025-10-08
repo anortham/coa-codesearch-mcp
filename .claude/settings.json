@@ -1,0 +1,79 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bun run:*)",
+      "Bash(bun test:*)",
+      "mcp__tusk__recall",
+      "mcp__tusk__plan",
+      "mcp__tusk__checkpoint"
+    ]
+  },
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/conversation_start.ts"
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/pre_compact.ts"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/stop.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/post_response.ts"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/user_prompt_submit.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/enhanced_user_prompt_submit.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/exchange_monitor.ts"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/post_tool_use.ts"
+          },
+          {
+            "type": "command",
+            "command": "bun .claude/hooks/plan_detector.ts"
+          }
+        ]
+      }
+    ]
+  }
+}

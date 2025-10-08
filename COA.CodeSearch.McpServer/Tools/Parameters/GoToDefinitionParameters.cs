@@ -24,8 +24,8 @@ public class GoToDefinitionParameters
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
     /// <example>../other-project</example>
-    [Description("Path to the workspace directory to search. Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
-    public string WorkspacePath { get; set; } = string.Empty;
+    [Description("Workspace path. Default: current workspace - Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
+    public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
     /// Include full file content around definition for comprehensive understanding of the symbol's context and usage.

@@ -73,6 +73,7 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 SQLiteSymbolServiceMock.Object,
+                PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,

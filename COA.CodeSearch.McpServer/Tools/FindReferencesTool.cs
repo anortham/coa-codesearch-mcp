@@ -30,6 +30,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, AIOptimizedResponse<SearchResult>>, IPrioritizedTool
 {
     private readonly ILuceneIndexService _luceneIndexService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -45,6 +46,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -55,6 +57,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     public FindReferencesTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
+        IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -64,6 +67,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
         ILogger<FindReferencesTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
+        _pathResolutionService = pathResolutionService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -112,10 +116,11 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     {
         // Validate required parameters
         var symbolName = ValidateRequired(parameters.Symbol, nameof(parameters.Symbol));
-        var workspacePath = ValidateRequired(parameters.WorkspacePath, nameof(parameters.WorkspacePath));
-        
-        // Resolve to absolute path
-        workspacePath = Path.GetFullPath(workspacePath);
+
+        // Use provided workspace path or default to current workspace
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
         
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);

@@ -37,8 +37,8 @@ public class SearchAndReplaceParams
     /// <example>./src</example>
     /// <example>../other-project</example>
     [JsonPropertyName("workspacePath")]
-    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
-    public string? WorkspacePath { get; set; }
+    [Description("Workspace path. Default: current workspace - Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
+    public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
     /// File pattern filter to limit scope using glob patterns.

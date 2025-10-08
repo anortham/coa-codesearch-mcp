@@ -40,6 +40,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
+                PathResolutionServiceMock.Object,
                 ToolLoggerMock.Object,
                 sqliteMock?.Object
             );

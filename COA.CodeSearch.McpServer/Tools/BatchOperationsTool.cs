@@ -6,6 +6,7 @@ using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
+using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Analysis;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -130,7 +131,7 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
 {
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly TextSearchTool _textSearchTool;
-    private readonly FileSearchTool _fileSearchTool;
+    private readonly SearchFilesTool _searchFilesTool;
     private readonly CodeAnalyzer _codeAnalyzer;
 
     /// <summary>
@@ -139,18 +140,18 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="textSearchTool">Text search tool for batch operations</param>
-    /// <param name="fileSearchTool">File search tool for batch operations</param>
+    /// <param name="searchFilesTool">Unified file/directory search tool for batch operations</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     public BatchOperationsTool(
         IServiceProvider serviceProvider,
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
-        FileSearchTool fileSearchTool,
+        SearchFilesTool searchFilesTool,
         CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
-        _fileSearchTool = fileSearchTool;
+        _searchFilesTool = searchFilesTool;
         _codeAnalyzer = codeAnalyzer;
     }
 
@@ -190,10 +191,10 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
                 return new BatchOperationsResult
                 {
                     Success = false,
-                    Error = new ErrorInfo 
-                    { 
-                        Code = "BATCH_INVALID_OPERATIONS", 
-                        Message = "No valid operations found in operations parameter" 
+                    Error = new COA.Mcp.Framework.Models.ErrorInfo
+                    {
+                        Code = "BATCH_INVALID_OPERATIONS",
+                        Message = "No valid operations found in operations parameter"
                     }
                 };
             }
@@ -242,8 +243,8 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
             return new BatchOperationsResult
             {
                 Success = false,
-                Error = new ErrorInfo 
-                { 
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
+                {
                     Code = "BATCH_JSON_PARSE_ERROR", 
                     Message = $"Invalid operations JSON: {ex.Message}" 
                 }
@@ -255,8 +256,8 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
             return new BatchOperationsResult
             {
                 Success = false,
-                Error = new ErrorInfo 
-                { 
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
+                {
                     Code = "BATCH_EXECUTION_ERROR", 
                     Message = $"Batch execution failed: {ex.Message}" 
                 }
@@ -347,10 +348,11 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
         if (string.IsNullOrEmpty(operation.pattern))
             throw new ArgumentException("file_search requires 'pattern' parameter");
 
-        var parameters = new FileSearchParameters
+        var parameters = new SearchFilesParameters
         {
             Pattern = operation.pattern,
             WorkspacePath = workspacePath,
+            ResourceType = "file", // Default to file search (same behavior as FileSearchTool)
             MaxTokens = Math.Min(batchParams.MaxTokens / 4, 2000),
             NoCache = batchParams.NoCache,
             ResponseMode = "summary",
@@ -358,7 +360,7 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
             MaxResults = Math.Min(operation.maxResults ?? 20, 50) // Limit results
         };
 
-        return await _fileSearchTool.ExecuteAsync(parameters, cancellationToken);
+        return await _searchFilesTool.ExecuteAsync(parameters, cancellationToken);
     }
 
     private int GetResultCount(object? result)

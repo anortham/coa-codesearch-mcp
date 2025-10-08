@@ -35,6 +35,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly ISQLiteSymbolService _sqliteService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -63,6 +64,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         ISQLiteSymbolService sqliteService,
+        IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -74,6 +76,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     {
         _luceneIndexService = luceneIndexService;
         _sqliteService = sqliteService;
+        _pathResolutionService = pathResolutionService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -137,10 +140,11 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     {
         // Validate required parameters
         var query = ValidateRequired(parameters.Query, nameof(parameters.Query));
-        var workspacePath = ValidateRequired(parameters.WorkspacePath, nameof(parameters.WorkspacePath));
-        
-        // Resolve to absolute path
-        workspacePath = Path.GetFullPath(workspacePath);
+
+        // Use current workspace if not specified
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
         
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);

@@ -46,6 +46,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new SearchAndReplaceTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                PathResolutionServiceMock.Object,
                 smartQueryPreprocessor,
                 resourceStorageServiceMock.Object,
                 CodeAnalyzer,

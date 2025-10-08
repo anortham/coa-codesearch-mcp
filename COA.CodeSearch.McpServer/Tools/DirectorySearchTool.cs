@@ -33,6 +33,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for searching directories by name pattern using Lucene index
 /// </summary>
+[Obsolete("Use SearchFilesTool with resourceType='directory' instead. This tool will be removed in a future version.", error: false)]
 public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters, AIOptimizedResponse<DirectorySearchResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;
@@ -113,8 +114,12 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         CancellationToken cancellationToken)
     {
         // Validate parameters
-        var workspacePath = ValidateRequired(parameters.WorkspacePath, nameof(parameters.WorkspacePath));
         var pattern = ValidateRequired(parameters.Pattern, nameof(parameters.Pattern));
+
+        // Use provided workspace path or default to current workspace
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
         
         // Check if index exists for workspace
         if (!await _luceneService.IndexExistsAsync(workspacePath, cancellationToken))

@@ -16,6 +16,7 @@ public static class ToolNames
     public const string SearchAndReplace = "search_and_replace";
     
     // File and directory operations
+    public const string SearchFiles = "search_files";
     public const string DirectorySearch = "directory_search";
     public const string RecentFiles = "recent_files";
 
@@ -26,6 +27,7 @@ public static class ToolNames
     public const string TraceCallPath = "trace_call_path";
     
     // Editing tools
+    public const string EditLines = "edit_lines";
     public const string InsertAtLine = "insert_at_line";
     public const string ReplaceLines = "replace_lines";
     public const string DeleteLines = "delete_lines";

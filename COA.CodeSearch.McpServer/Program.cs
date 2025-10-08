@@ -303,13 +303,12 @@ public class Program
             // Search tools
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
-            builder.Services.AddScoped<FileSearchTool>();
+            builder.Services.AddScoped<SearchFilesTool>(); // Unified file/directory search
             builder.Services.AddScoped<BatchOperationsTool>(); // Batch operations for multiple searches
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
-            builder.Services.AddScoped<DirectorySearchTool>(); // New! Directory search implementation
             builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
             builder.Services.AddScoped<SearchAndReplaceTool>(); // Enhanced! Uses DiffMatchPatch and workspace permissions
-            
+
             // Navigation tools (from CodeNav consolidation)
             // TODO: All tools should follow the response builder pattern for consistency
             // These tools use dedicated response builders for token optimization and consistent behavior
@@ -317,11 +316,9 @@ public class Program
             builder.Services.AddScoped<FindReferencesTool>(); // Find all usages of a symbol
             builder.Services.AddScoped<TraceCallPathTool>(); // Hierarchical call chain analysis
             builder.Services.AddScoped<GoToDefinitionTool>(); // Jump to symbol definition
-            
+
             // Editing tools (NEW - Enable dogfooding!)
-            builder.Services.AddScoped<InsertAtLineTool>(); // Insert content at specific line numbers
-            builder.Services.AddScoped<ReplaceLinesTool>(); // Replace line ranges with new content
-            builder.Services.AddScoped<DeleteLinesTool>(); // Delete line ranges with surgical precision
+            builder.Services.AddScoped<EditLinesTool>(); // Unified line editing (insert/replace/delete)
 
             // Refactoring tools (AST-aware semantic refactoring)
             builder.Services.AddScoped<SmartRefactorTool>(); // Smart refactoring with symbol-aware transformations
@@ -339,7 +336,7 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "insert_at_line", "replace_lines", "delete_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "search_files", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "edit_lines", "insert_at_line", "replace_lines", "delete_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
@@ -347,6 +344,7 @@ public class Program
                     {"trace_call_path", 92},
                     {"text_search", 90},
                     {"symbol_search", 85},
+                    {"search_files", 82},
                     {"file_search", 80},
                     {"line_search", 75},
                     {"search_and_replace", 70},
@@ -354,6 +352,7 @@ public class Program
                     {"directory_search", 60},
                     {"batch_operations", 85},
                     {"index_workspace", 100},
+                    {"edit_lines", 92},
                     {"insert_at_line", 90},
                     {"replace_lines", 90},
                     {"delete_lines", 90},
@@ -434,6 +433,15 @@ public class Program
                         BuiltInTool = "Read + Edit",
                         Limitation = "Full file read required, manual line identification, risk of corruption",
                         PerformanceMetric = "Precise deletion vs read-modify-write operations"
+                    },
+                    ["Unified line editing"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Unified line editing",
+                        ServerTool = "mcp__codesearch__edit_lines",
+                        Advantage = "One tool for all line operations - insert, replace, delete with minimal parameters (3-4 vs 6-8)",
+                        BuiltInTool = "Multiple tool calls",
+                        Limitation = "Must remember which specific editing tool to use, more parameters to specify",
+                        PerformanceMetric = "Simpler API: edit_lines(file, operation, line, content) vs separate tools"
                     },
                     ["Symbol navigation"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {

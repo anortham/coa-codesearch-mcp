@@ -24,8 +24,8 @@ public class GetSymbolsOverviewParameters
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
     /// <example>../other-project</example>
-    [Description("Workspace path (e.g., C:\\source\\MyProject, ./src, ../other-project)")]
-    public string WorkspacePath { get; set; } = string.Empty;
+    [Description("Workspace path. Default: current workspace - Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
+    public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
     /// Include method signatures and details for comprehensive symbol understanding.

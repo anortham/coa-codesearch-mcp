@@ -38,6 +38,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             _tool = new FindReferencesTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
+                PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,

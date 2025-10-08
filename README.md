@@ -235,55 +235,64 @@ Unlike basic file search, CodeSearch understands your code:
 - **Type-Aware**: Extracts and indexes types from 10+ languages for accurate navigation
 - **Precise Editing**: Complete line-based editing suite for surgical code modifications without full file reads
 
-## 🛠️ Available Tools
+## 🛠️ Available Tools - **Now with Smart Defaults!** ✨
+
+**Note:** All tools now support smart defaults - most parameters are optional and default to sensible values. The `workspacePath` parameter defaults to the current workspace directory across all tools.
 
 ### Core Search Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `index_workspace` | Index files for search | `workspacePath`, `forceRebuild` |
-| `text_search` | Search file contents | `query`, `workspacePath`, `maxTokens` |
-| `file_search` | Find files by name pattern | `pattern`, `workspacePath`, `useRegex` |
-| `directory_search` | Find directories by pattern | `pattern`, `workspacePath`, `includeHidden` |
-| `batch_operations` | Execute multiple searches in batch | `workspacePath`, `operations`, `maxTokens` |
-| `recent_files` | Get recently modified files | `workspacePath`, `timeFrame` |
-| `similar_files` | Find content-similar files | `filePath`, `workspacePath`, `minScore` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `index_workspace` | Index files for search | `workspacePath` (optional, defaults to current dir) |
+| `text_search` | Search file contents | `query` (required) |
+| `search_files` | 🆕 Find files or directories by pattern | `pattern` (required), `resourceType` (optional: "file", "directory", "both") |
+| `batch_operations` | Execute multiple searches in batch | `operations` (required) |
+| `recent_files` | Get recently modified files | `timeFrame` (optional, e.g., "2d", "1w") |
+| `similar_files` | Find content-similar files | `filePath` (required) |
 
 ### Navigation Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `symbol_search` | Find classes, interfaces, methods by name | `symbol`, `workspacePath`, `includeReferences`, `maxResults` |
-| `find_references` | Find all usages of a symbol | `symbol`, `workspacePath`, `groupByFile`, `contextLines` |
-| `goto_definition` | Jump to symbol definition | `symbol`, `workspacePath`, `includeFullContext`, `contextLines` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `symbol_search` | Find classes, interfaces, methods by name | `symbol` (required) |
+| `find_references` | Find all usages of a symbol | `symbol` (required) |
+| `goto_definition` | Jump to symbol definition | `symbol` (required) |
 
 ### Advanced Search Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `line_search` | Get ALL occurrences with line numbers | `pattern`, `workspacePath`, `contextLines`, `maxResultsPerFile` |
-| `search_and_replace` | Replace patterns across files with preview and fuzzy matching | `searchPattern`, `replacePattern`, `workspacePath`, `matchMode`, `fuzzyThreshold`, `preview` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `line_search` | Get ALL occurrences with line numbers | `pattern` (required) |
+| `search_and_replace` | Replace patterns across files with preview and fuzzy matching | `searchPattern` (required), `replacePattern` (optional) |
 
 ### Refactoring Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `smart_refactor` | AST-aware symbol renaming with byte-offset precision | `operation`, `params`, `workspacePath`, `dryRun`, `maxFiles` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `smart_refactor` | AST-aware symbol renaming with byte-offset precision | `operation` (required), `params` (required) |
 
 ### Editing Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `insert_at_line` | Insert content at specific line numbers | `filePath`, `lineNumber`, `content`, `preserveIndentation` |
-| `replace_lines` | Replace line ranges with new content | `filePath`, `startLine`, `endLine`, `content`, `preserveIndentation` |
-| `delete_lines` | Delete line ranges with surgical precision | `filePath`, `startLine`, `endLine`, `contextLines` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `edit_lines` | 🆕 Unified line editing (insert/replace/delete) | `filePath` (required), `operation` (required: "insert", "replace", "delete"), `startLine` (required) |
 
 ### System Tools
 
-| Tool | Purpose | Parameters |
-|------|---------|------------|
-| `hello_world` | Test connectivity | `name`, `includeTime` |
-| `get_system_info` | System diagnostics | `includeEnvironment` |
+| Tool | Purpose | Key Parameters (all others optional) |
+|------|---------|--------------------------------------|
+| `hello_world` | Test connectivity | `name` (optional) |
+| `get_system_info` | System diagnostics | None required |
+
+### Deprecated Tools (still available but prefer alternatives)
+
+| Deprecated | Use Instead | Reason |
+|-----------|-------------|--------|
+| `file_search` | `search_files` | Consolidated into unified search |
+| `directory_search` | `search_files --resourceType "directory"` | Consolidated into unified search |
+| `insert_at_line` | `edit_lines --operation "insert"` | Consolidated into unified editor |
+| `replace_lines` | `edit_lines --operation "replace"` | Consolidated into unified editor |
+| `delete_lines` | `edit_lines --operation "delete"` | Consolidated into unified editor |
 
 ## 💬 How to Use with Claude Code
 

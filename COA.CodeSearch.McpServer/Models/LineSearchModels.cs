@@ -1,3 +1,4 @@
+using System.ComponentModel;
 using System.Text.Json.Serialization;
 
 namespace COA.CodeSearch.McpServer.Models;
@@ -22,8 +23,9 @@ public class LineSearchParams
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
     /// <example>../other-project</example>
+    [Description("Workspace path. Default: current workspace - Examples: 'C:\\source\\MyProject', './src', '../other-project'")]
     [JsonPropertyName("workspacePath")]
-    public string? WorkspacePath { get; set; }
+    public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
     /// File pattern filter to limit search scope using glob patterns.

@@ -26,6 +26,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, AIOptimizedResponse<SearchAndReplaceResult>>
 {
     private readonly ILuceneIndexService _indexService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly SmartQueryPreprocessor _queryProcessor;
     private readonly IResourceStorageService _storageService;
     private readonly CodeAnalyzer _codeAnalyzer;
@@ -38,6 +39,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="indexService">Lucene index service for search operations</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="queryProcessor">Smart query preprocessing service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
@@ -47,6 +49,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     public SearchAndReplaceTool(
         IServiceProvider serviceProvider,
         ILuceneIndexService indexService,
+        IPathResolutionService pathResolutionService,
         SmartQueryPreprocessor queryProcessor,
         IResourceStorageService storageService,
         CodeAnalyzer codeAnalyzer,
@@ -55,6 +58,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
         ILogger<SearchAndReplaceTool> logger) : base(serviceProvider, logger)
     {
         _indexService = indexService;
+        _pathResolutionService = pathResolutionService;
         _queryProcessor = queryProcessor;
         _storageService = storageService;
         _codeAnalyzer = codeAnalyzer;
@@ -100,8 +104,10 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
             if (string.IsNullOrWhiteSpace(parameters.SearchPattern))
                 return CreateErrorResponse("Search pattern cannot be empty");
 
-            // Use workspace path directly
-            var workspacePath = parameters.WorkspacePath ?? Directory.GetCurrentDirectory();
+            // Use provided workspace path or default to current workspace
+            var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+                ? _pathResolutionService.GetPrimaryWorkspacePath()
+                : Path.GetFullPath(parameters.WorkspacePath);
             
             // Check if index exists
             if (!await _indexService.IndexExistsAsync(workspacePath, cancellationToken))

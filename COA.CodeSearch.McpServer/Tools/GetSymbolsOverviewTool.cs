@@ -7,6 +7,7 @@ using COA.Mcp.Framework.TokenOptimization.ResponseBuilders;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
+using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Tools.Models;
@@ -23,6 +24,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly ILogger<GetSymbolsOverviewTool> _logger;
     private readonly ISQLiteSymbolService? _sqliteService;
 
@@ -33,6 +35,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="sqliteService">SQLite symbol service for symbol lookups</param>
     public GetSymbolsOverviewTool(
@@ -40,12 +43,14 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        IPathResolutionService pathResolutionService,
         ILogger<GetSymbolsOverviewTool> logger,
         ISQLiteSymbolService? sqliteService = null) : base(serviceProvider, logger)
     {
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _pathResolutionService = pathResolutionService;
         _logger = logger;
         _sqliteService = sqliteService;
     }
@@ -111,6 +116,11 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             filePath = Path.GetFullPath(filePath);
         }
 
+        // Use provided workspace path or default to current workspace
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
+
         // Validate file exists
         if (!File.Exists(filePath))
         {
@@ -155,10 +165,9 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             _logger.LogInformation("Getting symbols overview from {FilePath}", filePath);
 
             // Check if SQLite database exists
-            if (_sqliteService == null || string.IsNullOrEmpty(parameters.WorkspacePath) ||
-                !_sqliteService.DatabaseExists(parameters.WorkspacePath))
+            if (_sqliteService == null || !_sqliteService.DatabaseExists(workspacePath))
             {
-                _logger.LogWarning("SQLite database not found for workspace {WorkspacePath}", parameters.WorkspacePath);
+                _logger.LogWarning("SQLite database not found for workspace {WorkspacePath}", workspacePath);
                 return new AIOptimizedResponse<SymbolsOverviewResult>
                 {
                     Success = false,
@@ -183,7 +192,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             _logger.LogDebug("Querying SQLite for symbols in {FilePath}", filePath);
 
             var symbols = await _sqliteService.GetSymbolsForFileAsync(
-                parameters.WorkspacePath,
+                workspacePath,
                 filePath,
                 cancellationToken);
 

@@ -41,6 +41,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             ServiceProvider,
             _callPathTracerMock.Object,
             _sqliteServiceMock.Object,
+            PathResolutionServiceMock.Object,
             ResponseCacheServiceMock.Object,
             ResourceStorageServiceMock.Object,
             CacheKeyGeneratorMock.Object,

@@ -21,7 +21,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
     {
         private BatchOperationsTool _tool = null!;
         private TextSearchTool _textSearchTool = null!;
-        private FileSearchTool _fileSearchTool = null!;
+        private SearchFilesTool _searchFilesTool = null!;
 
         protected override BatchOperationsTool CreateTool()
         {
@@ -40,6 +40,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 SQLiteSymbolServiceMock.Object,
+                PathResolutionServiceMock.Object,
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
@@ -49,9 +50,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CodeAnalyzer,
                 textSearchLoggerMock.Object);
 
-            // Create actual FileSearchTool instance
-            var fileSearchLoggerMock = new Mock<ILogger<FileSearchTool>>();
-            _fileSearchTool = new FileSearchTool(
+            // Create actual SearchFilesTool instance
+            var searchFilesLoggerMock = new Mock<ILogger<SearchFilesTool>>();
+            _searchFilesTool = new SearchFilesTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 SQLiteSymbolServiceMock.Object,
@@ -59,14 +60,13 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                fileSearchLoggerMock.Object,
-                CodeAnalyzer);
+                searchFilesLoggerMock.Object);
 
             _tool = new BatchOperationsTool(
                 ServiceProvider,
                 ToolLoggerMock.Object,
                 _textSearchTool,
-                _fileSearchTool,
+                _searchFilesTool,
                 CodeAnalyzer
             );
             return _tool;

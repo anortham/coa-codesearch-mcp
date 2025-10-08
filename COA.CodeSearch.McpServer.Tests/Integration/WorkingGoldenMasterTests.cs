@@ -99,6 +99,7 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
         _searchReplaceTool = new SearchAndReplaceTool(
             ServiceProvider,
             LuceneIndexServiceMock.Object,
+            PathResolutionServiceMock.Object,
             smartQueryPreprocessor,
             ResourceStorageServiceMock.Object,
             CodeAnalyzer,

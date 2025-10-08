@@ -11,6 +11,7 @@ using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Services.Julie;
+using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
@@ -25,6 +26,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly GoToDefinitionResponseBuilder _responseBuilder;
     private readonly ILogger<GoToDefinitionTool> _logger;
     private readonly ISQLiteSymbolService? _sqliteService;
@@ -36,6 +38,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="sqliteService">SQLite symbol service for symbol lookups</param>
     public GoToDefinitionTool(
@@ -43,12 +46,14 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
+        IPathResolutionService pathResolutionService,
         ILogger<GoToDefinitionTool> logger,
         ISQLiteSymbolService? sqliteService = null) : base(serviceProvider, logger)
     {
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
+        _pathResolutionService = pathResolutionService;
         _responseBuilder = new GoToDefinitionResponseBuilder(logger as ILogger<GoToDefinitionResponseBuilder>, storageService);
         _logger = logger;
         _sqliteService = sqliteService;
@@ -91,10 +96,11 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     {
         // Validate required parameters
         var symbolName = ValidateRequired(parameters.Symbol, nameof(parameters.Symbol));
-        var workspacePath = ValidateRequired(parameters.WorkspacePath, nameof(parameters.WorkspacePath));
 
-        // Resolve to absolute path
-        workspacePath = Path.GetFullPath(workspacePath);
+        // Use provided workspace path or default to current workspace
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
 
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);

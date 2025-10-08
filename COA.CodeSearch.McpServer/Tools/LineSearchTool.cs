@@ -93,22 +93,21 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
         {
             _logger.LogInformation("Starting line search for pattern: {Pattern}", parameters.Pattern);
 
-            // Validate workspace path
-            if (string.IsNullOrEmpty(parameters.WorkspacePath))
-            {
-                throw new ArgumentException("WorkspacePath is required for line search operations");
-            }
-            
-            var normalizedPath = _pathResolutionService.GetFullPath(parameters.WorkspacePath);
+            // Use provided workspace path or default to current workspace
+            var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+                ? _pathResolutionService.GetPrimaryWorkspacePath()
+                : parameters.WorkspacePath;
+
+            var normalizedPath = _pathResolutionService.GetFullPath(workspacePath);
             if (!_pathResolutionService.DirectoryExists(normalizedPath))
             {
-                throw new DirectoryNotFoundException($"Workspace path not found: {parameters.WorkspacePath}");
+                throw new DirectoryNotFoundException($"Workspace path not found: {workspacePath}");
             }
 
             // Ensure index exists
             if (!await _indexService.IndexExistsAsync(normalizedPath, cancellationToken))
             {
-                throw new InvalidOperationException($"No search index found for workspace. Run index_workspace first for: {parameters.WorkspacePath}");
+                throw new InvalidOperationException($"No search index found for workspace. Run index_workspace first for: {workspacePath}");
             }
 
             // Use SmartQueryPreprocessor for multi-field search optimization

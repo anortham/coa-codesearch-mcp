@@ -16,6 +16,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool for inserting text at a specific line in a file without requiring prior file reading.
 /// This enables editing files using line-precise positioning from search results.
 /// </summary>
+[Obsolete("Use EditLinesTool with operation='insert' instead. This tool will be removed in a future version.", error: false)]
 public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOptimizedResponse<InsertAtLineResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;

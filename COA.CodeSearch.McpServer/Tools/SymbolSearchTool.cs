@@ -33,6 +33,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
 {
     private readonly ILuceneIndexService _luceneIndexService;
     private readonly ISQLiteSymbolService _sqliteService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly IResponseCacheService _cacheService;
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
@@ -48,6 +49,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
     /// <param name="sqliteService">SQLite symbol service for fast exact/prefix matching</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -58,6 +60,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
         IServiceProvider serviceProvider,
         ILuceneIndexService luceneIndexService,
         ISQLiteSymbolService sqliteService,
+        IPathResolutionService pathResolutionService,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
@@ -67,6 +70,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     {
         _luceneIndexService = luceneIndexService;
         _sqliteService = sqliteService;
+        _pathResolutionService = pathResolutionService;
         _cacheService = cacheService;
         _storageService = storageService;
         _keyGenerator = keyGenerator;
@@ -114,10 +118,11 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     {
         // Validate required parameters
         var symbolName = ValidateRequired(parameters.Symbol, nameof(parameters.Symbol));
-        var workspacePath = ValidateRequired(parameters.WorkspacePath, nameof(parameters.WorkspacePath));
-        
-        // Resolve to absolute path
-        workspacePath = Path.GetFullPath(workspacePath);
+
+        // Use provided workspace path or default to current workspace
+        var workspacePath = string.IsNullOrWhiteSpace(parameters.WorkspacePath)
+            ? _pathResolutionService.GetPrimaryWorkspacePath()
+            : Path.GetFullPath(parameters.WorkspacePath);
         
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);

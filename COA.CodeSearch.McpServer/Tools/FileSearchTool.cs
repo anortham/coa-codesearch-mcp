@@ -25,6 +25,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// <summary>
 /// Tool for searching files by name pattern in indexed workspaces with token optimization
 /// </summary>
+[Obsolete("Use SearchFilesTool with resourceType='file' instead. This tool will be removed in a future version.", error: false)]
 public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimizedResponse<FileSearchResult>>
 {
     private readonly ILuceneIndexService _luceneIndexService;

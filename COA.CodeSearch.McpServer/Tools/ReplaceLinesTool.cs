@@ -16,6 +16,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool for replacing a range of lines in a file with new content.
 /// Enables precise surgical editing of code blocks at known line positions.
 /// </summary>
+[Obsolete("Use EditLinesTool with operation='replace' instead. This tool will be removed in a future version.", error: false)]
 public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;

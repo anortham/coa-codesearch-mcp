@@ -15,6 +15,7 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// Tool for deleting a range of lines from a file.
 /// Enables precise surgical deletion of code blocks at known line positions.
 /// </summary>
+[Obsolete("Use EditLinesTool with operation='delete' instead. This tool will be removed in a future version.", error: false)]
 public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptimizedResponse<DeleteLinesResult>>
 {
     private readonly IPathResolutionService _pathResolutionService;

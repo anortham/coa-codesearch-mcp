@@ -48,6 +48,7 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
         _searchReplaceTool = new SearchAndReplaceTool(
             ServiceProvider,
             LuceneIndexServiceMock.Object,
+            PathResolutionServiceMock.Object,
             smartQueryPreprocessor,
             ResourceStorageServiceMock.Object,
             CodeAnalyzer,
