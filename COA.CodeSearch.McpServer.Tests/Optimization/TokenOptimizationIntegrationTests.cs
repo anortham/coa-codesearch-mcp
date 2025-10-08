@@ -6,7 +6,6 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
-using COA.VSCodeBridge;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
@@ -79,7 +78,6 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
                 smartDocumentationService,
-                VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
                 loggerMock.Object);

@@ -24,8 +24,6 @@ using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.CodeSearch.McpServer.Tools.Results;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 using Lucene.Net.Search;
 using Lucene.Net.Index;
 using Lucene.Net.QueryParsers.Classic;
@@ -44,7 +42,6 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly DirectorySearchResponseBuilder _responseBuilder;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<DirectorySearchTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
     
@@ -65,7 +62,6 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     public DirectorySearchTool(
@@ -76,7 +72,6 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<DirectorySearchTool> logger,
         CodeAnalyzer codeAnalyzer)
         : base(serviceProvider, logger)
@@ -88,7 +83,6 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new DirectorySearchResponseBuilder(null, storageService);
-        _vscode = vscode;
         _logger = logger;
         _codeAnalyzer = codeAnalyzer;
     }

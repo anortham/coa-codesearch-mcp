@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for smart refactoring operations
 /// </summary>
-public class SmartRefactorParameters : VisualizableParameters
+public class SmartRefactorParameters
 {
     /// <summary>
     /// The refactoring operation to perform

@@ -30,7 +30,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object,
                 CodeAnalyzer
             );

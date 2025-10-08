@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the get_symbols_overview tool - extracts all symbols from files with complete type information and line numbers
 /// </summary>
-public class GetSymbolsOverviewParameters : VisualizableParameters
+public class GetSymbolsOverviewParameters
 {
     /// <summary>
     /// Path to the file to analyze for symbol extraction. Must be an existing code file.

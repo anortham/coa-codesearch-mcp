@@ -64,7 +64,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             var mockSymbols = CreateMockSQLiteSymbols();
@@ -122,7 +121,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Setup SQLite mock to return empty list (symbol not found)
@@ -159,7 +157,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Act & Assert - The framework throws an exception for validation errors
@@ -181,7 +178,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             var mockSymbols = CreateMockSQLiteSymbols();
@@ -238,7 +234,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 10,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             var mockSymbols = CreateMockSQLiteSymbols();
@@ -352,7 +347,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = true, // Disable cache for testing
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Setup SQLite mock to return JulieSymbol
@@ -416,7 +410,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = true,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Setup SQLite mock to return database doesn't exist
@@ -448,7 +441,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = true,
                 CaseSensitive = false, // Case-insensitive
-                NavigateToFirstResult = false
             };
 
             // Setup SQLite mock to return "TestClass" (different case)
@@ -509,7 +501,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ContextLines = 5,
                 NoCache = true,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Setup SQLite mock to return multiple JulieSymbols

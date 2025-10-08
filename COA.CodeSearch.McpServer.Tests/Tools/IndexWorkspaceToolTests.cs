@@ -41,7 +41,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
             return _tool;
@@ -307,10 +306,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                VSCodeBridgeMock.Object,
                 ToolLoggerMock.Object
             );
-            
+
             var parameters = new IndexWorkspaceParameters
             {
                 WorkspacePath = TestWorkspacePath

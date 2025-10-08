@@ -19,8 +19,6 @@ using Lucene.Net.Index;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
 using Lucene.Net.Util;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -36,7 +34,6 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly FileSearchResponseBuilder _responseBuilder;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<FileSearchTool> _logger;
     private readonly CodeAnalyzer _codeAnalyzer;
 
@@ -50,7 +47,6 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="logger">Logger instance</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     public FileSearchTool(
@@ -61,7 +57,6 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<FileSearchTool> logger,
         CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
@@ -72,7 +67,6 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new FileSearchResponseBuilder(logger as ILogger<FileSearchResponseBuilder>, storageService);
-        _vscode = vscode;
         _logger = logger;
         _codeAnalyzer = codeAnalyzer;
     }
@@ -362,34 +356,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(fileSearchResult, context);
-            
-            // Open first result in VS Code if requested
-            if ((parameters.OpenFirstResult ?? false) && _vscode.IsConnected && result.Success && files.Count > 0)
-            {
-                // Fire and forget - don't block the main response
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        var firstFile = files.First();
-                        var success = await _vscode.OpenFileAsync(firstFile.FilePath);
-                        
-                        if (success)
-                        {
-                            _logger.LogDebug("Opened file in VS Code: {FilePath}", firstFile.FilePath);
-                        }
-                        else
-                        {
-                            _logger.LogWarning("Failed to open file in VS Code: {FilePath}", firstFile.FilePath);
-                        }
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to open first file result in VS Code");
-                    }
-                }, cancellationToken);
-            }
-            
+
             // Add directories to extension data if requested
             if (directories != null)
             {

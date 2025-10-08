@@ -144,24 +144,7 @@ public class Program
         
         // Write lock management
         services.AddSingleton<IWriteLockManager, WriteLockManager>();
-        
-        // VS Code Bridge integration (graceful degradation if unavailable)
-        services.Configure<COA.VSCodeBridge.VSCodeBridgeOptions>(options =>
-        {
-            options.Url = "ws://localhost:7823/mcp";
-            options.AutoConnect = false; // Disabled to prevent log flooding when bridge not running
-            options.ThrowOnConnectionFailure = false; // Graceful degradation
-            options.ThrowOnDisplayFailure = false;
-        });
-        services.AddSingleton<COA.VSCodeBridge.VSCodeBridge>(serviceProvider =>
-        {
-            var options = serviceProvider.GetRequiredService<IOptions<COA.VSCodeBridge.VSCodeBridgeOptions>>();
-            var logger = serviceProvider.GetService<ILogger<COA.VSCodeBridge.VSCodeBridge>>();
-            return new COA.VSCodeBridge.VSCodeBridge(options, logger);
-        });
-        services.AddSingleton<COA.VSCodeBridge.IVSCodeBridge>(serviceProvider => 
-            serviceProvider.GetRequiredService<COA.VSCodeBridge.VSCodeBridge>());
-        
+
         // Token Optimization services
         services.AddSingleton<ITokenEstimator, DefaultTokenEstimator>();
         // Note: IInsightGenerator and IActionGenerator may be internal to framework

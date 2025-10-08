@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the find references tool - finds all usages of a symbol
 /// </summary>
-public class FindReferencesParameters : VisualizableParameters
+public class FindReferencesParameters
 {
     /// <summary>
     /// The symbol name to find all references for - CRITICAL for understanding impact before refactoring.

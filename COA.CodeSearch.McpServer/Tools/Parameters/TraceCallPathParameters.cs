@@ -74,28 +74,10 @@ public class TraceCallPathParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Navigate to first result automatically when showing in VS Code
-    /// </summary>
-    [Description("Auto-navigate to first result in VS Code")]
-    public bool NavigateToFirstResult { get; set; } = false;
-
-    /// <summary>
     /// Disable caching for this request
     /// </summary>
     [Description("Disable caching for this request")]
     public bool NoCache { get; set; } = false;
-
-    /// <summary>
-    /// Override tool default: whether to show in VS Code (null = use tool default)
-    /// </summary>
-    [Description("Override: show in VS Code (null = default)")]
-    public bool? ShowInVSCode { get; set; }
-
-    /// <summary>
-    /// Override tool default: preferred view type (auto, grid, chart, markdown, tree, timeline)
-    /// </summary>
-    [Description("Override: view type (auto, grid, chart, markdown, tree, timeline)")]
-    public string? VSCodeView { get; set; }
 
     /// <summary>
     /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.

@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the goto definition tool - locates the exact definition of symbols with precision and context
 /// </summary>
-public class GoToDefinitionParameters : VisualizableParameters
+public class GoToDefinitionParameters
 {
     /// <summary>
     /// The symbol name to find the exact definition for - VERIFY BEFORE CODING to understand types and signatures.

@@ -6,7 +6,6 @@ using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.TypeExtraction;
-using COA.VSCodeBridge;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
 using System.Threading;
@@ -23,8 +22,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         private BatchOperationsTool _tool = null!;
         private TextSearchTool _textSearchTool = null!;
         private FileSearchTool _fileSearchTool = null!;
-        private Mock<IVSCodeBridge> _vscodeBridgeMock = null!;
-        
+
         protected override BatchOperationsTool CreateTool()
         {
             // Create dependencies for TextSearchTool
@@ -47,11 +45,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
                 smartDocumentationService,
-                VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
                 textSearchLoggerMock.Object);
-                
+
             // Create actual FileSearchTool instance
             var fileSearchLoggerMock = new Mock<ILogger<FileSearchTool>>();
             _fileSearchTool = new FileSearchTool(
@@ -62,18 +59,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                VSCodeBridgeMock.Object,
                 fileSearchLoggerMock.Object,
                 CodeAnalyzer);
-                
-            _vscodeBridgeMock = new Mock<IVSCodeBridge>();
-            
+
             _tool = new BatchOperationsTool(
                 ServiceProvider,
                 ToolLoggerMock.Object,
                 _textSearchTool,
                 _fileSearchTool,
-                _vscodeBridgeMock.Object,
                 CodeAnalyzer
             );
             return _tool;

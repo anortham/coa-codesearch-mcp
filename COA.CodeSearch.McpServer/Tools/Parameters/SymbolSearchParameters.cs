@@ -1,13 +1,12 @@
 using System.ComponentModel;
 using System.ComponentModel.DataAnnotations;
-using COA.Mcp.Framework.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
 /// <summary>
 /// Parameters for the symbol search tool - finds type and method definitions using Tree-sitter data
 /// </summary>
-public class SymbolSearchParameters : VisualizableParameters
+public class SymbolSearchParameters
 {
     /// <summary>
     /// The symbol name to search for - supports partial matching and intelligent type detection.

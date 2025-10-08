@@ -25,8 +25,6 @@ using Lucene.Net.Index;
 using Lucene.Net.Util;
 using Lucene.Net.QueryParsers.Classic;
 using COA.Mcp.Framework.Interfaces;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -43,8 +41,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
     private readonly SmartDocumentationService _smartDocumentationService;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
-        private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
+    private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
     private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<TextSearchTool> _logger;
 
@@ -59,7 +56,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <param name="keyGenerator">Cache key generator</param>
     /// <param name="queryPreprocessor">Query preprocessing service</param>
     /// <param name="smartDocumentationService">Smart documentation service</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="smartQueryPreprocessor">Smart query preprocessing service</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     /// <param name="logger">Logger instance</param>
@@ -72,8 +68,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
         SmartDocumentationService smartDocumentationService,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
-                SmartQueryPreprocessor smartQueryPreprocessor,
+        SmartQueryPreprocessor smartQueryPreprocessor,
         CodeAnalyzer codeAnalyzer,
         ILogger<TextSearchTool> logger) : base(serviceProvider, logger)
     {
@@ -84,9 +79,8 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
         _smartDocumentationService = smartDocumentationService;
-        _vscode = vscode;
         _logger = logger;
-                _smartQueryPreprocessor = smartQueryPreprocessor;
+        _smartQueryPreprocessor = smartQueryPreprocessor;
         _codeAnalyzer = codeAnalyzer;
         
         // Create response builder with dependencies
@@ -400,59 +394,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
 
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
-
-            // Send visualization to VS Code if requested
-            if ((parameters.ShowInVSCode ?? false) && _vscode.IsConnected && searchResult.TotalHits > 0)
-            {
-                try
-                {
-                    // Log what we have in searchResult before sending to VS Code
-                    if (searchResult.Hits?.Any() == true)
-                    {
-                        var firstHit = searchResult.Hits.First();
-                        _logger.LogDebug("First hit before VS Code visualization: Snippet={HasSnippet}, ContextLines={LineCount}, StartLine={StartLine}", 
-                            !string.IsNullOrEmpty(firstHit.Snippet), 
-                            firstHit.ContextLines?.Count ?? 0, 
-                            firstHit.StartLine);
-                    }
-                    
-                    // Create enhanced visualization data with richer context for VS Code (separate from AI response)
-                    // Use the original search hits before token reduction for richer VS Code display
-                    var visualizationData = new
-                    {
-                        query = query,
-                        totalHits = searchResult.TotalHits,
-                        searchTime = (int)searchResult.SearchTime.TotalMilliseconds,
-                        results = searchResult.Hits?.Select(hit => new
-                        {
-                            filePath = hit.FilePath,
-                            line = hit.LineNumber ?? 1,  // The actual match line (for navigation)
-                            column = 1,
-                            score = hit.Score,
-                            snippet = hit.Snippet ?? string.Join("\n", hit.ContextLines ?? new List<string>()),
-                            preview = hit.Snippet ?? string.Join("\n", hit.ContextLines ?? new List<string>()),
-                            startLine = hit.StartLine ?? (hit.LineNumber ?? 1),  // First line of context display
-                            endLine = hit.EndLine,
-                            contextLines = hit.ContextLines
-                        }).ToList()
-                    };
-
-                    // Send visualization using the generic protocol
-                    await _vscode.SendVisualizationAsync(
-                        "code-search",
-                        visualizationData,
-                        new VisualizationHint
-                        {
-                            Interactive = true,
-                            ConsolidateTabs = true
-                        });
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogWarning(ex, "Failed to send search results to VS Code Bridge");
-                    // Don't fail the operation if visualization fails
-                }
-            }
 
             // Auto-documentation: store findings in ProjectKnowledge if enabled
             if (parameters.DocumentFindings && result.Success && searchResult.TotalHits > 0)

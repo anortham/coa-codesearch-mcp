@@ -62,7 +62,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 MaxTokens = 8000,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             var mockSearchResults = CreateMockSearchResultWithTypeInfo();
@@ -122,7 +121,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 MaxTokens = 8000,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             // Act & Assert - The framework throws an exception for validation errors
@@ -145,7 +143,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 MaxTokens = 8000,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             LuceneIndexServiceMock
@@ -176,7 +173,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 MaxTokens = 8000,
                 NoCache = false,
                 CaseSensitive = false,
-                NavigateToFirstResult = false
             };
 
             var mockSearchResults = CreateMockSearchResultWithTypeInfo();

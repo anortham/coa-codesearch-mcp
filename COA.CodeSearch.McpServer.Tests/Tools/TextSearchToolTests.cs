@@ -43,7 +43,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
                 smartDocumentationService,
-                VSCodeBridgeMock.Object,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
                 ToolLoggerMock.Object

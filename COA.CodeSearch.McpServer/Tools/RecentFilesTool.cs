@@ -13,8 +13,6 @@ using COA.CodeSearch.McpServer.Services.Sqlite;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.Logging;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -29,7 +27,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
     private readonly IResourceStorageService _storageService;
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly RecentFilesResponseBuilder _responseBuilder;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<RecentFilesTool> _logger;
 
     /// <summary>
@@ -41,7 +38,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="logger">Logger instance</param>
     public RecentFilesTool(
         IServiceProvider serviceProvider,
@@ -50,7 +46,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<RecentFilesTool> logger) : base(serviceProvider, logger)
     {
         _sqliteService = sqliteService;
@@ -59,7 +54,6 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _responseBuilder = new RecentFilesResponseBuilder(null, storageService);
-        _vscode = vscode;
         _logger = logger;
     }
 
@@ -193,27 +187,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
             
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(recentFilesResult, context);
-            
-            // NEW: Send timeline visualizations to VS Code (if connected)
-            if (_vscode.IsConnected && result.Success && recentFiles.Count > 0)
-            {
-                // Fire and forget - don't block the main response
-                _ = Task.Run(async () =>
-                {
-                    try
-                    {
-                        // Show timeline chart of recent activity
-                        await SendTimelineVisualizationAsync(recentFiles, timeFrame);
-                        
-                        _logger.LogDebug("Successfully sent recent files timeline visualization to VS Code");
-                    }
-                    catch (Exception ex)
-                    {
-                        _logger.LogWarning(ex, "Failed to send recent files visualizations to VS Code (non-blocking)");
-                    }
-                }, cancellationToken);
-            }
-            
+
             // Cache the successful response
             if (!parameters.NoCache && result.Success)
             {
@@ -326,53 +300,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         };
         return result;
     }
-    
-    private async Task SendTimelineVisualizationAsync(List<RecentFileInfo> recentFiles, TimeSpan timeFrame)
-    {
-        try
-        {
-            // Group files by hour/day depending on timeframe
-            var groupingUnit = timeFrame.TotalDays <= 1 ? "hour" : "day";
-            
-            // Convert files to timeline events
-            var events = recentFiles.Select((file, index) => new
-            {
-                id = $"file-{index}",
-                timestamp = file.LastModified.ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                title = file.FileName,
-                description = $"Modified in {file.Directory}",
-                type = "file_modification",
-                category = file.Extension.TrimStart('.'),
-                metadata = new
-                {
-                    filePath = file.FilePath,
-                    sizeBytes = file.SizeBytes,
-                    extension = file.Extension
-                }
-            }).ToArray();
-            
-            await _vscode.SendVisualizationAsync(
-                "timeline",
-                new
-                {
-                    title = $"Recent File Activity ({recentFiles.Count} files)",
-                    events = events,
-                    groupBy = groupingUnit,
-                    dateRange = new
-                    {
-                        start = recentFiles.Min(f => f.LastModified).ToString("yyyy-MM-ddTHH:mm:ss.fffZ"),
-                        end = recentFiles.Max(f => f.LastModified).ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
-                    }
-                },
-                new VisualizationHint { Interactive = true }
-            );
-        }
-        catch (Exception ex)
-        {
-            _logger.LogWarning(ex, "Failed to send timeline visualization");
-        }
-    }
-    
+
     private static string FormatTimeSpan(TimeSpan timeSpan)
     {
         if (timeSpan.TotalMinutes < 60)

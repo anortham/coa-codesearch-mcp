@@ -6,8 +6,6 @@ using COA.Mcp.Framework.Base;
 using COA.Mcp.Framework.Models;
 using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 using COA.CodeSearch.McpServer.Services.Analysis;
 
 namespace COA.CodeSearch.McpServer.Tools;
@@ -133,7 +131,6 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
     private readonly ILogger<BatchOperationsTool> _logger;
     private readonly TextSearchTool _textSearchTool;
     private readonly FileSearchTool _fileSearchTool;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly CodeAnalyzer _codeAnalyzer;
 
     /// <summary>
@@ -143,20 +140,17 @@ public class BatchOperationsTool : CodeSearchToolBase<BatchOperationsParameters,
     /// <param name="logger">Logger instance</param>
     /// <param name="textSearchTool">Text search tool for batch operations</param>
     /// <param name="fileSearchTool">File search tool for batch operations</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     public BatchOperationsTool(
         IServiceProvider serviceProvider,
         ILogger<BatchOperationsTool> logger,
         TextSearchTool textSearchTool,
         FileSearchTool fileSearchTool,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
         CodeAnalyzer codeAnalyzer) : base(serviceProvider, logger)
     {
         _logger = logger;
         _textSearchTool = textSearchTool;
         _fileSearchTool = fileSearchTool;
-        _vscode = vscode;
         _codeAnalyzer = codeAnalyzer;
     }
 

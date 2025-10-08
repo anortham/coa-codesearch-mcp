@@ -14,8 +14,6 @@ using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.ResponseBuilders;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using COA.VSCodeBridge;
-using COA.VSCodeBridge.Models;
 
 namespace COA.CodeSearch.McpServer.Tools;
 
@@ -32,7 +30,6 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly IndexResponseBuilder _responseBuilder;
     private readonly FileWatcherService? _fileWatcherService;
-    private readonly COA.VSCodeBridge.IVSCodeBridge _vscode;
     private readonly ILogger<IndexWorkspaceTool> _logger;
 
     // Phoenix integration: SQLite canonical storage + Julie extraction
@@ -49,7 +46,6 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
-    /// <param name="vscode">VS Code bridge for IDE integration</param>
     /// <param name="logger">Logger instance</param>
     public IndexWorkspaceTool(
         IServiceProvider serviceProvider,
@@ -59,7 +55,6 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
         IResponseCacheService cacheService,
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
-        COA.VSCodeBridge.IVSCodeBridge vscode,
         ILogger<IndexWorkspaceTool> logger) : base(serviceProvider, logger)
     {
         _luceneIndexService = luceneIndexService;
@@ -70,7 +65,6 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
         _keyGenerator = keyGenerator;
         _responseBuilder = new IndexResponseBuilder(null, storageService);
         _fileWatcherService = serviceProvider.GetService<FileWatcherService>();
-        _vscode = vscode;
         _logger = logger;
 
         // Phoenix integration: Optional services (graceful degradation if not available)
