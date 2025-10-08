@@ -504,7 +504,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             {
                 FilePath = @"C:\test\Services\LuceneIndexService.cs",
                 Score = 10.0f, // High score due to TypeDefinitionBoostFactor
-                LineNumber = 21,
+                StartLine = 21,
                 Fields = new Dictionary<string, string>
                 {
                     ["type_info"] = "{\"types\":[{\"Name\":\"LuceneIndexService\",\"Kind\":\"class\",\"Signature\":\"public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable\",\"Line\":21,\"Column\":1,\"Modifiers\":[\"public\"]}],\"methods\":[{\"Name\":\"SearchAsync\",\"Signature\":\"Task<SearchResult> SearchAsync(string workspacePath, Query query)\",\"Line\":257}],\"language\":\"c-sharp\"}"
@@ -524,7 +524,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             {
                 FilePath = @"C:\test\SomeOtherFile.cs",
                 Score = 0.5f, // Lower score
-                LineNumber = 10,
+                StartLine = 10,
                 Fields = new Dictionary<string, string>(),
                 Snippet = "// Some reference to LuceneIndexService"
             };
@@ -579,7 +579,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             {
                 FilePath = @"C:\test\Services\LuceneIndexService.cs",
                 Score = 1.0f,
-                LineNumber = 257, // Inside SearchAsync method
+                StartLine = 257, // Inside SearchAsync method
                 Fields = new Dictionary<string, string>
                 {
                     ["type_info"] = "{\"types\":[{\"Name\":\"LuceneIndexService\",\"Kind\":\"class\",\"Line\":21}],\"methods\":[{\"Name\":\"SearchAsync\",\"Signature\":\"Task<SearchResult> SearchAsync(string workspacePath, Query query)\",\"Line\":257,\"ContainingType\":\"LuceneIndexService\"}],\"language\":\"c-sharp\"}"

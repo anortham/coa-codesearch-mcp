@@ -70,7 +70,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -97,7 +97,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -135,7 +135,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -163,7 +163,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -188,7 +188,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
             {
                 Hits = new List<SearchHit>
                 {
-                    new SearchHit { FilePath = "/test/file.cs", LineNumber = 1, Score = 1.0f }
+                    new SearchHit { FilePath = "/test/file.cs", StartLine = 1, Score = 1.0f }
                 }
             };
 
@@ -226,7 +226,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -261,7 +261,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs", 
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -285,7 +285,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/SomeTests.cs", 
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }
@@ -321,7 +321,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/TestFile.cs", 
-                        LineNumber = 1,
+                        StartLine = 1,
                         Score = 1.0f
                     }
                 }

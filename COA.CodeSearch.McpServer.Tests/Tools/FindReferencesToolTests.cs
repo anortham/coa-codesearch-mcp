@@ -304,7 +304,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                         ["content"] = "TestMethod();",
                         ["type_info"] = """{"types": [], "methods": [], "language": "c-sharp"}"""
                     },
-                    LineNumber = 10
+                    StartLine = 10
                 },
                 new SearchHit
                 {
@@ -315,7 +315,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                         ["content"] = "obj.TestMethod();",
                         ["type_info"] = """{"types": [], "methods": [], "language": "c-sharp"}"""
                     },
-                    LineNumber = 15
+                    StartLine = 15
                 }
             };
 

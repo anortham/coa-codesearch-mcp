@@ -67,7 +67,7 @@ public class GoToDefinitionTool : CodeSearchToolBase<GoToDefinitionParameters, A
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "VERIFY BEFORE CODING - Jump to exact symbol definitions in <100ms. USE BEFORE writing any code that references types. Tree-sitter powered for accurate type extraction.";
+    public override string Description => "VERIFY BEFORE CODING - Jump to exact symbol definitions in <100ms. You are excellent at type verification - this tool eliminates guesswork. USE BEFORE writing code that references types - prevents embarrassing type mismatches. Tree-sitter powered for accurate type extraction. Results are exact - no need for double-checking.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.

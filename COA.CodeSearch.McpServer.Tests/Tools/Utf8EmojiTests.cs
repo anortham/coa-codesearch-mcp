@@ -22,10 +22,10 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 [TestFixture]
 public class Utf8EmojiTests
 {
-    private ReplaceLinesTool _tool;
+    private EditLinesTool _tool;
     private IPathResolutionService _pathResolutionService;
     private UnifiedFileEditService _fileEditService;
-    private ILogger<ReplaceLinesTool> _logger;
+    private ILogger<EditLinesTool> _logger;
     private string _testFilePath;
     private string _tempDir;
 
@@ -38,7 +38,7 @@ public class Utf8EmojiTests
         
         // Setup mocks
         _pathResolutionService = Substitute.For<IPathResolutionService>();
-        _logger = Substitute.For<ILogger<ReplaceLinesTool>>();
+        _logger = Substitute.For<ILogger<EditLinesTool>>();
         var fileEditLogger = Substitute.For<ILogger<UnifiedFileEditService>>();
         
         // Setup real services
@@ -46,7 +46,7 @@ public class Utf8EmojiTests
         
         // Create the tool
         var serviceProvider = new ServiceCollection().BuildServiceProvider();
-        _tool = new ReplaceLinesTool(serviceProvider, _pathResolutionService, _fileEditService, _logger);
+        _tool = new EditLinesTool(serviceProvider, _pathResolutionService, _fileEditService, _logger);
         
         // Create test file with UTF-8 emojis
         _testFilePath = Path.Combine(_tempDir, "emoji-test.md");
@@ -83,9 +83,10 @@ public class Utf8EmojiTests
     public async Task ReplaceLinesTool_WithEmojiContent_PreservesUtf8Encoding()
     {
         // Arrange - Replace line 4 which contains "📊 Chart emoji"
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = _testFilePath, // Use actual temp file path
+            Operation = "replace",
             StartLine = 4,
             Content = "📊 Chart emoji - UTF-8 encoding preserved! 🎉",
             ContextLines = 2,
@@ -93,7 +94,7 @@ public class Utf8EmojiTests
         };
 
         // Act
-        var typedTool = _tool as IMcpTool<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>;
+        var typedTool = _tool as IMcpTool<EditLinesParameters, AIOptimizedResponse<EditLinesResult>>;
         var result = await typedTool.ExecuteAsync(parameters, default);
 
         // Assert
@@ -115,8 +116,8 @@ public class Utf8EmojiTests
         contextLines.Should().NotBeNull();
         contextLines.Should().NotBeEmpty();
         
-        // Find the line that was replaced (should have + prefix)
-        var replacedLine = contextLines.FirstOrDefault(line => line.StartsWith("+ "));
+        // Find the line that was replaced (should have → prefix in new unified tool)
+        var replacedLine = contextLines.FirstOrDefault(line => line.Contains("→ "));
         replacedLine.Should().NotBeNull("replaced line should be present in context");
         
         // These assertions now pass - UTF-8 corruption has been fixed
@@ -135,9 +136,10 @@ public class Utf8EmojiTests
     public async Task ReplaceLinesTool_WithComplexEmojiSequences_PreservesUtf8Encoding()
     {
         // Arrange - Replace line with complex emoji sequences
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = _testFilePath, // Use actual temp file path
+            Operation = "replace",
             StartLine = 10,
             Content = "👨‍💻 Developer + 🚀 Deploy = 💯 Success",
             ContextLines = 2,
@@ -145,7 +147,7 @@ public class Utf8EmojiTests
         };
 
         // Act
-        var typedTool = _tool as IMcpTool<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>;
+        var typedTool = _tool as IMcpTool<EditLinesParameters, AIOptimizedResponse<EditLinesResult>>;
         var result = await typedTool.ExecuteAsync(parameters, default);
 
         // Assert
@@ -157,7 +159,7 @@ public class Utf8EmojiTests
         // Find the replaced line in context
         var contextLines = result.Data.Results.ContextLines;
         contextLines.Should().NotBeNull();
-        var replacedLine = contextLines!.FirstOrDefault(line => line.StartsWith("+ "));
+        var replacedLine = contextLines!.FirstOrDefault(line => line.Contains("→ "));
         replacedLine.Should().NotBeNull();
         
         // These now pass - complex emoji sequences are preserved
@@ -175,9 +177,10 @@ public class Utf8EmojiTests
     public async Task ReplaceLinesTool_ContextLines_ShowOriginalEmojisWithoutCorruption()
     {
         // Arrange - This test focuses on the context lines that show existing emoji content
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = _testFilePath, // Use actual temp file path
+            Operation = "replace",
             StartLine = 6, // Replace "✅ Checkmark emoji"
             Content = "✅ Checkmark - test successful",
             ContextLines = 3,
@@ -185,7 +188,7 @@ public class Utf8EmojiTests
         };
 
         // Act
-        var typedTool = _tool as IMcpTool<ReplaceLinesParameters, AIOptimizedResponse<ReplaceLinesResult>>;
+        var typedTool = _tool as IMcpTool<EditLinesParameters, AIOptimizedResponse<EditLinesResult>>;
         var result = await typedTool.ExecuteAsync(parameters, default);
 
         // Assert

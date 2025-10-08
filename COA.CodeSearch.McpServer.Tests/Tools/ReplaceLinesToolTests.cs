@@ -19,17 +19,17 @@ using System.Text;
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
-    public class ReplaceLinesToolTests : CodeSearchToolTestBase<ReplaceLinesTool>
+    public class ReplaceLinesToolTests : CodeSearchToolTestBase<EditLinesTool>
     {
-        private ReplaceLinesTool _tool = null!;
+        private EditLinesTool _tool = null!;
         private string _testFilePath = null!;
         
-        protected override ReplaceLinesTool CreateTool()
+        protected override EditLinesTool CreateTool()
         {
             var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
                 new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-            var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<ReplaceLinesTool>>();
-            _tool = new ReplaceLinesTool(
+            var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+            _tool = new EditLinesTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
                 unifiedFileEditService,
@@ -67,9 +67,10 @@ Line 6");
         public async Task ExecuteAsync_ReplaceSingleLine_ReplacesCorrectly()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 3,
                 Content = "New line 3 content",
                 PreserveIndentation = false,
@@ -89,7 +90,7 @@ Line 6");
             result.Data.Results.EndLine.Should().Be(3);
             result.Data.Results.LinesRemoved.Should().Be(1);
             result.Data.Results.LinesAdded.Should().Be(1);
-            result.Data.Results.OriginalContent.Should().Be("Line 3");
+            result.Data.Results.DeletedContent.Should().Be("Line 3");
 
             // Verify file content
             var fileLines = await File.ReadAllLinesAsync(_testFilePath);
@@ -101,9 +102,10 @@ Line 6");
         public async Task ExecuteAsync_ReplaceLineRange_ReplacesCorrectRange()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2,
                 EndLine = 4,
                 Content = "New content line 1\nNew content line 2",
@@ -139,9 +141,10 @@ Line 6");
                     // but the Content field is [Required] and cannot be empty.
                     // For actual line deletion, use DeleteLinesTool instead.
                     
-                    var parameters = new ReplaceLinesParameters
+                    var parameters = new EditLinesParameters
                     {
                         FilePath = _testFilePath,
+                Operation = "replace",
                         StartLine = 3,
                         EndLine = 4,
                         Content = ".", // Minimal content instead of empty
@@ -168,9 +171,10 @@ Line 6");
                 public async Task ExecuteAsync_WithIndentationPreservation_PreservesIndentation()
                 {
                     // Arrange
-                    var parameters = new ReplaceLinesParameters
+                    var parameters = new EditLinesParameters
                     {
                         FilePath = _testFilePath,
+                Operation = "replace",
                         StartLine = 2, // Replace indented line 2
                         Content = "New indented content",
                         PreserveIndentation = true,
@@ -193,9 +197,10 @@ Line 6");
         public async Task ExecuteAsync_WithoutIndentationPreservation_NoIndentation()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2, // Replace indented line 2
                 Content = "New unindented content",
                 PreserveIndentation = false,
@@ -218,9 +223,10 @@ Line 6");
         public async Task ExecuteAsync_ReplaceMultipleWithMultiple_ReplacesCorrectly()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 3,
                 EndLine = 5,
                 Content = "Replacement line A\nReplacement line B\nReplacement line C\nReplacement line D",
@@ -251,9 +257,10 @@ Line 6");
         public async Task ExecuteAsync_ContextLines_GeneratesCorrectContext()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 3,
                 Content = "New line content",
                 PreserveIndentation = false,
@@ -277,9 +284,10 @@ Line 6");
         public async Task ExecuteAsync_InvalidStartLine_ReturnsError()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 0, // Invalid line number
                 Content = "Test content",
                 PreserveIndentation = false,
@@ -295,9 +303,10 @@ Line 6");
         public async Task ExecuteAsync_StartLineBeyondFile_ReturnsError()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 100, // Way beyond file length
                 Content = "Test content",
                 PreserveIndentation = false,
@@ -318,9 +327,10 @@ Line 6");
         public async Task ExecuteAsync_EndLineBeforeStartLine_ReturnsError()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 4,
                 EndLine = 2, // EndLine < StartLine
                 Content = "Test content",
@@ -342,9 +352,10 @@ Line 6");
         public async Task ExecuteAsync_NullContent_ReturnsError()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2,
                 Content = null!, // Null content
                 PreserveIndentation = false,
@@ -359,9 +370,10 @@ Line 6");
         public async Task ExecuteAsync_NonExistentFile_ReturnsError()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = "non_existent_file.txt",
+                Operation = "replace",
                 StartLine = 1,
                 Content = "Test content",
                 PreserveIndentation = false,
@@ -386,9 +398,10 @@ Line 6");
             var testContent = "Line 1\nLine 2\nLine 3";
             await File.WriteAllTextAsync(_testFilePath, testContent, utf8WithBom);
 
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2,
                 Content = "Replaced UTF-8 line",
                 PreserveIndentation = false,
@@ -411,9 +424,10 @@ Line 6");
         public async Task ExecuteAsync_OriginalContentCapture_StoresCorrectContent()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2,
                 EndLine = 4,
                 Content = "New content",
@@ -432,7 +446,7 @@ Line 6");
             var expectedOriginal = "    Indented line 2" + Environment.NewLine + 
                                    "Line 3" + Environment.NewLine + 
                                    "    Indented line 4";
-            result.Data!.Results.OriginalContent.Should().Be(expectedOriginal);
+            result.Data!.Results.DeletedContent.Should().Be(expectedOriginal);
         }
 
         [Test]
@@ -442,9 +456,10 @@ Line 6");
             var mixedIndentContent = "Line 1\n\tTab indented\n    Space indented\nNo indent";
             await File.WriteAllTextAsync(_testFilePath, mixedIndentContent);
 
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 2, // Replace tab-indented line
                 Content = "New content",
                 PreserveIndentation = true,
@@ -467,9 +482,10 @@ Line 6");
         public async Task ExecuteAsync_ReplaceEntireFile_WorksCorrectly()
         {
             // Arrange
-            var parameters = new ReplaceLinesParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
+                Operation = "replace",
                 StartLine = 1,
                 EndLine = 6, // All lines
                 Content = "Completely new content\nSecond line\nThird line",

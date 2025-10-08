@@ -16,20 +16,20 @@ namespace COA.CodeSearch.McpServer.Tests.Integration;
 /// Implements copy-original-edit-diff pattern for bulletproof accuracy validation.
 /// </summary>
 [TestFixture]
-public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool>
+public class RealWorldFileEditingTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private InsertAtLineTool _insertTool = null!;
-    private ReplaceLinesTool _replaceTool = null!;
-    private DeleteLinesTool _deleteTool = null!;
+    private EditLinesTool _insertTool = null!;
+    private EditLinesTool _replaceTool = null!;
+    private EditLinesTool _deleteTool = null!;
 
-    protected override InsertAtLineTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         // Create primary tool for base class
         var unifiedFileEditServiceForInsert = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
-        _insertTool = new InsertAtLineTool(
+        var insertLogger = new Mock<ILogger<EditLinesTool>>();
+        _insertTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForInsert,
@@ -47,8 +47,8 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         // Create additional tools
         var unifiedFileEditServiceForReplace = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
-        _replaceTool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<ILogger<EditLinesTool>>();
+        _replaceTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForReplace,
@@ -57,8 +57,8 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         
         var unifiedFileEditServiceForDelete = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
-        _deleteTool = new DeleteLinesTool(
+        var deleteLogger = new Mock<ILogger<EditLinesTool>>();
+        _deleteTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForDelete,
@@ -91,9 +91,10 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         var methodEndLine = FindMethodEndLine(testFile.OriginalLines, methodStartLine);
 
         // Act - Replace the method with improved implementation
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    /// <summary>
@@ -178,9 +179,10 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<InsertAtLineTool
         // Act - Update the timeout value
         var timeoutLine = FindLineContaining(testFile.OriginalLines, "\"Timeout\"");
         
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = timeoutLine,
             Content = "    \"Timeout\": 60000",
             PreserveIndentation = false, // We're providing exact indentation
@@ -228,10 +230,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         var testFile = await _fileManager.CreateTestFileAsync(unicodeContent, "unicode_test.yml", Encoding.UTF8);
 
         // Act - Insert new Unicode line
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3,
+            Operation = "insert",
+            StartLine = 3,
             Content = "description: \"Testing with special chars: àáâãäåæçèéêë 한글 العربية\"",
             PreserveIndentation = true,
             ContextLines = 2
@@ -284,9 +287,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         var targetLine = 5000; // Middle of file
         var startTime = DateTime.UtcNow;
         
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = targetLine,
             EndLine = targetLine + 2,
             Content = "    // MODIFIED: Performance test replacement\n    public void PerformanceTestMethod()\n    {",
@@ -329,10 +333,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Act & Measure - Insert operation
         var insertStart = DateTime.UtcNow;
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 50,
+            Operation = "insert",
+            StartLine = 50,
             Content = "INSERTED: Performance test line",
             PreserveIndentation = false,
             ContextLines = 0
@@ -341,9 +346,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Act & Measure - Replace operation
         var replaceStart = DateTime.UtcNow;
-        var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 25,
             EndLine = 27,
             Content = "REPLACED: Performance test replacement\nSecond replaced line\nThird replaced line",
@@ -354,9 +360,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Act & Measure - Delete operation  
         var deleteStart = DateTime.UtcNow;
-        var deleteResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var deleteResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 75,
             EndLine = 80,
             ContextLines = 0
@@ -396,10 +403,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Act & Measure operations
         var insertStart = DateTime.UtcNow;
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 500,
+            Operation = "insert",
+            StartLine = 500,
             Content = string.Join("\n", Enumerable.Range(1, 10).Select(i => $"BULK INSERT {i}: Performance testing")),
             PreserveIndentation = false,
             ContextLines = 0
@@ -407,9 +415,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         metrics.InsertTimeMs = (DateTime.UtcNow - insertStart).TotalMilliseconds;
 
         var replaceStart = DateTime.UtcNow;
-        var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 250,
             EndLine = 270,
             Content = string.Join("\n", Enumerable.Range(1, 25).Select(i => $"BULK REPLACE {i}: Performance testing with longer content")),
@@ -419,9 +428,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         metrics.ReplaceTimeMs = (DateTime.UtcNow - replaceStart).TotalMilliseconds;
 
         var deleteStart = DateTime.UtcNow;
-        var deleteResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var deleteResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 750,
             EndLine = 780,
             ContextLines = 0
@@ -462,10 +472,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         // Act & Measure - Operations at different positions
         // Beginning of file
         var beginningStart = DateTime.UtcNow;
-        var beginningResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var beginningResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 10,
+            Operation = "insert",
+            StartLine = 10,
             Content = "INSERTED AT BEGINNING: Performance test",
             PreserveIndentation = false,
             ContextLines = 0
@@ -474,9 +485,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Middle of file
         var middleStart = DateTime.UtcNow;
-        var middleResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var middleResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 2500,
             EndLine = 2510,
             Content = string.Join("\n", Enumerable.Range(1, 15).Select(i => $"MIDDLE REPLACE {i}: Large file performance test")),
@@ -487,9 +499,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // End of file
         var endStart = DateTime.UtcNow;
-        var endResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var endResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 4900,
             EndLine = 4950,
             ContextLines = 0
@@ -531,30 +544,33 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Act - Perform various operations on file without trailing newline
         // 1. Insert at beginning
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 1,
+            Operation = "insert",
+            StartLine = 1,
             Content = "INSERTED: Beginning line",
             PreserveIndentation = false,
             ContextLines = 1
         }, CancellationToken.None);
 
         // 2. Insert in middle  
-        var middleInsertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var middleInsertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3,
+            Operation = "insert",
+            StartLine = 3,
             Content = "INSERTED: Middle line",
             PreserveIndentation = false,
             ContextLines = 1
         }, CancellationToken.None);
 
         // 3. Insert at end (most challenging case for no-trailing-newline files)
-        var endInsertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var endInsertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 6, // After all existing lines
+            Operation = "insert",
+            StartLine = 6, // After all existing lines
             Content = "INSERTED: End line",
             PreserveIndentation = false,
             ContextLines = 1
@@ -600,9 +616,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         var startTime = DateTime.UtcNow;
         
         // 1. Replace a very long line
-        var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 2, // Replace the 10K character line
             EndLine = 2,
             Content = "REPLACED: New shorter line to replace the very long one",
@@ -611,19 +628,21 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         }, CancellationToken.None);
 
         // 2. Insert between long lines
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3,
+            Operation = "insert",
+            StartLine = 3,
             Content = "INSERTED: Between long lines",
             PreserveIndentation = false,
             ContextLines = 1
         }, CancellationToken.None);
 
         // 3. Delete a long line
-        var deleteResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var deleteResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 5, // Delete the last very long line
             EndLine = 5,
             ContextLines = 1
@@ -671,10 +690,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Test 1: Insert before empty line
         var testFile1 = await _fileManager.CreateTestFileAsync(contentWithEmptyLines, "empty_lines_insert.txt");
-        var insertBeforeEmptyResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertBeforeEmptyResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile1.FilePath,
-            LineNumber = 2, // Insert before first empty line
+            Operation = "insert",
+            StartLine = 2, // Insert before first empty line
             Content = "INSERTED: Before empty line",
             PreserveIndentation = false,
             ContextLines = 1
@@ -682,9 +702,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Test 2: Replace empty lines with content (separate file)
         var testFile2 = await _fileManager.CreateTestFileAsync(contentWithEmptyLines, "empty_lines_replace.txt");
-        var replaceEmptyResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceEmptyResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile2.FilePath,
+            Operation = "replace",
             StartLine = 4, // Replace the double empty lines
             EndLine = 5,
             Content = "REPLACED: Where empty lines were\nREPLACED: Second replacement line",
@@ -694,9 +715,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Test 3: Delete line containing empty line (separate file)
         var testFile3 = await _fileManager.CreateTestFileAsync(contentWithEmptyLines, "empty_lines_delete.txt");
-        var deleteWithEmptyResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var deleteWithEmptyResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile3.FilePath,
+            Operation = "delete",
             StartLine = 2, // Delete the first empty line (line 2)
             ContextLines = 1
         }, CancellationToken.None);
@@ -731,18 +753,20 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         var testFile = await _fileManager.CreateTestFileAsync(onlyEmptyLines, "only_empty_lines.txt");
 
         // Act - Operations on file with only empty lines
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3,
+            Operation = "insert",
+            StartLine = 3,
             Content = "INSERTED: First real content",
             PreserveIndentation = false,
             ContextLines = 2
         }, CancellationToken.None);
 
-        var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 1,
             EndLine = 2,
             Content = "REPLACED: Multiple empty lines with content",
@@ -776,10 +800,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Test 1: Insert before the single character (separate file)
         var testFile1 = await _fileManager.CreateTestFileAsync(minimalContent, "single_char_insert.txt");
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile1.FilePath,
-            LineNumber = 1,
+            Operation = "insert",
+            StartLine = 1,
             Content = "INSERTED: Before single char",
             PreserveIndentation = false,
             ContextLines = 0
@@ -787,10 +812,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
 
         // Test 2: Append after the single character (separate file)
         var testFile2 = await _fileManager.CreateTestFileAsync(minimalContent, "single_char_append.txt");
-        var appendResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var appendResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile2.FilePath,
-            LineNumber = 2, // Line 2 (after the single character line)
+            Operation = "insert",
+            StartLine = 2, // Line 2 (after the single character line)
             Content = "INSERTED: After single char",
             PreserveIndentation = false,
             ContextLines = 0
@@ -853,10 +879,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         // Task 1: Insert at beginning
         tasks.Add(Task.Run(async () =>
         {
-            var result = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var result = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "CONCURRENT INSERT: At beginning",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -868,10 +895,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         tasks.Add(Task.Run(async () =>
         {
             await Task.Delay(10); // Small delay to offset operations
-            var result = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var result = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 50,
+                Operation = "insert",
+                StartLine = 50,
                 Content = "CONCURRENT INSERT: At middle",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -883,9 +911,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         tasks.Add(Task.Run(async () =>
         {
             await Task.Delay(20); // Small delay to offset operations
-            var result = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+            var result = await _replaceTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
+                Operation = "replace",
                 StartLine = 90,
                 Content = "CONCURRENT REPLACE: Near end",
                 PreserveIndentation = false,
@@ -926,27 +955,30 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         using var fileStream = new FileStream(testFile.FilePath, FileMode.Open, FileAccess.ReadWrite, FileShare.None);
         
         // Try to perform operations on locked file
-        var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+        var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 2,
+            Operation = "insert",
+            StartLine = 2,
             Content = "INSERTED: Should fail due to lock",
             PreserveIndentation = false,
             ContextLines = 1
         }, CancellationToken.None);
         
-        var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 2,
             Content = "REPLACED: Should fail due to lock",
             PreserveIndentation = false,
             ContextLines = 1
         }, CancellationToken.None);
         
-        var deleteResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+        var deleteResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 3,
             ContextLines = 1
         }, CancellationToken.None);
@@ -988,10 +1020,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         for (int i = 0; i < 10; i++)
         {
             // Insert operation
-            var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 2 + i,
+                Operation = "insert",
+                StartLine = 2 + i,
                 Content = $"RAPID INSERT {i}: Added in sequence",
                 PreserveIndentation = false,
                 ContextLines = 0
@@ -1043,9 +1076,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         var results = new List<(string operation, bool success)>();
         
         // Test 1: Normal operation (should succeed completely)
-        var normalResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var normalResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 2,
             EndLine = 3,
             Content = "REPLACED: Lines 2-3\nREPLACED: Both lines changed",
@@ -1055,9 +1089,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         results.Add(("Normal replace", normalResult.Success));
         
         // Test 2: Operation with invalid line range (should fail completely)
-        var invalidResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+        var invalidResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = 100, // Invalid line number
             Content = "INVALID: This should not appear",
             PreserveIndentation = false,
@@ -1123,27 +1158,30 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         try
         {
             // Act - Try to perform line operations on binary file
-            var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = binaryFilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "TEXT: This should fail",
                 PreserveIndentation = false,
                 ContextLines = 1
             }, CancellationToken.None);
             
-            var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+            var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = binaryFilePath,
+                Operation = "replace",
                 StartLine = 1,
                 Content = "TEXT: This should also fail",
                 PreserveIndentation = false,
                 ContextLines = 1
             }, CancellationToken.None);
             
-            var deleteResult = await _deleteTool.ExecuteAsync(new DeleteLinesParameters
+            var deleteResult = await _deleteTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = binaryFilePath,
+                Operation = "delete",
                 StartLine = 1,
                 ContextLines = 1
             }, CancellationToken.None);
@@ -1188,10 +1226,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         try
         {
             // Act - Try to perform line operations on executable file
-            var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = executableFilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "CODE: This should fail",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -1240,9 +1279,10 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         try
         {
             // Act - Try to perform line operations on ZIP file
-            var replaceResult = await _replaceTool.ExecuteAsync(new ReplaceLinesParameters
+            var replaceResult = await _replaceTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = zipFilePath,
+                Operation = "replace",
                 StartLine = 1,
                 Content = "ARCHIVE: This should fail",
                 PreserveIndentation = false,
@@ -1285,10 +1325,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         try
         {
             // Act - Try to perform line operations on file with null bytes
-            var insertResult = await _insertTool.ExecuteAsync(new InsertAtLineParameters
+            var insertResult = await _insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = nullByteFilePath,
-                LineNumber = 2,
+                Operation = "insert",
+                StartLine = 2,
                 Content = "INSERTED: Between null byte lines",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -1391,10 +1432,11 @@ math_symbols: ""∑ ∞ ≈ ≠ ± √ π α β γ""
         bomBytes.Take(3).Should().Equal(new byte[] { 0xEF, 0xBB, 0xBF }, "File should start with UTF-8 BOM");
 
         // Act - Insert new line
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 2,
+            Operation = "insert",
+            StartLine = 2,
             Content = "using System.Text;",
             PreserveIndentation = false,
             ContextLines = 1
@@ -1498,10 +1540,11 @@ namespace TestNamespace
         insertAfterLine.Should().BeGreaterThan(0, "Should find existing field");
 
         // Act - Add new properties after the field
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = insertAfterLine + 1,
+            Operation = "insert",
+            StartLine = insertAfterLine + 1,
             Content = @"        private readonly ILogger _logger;
         
         public bool IsEnabled { get; set; } = true;
@@ -1557,9 +1600,10 @@ public class DatabaseService
         var constructorEndLine = FindLineContaining(testFile.OriginalLines, "_connectionString = connectionString;") + 1;
 
         // Act - Replace constructor with enhanced version
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = constructorStartLine,
             EndLine = constructorEndLine,
             Content = @"    public DatabaseService(string connectionString, ILogger logger, TimeSpan timeout = default)
@@ -1612,10 +1656,11 @@ namespace TestApp.Services
         var testFile = await _fileManager.CreateTestFileAsync(classContent, "EmailService.cs");
 
         // Act - Insert additional using statements after existing ones
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 2, // After 'using System;'
+            Operation = "replace",
+            StartLine = 2, // After 'using System;'
             Content = @"using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
@@ -1674,9 +1719,10 @@ public class FileProcessor
         var methodEndLine = FindLineContaining(testFile.OriginalLines, "return processed;");
 
         // Act - Replace synchronous method with async version
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    public async Task<string> ProcessFileAsync(string filePath)
@@ -1748,19 +1794,20 @@ public class FileProcessor
             : 100.0;
         
         public async Task TestBasicOperationsAsync(
-            InsertAtLineTool insertTool, 
-            ReplaceLinesTool replaceTool, 
-            DeleteLinesTool deleteTool,
+            EditLinesTool insertTool, 
+            EditLinesTool replaceTool, 
+            EditLinesTool deleteTool,
             TestFileManager fileManager)
         {
             // Test basic insert, replace, delete operations
             var testContent = "Line 1\nLine 2\nLine 3";
             var testFile = await fileManager.CreateTestFileAsync(testContent, "basic_ops_test.txt");
             
-            var insertResult = await insertTool.ExecuteAsync(new InsertAtLineParameters
+            var insertResult = await insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 2,
+                Operation = "insert",
+                StartLine = 2,
                 Content = "Inserted line",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -1768,9 +1815,10 @@ public class FileProcessor
             
             _results.Add(new TestResult("BasicInsert", insertResult.Success, "Insert operation"));
             
-            var replaceResult = await replaceTool.ExecuteAsync(new ReplaceLinesParameters
+            var replaceResult = await replaceTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
+                Operation = "replace",
                 StartLine = 3,
                 Content = "Replaced line",
                 PreserveIndentation = false,
@@ -1779,9 +1827,10 @@ public class FileProcessor
             
             _results.Add(new TestResult("BasicReplace", replaceResult.Success, "Replace operation"));
             
-            var deleteResult = await deleteTool.ExecuteAsync(new DeleteLinesParameters
+            var deleteResult = await deleteTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
+                Operation = "delete",
                 StartLine = 1,
                 ContextLines = 1
             }, CancellationToken.None);
@@ -1789,16 +1838,17 @@ public class FileProcessor
             _results.Add(new TestResult("BasicDelete", deleteResult.Success, "Delete operation"));
         }
         
-        public async Task TestEncodingPreservationAsync(InsertAtLineTool insertTool, TestFileManager fileManager)
+        public async Task TestEncodingPreservationAsync(EditLinesTool insertTool, TestFileManager fileManager)
         {
             // Test UTF-8 with BOM preservation
             var utf8Content = "Unicode: Ééñü中文";
             var testFile = await fileManager.CreateTestFileAsync(utf8Content, "encoding_test.txt", Encoding.UTF8);
             
-            var result = await insertTool.ExecuteAsync(new InsertAtLineParameters
+            var result = await insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "New Unicode: 中文テスト", 
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -1816,17 +1866,18 @@ public class FileProcessor
             }
         }
         
-        public async Task TestPerformanceUnderLoadAsync(InsertAtLineTool insertTool, TestFileManager fileManager)
+        public async Task TestPerformanceUnderLoadAsync(EditLinesTool insertTool, TestFileManager fileManager)
         {
             var largeContent = string.Join("\n", Enumerable.Range(1, 1000).Select(i => $"Line {i}: Performance test content"));
             var testFile = await fileManager.CreateTestFileAsync(largeContent, "performance_test.txt");
             
             var stopwatch = Stopwatch.StartNew();
             
-            var result = await insertTool.ExecuteAsync(new InsertAtLineParameters
+            var result = await insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 500,
+                Operation = "insert",
+                StartLine = 500,
                 Content = "Performance test insert",
                 PreserveIndentation = false,
                 ContextLines = 0
@@ -1847,17 +1898,18 @@ public class FileProcessor
         }
         
         public async Task TestEdgeCaseHandlingAsync(
-            InsertAtLineTool insertTool, 
-            ReplaceLinesTool replaceTool, 
-            DeleteLinesTool deleteTool,
+            EditLinesTool insertTool, 
+            EditLinesTool replaceTool, 
+            EditLinesTool deleteTool,
             TestFileManager fileManager)
         {
             // Test single character file
             var singleCharFile = await fileManager.CreateTestFileAsync("X", "single_char.txt");
-            var singleCharResult = await insertTool.ExecuteAsync(new InsertAtLineParameters
+            var singleCharResult = await insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = singleCharFile.FilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "Before X",
                 PreserveIndentation = false,
                 ContextLines = 0
@@ -1867,10 +1919,11 @@ public class FileProcessor
             
             // Test empty file
             var emptyFile = await fileManager.CreateTestFileAsync("", "empty_file.txt");
-            var emptyFileResult = await insertTool.ExecuteAsync(new InsertAtLineParameters
+            var emptyFileResult = await insertTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = emptyFile.FilePath,
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "First line",
                 PreserveIndentation = false,
                 ContextLines = 0
@@ -1879,14 +1932,15 @@ public class FileProcessor
             _results.Add(new TestResult("EmptyFile", emptyFileResult.Success, "Empty file handling"));
         }
         
-        public async Task TestDataIntegrityAsync(ReplaceLinesTool replaceTool, TestFileManager fileManager)
+        public async Task TestDataIntegrityAsync(EditLinesTool replaceTool, TestFileManager fileManager)
         {
             var originalContent = "Critical data line 1\nCritical data line 2\nCritical data line 3";
             var testFile = await fileManager.CreateTestFileAsync(originalContent, "integrity_test.txt");
             
-            var result = await replaceTool.ExecuteAsync(new ReplaceLinesParameters
+            var result = await replaceTool.ExecuteAsync(new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
+                Operation = "replace",
                 StartLine = 2,
                 Content = "Modified critical data line 2",
                 PreserveIndentation = false,

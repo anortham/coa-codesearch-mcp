@@ -31,7 +31,7 @@ public class NullableReferenceValidationTests
         {
             FilePath = "test.cs",
             Score = 1.0f,
-            LineNumber = 5,
+            StartLine = 5,
             Fields = new Dictionary<string, string> { ["content"] = "test content" },
             ContextLines = null // This caused CS8602 warnings
         };
@@ -40,7 +40,7 @@ public class NullableReferenceValidationTests
         {
             FilePath = "test2.cs", 
             Score = 0.9f,
-            LineNumber = 10,
+            StartLine = 10,
             Fields = new Dictionary<string, string> { ["content"] = "more content" },
             ContextLines = new List<string> { "line 1", "line 2", "line 3" }
         };
@@ -314,7 +314,7 @@ public class NullableReferenceValidationTests
             {
                 FilePath = "file1.cs",
                 Score = 1.0f,
-                LineNumber = null, // Nullable line number
+                StartLine = null, // Nullable line number
                 Fields = new Dictionary<string, string> { ["content"] = "content1" },
                 ContextLines = null
             },
@@ -322,7 +322,7 @@ public class NullableReferenceValidationTests
             {
                 FilePath = "file2.cs",
                 Score = 0.9f,
-                LineNumber = 5,
+                StartLine = 5,
                 Fields = new Dictionary<string, string>(), // Empty fields
                 ContextLines = new List<string> { "context1", "context2" }
             },
@@ -330,7 +330,7 @@ public class NullableReferenceValidationTests
             {
                 FilePath = "file3.cs",
                 Score = 0.8f,
-                LineNumber = 10,
+                StartLine = 10,
                 Fields = new Dictionary<string, string> 
                 { 
                     ["content"] = "line1\nline2\nline3",
@@ -348,7 +348,7 @@ public class NullableReferenceValidationTests
             foreach (var hit in searchHits)
             {
                 // Safe line number handling
-                var hasLineNumber = hit.LineNumber.HasValue;
+                var hasStartLine = hit.LineNumber.HasValue;
                 var lineNumber = hit.LineNumber ?? 0;
 
                 // Safe context handling
@@ -361,7 +361,7 @@ public class NullableReferenceValidationTests
                 var lines = content?.Split('\n') ?? Array.Empty<string>();
 
                 // Safe line validation
-                if (hasLineNumber && hasContent && lineNumber > 0 && lineNumber <= lines.Length)
+                if (hasStartLine && hasContent && lineNumber > 0 && lineNumber <= lines.Length)
                 {
                     var targetLine = lines[lineNumber - 1];
                     Assert.That(targetLine, Is.Not.Null);
@@ -371,8 +371,8 @@ public class NullableReferenceValidationTests
                 {
                     FilePath = hit.FilePath ?? "unknown",
                     Score = hit.Score,
-                    HasLineNumber = hasLineNumber,
-                    LineNumber = lineNumber,
+                    HasStartLine = hasStartLine,
+                    StartLine = lineNumber,
                     HasContext = hasContext,
                     ContextCount = contextCount,
                     FirstContext = firstContext,

@@ -17,17 +17,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Tests that demonstrate and verify the indentation bug fixes for InsertAtLineTool
 /// </summary>
 [TestFixture]
-public class InsertAtLineIndentationTests : CodeSearchToolTestBase<InsertAtLineTool>
+public class InsertAtLineIndentationTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private InsertAtLineTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override InsertAtLineTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<InsertAtLineTool>>();
-        _tool = new InsertAtLineTool(
+        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -63,10 +63,11 @@ public static class ToolNames
         
         // Act: Insert a new constant at line 8 (the line with tab indentation)
         // The tool should prioritize surrounding lines (space indentation) over the target line (tab indentation)
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 8, // Insert before the tab-indented line
+                Operation = "insert",
+            StartLine = 8, // Insert before the tab-indented line
             Content = @"    // Navigation tools (added by test)",
             PreserveIndentation = true,
             ContextLines = 3
@@ -118,10 +119,11 @@ public static class ToolNames
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "MixedIndent.cs");
 
         // Act: Insert a new property between Property2 and Property3
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 5, // Insert before Property3
+                Operation = "insert",
+            StartLine = 5, // Insert before Property3
             Content = "public string InsertedProperty { get; set; }  // Should use normalized space indentation",
             PreserveIndentation = true,
             ContextLines = 2
@@ -173,10 +175,11 @@ public static class ToolNames
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "TestClass.cs");
 
         // Act: Insert a new method at the end of the class (before closing brace)
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 12, // Insert before the closing brace
+                Operation = "insert",
+            StartLine = 12, // Insert before the closing brace
                         Content = @"
             public void Method3()
             {
@@ -227,10 +230,11 @@ public static class ToolNames
 
             // Act: Insert abstract method implementations near the end of the class
             // This simulates the exact scenario that caused the boundary violation
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = testFile.FilePath,
-                LineNumber = 13, // Insert before the closing brace of the class
+                Operation = "insert",
+                StartLine = 13, // Insert before the closing brace of the class
                 Content = @"    
         /// <summary>
         /// Generate insights for the base response builder pattern

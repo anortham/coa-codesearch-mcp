@@ -16,13 +16,13 @@ using COA.Mcp.Framework.Models;
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
-    public class FileSearchToolTests : CodeSearchToolTestBase<FileSearchTool>
+    public class FileSearchToolTests : CodeSearchToolTestBase<SearchFilesTool>
     {
-        private FileSearchTool _tool = null!;
+        private SearchFilesTool _tool = null!;
         
-        protected override FileSearchTool CreateTool()
+        protected override SearchFilesTool CreateTool()
         {
-            _tool = new FileSearchTool(
+            _tool = new SearchFilesTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
                 SQLiteSymbolServiceMock.Object,
@@ -30,8 +30,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResponseCacheServiceMock.Object,
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
-                ToolLoggerMock.Object,
-                CodeAnalyzer
+                ToolLoggerMock.Object
             );
             return _tool;
         }
@@ -39,8 +38,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         [Test]
         public void Tool_Should_Have_Correct_Metadata()
         {
-            // Assert
-            _tool.Name.Should().Be(ToolNames.FileSearch);
+            // Assert - FileSearchToolTests now uses unified SearchFilesTool
+            _tool.Name.Should().Be(ToolNames.SearchFiles);
             _tool.Description.Should().NotBeNullOrWhiteSpace();
             _tool.Category.Should().Be(COA.Mcp.Framework.ToolCategory.Query);
         }
@@ -50,14 +49,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Arrange
             SetupNoIndex();
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -97,7 +96,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath,
@@ -105,7 +104,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -113,14 +112,12 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            
-            // Debug output
-            var resultsType = result.Result.Data.Results?.GetType()?.FullName ?? "null";
-            var resultsCount = (result.Result.Data.Results as System.Collections.IEnumerable)?.Cast<object>().Count() ?? -1;
-            Console.WriteLine($"Results type: {resultsType}, Count in Results: {resultsCount}, Data.Count: {result.Result.Data.Count}");
-            
-            result.Result.Data.Count.Should().Be(2); // Only .cs files
-            result.Result.Data.Summary.Should().Contain("2 files");
+            result.Result.Data.Results.Should().NotBeNull();
+
+            // Unified tool returns Files list for file searches
+            result.Result.Data.Results.Files.Should().NotBeNull();
+            result.Result.Data.Results.Files!.Count.Should().Be(2); // Only .cs files
+            result.Result.Data.Results.TotalMatches.Should().Be(2);
         }
         
         [Test]
@@ -150,7 +147,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "^test_.*\\.cs$",
                 WorkspacePath = TestWorkspacePath,
@@ -158,7 +155,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -166,7 +163,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(2); // Only test_*.cs files
+            result.Result.Data.Results.TotalMatches.Should().Be(2); // Only test_*.cs files
         }
         
         [Test]
@@ -198,7 +195,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*",
                 WorkspacePath = TestWorkspacePath,
@@ -206,7 +203,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -214,7 +211,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(3); // 2 .cs and 1 .js file
+            result.Result.Data.Results.TotalMatches.Should().Be(3); // 2 .cs and 1 .js file
         }
         
         [Test]
@@ -244,7 +241,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath,
@@ -252,7 +249,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -283,7 +280,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*",
                 WorkspacePath = TestWorkspacePath,
@@ -291,7 +288,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -326,14 +323,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -343,7 +340,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             ResponseCacheServiceMock.Verify(
                 x => x.SetAsync(
                     It.IsAny<string>(),
-                    It.IsAny<AIOptimizedResponse<FileSearchResult>>(),
+                    It.IsAny<AIOptimizedResponse<SearchFilesResult>>(),
                     It.IsAny<CacheEntryOptions>()),
                 Times.Once);
         }
@@ -364,7 +361,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath,
@@ -372,7 +369,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -407,14 +404,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ThrowsAsync(new Exception("Index corrupted"));
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -431,14 +428,14 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         public async Task ExecuteAsync_Should_Validate_Required_Parameters()
         {
             // Arrange
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = null!, // Missing required parameter
                 WorkspacePath = TestWorkspacePath
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -474,7 +471,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "**/*.csproj",
                 WorkspacePath = TestWorkspacePath,
@@ -482,7 +479,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -490,8 +487,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(3); // All .csproj files found recursively
-            result.Result.Data.Summary.Should().Contain("3 files");
+            result.Result.Data.Results.TotalMatches.Should().Be(3); // All .csproj files found recursively
             
             // Verify that the search used MatchAllDocsQuery for ** patterns (since Lucene WildcardQuery doesn't support **)
             LuceneIndexServiceMock.Verify(
@@ -530,7 +526,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "src/**/*.cs",
                 WorkspacePath = TestWorkspacePath,
@@ -538,7 +534,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -546,7 +542,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(2); // Files in src directory recursively
+            result.Result.Data.Results.TotalMatches.Should().Be(2); // Files in src directory recursively
         }
 
         [Test]
@@ -580,7 +576,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "*.cs",
                 WorkspacePath = TestWorkspacePath,
@@ -588,7 +584,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert - FileSearchTool should filter to only .cs files
@@ -598,7 +594,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Data.Should().NotBeNull();
             
             // The tool should have filtered the results to only include .cs files
-            result.Result.Data.Count.Should().Be(3, "should return only the 3 .cs files from the 5 total files");
+            result.Result.Data.Results.TotalMatches.Should().Be(3, "should return only the 3 .cs files from the 5 total files");
             result.Result.Data.Results.Should().NotBeNull();
             
             // Verify all returned files match the pattern
@@ -650,7 +646,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "src\\**\\*.cs", // Windows-style path separators
                 WorkspacePath = TestWorkspacePath,
@@ -658,7 +654,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -666,7 +662,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(2);
+            result.Result.Data.Results.TotalMatches.Should().Be(2);
         }
 
         [Test]
@@ -700,7 +696,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                     It.IsAny<CancellationToken>()))
                 .ReturnsAsync(searchResult);
             
-            var parameters = new FileSearchParameters
+            var parameters = new SearchFilesParameters
             {
                 Pattern = "**/*.test.js",
                 WorkspacePath = TestWorkspacePath,
@@ -708,7 +704,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             };
             
             // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FileSearchResult>>(
+            var result = await ExecuteToolAsync<AIOptimizedResponse<SearchFilesResult>>(
                 async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
             
             // Assert
@@ -716,8 +712,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
             result.Result.Should().NotBeNull();
             result.Result!.Success.Should().BeTrue();
             result.Result.Data.Should().NotBeNull();
-            result.Result.Data.Count.Should().Be(3); // Only *.test.js files, not main.js
-            result.Result.Data.Summary.Should().Contain("3 files");
+            result.Result.Data.Results.TotalMatches.Should().Be(3); // Only *.test.js files, not main.js
         }
     }
 }

@@ -370,7 +370,7 @@ public class SimpleWarningValidationTests
             },
             new MockSearchResult
             {
-                FilePath = "file2.cs", 
+                FilePath = "file2.cs",
                 Score = 0.9f,
                 LineNumber = 5,
                 Content = null,
@@ -394,7 +394,7 @@ public class SimpleWarningValidationTests
             foreach (var result in searchResults)
             {
                 // Safe nullable handling patterns
-                var hasLineNumber = result.LineNumber.HasValue;
+                var hasStartLine = result.LineNumber.HasValue;
                 var lineNumber = result.LineNumber ?? 0;
                 
                 var hasContext = result.ContextLines?.Any() == true;
@@ -406,7 +406,7 @@ public class SimpleWarningValidationTests
 
                 // Safe array access
                 string targetLine = "";
-                if (hasLineNumber && lineNumber > 0 && lineNumber <= lines.Length)
+                if (hasStartLine && lineNumber > 0 && lineNumber <= lines.Length)
                 {
                     targetLine = lines[lineNumber - 1];
                 }
@@ -415,8 +415,8 @@ public class SimpleWarningValidationTests
                 {
                     FilePath = result.FilePath ?? "unknown",
                     Score = result.Score,
-                    HasLineNumber = hasLineNumber,
-                    LineNumber = lineNumber,
+                    HasStartLine = hasStartLine,
+                    StartLine = lineNumber,
                     HasContext = hasContext,
                     ContextCount = contextCount,
                     FirstContext = firstContext,

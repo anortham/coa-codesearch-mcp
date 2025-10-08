@@ -17,17 +17,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Tests that demonstrate the indentation bug we discovered when using replace_lines tool
 /// </summary>
 [TestFixture]
-public class IndentationBugTests : CodeSearchToolTestBase<ReplaceLinesTool>
+public class IndentationBugTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private ReplaceLinesTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override ReplaceLinesTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<ReplaceLinesTool>>();
-        _tool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -68,9 +68,10 @@ public static class ToolNames
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "ToolNames.cs");
         
         // Act: Try to add a new tool constant at the end, similar to what we did
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = 16, // The DeleteLines line (corrected)
             EndLine = 16,   // Just replace this one line
             Content = @"    public const string DeleteLines = ""delete_lines"";
@@ -165,9 +166,10 @@ Expected indentation: '{expectedIndentation}'
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "MixedIndent.cs");
 
         // Act: Replace the middle property
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = 4, // Property2 line
             EndLine = 4,
             Content = "    public string Property2Modified { get; set; }  // Should use space indentation",

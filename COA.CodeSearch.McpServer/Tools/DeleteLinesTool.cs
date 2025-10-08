@@ -20,7 +20,7 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
 {
     private readonly IPathResolutionService _pathResolutionService;
     private readonly UnifiedFileEditService _fileEditService;
-    private readonly ILogger<DeleteLinesTool> _logger;
+    private readonly ILogger<EditLinesTool> _logger;
 
     /// <summary>
     /// Initializes a new instance of the DeleteLinesTool with required dependencies.
@@ -33,7 +33,7 @@ public class DeleteLinesTool : CodeSearchToolBase<DeleteLinesParameters, AIOptim
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<DeleteLinesTool> logger) : base(serviceProvider, logger)
+        ILogger<EditLinesTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;

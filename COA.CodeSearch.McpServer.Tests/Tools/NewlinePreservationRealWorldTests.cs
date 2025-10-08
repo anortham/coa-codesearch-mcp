@@ -16,19 +16,19 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Uses copy-original-edit-diff pattern to validate that editing tools preserve file format correctly.
 /// </summary>
 [TestFixture]
-public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLinesTool>
+public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private DeleteLinesTool _deleteTool = null!;
-    private InsertAtLineTool _insertTool = null!;
-    private ReplaceLinesTool _replaceTool = null!;
+    private EditLinesTool _deleteTool = null!;
+    private EditLinesTool _insertTool = null!;
+    private EditLinesTool _replaceTool = null!;
 
-    protected override DeleteLinesTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
-        _deleteTool = new DeleteLinesTool(
+        var deleteLogger = new Mock<ILogger<EditLinesTool>>();
+        _deleteTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -46,8 +46,8 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         // Create additional tools
         var unifiedFileEditServiceForInsert = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
-        _insertTool = new InsertAtLineTool(
+        var insertLogger = new Mock<ILogger<EditLinesTool>>();
+        _insertTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForInsert,
@@ -56,8 +56,8 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         
         var unifiedFileEditServiceForReplace = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
-        _replaceTool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<ILogger<EditLinesTool>>();
+        _replaceTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForReplace,
@@ -88,9 +88,10 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         var methodEndLine = FindMethodEndLine(testFile.OriginalLines, methodStartLine);
         
         // Act - Delete the method
-        var parameters = new DeleteLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             ContextLines = 3
@@ -132,10 +133,11 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         insertionLine.Should().BeGreaterThan(0, "Should find a closing brace in the file");
         
         // Act - Insert a new method
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = insertionLine,
+            Operation = "delete",
+            StartLine = insertionLine,
             Content = @"    /// <summary>
     /// Test method added by newline preservation test.
     /// </summary>
@@ -183,9 +185,10 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<DeleteLi
         var methodEndLine = FindMethodEndLine(testFile.OriginalLines, methodStartLine);
         
         // Act - Replace with a modified version
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    /// <summary>
@@ -279,10 +282,11 @@ namespace TestNamespace
         }";
             
             // Act - Insert the pre-indented content
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = tempFilePath,
-                LineNumber = 12, // Insert after the comment line
+                Operation = "replace",
+                StartLine = 12, // Insert after the comment line
                 Content = contentToInsert,
                 PreserveIndentation = true
             };
@@ -343,10 +347,11 @@ namespace TestNamespace
     Console.WriteLine(""test"");
 }";
             
-            var parameters1 = new InsertAtLineParameters
+            var parameters1 = new EditLinesParameters
             {
                 FilePath = tempFilePath,
-                LineNumber = 5,
+                Operation = "insert",
+                StartLine = 5,
                 Content = unindentedContent,
                 PreserveIndentation = true
             };
@@ -364,10 +369,11 @@ namespace TestNamespace
             Console.WriteLine(""already indented"");
         }";
             
-            var parameters2 = new InsertAtLineParameters
+            var parameters2 = new EditLinesParameters
             {
                 FilePath = tempFilePath,
-                LineNumber = 6,
+                Operation = "insert",
+                StartLine = 6,
                 Content = preIndentedContent,
                 PreserveIndentation = true
             };

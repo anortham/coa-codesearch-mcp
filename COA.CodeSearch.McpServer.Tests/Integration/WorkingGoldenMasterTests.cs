@@ -17,22 +17,22 @@ namespace COA.CodeSearch.McpServer.Tests.Integration;
 /// Implements proper copy-edit-diff methodology with DiffPlex validation.
 /// </summary>
 [TestFixture]
-public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
+public class WorkingGoldenMasterTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private DeleteLinesTool _deleteTool = null!;
-    private InsertAtLineTool _insertTool = null!;
-    private ReplaceLinesTool _replaceTool = null!;
+    private EditLinesTool _deleteTool = null!;
+    private EditLinesTool _insertTool = null!;
+    private EditLinesTool _replaceTool = null!;
     private SearchAndReplaceTool _searchReplaceTool = null!;
 
     private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "COA.CodeSearch.McpServer.Tests", "Resources", "GoldenMaster");
 
-    protected override DeleteLinesTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new UnifiedFileEditService(
             new Mock<ILogger<UnifiedFileEditService>>().Object);
-        var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
-        _deleteTool = new DeleteLinesTool(
+        var deleteLogger = new Mock<ILogger<EditLinesTool>>();
+        _deleteTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -67,8 +67,8 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
         
         var unifiedFileEditServiceForInsert = new UnifiedFileEditService(
             new Mock<ILogger<UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
-        _insertTool = new InsertAtLineTool(
+        var insertLogger = new Mock<ILogger<EditLinesTool>>();
+        _insertTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForInsert,
@@ -77,8 +77,8 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
         
         var unifiedFileEditServiceForReplace = new UnifiedFileEditService(
             new Mock<ILogger<UnifiedFileEditService>>().Object);
-        var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
-        _replaceTool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<ILogger<EditLinesTool>>();
+        _replaceTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditServiceForReplace,
@@ -192,9 +192,10 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
 
     private async Task<dynamic> ExecuteDeleteOperation(GoldenMasterTestCase testCase, string filePath)
     {
-        var parameters = new DeleteLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = filePath,
+            Operation = "delete",
             StartLine = testCase.Operation.StartLine,
             EndLine = testCase.Operation.EndLine ?? testCase.Operation.StartLine,
             ContextLines = testCase.Operation.ContextLines ?? 3
@@ -205,10 +206,11 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
 
     private async Task<dynamic> ExecuteInsertOperation(GoldenMasterTestCase testCase, string filePath)
     {
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = filePath,
-            LineNumber = testCase.Operation.StartLine,
+            Operation = "insert",
+            StartLine = testCase.Operation.StartLine,
             Content = testCase.Operation.Content ?? "// Inserted by test",
             PreserveIndentation = testCase.Operation.PreserveIndentation ?? true,
             ContextLines = testCase.Operation.ContextLines ?? 3
@@ -219,9 +221,10 @@ public class WorkingGoldenMasterTests : CodeSearchToolTestBase<DeleteLinesTool>
 
     private async Task<dynamic> ExecuteReplaceOperation(GoldenMasterTestCase testCase, string filePath)
     {
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = filePath,
+            Operation = "replace",
             StartLine = testCase.Operation.StartLine,
             EndLine = testCase.Operation.EndLine ?? testCase.Operation.StartLine,
             Content = testCase.Operation.Content ?? "// Replaced by test",

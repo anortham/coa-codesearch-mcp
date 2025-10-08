@@ -19,17 +19,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// These are the "mess so bad you have to start over" scenarios
 /// </summary>
 [TestFixture]
-public class InsertAtLineCorruptionTests : CodeSearchToolTestBase<InsertAtLineTool>
+public class InsertAtLineCorruptionTests : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private InsertAtLineTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override InsertAtLineTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<InsertAtLineTool>>();
-        _tool = new InsertAtLineTool(
+        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -57,10 +57,11 @@ public class InsertAtLineCorruptionTests : CodeSearchToolTestBase<InsertAtLineTo
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "Test.cs");
         
         // Act: Try to insert at line 100 when file only has 4 lines
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 100, // Way beyond file end
+                Operation = "insert",
+            StartLine = 100, // Way beyond file end
             Content = "public void NewMethod() { }",
             PreserveIndentation = true,
             ContextLines = 3
@@ -121,10 +122,11 @@ multiple lines and ""quotes"" inside"";
         Console.WriteLine($""Template {data} with interpolation"");
     }";
 
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 4, // Insert before the closing brace
+                Operation = "insert",
+            StartLine = 4, // Insert before the closing brace
             Content = problematicContent,
             PreserveIndentation = true,
             ContextLines = 5
@@ -174,10 +176,11 @@ multiple lines and ""quotes"" inside"";
             hugeContent.AppendLine($"    public void GeneratedMethod{i}() {{ Console.WriteLine(\"Method {i}\"); }}");
         }
 
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3, // Insert before closing brace
+                Operation = "insert",
+            StartLine = 3, // Insert before closing brace
             Content = hugeContent.ToString(),
             PreserveIndentation = true,
             ContextLines = 3
@@ -231,10 +234,11 @@ multiple lines and ""quotes"" inside"";
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "NestedTest.cs");
         
         // Act: Insert into the inner class
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 7, // After InnerMethod, before inner class closing brace
+                Operation = "insert",
+            StartLine = 7, // After InnerMethod, before inner class closing brace
             Content = @"            
             public void NewInnerMethod()
             {
@@ -296,17 +300,18 @@ multiple lines and ""quotes"" inside"";
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "ConcurrentTest.cs");
         
         // Act: Attempt multiple simultaneous insertions (this might expose threading issues)
-        var tasks = new List<Task<COA.Mcp.Framework.TokenOptimization.Models.AIOptimizedResponse<COA.CodeSearch.McpServer.Models.InsertAtLineResult>>>();
+        var tasks = new List<Task<COA.Mcp.Framework.TokenOptimization.Models.AIOptimizedResponse<COA.CodeSearch.McpServer.Models.EditLinesResult>>>();
         
         for (int i = 0; i < 5; i++)
         {
             var methodNumber = i;
             var task = Task.Run(async () =>
             {
-                var parameters = new InsertAtLineParameters
+                var parameters = new EditLinesParameters
                 {
                     FilePath = testFile.FilePath,
-                    LineNumber = 3 + methodNumber, // Different lines
+                Operation = "insert",
+                    StartLine = 3 + methodNumber, // Different lines
                     Content = $"    public void ConcurrentMethod{methodNumber}() {{ /* Added concurrently */ }}",
                     PreserveIndentation = true,
                     ContextLines = 2

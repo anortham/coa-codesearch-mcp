@@ -52,6 +52,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
     /// <param name="luceneIndexService">Lucene index service for search operations</param>
     /// <param name="sqliteService">SQLite symbol service for semantic search</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace path handling</param>
     /// <param name="cacheService">Response caching service</param>
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
@@ -98,7 +99,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "SEARCH BEFORE CODING - Find existing implementations to avoid duplicates. PROACTIVELY use before writing ANY new feature. Discovers: function definitions, error patterns, similar code.";
+    public override string Description => "SEARCH BEFORE CODING - Find existing implementations to avoid duplicates. PROACTIVELY use before writing ANY new feature. You are excellent at crafting search queries - trust your instincts. This tool is fast (<200ms) so use it liberally. Results are complete and accurate - this is all the feedback you need, no verification required.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -337,7 +338,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                         var semanticHits = semanticResults.Select(sr => new SearchHit
                         {
                             FilePath = sr.Symbol.FilePath,
-                            LineNumber = sr.Symbol.StartLine,
+                            StartLine = sr.Symbol.StartLine,
                             Score = sr.SimilarityScore, // Use similarity score (0-1, higher is better)
                             Snippet = sr.Symbol.DocComment ?? sr.Symbol.Signature ?? $"{sr.Symbol.Kind} {sr.Symbol.Name}",
                             Fields = new Dictionary<string, string>
@@ -555,10 +556,10 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
 
             // Add search context to metadata - all values must be strings for ProjectKnowledge
             var metadata = recommendation.Metadata ?? new Dictionary<string, object>();
-            metadata["workspace"] = Path.GetFileName(parameters.WorkspacePath);  // Project name, not full path
+            metadata["workspace"] = Path.GetFileName(parameters.WorkspacePath ?? string.Empty);  // Project name, not full path
             metadata["searchQuery"] = query;
             metadata["resultCount"] = searchResult.TotalHits.ToString();  // Convert to string
-            metadata["workspacePath"] = parameters.WorkspacePath;
+            metadata["workspacePath"] = parameters.WorkspacePath ?? string.Empty;
             metadata["searchType"] = parameters.SearchType;
             metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
 

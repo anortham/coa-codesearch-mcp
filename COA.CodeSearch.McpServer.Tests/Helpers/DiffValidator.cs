@@ -279,7 +279,7 @@ public class DiffValidator
                     });
                     lineNumber++;
                     break;
-                    
+
                 case DiffPlex.DiffBuilder.Model.ChangeType.Deleted:
                     changes.Add(new Change
                     {
@@ -290,7 +290,7 @@ public class DiffValidator
                     });
                     // Don't increment line number for deletions
                     break;
-                    
+
                 case DiffPlex.DiffBuilder.Model.ChangeType.Modified:
                     changes.Add(new Change
                     {

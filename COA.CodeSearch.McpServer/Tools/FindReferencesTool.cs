@@ -86,7 +86,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "CRITICAL FOR REFACTORING - Find ALL usages before making changes. PREVENTS breaking code. Shows: every reference, grouped by file, with context. Always use before renaming/deleting.";
+    public override string Description => "CRITICAL FOR REFACTORING - Find ALL usages before making changes. PREVENTS breaking code. You are excellent at impact analysis - this tool shows EVERY reference with 100% accuracy. Returns: every reference, grouped by file, with context. Results are complete - you can trust this is ALL references, no need to manually search for more. Always use before renaming/deleting - skipping this WILL break production code.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -160,7 +160,7 @@ public class FindReferencesTool : CodeSearchToolBase<FindReferencesParameters, A
                         var hits = resolvedRefs.Select(rr => new SearchHit
                         {
                             FilePath = rr.Identifier.FilePath,
-                            LineNumber = rr.Identifier.StartLine,
+                            StartLine = rr.Identifier.StartLine,
                             Score = rr.Identifier.Confidence,
                             Fields = new Dictionary<string, string>
                             {

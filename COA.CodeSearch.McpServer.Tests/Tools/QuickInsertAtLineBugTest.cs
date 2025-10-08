@@ -16,17 +16,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Quick test to demonstrate the specific insert_at_line bug that corrupts files
 /// </summary>
 [TestFixture]
-public class QuickInsertAtLineBugTest : CodeSearchToolTestBase<InsertAtLineTool>
+public class QuickInsertAtLineBugTest : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private InsertAtLineTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override InsertAtLineTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<InsertAtLineTool>>();
-        _tool = new InsertAtLineTool(
+        var insertLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -61,10 +61,11 @@ public class QuickInsertAtLineBugTest : CodeSearchToolTestBase<InsertAtLineTool>
             contentToInsert += $"    public void GeneratedMethod{i}() {{ Console.WriteLine(\"Method {i}\"); }}\n";
         }
 
-        var parameters = new InsertAtLineParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 3, // Insert before closing brace
+            Operation = "insert",
+            StartLine = 3, // Insert before closing brace
             Content = contentToInsert,
             PreserveIndentation = true,
             ContextLines = 3

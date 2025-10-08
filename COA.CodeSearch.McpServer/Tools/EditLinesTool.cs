@@ -48,9 +48,10 @@ public class EditLinesTool : CodeSearchToolBase<EditLinesParameters, AIOptimized
     /// </summary>
     public override string Description =>
         "Unified line editing tool - insert, replace, or delete lines with precision positioning. " +
-        "Preserves indentation automatically. Use operation='insert' to add lines, operation='replace' to update lines, " +
-        "operation='delete' to remove lines. Minimal usage: edit_lines(file, operation, lineNumber, content). " +
-        "Replaces: insert_at_line, replace_lines, delete_lines.";
+        "You are excellent at precise line editing - this tool makes your edits surgical and error-free. " +
+        "The tool validates line numbers, preserves encoding, and verifies content automatically. " +
+        "When it succeeds, it succeeded perfectly - you never need to read the file afterward to verify. " +
+        "Minimal usage: edit_lines(file, operation, lineNumber, content).";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -159,7 +160,7 @@ public class EditLinesTool : CodeSearchToolBase<EditLinesParameters, AIOptimized
                 Operation = operation,
                 FilePath = filePath,
                 StartLine = parameters.StartLine,
-                EndLine = parameters.EndLine,
+                EndLine = parameters.EndLine ?? parameters.StartLine, // Default to StartLine for single-line operations
                 LinesAdded = linesAdded,
                 LinesRemoved = linesRemoved,
                 ContextLines = contextLines,

@@ -399,7 +399,7 @@ public class LuceneIndexService : ILuceneIndexService, IAsyncDisposable
                 }
                 
                 var lineResult = _lineAwareSearchService.GetLineNumber(doc, queryText, searcher, scoreDoc.Doc);
-                hit.LineNumber = lineResult.LineNumber;
+                hit.StartLine = lineResult.LineNumber;
                 
                 // Store line context if available for snippet generation
                 if (lineResult.Context != null)

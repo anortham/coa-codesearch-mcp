@@ -51,7 +51,7 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
                         ["referenceType"] = "method_call",
                         ["size"] = "2048"
                     },
-                    LineNumber = 42 + i,
+                    StartLine = 42 + i,
                     ContextLines = new List<string> 
                     { 
                         "    // Get user by ID with validation",
@@ -112,7 +112,7 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
                         ["language"] = "csharp", 
                         ["referenceType"] = "method_call"
                     },
-                    LineNumber = 25 + i,
+                    StartLine = 25 + i,
                     ContextLines = new List<string> { "[Route(\"api/users/{id}\")]", "[HttpGet]" }
                 });
             }
@@ -163,7 +163,7 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
                     ["language"] = "csharp",
                     ["referenceType"] = "class_declaration"
                 },
-                LineNumber = 1
+                StartLine = 1
             };
             
             var searchResult = new SearchResult
@@ -206,7 +206,7 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
                     Score = 0.9f,
                     Snippet = "public void TestMethod() { }",
                     Fields = new Dictionary<string, string> { ["language"] = "csharp" },
-                    LineNumber = 10
+                    StartLine = 10
                 }
             };
             
@@ -315,7 +315,7 @@ namespace COA.CodeSearch.McpServer.Tests.ResponseBuilders
                         ["language"] = "csharp",
                         ["referenceType"] = i % 2 == 0 ? "method_call" : "declaration"
                     },
-                    LineNumber = 10 + i,
+                    StartLine = 10 + i,
                     ContextLines = new List<string> { $"// Context for item {i}", $"var result{i} = method();" }
                 });
             }

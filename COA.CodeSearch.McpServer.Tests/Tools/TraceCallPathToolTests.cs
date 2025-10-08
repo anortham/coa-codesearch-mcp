@@ -521,7 +521,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             {
                 FilePath = @"C:\project\Controllers\UserController.cs",
                 Score = 0.95f,
-                LineNumber = 45,
+                StartLine = 45,
                 Fields = new Dictionary<string, string>
                 {
                     ["trace_direction"] = "up",
@@ -545,7 +545,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             {
                 FilePath = @"C:\project\Services\UserService.cs",
                 Score = 0.85f,
-                LineNumber = 123,
+                StartLine = 123,
                 Fields = new Dictionary<string, string>
                 {
                     ["trace_direction"] = "up",
@@ -569,7 +569,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             {
                 FilePath = @"C:\project\Tests\UserServiceTests.cs",
                 Score = 0.65f,
-                LineNumber = 89,
+                StartLine = 89,
                 Fields = new Dictionary<string, string>
                 {
                     ["trace_direction"] = "up",
@@ -610,7 +610,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             {
                 FilePath = @"C:\project\Controllers\PaymentController.cs",
                 Score = 1.0f,
-                LineNumber = 67,
+                StartLine = 67,
                 Fields = new Dictionary<string, string>
                 {
                     ["trace_direction"] = "up",
@@ -633,7 +633,7 @@ public class TraceCallPathToolTests : CodeSearchToolTestBase<TraceCallPathTool>
             {
                 FilePath = @"C:\project\Console\Program.cs",
                 Score = 0.90f,
-                LineNumber = 12,
+                StartLine = 12,
                 Fields = new Dictionary<string, string>
                 {
                     ["trace_direction"] = "up",

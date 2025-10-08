@@ -53,8 +53,7 @@ public class SearchFilesTool : CodeSearchToolBase<SearchFilesParameters, AIOptim
     public override string Description =>
         "Unified filesystem search - find files, directories, or both by pattern. " +
         "Supports glob patterns and regex. Minimal usage: search_files(pattern). " +
-        "Use resourceType='file' for files (default), 'directory' for directories, 'both' for both. " +
-        "Replaces: file_search, directory_search.";
+        "Use resourceType='file' for files (default), 'directory' for directories, 'both' for both.";
 
     public override ToolCategory Category => ToolCategory.Query;
 

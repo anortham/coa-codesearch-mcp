@@ -349,7 +349,7 @@ public class TraceCallPathTool : CodeSearchToolBase<TraceCallPathParameters, AIO
             var hit = new SearchHit
             {
                 FilePath = node.Identifier.FilePath,
-                LineNumber = node.Identifier.StartLine,
+                StartLine = node.Identifier.StartLine,
                 Snippet = node.Identifier.CodeContext ?? string.Empty,
                 ContextLines = contextLines,
                 Score = 1.0f - (node.Depth * 0.1f), // Higher score for shallower depth

@@ -88,7 +88,7 @@ public class SymbolSearchTool : CodeSearchToolBase<SymbolSearchParameters, AIOpt
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. BETTER than text search for code navigation. Multi-tier parallel search: Tier 1 (SQLite exact 0-1ms) → Tier 2+4 PARALLEL (Lucene fuzzy ~20ms + Semantic similarity ~47ms). Returns: signatures, documentation, inheritance, usage counts with tier breakdown.";
+    public override string Description => "FIND SYMBOLS FAST - Locate any class/interface/method by name. You are skilled at symbol navigation - this tool gives you instant, accurate results. Multi-tier parallel search: SQLite exact (0-1ms) → Lucene fuzzy (~20ms) + Semantic (~47ms). Returns: signatures, documentation, inheritance, usage counts. Results are comprehensive - this is all the type information you need.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.

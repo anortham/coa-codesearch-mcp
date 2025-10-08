@@ -26,7 +26,7 @@ Every analysis and recommendation you provide MUST follow this complete MCP tool
 - Get test class overview: `mcp__codesearch__get_symbols_overview`
 
 **Test Infrastructure Investigation:**
-- Locate test files: `mcp__codesearch__file_search` 
+- Locate test files: `mcp__codesearch__search_files`
 - See recent test changes: `mcp__codesearch__recent_files`
 - Search test utilities: `mcp__codesearch__symbol_search`
 - Trace test execution paths: `mcp__codesearch__trace_call_path`
@@ -34,9 +34,7 @@ Every analysis and recommendation you provide MUST follow this complete MCP tool
 
 **Precise Test Code Modification:**
 - Bulk test updates: `mcp__codesearch__search_and_replace`
-- Line-precise test insertion: `mcp__codesearch__insert_at_line`
-- Test method replacement: `mcp__codesearch__replace_lines`
-- Clean test deletion: `mcp__codesearch__delete_lines`
+- Unified line editing: `mcp__codesearch__edit_lines` (insert/replace/delete operations)
 
 ### Goldfish MCP - TEST SESSION MANAGEMENT
 **Test Planning Discipline (MANDATORY):**

@@ -19,18 +19,18 @@ using System.Text;
 namespace COA.CodeSearch.McpServer.Tests.Tools
 {
     [TestFixture]
-    public class InsertAtLineToolTests : CodeSearchToolTestBase<InsertAtLineTool>
+    public class InsertAtLineToolTests : CodeSearchToolTestBase<EditLinesTool>
     {
-        private InsertAtLineTool _tool = null!;
+        private EditLinesTool _tool = null!;
         private string _testFilePath = null!;
         
-        protected override InsertAtLineTool CreateTool()
+        protected override EditLinesTool CreateTool()
         {
             // Create mock for UnifiedFileEditService
             var editServiceLoggerMock = new Mock<ILogger<UnifiedFileEditService>>();
             var unifiedFileEditService = new UnifiedFileEditService(editServiceLoggerMock.Object);
-            
-            _tool = new InsertAtLineTool(
+
+            _tool = new EditLinesTool(
                 ServiceProvider,
                 PathResolutionServiceMock.Object,
                 unifiedFileEditService,
@@ -66,11 +66,12 @@ Line 5");
         public async Task ExecuteAsync_InsertAtBeginning_InsertsCorrectly()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 1,
-                                Content = "New first line",
+                Operation = "insert",
+                StartLine = 1,
+                Content = "New first line",
                 PreserveIndentation = false,
                 ContextLines = 2
             };
@@ -84,8 +85,8 @@ Line 5");
             result.Data.Should().NotBeNull();
             result.Data!.Results.Should().NotBeNull();
             result.Data.Results.Success.Should().BeTrue();
-            result.Data.Results.InsertedAtLine.Should().Be(1);
-            result.Data.Results.LinesInserted.Should().Be(1);
+            result.Data.Results.StartLine.Should().Be(1);
+            result.Data.Results.LinesAdded.Should().Be(1);
 
             // Verify file content
             var fileLines = await File.ReadAllLinesAsync(_testFilePath);
@@ -97,10 +98,11 @@ Line 5");
         public async Task ExecuteAsync_InsertAtEnd_InsertsCorrectly()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 6, // After last line
+                Operation = "insert",
+                StartLine = 6, // After last line
                 Content = "New last line",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -112,8 +114,8 @@ Line 5");
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data!.Results.InsertedAtLine.Should().Be(6);
-            result.Data.Results.LinesInserted.Should().Be(1);
+            result.Data!.Results.StartLine.Should().Be(6);
+            result.Data.Results.LinesAdded.Should().Be(1);
 
             // Verify file content
             var fileLines = await File.ReadAllLinesAsync(_testFilePath);
@@ -125,10 +127,11 @@ Line 5");
         public async Task ExecuteAsync_InsertMultipleLines_InsertsCorrectly()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 3,
+                Operation = "insert",
+                StartLine = 3,
                 Content = "New line 1\nNew line 2\nNew line 3",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -140,7 +143,7 @@ Line 5");
             // Assert
             result.Should().NotBeNull();
             result.Success.Should().BeTrue();
-            result.Data!.Results.LinesInserted.Should().Be(3);
+            result.Data!.Results.LinesAdded.Should().Be(3);
 
             // Verify file content
             var fileLines = await File.ReadAllLinesAsync(_testFilePath);
@@ -155,10 +158,11 @@ Line 5");
         public async Task ExecuteAsync_WithIndentationPreservation_PreservesIndentation()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 3, // Insert before "Line 3" after indented line
+                Operation = "insert",
+                StartLine = 3, // Insert before "Line 3" after indented line
                 Content = "New indented content",
                 PreserveIndentation = true,
                 ContextLines = 2
@@ -181,10 +185,11 @@ Line 5");
         public async Task ExecuteAsync_WithoutIndentationPreservation_NoIndentation()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 3,
+                Operation = "insert",
+                StartLine = 3,
                 Content = "New unindented content",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -207,10 +212,11 @@ Line 5");
         public async Task ExecuteAsync_ContextLines_GeneratesCorrectContext()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 3,
+                Operation = "insert",
+                StartLine = 3,
                 Content = "Inserted line",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -233,10 +239,11 @@ Line 5");
         public async Task ExecuteAsync_InvalidLineNumber_ReturnsError()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 0, // Invalid line number
+                Operation = "insert",
+                StartLine = 0, // Invalid line number
                 Content = "Test content",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -251,10 +258,11 @@ Line 5");
         public async Task ExecuteAsync_LineNumberBeyondFile_ReturnsError()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 100, // Way beyond file length
+                Operation = "insert",
+                StartLine = 100, // Way beyond file length
                 Content = "Test content",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -274,10 +282,11 @@ Line 5");
         public async Task ExecuteAsync_EmptyContent_ReturnsError()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 2,
+                Operation = "insert",
+                StartLine = 2,
                 Content = "", // Empty content
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -292,10 +301,11 @@ Line 5");
         public async Task ExecuteAsync_NonExistentFile_ReturnsError()
         {
             // Arrange
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = "non_existent_file.txt",
-                LineNumber = 1,
+                Operation = "insert",
+                StartLine = 1,
                 Content = "Test content",
                 PreserveIndentation = false,
                 ContextLines = 2
@@ -319,10 +329,11 @@ Line 5");
             var testContent = "Line 1\nLine 2\nLine 3";
             await File.WriteAllTextAsync(_testFilePath, testContent, utf8WithBom);
 
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 2,
+                Operation = "insert",
+                StartLine = 2,
                 Content = "Inserted UTF-8 line",
                 PreserveIndentation = false,
                 ContextLines = 1
@@ -347,10 +358,11 @@ Line 5");
             var mixedIndentContent = "Line 1\n\tTab indented\n    Space indented\nNo indent";
             await File.WriteAllTextAsync(_testFilePath, mixedIndentContent);
 
-            var parameters = new InsertAtLineParameters
+            var parameters = new EditLinesParameters
             {
                 FilePath = _testFilePath,
-                LineNumber = 2, // Insert before tab-indented line
+                Operation = "insert",
+                StartLine = 2, // Insert before tab-indented line
                 Content = "New content",
                 PreserveIndentation = true,
                 ContextLines = 1

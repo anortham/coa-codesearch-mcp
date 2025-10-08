@@ -16,17 +16,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Test ReplaceLinesTool for the same newline bug found in InsertAtLineTool
 /// </summary>
 [TestFixture]
-public class ReplaceLinesNewlineBugTest : CodeSearchToolTestBase<ReplaceLinesTool>
+public class ReplaceLinesNewlineBugTest : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private ReplaceLinesTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override ReplaceLinesTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<ReplaceLinesTool>>();
-        _tool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -63,9 +63,10 @@ public class ReplaceLinesNewlineBugTest : CodeSearchToolTestBase<ReplaceLinesToo
             largeReplacement += $"    public void GeneratedMethod{i}() {{ Console.WriteLine(\"Method {i}\"); }}\n";
         }
 
-        var parameters = new ReplaceLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 4,
             Content = largeReplacement,
             PreserveIndentation = true,

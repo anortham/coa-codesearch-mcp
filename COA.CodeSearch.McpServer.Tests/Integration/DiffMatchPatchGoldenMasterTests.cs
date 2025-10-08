@@ -25,9 +25,9 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
 {
     private TestFileManager _fileManager = null!;
     private SearchAndReplaceTool _searchReplaceTool = null!;
-    private InsertAtLineTool _insertTool = null!;
-    private ReplaceLinesTool _replaceTool = null!;
-    private DeleteLinesTool _deleteTool = null!;
+    private EditLinesTool _insertTool = null!;
+    private EditLinesTool _replaceTool = null!;
+    private EditLinesTool _deleteTool = null!;
     private UnifiedFileEditService _unifiedEditService = null!;
 
     private string TestResourcesPath => Path.Combine(TestContext.CurrentContext.TestDirectory, "..", "..", "..", "..", "COA.CodeSearch.McpServer.Tests", "Resources", "GoldenMaster");
@@ -77,24 +77,24 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
             .ReturnsAsync(true);
         
         // Create line-based editing tools with UnifiedFileEditService
-        var insertLogger = new Mock<ILogger<InsertAtLineTool>>();
-        _insertTool = new InsertAtLineTool(
+        var insertLogger = new Mock<ILogger<EditLinesTool>>();
+        _insertTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             _unifiedEditService,
             insertLogger.Object
         );
         
-        var replaceLogger = new Mock<ILogger<ReplaceLinesTool>>();
-        _replaceTool = new ReplaceLinesTool(
+        var replaceLogger = new Mock<ILogger<EditLinesTool>>();
+        _replaceTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             _unifiedEditService,
             replaceLogger.Object
         );
         
-        var deleteLogger = new Mock<ILogger<DeleteLinesTool>>();
-        _deleteTool = new DeleteLinesTool(
+        var deleteLogger = new Mock<ILogger<EditLinesTool>>();
+        _deleteTool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             _unifiedEditService,
@@ -320,10 +320,11 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
         File.WriteAllText(testFile.FilePath, originalContent);
 
         // Act 1 - Use InsertAtLineTool
-        var insertParams = new InsertAtLineParameters
+        var insertParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            LineNumber = 7, // After "// Line to replace"
+            Operation = "insert",
+            StartLine = 7, // After "// Line to replace"
             Content = "        // Inserted by UnifiedFileEditService",
             PreserveIndentation = true,
             ContextLines = 2
@@ -332,9 +333,10 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
         var insertResult = await _insertTool.ExecuteAsync(insertParams, CancellationToken.None);
 
         // Act 2 - Use ReplaceLinesTool
-        var replaceParams = new ReplaceLinesParameters
+        var replaceParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "insert",
             StartLine = 6, // "// Line to replace"
             Content = "        // Line replaced by UnifiedFileEditService",
             PreserveIndentation = true,
@@ -344,9 +346,10 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
         var replaceResult = await _replaceTool.ExecuteAsync(replaceParams, CancellationToken.None);
 
         // Act 3 - Use DeleteLinesTool
-        var deleteParams = new DeleteLinesParameters
+        var deleteParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "replace",
             StartLine = 10, // "// Line to delete"
             ContextLines = 2
         };

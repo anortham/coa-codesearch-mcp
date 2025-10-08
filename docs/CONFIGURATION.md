@@ -58,14 +58,13 @@ Controls response size and token limits to prevent overwhelming AI assistants:
     "EnableTokenUsageLogging": true,  // Log token usage
     "ToolSpecificLimits": {           // Override limits for specific tools
       "text_search": 15000,
-      "file_search": 10000,
+      "search_files": 10000,
       "batch_operations": 25000
     },
     "ToolSpecificResultLimits": {     // Result count limits per tool
       "text_search": 100,
-      "file_search": 100,
-      "recent_files": 50,
-      "directory_search": 20
+      "search_files": 100,
+      "recent_files": 50
     }
   }
 }

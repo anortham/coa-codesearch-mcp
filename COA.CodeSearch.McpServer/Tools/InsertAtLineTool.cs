@@ -21,7 +21,7 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
 {
     private readonly IPathResolutionService _pathResolutionService;
     private readonly UnifiedFileEditService _fileEditService;
-    private readonly ILogger<InsertAtLineTool> _logger;
+    private readonly ILogger<EditLinesTool> _logger;
 
     /// <summary>
     /// Initializes a new instance of the InsertAtLineTool with required dependencies.
@@ -34,7 +34,7 @@ public class InsertAtLineTool : CodeSearchToolBase<InsertAtLineParameters, AIOpt
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<InsertAtLineTool> logger) : base(serviceProvider, logger)
+        ILogger<EditLinesTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;

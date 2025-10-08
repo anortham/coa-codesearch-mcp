@@ -16,17 +16,17 @@ namespace COA.CodeSearch.McpServer.Tests.Tools;
 /// Test DeleteLinesTool for newline handling bugs similar to InsertAtLineTool
 /// </summary>
 [TestFixture]
-public class DeleteLinesNewlineBugTest : CodeSearchToolTestBase<DeleteLinesTool>
+public class DeleteLinesNewlineBugTest : CodeSearchToolTestBase<EditLinesTool>
 {
     private TestFileManager _fileManager = null!;
-    private DeleteLinesTool _tool = null!;
+    private EditLinesTool _tool = null!;
 
-    protected override DeleteLinesTool CreateTool()
+    protected override EditLinesTool CreateTool()
     {
         var unifiedFileEditService = new COA.CodeSearch.McpServer.Services.UnifiedFileEditService(
             new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.UnifiedFileEditService>>().Object);
-        var deleteLogger = new Mock<Microsoft.Extensions.Logging.ILogger<DeleteLinesTool>>();
-        _tool = new DeleteLinesTool(
+        var deleteLogger = new Mock<Microsoft.Extensions.Logging.ILogger<EditLinesTool>>();
+        _tool = new EditLinesTool(
             ServiceProvider,
             PathResolutionServiceMock.Object,
             unifiedFileEditService,
@@ -64,9 +64,10 @@ public class DeleteLinesNewlineBugTest : CodeSearchToolTestBase<DeleteLinesTool>
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "DeleteTest.cs");
         
         // Act: Delete lines 4-53 (all the ToDelete methods)
-        var parameters = new DeleteLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 4,
             EndLine = 53,
             ContextLines = 3
@@ -130,9 +131,10 @@ public class DeleteLinesNewlineBugTest : CodeSearchToolTestBase<DeleteLinesTool>
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "DeleteEndTest.cs");
         
         // Act: Delete line 4 (ToDelete method)
-        var parameters = new DeleteLinesParameters
+        var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
+            Operation = "delete",
             StartLine = 4,
             ContextLines = 3
         };

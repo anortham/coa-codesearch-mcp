@@ -21,7 +21,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
 {
     private readonly IPathResolutionService _pathResolutionService;
     private readonly UnifiedFileEditService _fileEditService;
-    private readonly ILogger<ReplaceLinesTool> _logger;
+    private readonly ILogger<EditLinesTool> _logger;
 
     /// <summary>
     /// Initializes a new instance of the ReplaceLinesTool with required dependencies.
@@ -34,7 +34,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
         IServiceProvider serviceProvider,
         IPathResolutionService pathResolutionService,
         UnifiedFileEditService fileEditService,
-        ILogger<ReplaceLinesTool> logger) : base(serviceProvider, logger)
+        ILogger<EditLinesTool> logger) : base(serviceProvider, logger)
     {
         _pathResolutionService = pathResolutionService;
         _fileEditService = fileEditService;
@@ -94,7 +94,7 @@ public class ReplaceLinesTool : CodeSearchToolBase<ReplaceLinesParameters, AIOpt
 
             // Generate context for verification
             var modifiedLines = FileLineUtilities.SplitLines(editResult.ModifiedContent ?? "");
-            var originalLines = FileLineUtilities.SplitLines(editResult.OriginalContent ?? "");
+            var originalLines = FileLineUtilities.SplitLines(editResult.DeletedContent ?? "");
             var actualEndLine = parameters.EndLine ?? parameters.StartLine;
             
             // Calculate lines added from the replacement content
