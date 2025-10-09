@@ -32,9 +32,9 @@
 
   <ItemGroup>
     <!-- COA Framework NuGet package references -->
-    <PackageReference Include="COA.Mcp.Framework" Version="2.1.27" />
-    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.27" />
-    
+    <PackageReference Include="COA.Mcp.Framework" Version="2.1.32" />
+    <PackageReference Include="COA.Mcp.Framework.TokenOptimization" Version="2.1.32" />
+
     <!-- Lucene.NET for search functionality -->
     <PackageReference Include="Lucene.Net" Version="4.8.0-beta00017" />
     <PackageReference Include="Lucene.Net.Analysis.Common" Version="4.8.0-beta00017" />

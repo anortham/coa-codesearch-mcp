@@ -64,8 +64,6 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
 
             var queryPreprocessorLoggerMock = new Mock<ILogger<QueryPreprocessor>>();
             var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
-            var smartDocLoggerMock = new Mock<ILogger<SmartDocumentationService>>();
-            var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
 
@@ -78,7 +76,6 @@ namespace COA.CodeSearch.McpServer.Tests.Optimization
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                smartDocumentationService,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
                 loggerMock.Object);

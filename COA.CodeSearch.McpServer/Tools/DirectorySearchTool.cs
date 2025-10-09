@@ -128,8 +128,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
         }
         
         // Validate max results
-        var maxResults = parameters.MaxResults ?? 100;
-        maxResults = ValidateRange(maxResults, 1, 500, nameof(parameters.MaxResults));
+        var maxResults = ValidateRange(parameters.MaxResults, 1, 500, nameof(parameters.MaxResults));
         
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);
@@ -160,7 +159,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
                     var sqliteDirs = await _sqliteService.SearchDirectoriesByPatternAsync(
                         workspacePath,
                         pattern,
-                        includeHidden: parameters.IncludeHidden ?? false,
+                        includeHidden: parameters.IncludeHidden,
                         maxResults: maxResults,
                         cancellationToken);
 
@@ -204,8 +203,8 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
                         // Build response context
                         var tier1Context = new ResponseContext
                         {
-                            ResponseMode = parameters.ResponseMode ?? "adaptive",
-                            TokenLimit = parameters.MaxTokens ?? 8000,
+                            ResponseMode = parameters.ResponseMode,
+                            TokenLimit = parameters.MaxTokens,
                             StoreFullResults = true,
                             ToolName = Name,
                             CacheKey = cacheKey
@@ -231,8 +230,8 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
             }
 
             // Build Lucene query for directory search
-            var includeHidden = parameters.IncludeHidden ?? false;
-            var useRegex = parameters.UseRegex ?? false;
+            var includeHidden = parameters.IncludeHidden;
+            var useRegex = parameters.UseRegex;
             
             // For directory search, we search all files and extract directory information
             // We'll use a MatchAllDocsQuery and filter directories in memory
@@ -417,7 +416,7 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
                 TotalMatches = directoryMap.Count,
                 Pattern = pattern,
                 WorkspacePath = workspacePath,
-                IncludedSubdirectories = parameters.IncludeSubdirectories ?? true,
+                IncludedSubdirectories = parameters.IncludeSubdirectories,
                 SearchTimeMs = elapsedMs
             };
             
@@ -425,13 +424,10 @@ public class DirectorySearchTool : CodeSearchToolBase<DirectorySearchParameters,
                 result.TotalMatches, pattern, result.SearchTimeMs);
             
             // Build response using the async method
-            var responseMode = parameters.ResponseMode ?? "adaptive";
-            var maxTokens = parameters.MaxTokens ?? 8000;
-            
             var context = new ResponseContext
             {
-                ResponseMode = responseMode,
-                TokenLimit = maxTokens,
+                ResponseMode = parameters.ResponseMode,
+                TokenLimit = parameters.MaxTokens,
                 StoreFullResults = true,
                 ToolName = Name
             };

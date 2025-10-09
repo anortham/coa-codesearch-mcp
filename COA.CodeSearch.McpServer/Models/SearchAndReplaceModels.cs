@@ -21,17 +21,17 @@ public class SearchAndReplaceParams
     public required string SearchPattern { get; set; }
 
     /// <summary>
-    /// Replacement pattern - use empty string for deletion, supports regex capture groups.
+    /// Replacement pattern - use empty string for deletion, supports regex capture groups (default: empty string - deletes matches)
     /// </summary>
     /// <example>newMethodName</example>
     /// <example>FIXED: $1</example>
     /// <example></example>
     [JsonPropertyName("replacePattern")]
-    [Description("Replace pattern (e.g., newMethodName, FIXED: $1, '' to delete)")]
+    [Description("Replace pattern (default: empty string - deletes matches. Examples: newMethodName, FIXED: $1)")]
     public string ReplacePattern { get; set; } = string.Empty;
 
     /// <summary>
-    /// Workspace path to search in. Can be absolute or relative path.
+    /// Workspace path to search in. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -41,31 +41,31 @@ public class SearchAndReplaceParams
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// File pattern filter to limit scope using glob patterns.
+    /// File pattern filter to limit scope using glob patterns (default: all files)
     /// </summary>
     /// <example>*.cs</example>
     /// <example>src/**/*.ts</example>
     /// <example>**/*.{js,jsx}</example>
     [JsonPropertyName("filePattern")]
-    [Description("File pattern filter (e.g., *.cs, src/**/*.ts, **/*.{js,jsx})")]
+    [Description("File pattern filter (default: all files. Examples: *.cs, src/**/*.ts, **/*.{js,jsx})")]
     public string? FilePattern { get; set; }
 
     /// <summary>
-    /// Search type: standard, literal, regex, code
+    /// Search type: standard, literal, regex, code (default: literal)
     /// </summary>
     [JsonPropertyName("searchType")]
-    [Description("Search type: standard, literal, regex, code")]
+    [Description("Search type (default: literal): standard, literal, regex, code")]
     public string SearchType { get; set; } = "literal";
         /// <summary>
-        /// Matching mode for search and replace operations
+        /// Matching mode for search and replace operations (default: exact)
         /// </summary>
         [JsonPropertyName("matchMode")]
         [Description("Matching mode: exact, whitespace_insensitive, multiline, fuzzy (default: exact)")]
         public string MatchMode { get; set; } = "exact";
 
     /// <summary>
-    /// Fuzzy match threshold (0.0-1.0) - only used when matchMode = "fuzzy"
-    /// 0.0 = perfect match only, 0.5 = moderate tolerance, 0.8 = high tolerance (default), 1.0 = match anything
+    /// Fuzzy match threshold (0.0-1.0) - only used when matchMode = "fuzzy" (default: 0.8)
+    /// 0.0 = perfect match only, 0.5 = moderate tolerance, 0.8 = high tolerance, 1.0 = match anything
     /// </summary>
     [JsonPropertyName("fuzzyThreshold")]
     [Description("Fuzzy match threshold 0.0-1.0 (default: 0.8, only for fuzzy mode)")]
@@ -73,8 +73,8 @@ public class SearchAndReplaceParams
     public float FuzzyThreshold { get; set; } = 0.8f;
 
     /// <summary>
-    /// Fuzzy match distance - how far to search in characters (only used when matchMode = "fuzzy")
-    /// Higher = slower but more comprehensive. Default: 1000 characters
+    /// Fuzzy match distance - how far to search in characters (only used when matchMode = "fuzzy") (default: 1000 characters)
+    /// Higher = slower but more comprehensive
     /// </summary>
     [JsonPropertyName("fuzzyDistance")]
     [Description("Fuzzy search distance in characters (default: 1000, only for fuzzy mode)")]
@@ -82,56 +82,56 @@ public class SearchAndReplaceParams
     public int FuzzyDistance { get; set; } = 1000;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: true - case sensitive)
     /// </summary>
     [JsonPropertyName("caseSensitive")]
-    [Description("Case sensitive search")]
+    [Description("Case sensitive search (default: true - case sensitive)")]
     public bool CaseSensitive { get; set; } = true;
 
     /// <summary>
-    /// Preview mode (default: true for safety)
+    /// Preview mode - shows changes without applying (default: true - safe preview mode)
     /// </summary>
     [JsonPropertyName("preview")]
     [Description("Preview mode - shows changes without applying (default: true)")]
     public bool Preview { get; set; } = true;
 
     /// <summary>
-    /// Number of context lines around each match
+    /// Number of context lines around each match (default: 2)
     /// </summary>
     [JsonPropertyName("contextLines")]
-    [Description("Number of context lines around each match")]
+    [Description("Number of context lines around each match (default: 2)")]
     [Range(0, 10)]
     public int ContextLines { get; set; } = 2;
 
     /// <summary>
-    /// Maximum total matches to process
+    /// Maximum total matches to process (default: 100)
     /// </summary>
     [JsonPropertyName("maxMatches")]
-    [Description("Maximum total matches to process")]
+    [Description("Maximum total matches to process (default: 100)")]
     [Range(1, 1000)]
     public int MaxMatches { get; set; } = 100;
 
     /// <summary>
-    /// Response mode: summary, default, full
+    /// Response mode: summary, default, full (default: summary)
     /// </summary>
     [JsonPropertyName("responseMode")]
-    [Description("Response mode: summary, default, full")]
-    public string? ResponseMode { get; set; }
+    [Description("Response mode (default: summary): summary, default, full")]
+    public string ResponseMode { get; set; } = "summary";
 
     /// <summary>
-    /// Maximum tokens for response
+    /// Maximum tokens for response (default: 8000)
     /// </summary>
     [JsonPropertyName("maxTokens")]
-    [Description("Maximum tokens for response")]
+    [Description("Maximum tokens for response (default: 8000)")]
     [Range(100, 100000)]
-    public int? MaxTokens { get; set; }
+    public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
     [JsonPropertyName("noCache")]
-    [Description("Disable caching for this request")]
-    public bool NoCache { get; set; }
+    [Description("Disable caching for this request (default: false - caching enabled)")]
+    public bool NoCache { get; set; } = false;
 }
 
 /// <summary>

@@ -89,8 +89,7 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
         workspacePath = Path.GetFullPath(workspacePath);
         
         // Validate max results
-        var maxResults = parameters.MaxResults ?? 50;
-        maxResults = ValidateRange(maxResults, 1, 500, nameof(parameters.MaxResults));
+        var maxResults = ValidateRange(parameters.MaxResults, 1, 500, nameof(parameters.MaxResults));
         
         // Parse time frame
         var timeFrame = TimeSpan.FromDays(7); // Default: last week
@@ -178,8 +177,8 @@ public class RecentFilesTool : CodeSearchToolBase<RecentFilesParameters, AIOptim
             // Build response context
             var context = new ResponseContext
             {
-                ResponseMode = parameters.ResponseMode ?? "adaptive",
-                TokenLimit = parameters.MaxTokens ?? 8000,
+                ResponseMode = parameters.ResponseMode,
+                TokenLimit = parameters.MaxTokens,
                 StoreFullResults = true,
                 ToolName = Name,
                 CacheKey = cacheKey
@@ -341,7 +340,7 @@ public class RecentFilesParameters
     /// Maximum number of results to return (default: 50, max: 500)
     /// </summary>
     [Description("Maximum number of results to return (default: 50, max: 500)")]
-    public int? MaxResults { get; set; }
+    public int MaxResults { get; set; } = 50;
 
     /// <summary>
     /// Comma-separated list of file extensions to filter results for focused analysis.
@@ -356,14 +355,14 @@ public class RecentFilesParameters
     /// Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)
     /// </summary>
     [Description("Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)")]
-    public string? ResponseMode { get; set; }
+    public string ResponseMode { get; set; } = "adaptive";
     
     /// <summary>
     /// Maximum tokens for response (default: 8000)
     /// </summary>
     [Description("Maximum tokens for response (default: 8000)")]
     [Range(100, 100000)]
-    public int? MaxTokens { get; set; }
+    public int MaxTokens { get; set; } = 8000;
     
     /// <summary>
     /// Disable caching for this request

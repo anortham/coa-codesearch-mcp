@@ -19,7 +19,7 @@ public class SymbolSearchParameters
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -28,26 +28,26 @@ public class SymbolSearchParameters
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// Optional: Filter results by specific symbol type to narrow down search results.
+    /// Optional: Filter results by specific symbol type to narrow down search results (default: all types)
     /// </summary>
     /// <example>class</example>
     /// <example>interface</example>
     /// <example>method</example>
-    [Description("Filter by symbol type (e.g., class, interface, method, function, property)")]
+    [Description("Filter by symbol type (default: all types. Examples: class, interface, method, function, property)")]
     public string? SymbolType { get; set; }
 
     /// <summary>
-    /// Include usage count for each symbol showing how many references exist across the codebase. Useful for understanding symbol popularity and impact.
+    /// Include usage count for each symbol showing how many references exist across the codebase. Useful for understanding symbol popularity and impact (default: false)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include usage count (shows reference count for refactoring impact)")]
+    [Description("Include usage count (default: false - shows reference count for refactoring impact)")]
     public bool IncludeReferences { get; set; } = false;
 
     /// <summary>
     /// Maximum number of results to return (default: 20)
     /// </summary>
-    [Description("Maximum number of results to return")]
+    [Description("Maximum number of results to return (default: 20)")]
     [Range(1, 100)]
     public int MaxResults { get; set; } = 20;
 
@@ -59,14 +59,14 @@ public class SymbolSearchParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
-    [Description("Case sensitive")]
+    [Description("Case sensitive search (default: false - case insensitive)")]
     public bool CaseSensitive { get; set; } = false;
 }

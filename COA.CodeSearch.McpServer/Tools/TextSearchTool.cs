@@ -41,7 +41,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     private readonly ICacheKeyGenerator _keyGenerator;
     private readonly SearchResponseBuilder _responseBuilder;
     private readonly QueryPreprocessor _queryPreprocessor;
-    private readonly SmartDocumentationService _smartDocumentationService;
     private readonly SmartQueryPreprocessor _smartQueryPreprocessor;
     private readonly CodeAnalyzer _codeAnalyzer;
     private readonly ILogger<TextSearchTool> _logger;
@@ -57,7 +56,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
     /// <param name="storageService">Resource storage service</param>
     /// <param name="keyGenerator">Cache key generator</param>
     /// <param name="queryPreprocessor">Query preprocessing service</param>
-    /// <param name="smartDocumentationService">Smart documentation service</param>
     /// <param name="smartQueryPreprocessor">Smart query preprocessing service</param>
     /// <param name="codeAnalyzer">Code analysis service</param>
     /// <param name="logger">Logger instance</param>
@@ -70,7 +68,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         IResourceStorageService storageService,
         ICacheKeyGenerator keyGenerator,
         QueryPreprocessor queryPreprocessor,
-        SmartDocumentationService smartDocumentationService,
         SmartQueryPreprocessor smartQueryPreprocessor,
         CodeAnalyzer codeAnalyzer,
         ILogger<TextSearchTool> logger) : base(serviceProvider, logger)
@@ -82,7 +79,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
         _storageService = storageService;
         _keyGenerator = keyGenerator;
         _queryPreprocessor = queryPreprocessor;
-        _smartDocumentationService = smartDocumentationService;
         _logger = logger;
         _smartQueryPreprocessor = smartQueryPreprocessor;
         _codeAnalyzer = codeAnalyzer;
@@ -227,9 +223,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                 targetField = queryResult.TargetField;
 
                 // Validate the processed query
-#pragma warning disable CS0618 // SearchType is obsolete but still used for backward compatibility
-                searchType = parameters.SearchType ?? "standard";
-#pragma warning restore CS0618
+                searchType = "standard";
                 if (!_queryPreprocessor.IsValidQuery(queryResult.ProcessedQuery, searchType, out var errorMessage))
                 {
                     return CreateQueryParseError(queryResult.ProcessedQuery, errorMessage);
@@ -434,12 +428,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             // Use response builder to create optimized response
             var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
 
-            // Auto-documentation: store findings in ProjectKnowledge if enabled
-            if (parameters.DocumentFindings && result.Success && searchResult.TotalHits > 0)
-            {
-                DocumentSearchFindings(parameters, searchResult, query);
-            }
-
             // Cache the successful response
             if (!parameters.NoCache && result.Success)
             {
@@ -557,57 +545,6 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             }
         };
         return result;
-    }
-
-    /// <summary>
-    /// Document search findings in ProjectKnowledge based on intelligent pattern detection
-    /// </summary>
-    private void DocumentSearchFindings(TextSearchParameters parameters, COA.CodeSearch.McpServer.Services.Lucene.SearchResult searchResult, string query)
-    {
-        try
-        {
-            // Extract file paths from search results
-            var filePaths = searchResult.Hits?.Select(h => h.FilePath).ToArray();
-            
-            // Get documentation recommendation from smart service
-            var recommendation = _smartDocumentationService.AnalyzeSearchResults(
-                query, 
-                searchResult.TotalHits, 
-                filePaths
-            );
-
-            if (!recommendation.ShouldDocument)
-            {
-                _logger.LogDebug("No documentation recommended for query: {Query}", query);
-                return;
-            }
-
-            // Use explicit FindingType if provided, otherwise use recommendation
-            var knowledgeType = parameters.FindingType ?? recommendation.KnowledgeType ?? "TechnicalDebt";
-            var content = recommendation.Content ?? $"Found {searchResult.TotalHits} instances of '{query}'";
-            var tags = recommendation.Tags ?? new[] { "codesearch-auto", "investigation" };
-            var priority = recommendation.Priority ?? "medium";
-
-            // Add search context to metadata - all values must be strings for ProjectKnowledge
-            var metadata = recommendation.Metadata ?? new Dictionary<string, object>();
-            metadata["workspace"] = Path.GetFileName(parameters.WorkspacePath ?? string.Empty);  // Project name, not full path
-            metadata["searchQuery"] = query;
-            metadata["resultCount"] = searchResult.TotalHits.ToString();  // Convert to string
-            metadata["workspacePath"] = parameters.WorkspacePath ?? string.Empty;
-#pragma warning disable CS0618 // SearchType is obsolete but still used for backward compatibility
-            metadata["searchType"] = parameters.SearchType ?? "standard";
-#pragma warning restore CS0618
-            metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
-
-            // ProjectKnowledge integration removed - service retired
-            _logger.LogDebug("Search findings documented locally: Query='{Query}', Type={Type}",
-                query, knowledgeType);
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Error auto-documenting search findings for query: {Query}", query);
-            // Don't throw - documentation failure shouldn't break search
-        }
     }
 
     /// <summary>

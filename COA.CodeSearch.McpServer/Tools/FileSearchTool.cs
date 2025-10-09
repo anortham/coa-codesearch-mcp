@@ -106,8 +106,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
         workspacePath = Path.GetFullPath(workspacePath);
         
         // Validate max results
-        var maxResults = parameters.MaxResults ?? 100;
-        maxResults = ValidateRange(maxResults, 1, 500, nameof(parameters.MaxResults));
+        var maxResults = ValidateRange(parameters.MaxResults, 1, 500, nameof(parameters.MaxResults));
         
         // Generate cache key
         var cacheKey = _keyGenerator.GenerateKey(Name, parameters);
@@ -133,7 +132,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
 
             // Determine if this pattern requires path-based search (contains ** or /)
             // For regex patterns, only check for actual path separators, not escape sequences
-            var requiresPathSearch = parameters.UseRegex == true
+            var requiresPathSearch = parameters.UseRegex
                 ? pattern.Contains("/")  // For regex, only forward slash indicates path search
                 : pattern.Contains("**") || pattern.Contains("/") || pattern.Contains("\\");
 
@@ -174,8 +173,8 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
                         // Build response context
                         var tier1Context = new ResponseContext
                         {
-                            ResponseMode = parameters.ResponseMode ?? "adaptive",
-                            TokenLimit = parameters.MaxTokens ?? 8000,
+                            ResponseMode = parameters.ResponseMode,
+                            TokenLimit = parameters.MaxTokens,
                             StoreFullResults = true,
                             ToolName = Name,
                             CacheKey = cacheKey
@@ -212,7 +211,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             
             // Create appropriate query based on pattern type
             Query query;
-            if (parameters.UseRegex == true)
+            if (parameters.UseRegex)
             {
                 query = new MatchAllDocsQuery();
                 _logger.LogDebug("Using MatchAllDocsQuery for regex pattern: {Pattern}", pattern);
@@ -251,7 +250,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             
             // Process results and filter by pattern
             var files = new List<FileSearchMatch>();
-            var useRegex = parameters.UseRegex ?? false;
+            var useRegex = parameters.UseRegex;
             var regex = useRegex ? new Regex(pattern, RegexOptions.IgnoreCase) : null;
             
             // For ** patterns, we need to normalize the pattern and create the regex once
@@ -321,7 +320,7 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             
             // Include directories if requested
             List<string>? directories = null;
-            if (parameters.IncludeDirectories ?? false)
+            if (parameters.IncludeDirectories)
             {
                 directories = files
                     .Select(f => f.Directory)
@@ -348,8 +347,8 @@ public class FileSearchTool : CodeSearchToolBase<FileSearchParameters, AIOptimiz
             // Build response context
             var context = new ResponseContext
             {
-                ResponseMode = parameters.ResponseMode ?? "adaptive",
-                TokenLimit = parameters.MaxTokens ?? 8000,
+                ResponseMode = parameters.ResponseMode,
+                TokenLimit = parameters.MaxTokens,
                 StoreFullResults = true,
                 ToolName = Name,
                 CacheKey = cacheKey
@@ -600,23 +599,23 @@ public class FileSearchParameters
     /// Maximum number of results to return (default: 100, max: 500)
     /// </summary>
     [Description("Maximum number of results to return (default: 100, max: 500)")]
-    public int? MaxResults { get; set; }
+    public int MaxResults { get; set; } = 100;
 
     /// <summary>
     /// Use regular expression instead of glob pattern for advanced pattern matching.
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Use regular expression instead of glob pattern for advanced matching.")]
-    public bool? UseRegex { get; set; }
+    [Description("Use regular expression instead of glob pattern for advanced matching (default: false).")]
+    public bool UseRegex { get; set; } = false;
 
     /// <summary>
     /// Include list of matching directories in results for better context and navigation.
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include list of matching directories in results for better navigation context.")]
-    public bool? IncludeDirectories { get; set; }
+    [Description("Include list of matching directories in results for better navigation context (default: false).")]
+    public bool IncludeDirectories { get; set; } = false;
 
     /// <summary>
     /// Comma-separated list of file extensions to filter results, improving precision.
@@ -631,14 +630,14 @@ public class FileSearchParameters
     /// Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)
     /// </summary>
     [Description("Response mode: 'summary', 'full', or 'adaptive' (default: adaptive)")]
-    public string? ResponseMode { get; set; }
+    public string ResponseMode { get; set; } = "adaptive";
     
     /// <summary>
     /// Maximum tokens for response (default: 8000)
     /// </summary>
     [Description("Maximum tokens for response (default: 8000)")]
     [Range(100, 100000)]
-    public int? MaxTokens { get; set; }
+    public int MaxTokens { get; set; } = 8000;
     
     /// <summary>
     /// Disable caching for this request
@@ -649,8 +648,8 @@ public class FileSearchParameters
     /// <summary>
     /// Automatically open the first matching file in VS Code
     /// </summary>
-    [Description("Automatically open the first matching file in VS Code")]
-    public bool? OpenFirstResult { get; set; }
+    [Description("Automatically open the first matching file in VS Code (default: false)")]
+    public bool OpenFirstResult { get; set; } = false;
 }
 
 /// <summary>

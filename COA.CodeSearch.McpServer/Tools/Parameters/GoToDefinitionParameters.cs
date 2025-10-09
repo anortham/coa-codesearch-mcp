@@ -19,7 +19,7 @@ public class GoToDefinitionParameters
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -28,32 +28,32 @@ public class GoToDefinitionParameters
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// Include full file content around definition for comprehensive understanding of the symbol's context and usage.
+    /// Include full file content around definition for comprehensive understanding of the symbol's context and usage (default: false)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include full file content around definition for comprehensive context understanding.")]
+    [Description("Include full file content around definition (default: false - snippet only)")]
     public bool IncludeFullContext { get; set; } = false;
 
     /// <summary>
-    /// Number of context lines to show around the definition for better understanding of implementation details.
+    /// Number of context lines to show around the definition for better understanding of implementation details (default: 10)
     /// </summary>
     /// <example>5</example>
     /// <example>15</example>
     /// <example>0</example>
-    [Description("Number of context lines around the definition (0-50). More context helps understand implementation details.")]
+    [Description("Number of context lines around the definition (default: 10, range: 0-50)")]
     [Range(0, 50)]
     public int ContextLines { get; set; } = 10;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
-    [Description("Case sensitive search")]
+    [Description("Case sensitive search (default: false - case insensitive)")]
     public bool CaseSensitive { get; set; } = false;
 }

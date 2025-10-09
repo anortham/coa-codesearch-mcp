@@ -18,7 +18,7 @@ public class LineSearchParams
     public required string Pattern { get; set; }
 
     /// <summary>
-    /// Workspace path to search in. Can be absolute or relative path.
+    /// Workspace path to search in. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -28,58 +28,66 @@ public class LineSearchParams
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// File pattern filter to limit search scope using glob patterns.
+    /// File pattern filter to limit search scope using glob patterns
     /// </summary>
     /// <example>*.cs</example>
     /// <example>src/**/*.ts</example>
     /// <example>**/*.{js,jsx}</example>
+    [Description("File pattern filter to limit scope using glob patterns. Examples: *.cs, src/**/*.ts, **/*.{js,jsx}")]
     [JsonPropertyName("filePattern")]
     public string? FilePattern { get; set; }
 
     /// <summary>
-    /// Number of context lines around each match (like grep -A/-B)
+    /// Number of context lines around each match - like grep -A/-B (default: 2)
     /// </summary>
+    [Description("Number of context lines around each match (default: 2)")]
     [JsonPropertyName("contextLines")]
     public int ContextLines { get; set; } = 2;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
+    [Description("Case sensitive search (default: false - case insensitive)")]
     [JsonPropertyName("caseSensitive")]
     public bool CaseSensitive { get; set; } = false;
 
     /// <summary>
-    /// Maximum results per file to prevent flooding
+    /// Maximum results per file to prevent flooding (default: 10)
     /// </summary>
+    [Description("Maximum results per file to prevent flooding (default: 10)")]
     [JsonPropertyName("maxResultsPerFile")]
     public int MaxResultsPerFile { get; set; } = 10;
 
     /// <summary>
-    /// Maximum total results across all files
+    /// Maximum total results across all files (default: 100)
     /// </summary>
+    [Description("Maximum total results across all files (default: 100)")]
     [JsonPropertyName("maxTotalResults")]
     public int MaxTotalResults { get; set; } = 100;
 
     /// <summary>
-    /// Search type controlling how the pattern is interpreted and matched.
+    /// Search type controlling how the pattern is interpreted and matched (default: standard)
     /// </summary>
     /// <example>standard</example>
     /// <example>regex</example>
     /// <example>literal</example>
+    [Description("Search type controlling how the pattern is interpreted (default: standard - Examples: standard, regex, literal)")]
     [JsonPropertyName("searchType")]
     public string SearchType { get; set; } = "standard";
 
     /// <summary>
-    /// Response mode: summary, default, full
+    /// Response mode: summary, default, full (default: default)
     /// </summary>
+    [Description("Response mode controlling output detail (default: default - Options: summary, default, full)")]
     [JsonPropertyName("responseMode")]
-    public string? ResponseMode { get; set; }
+    public string ResponseMode { get; set; } = "default";
 
     /// <summary>
-    /// Maximum tokens for response
+    /// Maximum tokens for response (default: 8000)
     /// </summary>
+    [Description("Maximum tokens for response (default: 8000)")]
     [JsonPropertyName("maxTokens")]
-    public int? MaxTokens { get; set; }
+    public int MaxTokens { get; set; } = 8000;
 }
 
 /// <summary>

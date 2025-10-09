@@ -19,7 +19,7 @@ public class GetSymbolsOverviewParameters
     public string FilePath { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -28,27 +28,27 @@ public class GetSymbolsOverviewParameters
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// Include method signatures and details for comprehensive symbol understanding.
+    /// Include method signatures and details for comprehensive symbol understanding (default: true)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include method signatures and details")]
+    [Description("Include method signatures and details (default: true - full method info)")]
     public bool IncludeMethods { get; set; } = true;
 
     /// <summary>
-    /// Include type inheritance and interface information for understanding class relationships.
+    /// Include type inheritance and interface information for understanding class relationships (default: true)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include inheritance and interface information")]
+    [Description("Include inheritance and interface information (default: true - shows relationships)")]
     public bool IncludeInheritance { get; set; } = true;
 
     /// <summary>
-    /// Include line numbers for each symbol for precise navigation and editing.
+    /// Include line numbers for each symbol for precise navigation and editing (default: true)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include line numbers for precise navigation")]
+    [Description("Include line numbers for precise navigation (default: true - shows line numbers)")]
     public bool IncludeLineNumbers { get; set; } = true;
 
     /// <summary>
@@ -59,8 +59,8 @@ public class GetSymbolsOverviewParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 }

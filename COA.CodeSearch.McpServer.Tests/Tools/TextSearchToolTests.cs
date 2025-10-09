@@ -28,12 +28,9 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             var queryPreprocessorLoggerMock = new Mock<ILogger<QueryPreprocessor>>();
             var queryPreprocessor = new QueryPreprocessor(queryPreprocessorLoggerMock.Object);
-            // ProjectKnowledgeService removed - service retired
-            var smartDocLoggerMock = new Mock<ILogger<SmartDocumentationService>>();
-            var smartDocumentationService = new SmartDocumentationService(smartDocLoggerMock.Object);
             var smartQueryPreprocessorLoggerMock = new Mock<ILogger<SmartQueryPreprocessor>>();
             var smartQueryPreprocessor = new SmartQueryPreprocessor(smartQueryPreprocessorLoggerMock.Object);
-            
+
             _tool = new TextSearchTool(
                 ServiceProvider,
                 LuceneIndexServiceMock.Object,
@@ -43,7 +40,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 ResourceStorageServiceMock.Object,
                 CacheKeyGeneratorMock.Object,
                 queryPreprocessor,
-                smartDocumentationService,
                 smartQueryPreprocessor,
                 CodeAnalyzer,
                 ToolLoggerMock.Object

@@ -19,7 +19,7 @@ public class FindReferencesParameters
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -28,35 +28,35 @@ public class FindReferencesParameters
     public string? WorkspacePath { get; set; } = null;
 
     /// <summary>
-    /// Include potential references using less strict matching. May include false positives but catches more usage patterns.
+    /// Include potential references using less strict matching. May include false positives but catches more usage patterns (default: false)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Include potential matches (less strict, may have false positives)")]
+    [Description("Include potential matches (default: false - strict matching only)")]
     public bool IncludePotential { get; set; } = false;
 
     /// <summary>
-    /// Group results by file for better organization and readability. Recommended for most use cases.
+    /// Group results by file for better organization and readability. Recommended for most use cases (default: true)
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Group results by file for better organization")]
+    [Description("Group results by file (default: true - organized by file)")]
     public bool GroupByFile { get; set; } = true;
 
     /// <summary>
     /// Maximum number of references to return (default: 100)
     /// </summary>
-    [Description("Maximum number of references to return")]
+    [Description("Maximum number of references to return (default: 100)")]
     [Range(1, 500)]
     public int MaxResults { get; set; } = 100;
 
     /// <summary>
-    /// Number of context lines to show around each reference for better understanding of usage.
+    /// Number of context lines to show around each reference for better understanding of usage (default: 2)
     /// </summary>
     /// <example>2</example>
     /// <example>5</example>
     /// <example>0</example>
-    [Description("Context lines around each reference (0-10)")]
+    [Description("Context lines around each reference (default: 2, range: 0-10)")]
     [Range(0, 10)]
     public int ContextLines { get; set; } = 2;
 
@@ -68,14 +68,14 @@ public class FindReferencesParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
-    [Description("Case sensitive")]
+    [Description("Case sensitive search (default: false - case insensitive)")]
     public bool CaseSensitive { get; set; } = false;
 }

@@ -154,8 +154,8 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
             // Use response builder for optimization and resource storage
             var responseContext = new ResponseContext
             {
-                TokenLimit = parameters.MaxTokens ?? 8000,
-                ResponseMode = parameters.ResponseMode ?? "default",
+                TokenLimit = parameters.MaxTokens,
+                ResponseMode = parameters.ResponseMode,
                 StoreFullResults = true,
                 ToolName = Name
             };
@@ -182,8 +182,8 @@ public class LineSearchTool : CodeSearchToolBase<LineSearchParams, AIOptimizedRe
 
             var responseContext = new ResponseContext
             {
-                TokenLimit = parameters.MaxTokens ?? 8000,
-                ResponseMode = parameters.ResponseMode ?? "default",
+                TokenLimit = parameters.MaxTokens,
+                ResponseMode = parameters.ResponseMode,
                 StoreFullResults = false,
                 ToolName = Name
             };

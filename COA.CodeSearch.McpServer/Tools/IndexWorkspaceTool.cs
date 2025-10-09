@@ -146,12 +146,12 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
             }
 
             // Check if force rebuild is requested or if it's a new index
-            if (parameters.ForceRebuild == true || initResult.IsNewIndex)
+            if (parameters.ForceRebuild || initResult.IsNewIndex)
             {
                 _logger.LogInformation("Starting full index for workspace: {WorkspacePath}", workspacePath);
-                
+
                 // Force rebuild with new schema if explicitly requested
-                if (parameters.ForceRebuild == true && !initResult.IsNewIndex)
+                if (parameters.ForceRebuild && !initResult.IsNewIndex)
                 {
                     // Step 1: Rebuild Lucene index
                     await _luceneIndexService.ForceRebuildIndexAsync(workspacePath, cancellationToken);
@@ -326,8 +326,8 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                 // Build response context
                 var context = new ResponseContext
                 {
-                    ResponseMode = parameters.ResponseMode ?? "summary",
-                    TokenLimit = parameters.MaxTokens ?? 8000,
+                    ResponseMode = parameters.ResponseMode,
+                    TokenLimit = parameters.MaxTokens,
                     StoreFullResults = true,
                     ToolName = Name,
                     CacheKey = cacheKey
@@ -384,8 +384,8 @@ public class IndexWorkspaceTool : CodeSearchToolBase<IndexWorkspaceParameters, A
                 // Build response context
                 var context = new ResponseContext
                 {
-                    ResponseMode = parameters.ResponseMode ?? "summary",
-                    TokenLimit = parameters.MaxTokens ?? 8000,
+                    ResponseMode = parameters.ResponseMode,
+                    TokenLimit = parameters.MaxTokens,
                     StoreFullResults = false, // No need to store for existing index
                     ToolName = Name,
                     CacheKey = cacheKey
@@ -484,8 +484,8 @@ public class IndexWorkspaceParameters
     /// </summary>
     /// <example>true</example>
     /// <example>false</example>
-    [Description("Force a full rebuild of the index even if it exists. Use when schema changes or corruption suspected.")]
-    public bool? ForceRebuild { get; set; }
+    [Description("Force a full rebuild of the index even if it exists (default: false). Use when schema changes or corruption suspected.")]
+    public bool ForceRebuild { get; set; } = false;
 
     /// <summary>
     /// File extensions to include in indexing. When specified, only these file types will be indexed.
@@ -493,8 +493,8 @@ public class IndexWorkspaceParameters
     /// <example>[".cs", ".js"]</example>
     /// <example>[".py", ".ts", ".tsx"]</example>
     /// <example>[".java", ".kt"]</example>
-    [Description("File extensions to include in indexing. Examples: '[\".cs\", \".js\"]', '[\".py\", \".ts\", \".tsx\"]'")]
-    public string[]? IncludeExtensions { get; set; }
+    [Description("File extensions to include in indexing (default: all supported types). Examples: '[\".cs\", \".js\"]', '[\".py\", \".ts\", \".tsx\"]'")]
+    public string[]? IncludeExtensions { get; set; } = null;
 
     /// <summary>
     /// File extensions to explicitly exclude from indexing, overriding default inclusion patterns.
@@ -502,21 +502,21 @@ public class IndexWorkspaceParameters
     /// <example>[".min.js", ".map"]</example>
     /// <example>[".dll", ".exe", ".bin"]</example>
     /// <example>[".log", ".tmp"]</example>
-    [Description("File extensions to exclude from indexing. Examples: '[\".min.js\", \".map\"]', '[\".dll\", \".exe\", \".bin\"]'")]
-    public string[]? ExcludeExtensions { get; set; }
-    
+    [Description("File extensions to exclude from indexing (default: none). Examples: '[\".min.js\", \".map\"]', '[\".dll\", \".exe\", \".bin\"]'")]
+    public string[]? ExcludeExtensions { get; set; } = null;
+
     /// <summary>
     /// Response mode: 'summary' or 'full' (default: summary)
     /// </summary>
     [Description("Response mode: 'summary' or 'full' (default: summary)")]
-    public string? ResponseMode { get; set; }
-    
+    public string ResponseMode { get; set; } = "summary";
+
     /// <summary>
     /// Maximum tokens for response (default: 8000)
     /// </summary>
     [Description("Maximum tokens for response (default: 8000)")]
     [Range(100, 100000)]
-    public int? MaxTokens { get; set; }
+    public int MaxTokens { get; set; } = 8000;
     
 }
 

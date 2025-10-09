@@ -46,9 +46,9 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 ```
 
 **Note:** Tools now have smart defaults - most calls need only 1-2 parameters!
-**Deprecated:** `insert_at_line`, `replace_lines`, `delete_lines` → use `edit_lines`
-**Deprecated:** `file_search`, `directory_search` → use `search_files`
-**Removed:** `batch_operations` (obsolete with MCP parallel tool calls), `similar_files` (never implemented)
+**Replaced:** `insert_at_line`, `replace_lines`, `delete_lines` → use `edit_lines`
+**Replaced:** `file_search`, `directory_search` → use `search_files`
+**Removed:** `batch_operations` (obsolete with MCP parallel tool calls), `similar_files` (never implemented), `SearchType` parameter (use `SearchMode` instead)
 
 ## 🚨 Development Workflow
 
@@ -209,6 +209,8 @@ text_search --query "UserService"  # All other params have smart defaults!
 **Framework Integration**
 
 - ✅ Local project references: Active development with live framework changes
+- ✅ JSON Schema fix: Only properties with explicit `[Required]` attribute or `required` modifier are required
+- ✅ Smart defaults work correctly: Value types with defaults (bool, int, float) no longer incorrectly marked as required
 - ✅ All 427 tests passing: Full compatibility with framework improvements
 - ✅ Zero regressions: Maintains production stability during development
 

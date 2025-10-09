@@ -19,7 +19,7 @@ public class TextSearchParameters
     public string Query { get; set; } = string.Empty;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
@@ -47,20 +47,13 @@ public class TextSearchParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// [DEPRECATED] Use SearchMode instead. This parameter is kept for backward compatibility only.
-    /// </summary>
-    [Obsolete("Use SearchMode parameter instead - SearchType will be removed in future version")]
-    [Description("[DEPRECATED] Use searchMode instead")]
-    public string? SearchType { get; set; } = null;
-
-    /// <summary>
-    /// Search mode controls how queries are matched. Default: 'auto' (smart detection).
+    /// Search mode controls how queries are matched (default: auto - smart detection).
     /// - 'auto': Automatically detect best approach (symbol/pattern/standard routing)
     /// - 'exact': Literal exact matching (no fuzzy, no wildcards)
     /// - 'fuzzy': Typo-tolerant search (handles spelling variations)
@@ -77,26 +70,8 @@ public class TextSearchParameters
 
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
-    [Description("Case sensitive")]
+    [Description("Case sensitive search (default: false - case insensitive)")]
     public bool CaseSensitive { get; set; } = false;
-
-    /// <summary>
-    /// Automatically document findings in ProjectKnowledge MCP when patterns are detected
-    /// </summary>
-    [Description("Auto-document findings in ProjectKnowledge MCP")]
-    public bool DocumentFindings { get; set; } = false;
-
-    /// <summary>
-    /// Override the auto-detected knowledge type (TechnicalDebt, ProjectInsight, WorkNote)
-    /// </summary>
-    [Description("Override the auto-detected knowledge type (TechnicalDebt, ProjectInsight, WorkNote)")]
-    public string? FindingType { get; set; }
-
-    /// <summary>
-    /// Enable intelligent pattern detection for auto-documentation
-    /// </summary>
-    [Description("Enable intelligent pattern detection")]
-    public bool AutoDetectPatterns { get; set; } = true;
 }

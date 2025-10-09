@@ -17,54 +17,54 @@ public class TraceCallPathParameters
     public string Symbol { get; set; } = string.Empty;
 
     /// <summary>
-    /// Direction to trace: 'up' (callers), 'down' (callees), or 'both' (full hierarchy) for comprehensive analysis.
+    /// Direction to trace: 'up' (callers), 'down' (callees), or 'both' (full hierarchy) for comprehensive analysis (default: up)
     /// </summary>
     /// <example>up</example>
     /// <example>down</example>
     /// <example>both</example>
-    [Description("Trace direction: up (who calls), down (what calls), both (full tree)")]
+    [Description("Trace direction (default: up - who calls this): up, down (what this calls), both (full tree)")]
     public string Direction { get; set; } = "up";
 
     /// <summary>
-    /// Maximum depth to trace (prevents infinite recursion)
+    /// Maximum depth to trace - prevents infinite recursion (default: 3)
     /// </summary>
-    [Description("Maximum depth to trace (prevents infinite recursion)")]
+    [Description("Maximum depth to trace (default: 3 - prevents infinite recursion)")]
     public int MaxDepth { get; set; } = 3;
 
     /// <summary>
-    /// Group results by file for better organization
+    /// Group results by file for better organization (default: true)
     /// </summary>
-    [Description("Group results by file for better organization")]
+    [Description("Group results by file (default: true - organized by file)")]
     public bool GroupByFile { get; set; } = true;
 
     /// <summary>
-    /// Number of context lines to show around each call site
+    /// Number of context lines to show around each call site (default: 2)
     /// </summary>
-    [Description("Number of context lines to show around each call site")]
+    [Description("Number of context lines around each call site (default: 2)")]
     public int ContextLines { get; set; } = 2;
 
     /// <summary>
-    /// Include potential matches (less strict matching)
+    /// Include potential matches - less strict matching (default: false)
     /// </summary>
-    [Description("Include potential matches (less strict matching)")]
+    [Description("Include potential matches (default: false - strict matching only)")]
     public bool IncludePotential { get; set; } = false;
 
     /// <summary>
-    /// Maximum number of results to return per level
+    /// Maximum number of results to return per level (default: 50)
     /// </summary>
-    [Description("Maximum number of results to return per level")]
+    [Description("Maximum number of results to return per level (default: 50)")]
     public int MaxResults { get; set; } = 50;
 
     /// <summary>
-    /// Case sensitive search
+    /// Case sensitive search (default: false - case insensitive)
     /// </summary>
-    [Description("Case sensitive")]
+    [Description("Case sensitive search (default: false - case insensitive)")]
     public bool CaseSensitive { get; set; } = false;
 
     /// <summary>
-    /// Show detailed method signatures in results
+    /// Show detailed method signatures in results (default: true)
     /// </summary>
-    [Description("Show detailed method signatures")]
+    [Description("Show detailed method signatures (default: true - includes signatures)")]
     public bool ShowSignatures { get; set; } = true;
 
     /// <summary>
@@ -74,13 +74,13 @@ public class TraceCallPathParameters
     public int MaxTokens { get; set; } = 8000;
 
     /// <summary>
-    /// Disable caching for this request
+    /// Disable caching for this request (default: false - caching enabled)
     /// </summary>
-    [Description("Disable caching for this request")]
+    [Description("Disable caching for this request (default: false - caching enabled)")]
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Path to the workspace directory to search. Can be absolute or relative path. Defaults to current workspace if not specified.
+    /// Path to the workspace directory to search. Can be absolute or relative path (default: current workspace)
     /// </summary>
     /// <example>C:\source\MyProject</example>
     /// <example>./src</example>
