@@ -227,7 +227,9 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                 targetField = queryResult.TargetField;
 
                 // Validate the processed query
+#pragma warning disable CS0618 // SearchType is obsolete but still used for backward compatibility
                 searchType = parameters.SearchType ?? "standard";
+#pragma warning restore CS0618
                 if (!_queryPreprocessor.IsValidQuery(queryResult.ProcessedQuery, searchType, out var errorMessage))
                 {
                     return CreateQueryParseError(queryResult.ProcessedQuery, errorMessage);
@@ -592,7 +594,9 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             metadata["searchQuery"] = query;
             metadata["resultCount"] = searchResult.TotalHits.ToString();  // Convert to string
             metadata["workspacePath"] = parameters.WorkspacePath ?? string.Empty;
-            metadata["searchType"] = parameters.SearchType;
+#pragma warning disable CS0618 // SearchType is obsolete but still used for backward compatibility
+            metadata["searchType"] = parameters.SearchType ?? "standard";
+#pragma warning restore CS0618
             metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
 
             // ProjectKnowledge integration removed - service retired

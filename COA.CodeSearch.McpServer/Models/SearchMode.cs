@@ -35,22 +35,25 @@ public enum SearchMode
     /// </summary>
     Regex,
 
-    // DEPRECATED - kept for backward compatibility
+    // Internal routing modes - used by Auto mode's smart detection
     /// <summary>
-    /// [DEPRECATED] Use Auto instead. Pattern-preserving search.
+    /// Pattern-preserving search mode (internal use).
+    /// Routes to content_patterns field for code structure matching with minimal analysis.
+    /// Recommended: Use Auto mode for automatic detection.
     /// </summary>
-    [Obsolete("Use Auto mode instead - smart routing handles patterns automatically")]
     Pattern,
 
     /// <summary>
-    /// [DEPRECATED] Use Auto instead. Symbol-only search.
+    /// Symbol-only search mode (internal use).
+    /// Routes to content_symbols field for identifier and CamelCase matching.
+    /// Recommended: Use Auto mode for automatic detection.
     /// </summary>
-    [Obsolete("Use Auto mode instead - smart routing targets symbol field when appropriate")]
     Symbol,
 
     /// <summary>
-    /// [DEPRECATED] Use Auto instead. Standard tokenization.
+    /// Standard tokenization search mode (internal use).
+    /// Routes to content field for general full-text search.
+    /// Recommended: Use Auto mode for automatic detection.
     /// </summary>
-    [Obsolete("Use Auto mode instead")]
     Standard
 }

@@ -117,7 +117,7 @@ text_search --query "UserService"  # All other params have smart defaults!
 **Logs**: `.coa/codesearch/logs/` (workspace-specific logging)
 
 **Token Optimization**: Active via `BaseResponseBuilder<T>` with 40% safety budget
-**Test Framework**: NUnit (528+ tests, zero warnings)
+**Test Framework**: NUnit (427 tests, zero warnings)
 **Framework**: Local project references for active development
 
 ### 3-Tier Search Architecture
@@ -209,7 +209,7 @@ text_search --query "UserService"  # All other params have smart defaults!
 **Framework Integration**
 
 - ✅ Local project references: Active development with live framework changes
-- ✅ All 456 tests passing: Full compatibility with framework improvements
+- ✅ All 427 tests passing: Full compatibility with framework improvements
 - ✅ Zero regressions: Maintains production stability during development
 
 ## ⚠️ Common Pitfalls
@@ -236,7 +236,7 @@ return new AIOptimizedResponse<T> { Data = new AIResponseData<T>(...) }
 ## 🧪 Testing
 
 ```bash
-# All tests (366+ total)
+# All tests (427 total)
 dotnet test
 
 # Specific tool tests
