@@ -52,62 +52,38 @@ The type extraction system supports **26 programming languages** using julie-cod
 - **Vue Single File Components**: Extracts types from `<script>` blocks (TS/JS)
 - **Razor/Blazor**: Extracts types from `@code` and `@functions` blocks
 - **Mixed Languages**: Handles embedded code in templating systems
-- **Cross-Platform Binaries**: Pre-compiled binaries for macOS (ARM64), Linux (x64), and Windows (x64) included in NuGet package
+- **Cross-Platform Binaries**: Pre-compiled julie-codesearch binaries for macOS (ARM64), Linux (x64), and Windows (x64) included in the build
 - **Zero Dependencies**: No manual tree-sitter library installation required - julie-codesearch binaries are self-contained
 
 ## 📋 Prerequisites
 
 - .NET 9.0 SDK or later
-- **No tree-sitter libraries required** - julie-codesearch binaries are self-contained and included in the NuGet package
+- **No tree-sitter libraries required** - julie-codesearch binaries are self-contained and included in the build
 
 ## 🚀 Quick Start
 
-### Installation as Global Tool
+### Build from Source
 
 ```bash
-# Install from NuGet (recommended)
-dotnet tool install -g COA.CodeSearch --version 2.1.43
-
-# Verify installation
-codesearch --version
-
-# Or build from source
+# Clone the repository
 git clone https://github.com/anortham/coa-codesearch-mcp.git
 cd coa-codesearch-mcp
+
+# Build the project
 dotnet build -c Release
-dotnet pack -c Release
-dotnet tool install -g --add-source ./nupkg COA.CodeSearch
 ```
 
-### Uninstall
+### Add to Claude Code
 
 ```bash
-# Remove global tool
-dotnet tool uninstall -g COA.CodeSearch
+# macOS/Linux
+claude mcp add codesearch /path/to/coa-codesearch-mcp/COA.CodeSearch.McpServer/bin/Release/net9.0/COA.CodeSearch.McpServer
+
+# Windows
+claude mcp add codesearch C:\path\to\coa-codesearch-mcp\COA.CodeSearch.McpServer\bin\Release\net9.0\COA.CodeSearch.McpServer.exe
 ```
 
-### Claude Code Integration
-
-Add to your Claude Code MCP configuration file:
-
-**Configuration File Locations:**
-- **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
-- **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Linux**: `~/.config/Claude/claude_desktop_config.json`
-
-**Configuration:**
-```json
-{
-  "mcpServers": {
-    "codesearch": {
-      "command": "codesearch",
-      "args": ["stdio"]
-    }
-  }
-}
-```
-
-**After adding the configuration:**
+**After adding:**
 1. Restart Claude Code completely
 2. Claude will now have powerful search capabilities - just ask naturally!
 
@@ -116,6 +92,8 @@ Add to your Claude Code MCP configuration file:
 # CodeSearch local indexes (can be regenerated)
 .coa/
 ```
+
+> **Note:** NuGet package installation will be available in a future release
 
 ## 🌟 What Makes This Special
 
@@ -137,7 +115,7 @@ Unlike basic file search, CodeSearch understands your code:
 
 ## 🛠️ Available Tools - **Now with Smart Defaults!** ✨
 
-**Note:** All tools now support smart defaults - most parameters are optional and default to sensible values. The `workspacePath` parameter defaults to the current workspace directory across all tools.
+**Note:** All tools support smart defaults - most parameters are optional and default to sensible values. The `workspacePath` parameter defaults to the current workspace directory across all tools.
 
 ### Core Search Tools
 
@@ -175,22 +153,13 @@ Unlike basic file search, CodeSearch understands your code:
 |------|---------|--------------------------------------|
 | `edit_lines` | 🆕 Unified line editing (insert/replace/delete) | `filePath` (required), `operation` (required: "insert", "replace", "delete"), `startLine` (required) |
 
-### System Tools
+### Analysis Tools
 
 | Tool | Purpose | Key Parameters (all others optional) |
 |------|---------|--------------------------------------|
-| `hello_world` | Test connectivity | `name` (optional) |
-| `get_system_info` | System diagnostics | None required |
-
-### Deprecated Tools (still available but prefer alternatives)
-
-| Deprecated | Use Instead | Reason |
-|-----------|-------------|--------|
-| `file_search` | `search_files` | Consolidated into unified search |
-| `directory_search` | `search_files --resourceType "directory"` | Consolidated into unified search |
-| `insert_at_line` | `edit_lines --operation "insert"` | Consolidated into unified editor |
-| `replace_lines` | `edit_lines --operation "replace"` | Consolidated into unified editor |
-| `delete_lines` | `edit_lines --operation "delete"` | Consolidated into unified editor |
+| `get_symbols_overview` | Extract all symbols from files | `filePath` (required) |
+| `find_patterns` | Detect code patterns and quality issues | `filePath` (required) |
+| `trace_call_path` | Hierarchical call chain analysis | `symbol` (required) |
 
 ## 💬 How to Use with Claude Code
 
@@ -495,8 +464,8 @@ mcp__codesearch__index_workspace --workspacePath "."
 # Test search
 mcp__codesearch__text_search --query "LuceneIndexService"
 
-# Check system health
-mcp__codesearch__get_system_info
+# Test file discovery
+mcp__codesearch__recent_files --timeFrame "7d"
 ```
 
 ## 🔧 Troubleshooting
@@ -524,7 +493,8 @@ Close Claude Code completely and restart it
 
 **Installation issues:**
 - Make sure you have .NET 9.0 installed: `dotnet --version`
-- Try reinstalling: `dotnet tool uninstall -g COA.CodeSearch && dotnet tool install -g COA.CodeSearch`
+- Try rebuilding: `cd coa-codesearch-mcp && dotnet build -c Release`
+- Verify the path in your Claude Code configuration is correct
 
 ### Template Embedding Fix (v2.1.4+)
 
@@ -591,7 +561,6 @@ MIT License - see [LICENSE](LICENSE) file.
 - **Issues**: [GitHub Issues](https://github.com/anortham/coa-codesearch-mcp/issues)
 - **Documentation**: [docs/](docs/) folder
 - **Framework**: [COA MCP Framework 2.1.8](https://www.nuget.org/packages/COA.Mcp.Framework)
-- **NuGet Package**: [COA.CodeSearch](https://www.nuget.org/packages/COA.CodeSearch)
 
 ---
 
