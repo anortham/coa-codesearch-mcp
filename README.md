@@ -9,7 +9,7 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 - **⚡ Lightning-Fast Search**: Lucene indexing enables instant search across millions of lines
 - **🔍 Smart Code Analysis**: Custom analyzer preserves code patterns like `: ITool`, `[Fact]`, and enhanced CamelCase tokenization with full generic type support (finds `McpToolBase<TParams, TResult>` when searching for "McpToolBase")
 - **📁 File Discovery**: Pattern-based file and directory search with fuzzy matching
-- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from 10+ languages including C#, TypeScript, Python, Java, Rust, JavaScript, Bash, JSON, TOML, and more
+- **🧬 Advanced Type Extraction**: Extract types, interfaces, classes, and methods from **26 programming languages** using julie-codesearch Rust CLI tool (includes C#, TypeScript, JavaScript, Python, Java, Rust, Go, C/C++, PHP, Ruby, Swift, Kotlin, and 14 more specialized languages)
 - **🧭 Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **📝 Line-Level Search**: Get ALL occurrences with exact line numbers - faster than grep with structured JSON output
 - **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety, plus fuzzy matching for handling typos and variations
@@ -37,128 +37,28 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 
 ### 🧬 Supported Languages for Type Extraction
 
-The type extraction system supports **10+ programming languages** using TreeSitter.DotNet:
+The type extraction system supports **26 programming languages** using julie-codesearch, a Rust-based CLI tool with native tree-sitter bindings:
 
-**✅ Fully Supported (with query files):**
-- **C#**: Classes, interfaces, structs, methods, properties
-- **Python**: Classes, functions, modules
-- **Java**: Classes, interfaces, methods
-- **Rust**: Structs, enums, impl blocks, functions
-- **TypeScript**: Interfaces, classes, functions, types
+**Core Languages (10):**
+- **Rust** • **TypeScript** • **JavaScript** • **Python** • **Java** • **C#** • **PHP** • **Ruby** • **Swift** • **Kotlin**
 
-**✅ Basic Support (fallback extraction):**
-- **JavaScript**: Functions, classes (no query file)
-- **Bash**: Functions, variables (no query file)
-- **JSON**: Structure analysis
-- **TOML**: Configuration parsing
+**Systems Languages (4):**
+- **C** • **C++** • **Go** • **Lua**
 
-**⚠️ Known Issues:**
-- **Go**: DLL entry point issue (`tree_sitter_go` not found)
-- **C++, Ruby, PHP, etc.**: May work but not tested at this commit  
+**Specialized Languages (12):**
+- **GDScript** • **Vue SFCs** • **Razor** • **SQL** • **HTML** • **CSS** • **Regex** • **Bash** • **PowerShell** • **Zig** • **Dart**
 
-**Special Support**:
+**Special Features**:
 - **Vue Single File Components**: Extracts types from `<script>` blocks (TS/JS)
 - **Razor/Blazor**: Extracts types from `@code` and `@functions` blocks
 - **Mixed Languages**: Handles embedded code in templating systems
+- **Cross-Platform Binaries**: Pre-compiled binaries for macOS (ARM64), Linux (x64), and Windows (x64) included in NuGet package
+- **Zero Dependencies**: No manual tree-sitter library installation required - julie-codesearch binaries are self-contained
 
 ## 📋 Prerequisites
 
 - .NET 9.0 SDK or later
-
-### macOS Tree-sitter Setup
-
-**⚠️ Important for macOS users:** This project uses Tree-sitter for advanced type extraction from 15+ languages. The NuGet package doesn't ship native Darwin libraries, so you need to install them manually:
-
-#### Quick Setup (Recommended)
-```bash
-# 1. Install Tree-sitter runtime via Homebrew
-brew install tree-sitter
-
-# 2. Build grammar libraries using our automation script
-sh scripts/build-grammars-macos.sh
-```
-
-This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Rust, Java, JSON, HTML, CSS, and Bash.
-
-#### Custom Installation Directory
-If you want to install in a local directory instead of Homebrew's default location:
-
-```bash
-# Build to custom directory
-DEST_DIR="$PWD/native" sh scripts/build-grammars-macos.sh
-
-# Then set the environment variable for runtime discovery
-export TREE_SITTER_NATIVE_PATHS="$PWD/native:/opt/homebrew/lib:/usr/local/lib"
-```
-
-#### Build Specific Grammars Only
-```bash
-# Build only C# and TypeScript grammars
-GRAMMARS="c-sharp typescript" sh scripts/build-grammars-macos.sh
-```
-
-#### Manual Verification
-After setup, verify the installation:
-```bash
-# Check installed libraries
-ls /opt/homebrew/lib/libtree-sitter*.dylib
-
-# For Intel Macs, check:
-ls /usr/local/lib/libtree-sitter*.dylib
-```
-
-The build script automatically detects your Mac architecture (Apple Silicon vs Intel) and adjusts paths accordingly.
-
-### Linux Tree-sitter Setup
-
-**⚠️ Important for Linux users:** Similar to macOS, Linux users need to install Tree-sitter libraries manually for advanced type extraction from 15+ languages:
-
-#### Quick Setup (Recommended)
-```bash
-# 1. Install Tree-sitter runtime via your package manager
-# Ubuntu/Debian:
-sudo apt install libtree-sitter-dev
-
-# Fedora/RHEL/CentOS:
-sudo dnf install tree-sitter-devel
-# or: sudo yum install tree-sitter-devel
-
-# Arch Linux:
-sudo pacman -S tree-sitter
-
-# 2. Build grammar libraries using our automation script
-bash scripts/build-grammars-linux.sh
-```
-
-This builds the most common grammars: C#, TypeScript, TSX, JavaScript, Python, Rust, Java, JSON, HTML, CSS, and Bash.
-
-#### Custom Installation Directory
-If you want to install in a local directory instead of system paths:
-
-```bash
-# Build to custom directory
-DEST_DIR="$PWD/native" bash scripts/build-grammars-linux.sh
-
-# Then set the environment variable for runtime discovery
-export TREE_SITTER_NATIVE_PATHS="$PWD/native:/usr/local/lib:/usr/lib:/usr/lib/x86_64-linux-gnu"
-```
-
-#### Build Specific Grammars Only
-```bash
-# Build only C# and TypeScript grammars
-GRAMMARS="c-sharp typescript" bash scripts/build-grammars-linux.sh
-```
-
-#### Manual Verification
-After setup, verify the installation:
-```bash
-# Check installed libraries
-ls /usr/local/lib/libtree-sitter*.so
-# or: ls /usr/lib/libtree-sitter*.so
-# or: ls /usr/lib/x86_64-linux-gnu/libtree-sitter*.so
-```
-
-The build script automatically detects common Linux library paths and supports various distributions.
+- **No tree-sitter libraries required** - julie-codesearch binaries are self-contained and included in the NuGet package
 
 ## 🚀 Quick Start
 
@@ -222,7 +122,7 @@ Add to your Claude Code MCP configuration file:
 Unlike basic file search, CodeSearch understands your code:
 
 - **Smart Pattern Recognition**: Finds `async Task`, `[Fact]`, `interface IService` patterns, plus enhanced CamelCase splitting for generic types
-- **Context-Aware**: Knows the difference between C# classes and JavaScript functions using Tree-sitter parsing
+- **Context-Aware**: Knows the difference between C# classes and JavaScript functions using julie-codesearch native tree-sitter extraction
 - **Instant Results**: Millisecond search across millions of lines of code
 - **Fuzzy Matching**: Finds files even with typos in names
 - **Content Similarity**: "Find files like this one" using advanced analysis
@@ -232,7 +132,7 @@ Unlike basic file search, CodeSearch understands your code:
 - **Code Navigation**: Symbol search, find references, and goto definition without compilation
 - **Structured Line Search**: Better than grep - returns JSON with exact line numbers and context
 - **Safe Bulk Edits**: Preview mode for search/replace prevents accidental changes
-- **Type-Aware**: Extracts and indexes types from 10+ languages for accurate navigation
+- **Type-Aware**: Extracts and indexes types from 26 languages via julie-codesearch for accurate navigation across all major programming languages
 - **Precise Editing**: Complete line-based editing suite for surgical code modifications without full file reads
 
 ## 🛠️ Available Tools - **Now with Smart Defaults!** ✨
@@ -357,7 +257,7 @@ Groups results by file for easy scanning
 **"Search for all classes ending with Controller"**
 ```
 Claude will find all classes matching the pattern like UserController, OrderController
-Uses Tree-sitter type extraction for accurate results
+Uses julie-codesearch tree-sitter-based extraction for accurate results across 26 languages
 ```
 
 **"Find where IRepository interface is implemented"**
@@ -370,27 +270,32 @@ Shows inheritance relationships and usage counts
 
 **"Find all classes and interfaces in my project"**
 ```
-Claude will extract types from C#, TypeScript, Python, Java, Rust, and other supported languages
+Claude will extract types from 26 languages including C#, TypeScript, Python, Java, Rust, Go, C/C++, PHP, Ruby, Swift, Kotlin, and more
+Uses julie-codesearch native tree-sitter extraction for LSP-quality results
 ```
 
 **"Show me all functions and methods in my codebase"**
 ```
-Claude will parse multiple languages and extract function/method definitions with signatures
+Claude will parse 26 languages and extract function/method definitions with signatures
+Supports everything from C# to Bash to specialized languages like GDScript
 ```
 
 **"Find all Vue component methods"**
 ```
-Claude will parse Vue files and extract methods from JavaScript/TypeScript script blocks
+Claude will parse Vue SFCs and extract methods from JavaScript/TypeScript script blocks
+julie-codesearch handles embedded languages in templating systems
 ```
 
 **"Show me all Python classes with their methods"**
 ```
 Claude will analyze Python files and extract class definitions and methods
+Full support for Python's class hierarchies and method signatures
 ```
 
 **"Find all Rust structs and impl blocks"**
 ```
 Claude will parse Rust code and extract struct definitions and implementations
+julie-codesearch provides native Rust tree-sitter integration
 ```
 
 ### Development Workflow

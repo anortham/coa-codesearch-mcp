@@ -9,9 +9,9 @@
 
 ## 🎯 Quick Reference
 
-Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace indexing with cross-platform support.
+Lucene.NET-powered code search with julie-codesearch native type extraction. Local workspace indexing with cross-platform support.
 
-**Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: TreeSitter.DotNet
+**Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: julie-codesearch Rust CLI (26 languages)
 
 ### Core Tools (14 available) - **Now with Smart Defaults!** 🎯
 
@@ -250,8 +250,9 @@ mcp__codesearch__recent_files --workspacePath "."
 
 - **COA MCP Framework**: Core MCP framework (v2.1.16)
 - **Goldfish MCP**: Session/memory management
-- **Tree-sitter bindings**: `C:\source\tree-sitter-dotnet-bindings`
+- **julie-codesearch**: Rust CLI for native tree-sitter type extraction (26 languages)
+- **julie-semantic**: Rust CLI for ONNX embeddings and HNSW semantic search
 
 ---
 
-_Updated: 2025-10-07 - Added tool consolidation (edit_lines, search_files) and smart defaults across all tools - most calls now need only 1-2 parameters!_
+_Updated: 2025-10-09 - Updated documentation to reflect julie-codesearch Rust CLI (26 language support), removed obsolete TreeSitter.DotNet references, expanded TypeExtraction.Languages config to all 26 supported languages_
