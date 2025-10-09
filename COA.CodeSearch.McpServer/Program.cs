@@ -222,7 +222,10 @@ public class Program
         var tempPathService = new PathResolutionService(configuration, tempLogger);
         var logsPath = tempPathService.GetLogsPath();
         tempPathService.EnsureDirectoryExists(logsPath);
-        
+
+        // Ensure .gitignore exists in .coa/codesearch to prevent committing indexes
+        tempPathService.EnsureGitIgnoreExists();
+
         // Use a shared log file name (no process-specific suffix)
         var logFile = Path.Combine(logsPath, "codesearch-.log");
         

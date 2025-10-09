@@ -62,7 +62,12 @@ public interface IPathResolutionService
     /// </summary>
     /// <param name="path">The directory path to ensure exists</param>
     void EnsureDirectoryExists(string path);
-    
+
+    /// <summary>
+    /// Ensures .gitignore file exists in the .coa/codesearch directory to prevent committing indexes
+    /// </summary>
+    void EnsureGitIgnoreExists();
+
     // Safe file system operations
     
     /// <summary>

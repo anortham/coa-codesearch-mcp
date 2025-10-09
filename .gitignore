@@ -422,6 +422,8 @@ test-mcp.sh
 # Lucene indexes and local data
 .codesearch/
 .coa/
+# Exception: Include .gitignore file in .coa/codesearch to help users avoid committing indexes
+!.coa/codesearch/.gitignore
 COA.CodeSearch.McpServer/.codesearch/
 
 # Claude Memory System - Exception for project memories
