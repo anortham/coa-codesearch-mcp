@@ -14,7 +14,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/conversation_start.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/conversation_start.ts"
           }
         ]
       }
@@ -24,7 +24,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/pre_compact.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/pre_compact.ts"
           }
         ]
       }
@@ -34,11 +34,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/stop.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/stop.ts"
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/post_response.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/post_response.ts"
           }
         ]
       }
@@ -48,15 +48,15 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/user_prompt_submit.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/user_prompt_submit.ts"
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/enhanced_user_prompt_submit.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/enhanced_user_prompt_submit.ts"
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/exchange_monitor.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/exchange_monitor.ts"
           }
         ]
       }
@@ -66,11 +66,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bun .claude/hooks/post_tool_use.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/post_tool_use.ts"
           },
           {
             "type": "command",
-            "command": "bun .claude/hooks/plan_detector.ts"
+            "command": "bun /Users/murphy/source/coa-codesearch-mcp/.claude/hooks/plan_detector.ts"
           }
         ]
       }

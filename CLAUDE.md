@@ -13,7 +13,7 @@ Lucene.NET-powered code search with Tree-sitter type extraction. Local workspace
 
 **Version**: 4b32d04 | **Status**: Production Ready | **Performance**: 117 files/sec | **Framework**: TreeSitter.DotNet
 
-### Core Tools (16 available) - **Now with Smart Defaults!** 🎯
+### Core Tools (14 available) - **Now with Smart Defaults!** 🎯
 
 ```bash
 # Essential Search
@@ -25,12 +25,11 @@ find_references     # Find ALL usages (critical before refactoring)
 # File Discovery
 search_files        # 🆕 Unified file/directory search (replaces file_search + directory_search)
 recent_files        # Recent modifications (great for context)
-similar_files       # Find similar code patterns
 
 # Advanced Search
 line_search         # Line-by-line search (replaces grep/rg)
 search_and_replace  # Bulk find & replace with preview + fuzzy matching
-batch_operations    # Multiple searches in parallel
+trace_call_path     # Hierarchical call chain analysis with semantic bridging
 
 # Refactoring
 smart_refactor      # AST-aware symbol renaming (byte-offset precision)
@@ -49,6 +48,7 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 **Note:** Tools now have smart defaults - most calls need only 1-2 parameters!
 **Deprecated:** `insert_at_line`, `replace_lines`, `delete_lines` → use `edit_lines`
 **Deprecated:** `file_search`, `directory_search` → use `search_files`
+**Removed:** `batch_operations` (obsolete with MCP parallel tool calls), `similar_files` (never implemented)
 
 ## 🚨 Development Workflow
 
@@ -165,13 +165,15 @@ text_search --query "UserService"  # All other params have smart defaults!
 
 **🆕 Smart Defaults & Tool Consolidation** (Latest - v2.1.9)
 
-- ✅ **Tool consolidation**: 18 tools → 16 tools (-11% reduction)
+- ✅ **Tool consolidation**: 19 tools → 14 tools (-26% reduction)
   - `edit_lines`: Replaces insert_at_line, replace_lines, delete_lines (3→1)
   - `search_files`: Replaces file_search, directory_search (2→1)
+  - Removed `batch_operations` (obsolete with MCP parallel tool calls)
 - ✅ **Smart defaults**: All tools now have optional `workspacePath` (defaults to current workspace)
 - ✅ **Minimal usage**: Most tools need only 1-2 parameters instead of 8+
 - ✅ **Parameter descriptions**: All defaults clearly documented in descriptions
 - ✅ **Zero breaking changes**: All existing code continues to work
+- ✅ **Semantic bridging**: `trace_call_path` uses embeddings for cross-language tracing (confidence ≥ 0.7)
 
 **SmartRefactorTool - AST-Aware Symbol Renaming** (v2.1.8)
 

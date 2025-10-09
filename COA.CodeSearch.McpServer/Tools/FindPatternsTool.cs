@@ -48,7 +48,8 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "Detects semantic patterns and code quality issues using Tree-sitter analysis";
+    public override string Description => "Detects semantic patterns and code quality issues using Tree-sitter analysis. " +
+        "Identifies async patterns, empty catches, unused usings, magic numbers, large methods, and dead code (unused private members).";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -165,6 +166,12 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         if (parameters.DetectLargeMethods)
         {
             patterns.AddRange(DetectLargeMethods(extractionResult, lines));
+        }
+
+        // Pattern 6: Dead code (unused private methods and fields)
+        if (parameters.DetectDeadCode)
+        {
+            patterns.AddRange(DetectDeadCode(fileContent, extractionResult, lines));
         }
 
         // Apply severity level filtering
@@ -492,6 +499,132 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         }
         
         return lineCount; // Fallback
+    }
+
+    /// <summary>
+    /// Detects unused private methods and fields (dead code).
+    /// </summary>
+    private List<CodePattern> DetectDeadCode(string fileContent, TypeExtractionResult extractionResult, string[] lines)
+    {
+        var patterns = new List<CodePattern>();
+
+        // Remove comments and strings for accurate reference counting
+        var codeOnly = RemoveCommentsAndStrings(fileContent);
+
+        // Detect unused private methods
+        if (extractionResult.Methods != null)
+        {
+            foreach (var method in extractionResult.Methods)
+            {
+                // Skip non-private methods
+                if (!IsPrivateMethod(lines, method.Line - 1))
+                    continue;
+
+                // Skip constructors and special methods
+                if (method.Name.StartsWith("<") || method.Name == ".ctor" || method.Name == ".cctor")
+                    continue;
+
+                // Count references to this method (excluding its declaration)
+                var methodPattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(method.Name)}\s*\(";
+                var matches = System.Text.RegularExpressions.Regex.Matches(codeOnly, methodPattern);
+
+                // If only 1 match (the declaration itself), it's likely unused
+                if (matches.Count <= 1)
+                {
+                    patterns.Add(new CodePattern
+                    {
+                        Type = "UnusedPrivateMethod",
+                        Severity = "Warning",
+                        Message = $"Private method '{method.Name}' appears to be unused",
+                        LineNumber = method.Line,
+                        LineContent = lines[method.Line - 1].TrimStart(),
+                        Suggestion = "Remove unused method or make it public if it's intended for external use"
+                    });
+                }
+            }
+        }
+
+        // Detect unused private fields
+        var fieldPattern = @"private\s+(?:readonly\s+)?(?:static\s+)?(\w+(?:<[\w,\s<>]+>)?)\s+(_?\w+)\s*(?:=|;)";
+        var fieldMatches = System.Text.RegularExpressions.Regex.Matches(fileContent, fieldPattern);
+
+        foreach (System.Text.RegularExpressions.Match fieldMatch in fieldMatches)
+        {
+            var fieldName = fieldMatch.Groups[2].Value;
+            var lineNumber = GetLineNumber(fileContent, fieldMatch.Index);
+
+            // Count references to this field (excluding its declaration)
+            var fieldRefPattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(fieldName)}\b";
+            var refMatches = System.Text.RegularExpressions.Regex.Matches(codeOnly, fieldRefPattern);
+
+            // If only 1 match (the declaration itself), it's unused
+            if (refMatches.Count <= 1)
+            {
+                patterns.Add(new CodePattern
+                {
+                    Type = "UnusedPrivateField",
+                    Severity = "Warning",
+                    Message = $"Private field '{fieldName}' appears to be unused",
+                    LineNumber = lineNumber,
+                    LineContent = lines[lineNumber - 1].TrimStart(),
+                    Suggestion = "Remove unused field to reduce code clutter"
+                });
+            }
+        }
+
+        return patterns;
+    }
+
+    /// <summary>
+    /// Checks if a method at the given line is private.
+    /// </summary>
+    private bool IsPrivateMethod(string[] lines, int lineIndex)
+    {
+        if (lineIndex < 0 || lineIndex >= lines.Length)
+            return false;
+
+        // Look at current line and few lines before for access modifier
+        for (int i = Math.Max(0, lineIndex - 3); i <= lineIndex; i++)
+        {
+            var line = lines[i].Trim();
+            if (line.Contains("private "))
+                return true;
+            // If we see public/protected/internal first, it's not private
+            if (line.Contains("public ") || line.Contains("protected ") || line.Contains("internal "))
+                return false;
+        }
+
+        // Default to private if no explicit modifier (in classes)
+        return true;
+    }
+
+    /// <summary>
+    /// Removes comments and string literals from code to avoid false positives.
+    /// </summary>
+    private string RemoveCommentsAndStrings(string code)
+    {
+        // Remove single-line comments
+        code = System.Text.RegularExpressions.Regex.Replace(code, @"//.*$", "", System.Text.RegularExpressions.RegexOptions.Multiline);
+
+        // Remove multi-line comments
+        code = System.Text.RegularExpressions.Regex.Replace(code, @"/\*.*?\*/", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+
+        // Remove string literals (basic - doesn't handle all edge cases)
+        code = System.Text.RegularExpressions.Regex.Replace(code, @"""([^""\\]|\\.)*""", "\"\"");
+
+        return code;
+    }
+
+    /// <summary>
+    /// Gets the line number for a character position in the file.
+    /// </summary>
+    private int GetLineNumber(string content, int charPosition)
+    {
+        if (charPosition < 0 || charPosition >= content.Length)
+            return 1;
+
+        var substring = content.Substring(0, charPosition);
+        return substring.Count(c => c == '\n') + 1;
     }
 
     private AIOptimizedResponse<FindPatternsResult> CreateErrorResponse(string errorMessage)

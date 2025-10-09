@@ -53,21 +53,26 @@ public class TextSearchParameters
     public bool NoCache { get; set; } = false;
 
     /// <summary>
-    /// Search type controls how the query is interpreted and matched against indexed content.
+    /// [DEPRECATED] Use SearchMode instead. This parameter is kept for backward compatibility only.
     /// </summary>
-    /// <example>standard</example>
-    /// <example>regex</example>
-    /// <example>wildcard</example>
-    [Description("Search type: standard (intelligent), literal (exact), code (code-aware), wildcard (*?), fuzzy (typos), phrase, regex")]
-    public string SearchType { get; set; } = "standard";
+    [Obsolete("Use SearchMode parameter instead - SearchType will be removed in future version")]
+    [Description("[DEPRECATED] Use searchMode instead")]
+    public string? SearchType { get; set; } = null;
 
     /// <summary>
-    /// Search mode determines the intelligence level and preprocessing applied to queries.
+    /// Search mode controls how queries are matched. Default: 'auto' (smart detection).
+    /// - 'auto': Automatically detect best approach (symbol/pattern/standard routing)
+    /// - 'exact': Literal exact matching (no fuzzy, no wildcards)
+    /// - 'fuzzy': Typo-tolerant search (handles spelling variations)
+    /// - 'semantic': Vector similarity search using embeddings (cross-language concept matching)
+    /// - 'regex': Regular expression pattern matching (full regex syntax)
     /// </summary>
     /// <example>auto</example>
-    /// <example>code</example>
-    /// <example>symbol</example>
-    [Description("Search mode: auto (smart routing), literal (no preprocessing), code (camelCase), symbol (classes/methods), standard, fuzzy")]
+    /// <example>exact</example>
+    /// <example>fuzzy</example>
+    /// <example>semantic</example>
+    /// <example>regex</example>
+    [Description("Search mode: 'auto' (default - smart detection), 'exact' (literal), 'fuzzy' (typo-tolerant), 'semantic' (embeddings), 'regex' (patterns)")]
     public string SearchMode { get; set; } = "auto";
 
 

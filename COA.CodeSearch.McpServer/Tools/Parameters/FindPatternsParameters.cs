@@ -49,6 +49,12 @@ public class FindPatternsParameters
     public bool DetectLargeMethods { get; set; } = true;
 
     /// <summary>
+    /// Detect unused private methods and fields (dead code).
+    /// </summary>
+    [JsonPropertyName("detectDeadCode")]
+    public bool DetectDeadCode { get; set; } = false;
+
+    /// <summary>
     /// Custom patterns to search for (regex patterns) - allows detection of project-specific anti-patterns.
     /// </summary>
     /// <example>["TODO.*urgent", "@deprecated"]</example>

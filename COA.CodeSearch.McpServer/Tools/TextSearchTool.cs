@@ -173,58 +173,90 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
                 return CreateNoIndexError(workspacePath);
             }
 
-                        // Parse SearchMode from parameters  
-                        var searchModeString = parameters.SearchMode ?? "auto";
-                        if (!Enum.TryParse<SearchMode>(searchModeString, true, out var searchMode))
-                        {
-                            searchMode = SearchMode.Auto;
-                        }
+            // Parse SearchMode from parameters
+            var searchModeString = parameters.SearchMode ?? "auto";
+            if (!Enum.TryParse<SearchMode>(searchModeString, true, out var searchMode))
+            {
+                searchMode = SearchMode.Auto;
+            }
 
-                        // Use SmartQueryPreprocessor to determine optimal field and approach
-                        var queryResult = _smartQueryPreprocessor.Process(query, searchMode);
-                        
-                        // Log the smart query processing result for debugging
-                        _logger.LogDebug("Smart query processing: '{OriginalQuery}' -> '{ProcessedQuery}', Field: {TargetField}, Mode: {Mode}, Reason: {Reason}",
-                            query, queryResult.ProcessedQuery, queryResult.TargetField, queryResult.DetectedMode, queryResult.Reason);
-                        
-                        // Validate the processed query using the legacy validator
-                        var searchType = parameters.SearchType ?? "standard";
-                        if (!_queryPreprocessor.IsValidQuery(queryResult.ProcessedQuery, searchType, out var errorMessage))
-                        {
-                            return CreateQueryParseError(queryResult.ProcessedQuery, errorMessage);
-                        }
+            _logger.LogInformation("🔍 Text search mode: {Mode}, query: '{Query}'", searchMode, query);
 
-                        // Build field-specific query using the SmartQueryPreprocessor results
-                        // Use CodeAnalyzer to match the analyzer used during indexing
-                        Query luceneQuery;
-                        
-                        if (queryResult.TargetField == "content")
-                        {
-                            // Use existing QueryPreprocessor for standard content field
-                            luceneQuery = _queryPreprocessor.BuildQuery(queryResult.ProcessedQuery, searchType, parameters.CaseSensitive, _codeAnalyzer);
-                        }
-                        else
-                        {
-                            // Create field-specific query for multi-field indexing
-                            var queryParser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
-                            queryParser.AllowLeadingWildcard = true;
-                            
-                            try
-                            {
-                                luceneQuery = queryParser.Parse(queryResult.ProcessedQuery);
-                            }
-                            catch (ParseException)
-                            {
-                                // Fallback to term query for problematic queries
-                                luceneQuery = new TermQuery(new Term(queryResult.TargetField, queryResult.ProcessedQuery.ToLowerInvariant()));
-                            }
-                        }
+            // Handle semantic-only mode (skip Lucene, go straight to vector search)
+            if (searchMode == SearchMode.Semantic)
+            {
+                return await HandleSemanticOnlySearchAsync(workspacePath, query, parameters, cacheKey, cancellationToken);
+            }
 
-                        // REMOVE THE OLD CODE BELOW - this new logic replaces it
-                        // OLD: // Validate and preprocess query
-                        // OLD: var searchType = parameters.SearchType ?? "standard";  
-                        // [Removed: Old validation logic - now handled by SmartQueryPreprocessor above]
+            // Build Lucene query based on search mode
+            Query luceneQuery;
+            string searchType; // For backward compatibility with scoring
+            string targetField = "content"; // Track for fallback logic
+
+            if (searchMode == SearchMode.Exact)
+            {
+                // Exact literal matching
+                _logger.LogDebug("Building exact literal query");
+                luceneQuery = _queryPreprocessor.BuildQuery(query, "literal", parameters.CaseSensitive, _codeAnalyzer);
+                searchType = "literal";
+            }
+            else if (searchMode == SearchMode.Fuzzy)
+            {
+                // Typo-tolerant fuzzy search
+                _logger.LogDebug("Building fuzzy query");
+                luceneQuery = _queryPreprocessor.BuildQuery(query, "fuzzy", parameters.CaseSensitive, _codeAnalyzer);
+                searchType = "fuzzy";
+            }
+            else if (searchMode == SearchMode.Regex)
+            {
+                // Regular expression pattern matching
+                _logger.LogDebug("Building regex query");
+                luceneQuery = _queryPreprocessor.BuildQuery(query, "regex", parameters.CaseSensitive, _codeAnalyzer);
+                searchType = "regex";
+            }
+            else
+            {
+                // Auto mode (default): Use SmartQueryPreprocessor for intelligent routing
+                var queryResult = _smartQueryPreprocessor.Process(query, searchMode);
                         
+                // Log the smart query processing result for debugging
+                _logger.LogDebug("Smart query processing: '{OriginalQuery}' -> '{ProcessedQuery}', Field: {TargetField}, Mode: {Mode}, Reason: {Reason}",
+                    query, queryResult.ProcessedQuery, queryResult.TargetField, queryResult.DetectedMode, queryResult.Reason);
+
+                // Track target field for fallback logic
+                targetField = queryResult.TargetField;
+
+                // Validate the processed query
+                searchType = parameters.SearchType ?? "standard";
+                if (!_queryPreprocessor.IsValidQuery(queryResult.ProcessedQuery, searchType, out var errorMessage))
+                {
+                    return CreateQueryParseError(queryResult.ProcessedQuery, errorMessage);
+                }
+
+                // Build field-specific query using the SmartQueryPreprocessor results
+                if (queryResult.TargetField == "content")
+                {
+                    // Use existing QueryPreprocessor for standard content field
+                    luceneQuery = _queryPreprocessor.BuildQuery(queryResult.ProcessedQuery, searchType, parameters.CaseSensitive, _codeAnalyzer);
+                }
+                else
+                {
+                    // Create field-specific query for multi-field indexing
+                    var queryParser = new QueryParser(LuceneVersion.LUCENE_48, queryResult.TargetField, _codeAnalyzer);
+                    queryParser.AllowLeadingWildcard = true;
+
+                    try
+                    {
+                        luceneQuery = queryParser.Parse(queryResult.ProcessedQuery);
+                    }
+                    catch (ParseException)
+                    {
+                        // Fallback to term query for problematic queries
+                        luceneQuery = new TermQuery(new Term(queryResult.TargetField, queryResult.ProcessedQuery.ToLowerInvariant()));
+                    }
+                }
+            }
+
             // Apply scoring factors for better relevance
             var scoringContext = new ScoringContext
             {
@@ -283,7 +315,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             searchResult.Query = query;
             
             // Fallback mechanism: If symbol search returns 0 results, retry with content field
-            if (searchResult.TotalHits == 0 && queryResult.TargetField == "content_symbols")
+            if (searchResult.TotalHits == 0 && targetField == "content_symbols")
             {
                 _logger.LogDebug("Symbol search for '{Query}' returned 0 results, falling back to content field", query);
                 
@@ -564,7 +596,7 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             metadata["caseSensitive"] = parameters.CaseSensitive.ToString();  // Convert to string
 
             // ProjectKnowledge integration removed - service retired
-            _logger.LogDebug("Search findings documented locally: Query='{Query}', Type={Type}", 
+            _logger.LogDebug("Search findings documented locally: Query='{Query}', Type={Type}",
                 query, knowledgeType);
         }
         catch (Exception ex)
@@ -572,6 +604,139 @@ public class TextSearchTool : CodeSearchToolBase<TextSearchParameters, AIOptimiz
             _logger.LogError(ex, "Error auto-documenting search findings for query: {Query}", query);
             // Don't throw - documentation failure shouldn't break search
         }
+    }
+
+    /// <summary>
+    /// Handle semantic-only search mode (Tier 3 vector search, no Lucene)
+    /// </summary>
+    private async Task<AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>> HandleSemanticOnlySearchAsync(
+        string workspacePath,
+        string query,
+        TextSearchParameters parameters,
+        string cacheKey,
+        CancellationToken cancellationToken)
+    {
+        _logger.LogInformation("🔮 Semantic-only mode: Skipping Lucene, using vector search");
+
+        // Check if semantic search is available
+        if (!_sqliteService.IsSemanticSearchAvailable())
+        {
+            return new AIOptimizedResponse<COA.CodeSearch.McpServer.Services.Lucene.SearchResult>
+            {
+                Success = false,
+                Error = new COA.Mcp.Framework.Models.ErrorInfo
+                {
+                    Code = "SEMANTIC_UNAVAILABLE",
+                    Message = "Semantic search is not available for this workspace",
+                    Recovery = new COA.Mcp.Framework.Models.RecoveryInfo
+                    {
+                        Steps = new[]
+                        {
+                            "Semantic search requires embeddings to be generated",
+                            "Run index_workspace to build semantic index",
+                            "Try a different search mode (auto, exact, fuzzy, regex)"
+                        }
+                    }
+                },
+                Insights = new List<string>
+                {
+                    "Semantic search uses vector embeddings for conceptual similarity",
+                    "The workspace needs to be indexed with semantic support enabled"
+                }
+            };
+        }
+
+        var semanticStopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var semanticResults = await _sqliteService.SearchSymbolsSemanticAsync(
+            workspacePath,
+            query,
+            limit: 20, // More results for semantic-only mode
+            cancellationToken);
+        semanticStopwatch.Stop();
+
+        if (!semanticResults.Any())
+        {
+            _logger.LogInformation("Semantic search returned no results for '{Query}'", query);
+
+            var emptyResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+            {
+                TotalHits = 0,
+                SearchTime = semanticStopwatch.Elapsed,
+                Query = query,
+                Hits = new List<SearchHit>()
+            };
+
+            var emptyResponseMode = parameters.ResponseMode?.ToLowerInvariant() ?? "adaptive";
+            var emptyContext = new ResponseContext
+            {
+                ResponseMode = emptyResponseMode,
+                TokenLimit = parameters.MaxTokens,
+                StoreFullResults = true,
+                ToolName = Name,
+                CacheKey = cacheKey
+            };
+
+            var response = await _responseBuilder.BuildResponseAsync(emptyResult, emptyContext);
+            response.Insights = new List<string>
+            {
+                $"No semantic matches found for '{query}'",
+                "Try using 'auto' mode for standard Lucene search",
+                "Semantic search finds conceptually similar code, not exact matches"
+            };
+
+            return response;
+        }
+
+        // Convert semantic results to SearchResult format
+        var searchResult = new COA.CodeSearch.McpServer.Services.Lucene.SearchResult
+        {
+            TotalHits = semanticResults.Count,
+            SearchTime = semanticStopwatch.Elapsed,
+            Query = query,
+            Hits = semanticResults.Select(sr => new SearchHit
+            {
+                FilePath = sr.Symbol.FilePath,
+                StartLine = sr.Symbol.StartLine,
+                Score = sr.SimilarityScore,
+                Snippet = sr.Symbol.DocComment ?? sr.Symbol.Signature ?? $"{sr.Symbol.Kind} {sr.Symbol.Name}",
+                Fields = new Dictionary<string, string>
+                {
+                    ["name"] = sr.Symbol.Name,
+                    ["kind"] = sr.Symbol.Kind,
+                    ["signature"] = sr.Symbol.Signature ?? "",
+                    ["language"] = sr.Symbol.Language,
+                    ["similarity_score"] = sr.SimilarityScore.ToString("F3"),
+                    ["search_tier"] = "semantic"
+                }
+            }).ToList()
+        };
+
+        _logger.LogInformation("✅ Semantic search: Found {Count} matches in {Ms}ms",
+            semanticResults.Count, semanticStopwatch.ElapsedMilliseconds);
+
+        var responseMode = parameters.ResponseMode?.ToLowerInvariant() ?? "adaptive";
+        var context = new ResponseContext
+        {
+            ResponseMode = responseMode,
+            TokenLimit = parameters.MaxTokens,
+            StoreFullResults = true,
+            ToolName = Name,
+            CacheKey = cacheKey
+        };
+
+        var result = await _responseBuilder.BuildResponseAsync(searchResult, context);
+
+        // Cache semantic results
+        if (!parameters.NoCache && result.Success)
+        {
+            await _cacheService.SetAsync(cacheKey, result, new CacheEntryOptions
+            {
+                AbsoluteExpiration = TimeSpan.FromMinutes(15),
+                Priority = CachePriority.Normal
+            });
+        }
+
+        return result;
     }
 
 

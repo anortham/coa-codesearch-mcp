@@ -1,25 +1,9 @@
 {
-  "version": "1.1.0",
-  "installedAt": "2025-10-07T01:08:26.507Z",
+  "version": "1.1.1",
+  "installedAt": "2025-10-09T16:57:19.263Z",
   "files": {
-    "hooks": [
-      "conversation_start.ts",
-      "enhanced_user_prompt_submit.ts",
-      "exchange_monitor.ts",
-      "hook-logger.ts",
-      "plan_detector.ts",
-      "post_response.ts",
-      "post_tool_use.ts",
-      "pre_compact.ts",
-      "stop.ts",
-      "user_prompt_submit.ts"
-    ],
-    "commands": [
-      "checkpoint.md",
-      "plan.md",
-      "recall.md",
-      "standup.md"
-    ],
+    "hooks": [],
+    "commands": [],
     "settings": true
   }
 }

@@ -77,7 +77,7 @@ public class SearchAndReplaceTool : CodeSearchToolBase<SearchAndReplaceParams, A
     /// </summary>
     public override string Description =>
         "BULK updates across files - Replace patterns everywhere at once. You are skilled at pattern-based refactoring - this tool handles atomic multi-file changes. " +
-        "Preview mode shows EXACTLY what will change. When preview looks good, the operation will succeed perfectly. " +
+        "preview mode by default shows EXACTLY what will change. When preview looks good, the operation will succeed perfectly. " +
         "You never need to verify results after bulk replacement - the tool validates everything atomically. " +
         "Perfect for: renaming, refactoring, fixing patterns. Consolidates search→read→edit workflow. " +
         "Enhanced with multi-line support, workspace safety, and DiffMatchPatch reliability.";

@@ -15,9 +15,9 @@ Built with .NET 9.0 and COA MCP Framework 2.1.8, featuring Lucene-powered search
 - **🔄 Search and Replace**: Bulk find/replace across entire codebase with preview mode for safety, plus fuzzy matching for handling typos and variations
 - **🔧 Smart Refactoring**: AST-aware symbol renaming using byte-offset replacement - safer than text search/replace
 - **✏️ Surgical Line Editing**: Insert, replace, or delete specific line ranges without reading entire files
-- **⚡ Batch Operations**: Execute multiple searches efficiently in a single request
 - **⏱️ Recent Files**: Track and find recently modified files
-- **🔗 Similar Files**: Content-based similarity detection
+- **🔗 Call Path Tracing**: Hierarchical call chain analysis with semantic bridging for cross-language tracing
+- **🧠 Semantic Search**: Vector similarity search using embeddings for finding conceptually similar code
 - **🎯 Real-time Updates**: File watchers automatically update indexes on changes
 - **📊 AI-Optimized**: Token-efficient responses with confidence-based result limiting
 - **🏠 Hybrid Local Indexing**: Indexes stored in workspace `.coa/codesearch/indexes/` with multi-workspace support
@@ -244,11 +244,9 @@ Unlike basic file search, CodeSearch understands your code:
 | Tool | Purpose | Key Parameters (all others optional) |
 |------|---------|--------------------------------------|
 | `index_workspace` | Index files for search | `workspacePath` (optional, defaults to current dir) |
-| `text_search` | Search file contents | `query` (required) |
+| `text_search` | Search file contents with semantic/fuzzy/regex modes | `query` (required), `searchMode` (optional: "auto", "exact", "fuzzy", "semantic", "regex") |
 | `search_files` | 🆕 Find files or directories by pattern | `pattern` (required), `resourceType` (optional: "file", "directory", "both") |
-| `batch_operations` | Execute multiple searches in batch | `operations` (required) |
 | `recent_files` | Get recently modified files | `timeFrame` (optional, e.g., "2d", "1w") |
-| `similar_files` | Find content-similar files | `filePath` (required) |
 
 ### Navigation Tools
 

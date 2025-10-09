@@ -1,36 +1,56 @@
 namespace COA.CodeSearch.McpServer.Models;
 
 /// <summary>
-/// Defines different search modes that leverage multi-field indexing for optimal search results
+/// Defines different search modes for text_search tool
 /// </summary>
 public enum SearchMode
 {
     /// <summary>
-    /// Automatically detect the best search approach based on query characteristics
+    /// Automatically detect the best search approach based on query characteristics.
+    /// Uses SmartQueryPreprocessor to route queries to optimal fields (symbols, patterns, etc.)
     /// </summary>
     Auto,
 
     /// <summary>
-    /// Pattern-preserving search - handles special characters like {}, (), : IRepository&lt;T&gt;
-    /// Uses content_patterns field with WhitespaceTokenizer for pattern preservation
+    /// Exact literal matching - no fuzzy tolerance, no wildcards.
+    /// Best for precise code searches where you know the exact text.
     /// </summary>
+    Exact,
+
+    /// <summary>
+    /// Typo-tolerant fuzzy search using Lucene FuzzyQuery.
+    /// Finds similar matches with slight variations (typos, spelling differences).
+    /// </summary>
+    Fuzzy,
+
+    /// <summary>
+    /// Semantic vector similarity search using embeddings (Tier 3 search).
+    /// Finds conceptually similar code across languages using HNSW vector index.
+    /// </summary>
+    Semantic,
+
+    /// <summary>
+    /// Regular expression pattern matching using Lucene RegexpQuery.
+    /// Supports full regex syntax for complex pattern matching.
+    /// </summary>
+    Regex,
+
+    // DEPRECATED - kept for backward compatibility
+    /// <summary>
+    /// [DEPRECATED] Use Auto instead. Pattern-preserving search.
+    /// </summary>
+    [Obsolete("Use Auto mode instead - smart routing handles patterns automatically")]
     Pattern,
 
     /// <summary>
-    /// Search only class/method/symbol names
-    /// Uses content_symbols field with symbol-only content
+    /// [DEPRECATED] Use Auto instead. Symbol-only search.
     /// </summary>
+    [Obsolete("Use Auto mode instead - smart routing targets symbol field when appropriate")]
     Symbol,
 
     /// <summary>
-    /// Standard tokenization (current default behavior)
-    /// Uses content field with standard CodeAnalyzer processing
+    /// [DEPRECATED] Use Auto instead. Standard tokenization.
     /// </summary>
-    Standard,
-
-    /// <summary>
-    /// Future: Typo-tolerant fuzzy search
-    /// Currently maps to Standard mode
-    /// </summary>
-    Fuzzy
+    [Obsolete("Use Auto mode instead")]
+    Standard
 }

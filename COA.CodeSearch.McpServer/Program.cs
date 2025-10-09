@@ -304,7 +304,6 @@ public class Program
             builder.Services.AddScoped<IndexWorkspaceTool>();
             builder.Services.AddScoped<TextSearchTool>(); // Uses BaseResponseBuilder pattern
             builder.Services.AddScoped<SearchFilesTool>(); // Unified file/directory search
-            builder.Services.AddScoped<BatchOperationsTool>(); // Batch operations for multiple searches
             builder.Services.AddScoped<RecentFilesTool>(); // New! Framework 1.5.2 implementation
             builder.Services.AddScoped<LineSearchTool>(); // New! Grep-like line-level search
             builder.Services.AddScoped<SearchAndReplaceTool>(); // Enhanced! Uses DiffMatchPatch and workspace permissions
@@ -336,7 +335,7 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "search_files", "file_search", "line_search", "search_and_replace", "recent_files", "directory_search", "batch_operations", "index_workspace", "edit_lines", "insert_at_line", "replace_lines", "delete_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "search_files", "line_search", "search_and_replace", "recent_files", "index_workspace", "edit_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
@@ -345,17 +344,11 @@ public class Program
                     {"text_search", 90},
                     {"symbol_search", 85},
                     {"search_files", 82},
-                    {"file_search", 80},
                     {"line_search", 75},
                     {"search_and_replace", 70},
                     {"recent_files", 65},
-                    {"directory_search", 60},
-                    {"batch_operations", 85},
                     {"index_workspace", 100},
                     {"edit_lines", 92},
-                    {"insert_at_line", 90},
-                    {"replace_lines", 90},
-                    {"delete_lines", 90},
                     {"smart_refactor", 95},
                     {"get_symbols_overview", 95}
                 },
@@ -398,42 +391,6 @@ public class Program
                         Limitation = "Easy to miss references in comments, tests, configs → runtime failures",
                         PerformanceMetric = "100% reference coverage + safe rollback vs 60% coverage with potential disasters"
                     },
-                    ["File discovery"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "File discovery",
-                        ServerTool = "mcp__codesearch__file_search",
-                        Advantage = "Pre-indexed instant results with glob patterns",
-                        BuiltInTool = "bash find",
-                        Limitation = "Filesystem traversal, no caching",
-                        PerformanceMetric = "Instant vs seconds of directory scanning"
-                    },
-                    ["Surgical code insertion"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Surgical code insertion",
-                        ServerTool = "mcp__codesearch__insert_at_line",
-                        Advantage = "INSERT CODE WITHOUT READ - Line-precise positioning with automatic indentation",
-                        BuiltInTool = "Read + Edit",
-                        Limitation = "Requires full file read, manual line counting, indentation errors",
-                        PerformanceMetric = "Direct line insertion vs read-modify-write cycle"
-                    },
-                    ["Line range replacement"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Line range replacement",
-                        ServerTool = "mcp__codesearch__replace_lines",
-                        Advantage = "REPLACE LINES WITHOUT READ - Surgical line range replacement with context verification",
-                        BuiltInTool = "Read + Edit",
-                        Limitation = "Must read entire file, manually identify line ranges, error-prone",
-                        PerformanceMetric = "Precision editing vs full file manipulation"
-                    },
-                    ["Line deletion"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Line deletion",
-                        ServerTool = "mcp__codesearch__delete_lines",
-                        Advantage = "DELETE LINES WITHOUT READ - Surgical line deletion with context verification",
-                        BuiltInTool = "Read + Edit",
-                        Limitation = "Full file read required, manual line identification, risk of corruption",
-                        PerformanceMetric = "Precise deletion vs read-modify-write operations"
-                    },
                     ["Unified line editing"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {
                         Task = "Unified line editing",
@@ -470,15 +427,6 @@ public class Program
                         Limitation = "Must find and edit each file individually, error-prone, no preview",
                         PerformanceMetric = "Atomic bulk operations vs manual file-by-file editing"
                     },
-                    ["Multi-operation efficiency"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Multi-operation efficiency",
-                        ServerTool = "mcp__codesearch__batch_operations",
-                        Advantage = "PARALLEL search for speed - Run multiple searches simultaneously, 3-10x faster",
-                        BuiltInTool = "Sequential tool usage",
-                        Limitation = "Manual sequential operations, much slower, no parallelization", 
-                        PerformanceMetric = "Parallel execution vs sequential workflow bottlenecks"
-                    },
                     ["Recent activity tracking"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {
                         Task = "Recent activity tracking",
@@ -487,15 +435,6 @@ public class Program
                         BuiltInTool = "git log + manual file inspection",
                         Limitation = "Manual git commands, no file content preview, time-consuming",
                         PerformanceMetric = "Instant session context vs manual investigation"
-                    },
-                    ["Directory exploration"] = new COA.Mcp.Framework.Configuration.ToolComparison
-                    {
-                        Task = "Directory exploration",
-                        ServerTool = "mcp__codesearch__directory_search",
-                        Advantage = "EXPLORE project structure - Navigate folders without manual traversal",
-                        BuiltInTool = "ls/find commands",
-                        Limitation = "Manual filesystem navigation, no pattern matching, tedious",
-                        PerformanceMetric = "Structured directory discovery vs command-line traversal"
                     },
                     ["Workspace initialization"] = new COA.Mcp.Framework.Configuration.ToolComparison
                     {

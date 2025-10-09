@@ -91,7 +91,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLine
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
+            Operation = "delete",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             ContextLines = 3
@@ -136,7 +136,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLine
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "delete",
+            Operation = "insert",
             StartLine = insertionLine,
             Content = @"    /// <summary>
     /// Test method added by newline preservation test.
@@ -188,7 +188,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLine
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
+            Operation = "replace",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    /// <summary>
@@ -206,7 +206,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLine
             return Encoding.UTF32; // UTF-32 LE
         if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
             return new UTF8Encoding(true); // UTF-8 WITH BOM
-        
+
         if (bytes.Length >= 2)
         {
             if (bytes[0] == 0xFF && bytes[1] == 0xFE)
@@ -214,7 +214,7 @@ public class NewlinePreservationRealWorldTests : CodeSearchToolTestBase<EditLine
             if (bytes[0] == 0xFE && bytes[1] == 0xFF)
                 return Encoding.BigEndianUnicode; // UTF-16 BE
         }
-        
+
         // Default to UTF-8 without BOM
         return new UTF8Encoding(false);
     }",
