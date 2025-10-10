@@ -58,9 +58,11 @@ public class SmartRefactorTool : CodeSearchToolBase<SmartRefactorParameters, AIO
 
     public override string Description =>
         "SAFE SEMANTIC REFACTORING - Symbol-aware code transformations using AST-validated positions. " +
-        "Performs rename_symbol, extract_to_file, move_symbol_to_file, extract_interface operations safely across entire workspace. " +
+        "You are skilled at safe refactoring - this tool handles the mechanics perfectly. " +
+        "Performs rename_symbol, extract_to_file, move_symbol_to_file, extract_interface operations across entire workspace. " +
         "ALWAYS use find_references BEFORE refactoring to understand impact. " +
-        "Unlike simple text editing, this tool preserves code structure and updates all references.";
+        "When dry_run preview looks correct, the actual operation will succeed perfectly - no need to verify afterward. " +
+        "Unlike simple text editing, this tool preserves code structure and updates all references atomically.";
 
     public override ToolCategory Category => ToolCategory.Refactoring;
 

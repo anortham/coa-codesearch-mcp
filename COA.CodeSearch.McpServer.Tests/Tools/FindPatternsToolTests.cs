@@ -5,7 +5,8 @@ using COA.CodeSearch.McpServer.Tools;
 using COA.CodeSearch.McpServer.Tests.Base;
 using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.CodeSearch.McpServer.Tools.Models;
-using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Sqlite;
+using COA.CodeSearch.McpServer.Services;
 using COA.Mcp.Framework.TokenOptimization.Models;
 using Microsoft.Extensions.Logging;
 using System.Threading.Tasks;
@@ -21,14 +22,22 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
     public class FindPatternsToolTests : CodeSearchToolTestBase<FindPatternsTool>
     {
         private FindPatternsTool _tool = null!;
-        private Mock<ITypeExtractionService> _typeExtractionServiceMock = null!;
+        private Mock<ISQLiteSymbolService> _sqliteServiceMock = null!;
+        private Mock<IPathResolutionService> _pathResolutionServiceMock = null!;
         private string _testFilePath = null!;
 
         protected override FindPatternsTool CreateTool()
         {
+            _pathResolutionServiceMock = CreateMock<IPathResolutionService>();
+            _sqliteServiceMock = CreateMock<ISQLiteSymbolService>();
+
+            _pathResolutionServiceMock.Setup(x => x.GetPrimaryWorkspacePath()).Returns(TestWorkspacePath);
+
             _tool = new FindPatternsTool(
                 ServiceProvider,
-                ToolLoggerMock.Object
+                _pathResolutionServiceMock.Object,
+                ToolLoggerMock.Object,
+                _sqliteServiceMock.Object
             );
             return _tool;
         }
@@ -37,17 +46,6 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         {
             // Configure base services first
             base.ConfigureServices(services);
-            
-            // Override the ITypeExtractionService with our mock
-            _typeExtractionServiceMock = CreateMock<ITypeExtractionService>();
-            
-            // Remove existing registration and add our mock
-            var descriptor = services.FirstOrDefault(d => d.ServiceType == typeof(ITypeExtractionService));
-            if (descriptor != null)
-            {
-                services.Remove(descriptor);
-            }
-            services.AddSingleton(_typeExtractionServiceMock.Object);
         }
 
         [SetUp]
@@ -131,7 +129,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -177,7 +175,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -223,7 +221,7 @@ class Program
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -270,7 +268,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -319,7 +317,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -411,7 +409,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -439,36 +437,6 @@ public class TestClass
             unusedUsingPatterns.Should().Contain(p => p.Message.Contains("UnusedCustom.Something"));
         }
 
-        [Test]
-        public async Task ExecuteAsync_Should_Handle_Type_Extraction_Failure()
-        {
-            // Arrange
-            var testCode = "invalid code that cannot be parsed";
-            await File.WriteAllTextAsync(_testFilePath, testCode);
-
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
-                {
-                    Success = false,
-                    Language = "csharp"
-                });
-
-            var parameters = new FindPatternsParameters
-            {
-                FilePath = _testFilePath,
-                DetectAsyncPatterns = true
-            };
-
-            // Act
-            var result = await ExecuteToolAsync<AIOptimizedResponse<FindPatternsResult>>(
-                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
-
-            // Assert
-            result.Success.Should().BeTrue();
-            result.Result.Should().NotBeNull();
-            result.Result!.Success.Should().BeFalse();
-            result.Result.Error!.Message.Should().Contain("Failed to extract type information");
-        }
 
         [Test]
         public async Task ExecuteAsync_Should_Respect_MaxResults_Parameter()
@@ -490,7 +458,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -538,7 +506,7 @@ public class TestClass
 }";
             await File.WriteAllTextAsync(_testFilePath, testCode);
 
-            SetupSuccessfulTypeExtraction();
+            SetupEmptySymbols();
 
             var parameters = new FindPatternsParameters
             {
@@ -560,6 +528,111 @@ public class TestClass
             result.Result!.Success.Should().BeTrue();
             result.Result.Data!.Results.PatternsFound.Should().NotBeEmpty();
             result.Result.Data.Results.PatternsFound.Should().OnlyContain(p => p.Severity == "Error");
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Detect_Custom_Patterns()
+        {
+            // Arrange
+            var testCode = @"
+using System;
+
+public class TestClass
+{
+    public void TestMethod()
+    {
+        // TODO: Fix this urgent issue
+        Console.WriteLine(""Debug output""); // Remove before production
+        var deprecated = GetOldMethod(); // @deprecated
+    }
+}";
+            await File.WriteAllTextAsync(_testFilePath, testCode);
+
+            SetupEmptySymbols();
+
+            var parameters = new FindPatternsParameters
+            {
+                FilePath = _testFilePath,
+                DetectAsyncPatterns = false,
+                DetectEmptyCatchBlocks = false,
+                DetectUnusedUsings = false,
+                DetectMagicNumbers = false,
+                DetectLargeMethods = false,
+                CustomPatterns = new List<string>
+                {
+                    @"TODO.*urgent",
+                    @"@deprecated",
+                    @"Console\.WriteLine"
+                }
+            };
+
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FindPatternsResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result!.Success.Should().BeTrue();
+            result.Result.Data!.Results.PatternsFound.Should().HaveCount(3);
+
+            var customPatterns = result.Result.Data.Results.PatternsFound
+                .Where(p => p.Type == "CustomPattern").ToList();
+            customPatterns.Should().HaveCount(3);
+
+            // Verify each pattern was found
+            customPatterns.Should().Contain(p => p.Metadata["matchedText"].ToString()!.Contains("TODO"));
+            customPatterns.Should().Contain(p => p.Metadata["matchedText"].ToString()!.Contains("@deprecated"));
+            customPatterns.Should().Contain(p => p.Metadata["matchedText"].ToString()!.Contains("Console.WriteLine"));
+
+            // Verify all have Info severity
+            customPatterns.Should().OnlyContain(p => p.Severity == "Info");
+        }
+
+        [Test]
+        public async Task ExecuteAsync_Should_Handle_Invalid_Custom_Regex_Pattern()
+        {
+            // Arrange
+            var testCode = @"
+using System;
+
+public class TestClass
+{
+    public void TestMethod()
+    {
+        Console.WriteLine(""Test"");
+    }
+}";
+            await File.WriteAllTextAsync(_testFilePath, testCode);
+
+            SetupEmptySymbols();
+
+            var parameters = new FindPatternsParameters
+            {
+                FilePath = _testFilePath,
+                DetectAsyncPatterns = false,
+                DetectEmptyCatchBlocks = false,
+                DetectUnusedUsings = false,
+                DetectMagicNumbers = false,
+                DetectLargeMethods = false,
+                CustomPatterns = new List<string>
+                {
+                    @"[invalid(regex" // Invalid regex
+                }
+            };
+
+            // Act
+            var result = await ExecuteToolAsync<AIOptimizedResponse<FindPatternsResult>>(
+                async () => await _tool.ExecuteAsync(parameters, CancellationToken.None));
+
+            // Assert
+            result.Success.Should().BeTrue();
+            result.Result!.Success.Should().BeTrue();
+
+            var invalidPattern = result.Result.Data!.Results.PatternsFound
+                .FirstOrDefault(p => p.Type == "InvalidCustomPattern");
+            invalidPattern.Should().NotBeNull();
+            invalidPattern!.Severity.Should().Be("Error");
+            invalidPattern.Message.Should().Contain("Invalid regex pattern");
         }
 
         [Test]
@@ -589,34 +662,28 @@ public class TestClass
             result.SeveritySummary["Info"].Should().Be(1);
         }
 
-        private void SetupSuccessfulTypeExtraction()
+        private void SetupEmptySymbols()
         {
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
-                {
-                    Success = true,
-                    Language = "csharp",
-                    Types = new List<TypeInfo>(),
-                    Methods = new List<MethodInfo>()
-                });
+            // SQLite database doesn't exist, so patterns will work without symbols
+            _sqliteServiceMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(false);
         }
 
         private void SetupSuccessfulTypeExtractionWithMethods()
         {
-            _typeExtractionServiceMock.Setup(x => x.ExtractTypes(It.IsAny<string>(), It.IsAny<string>()))
-                .ReturnsAsync(new TypeExtractionResult
+            // Setup SQLite to return method symbols for large method detection
+            _sqliteServiceMock.Setup(x => x.DatabaseExists(It.IsAny<string>())).Returns(true);
+            _sqliteServiceMock.Setup(x => x.GetSymbolsForFileAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new List<COA.CodeSearch.McpServer.Services.Julie.JulieSymbol>
                 {
-                    Success = true,
-                    Language = "csharp",
-                    Types = new List<TypeInfo>(),
-                    Methods = new List<MethodInfo>
+                    new COA.CodeSearch.McpServer.Services.Julie.JulieSymbol
                     {
-                        new MethodInfo
-                        {
-                            Name = "LargeMethod",
-                            Line = 6, // Approximate line number
-                            Signature = "public void LargeMethod()"
-                        }
+                        Name = "LargeMethod",
+                        Kind = "method",
+                        Language = "csharp",
+                        StartLine = 6,
+                        EndLine = 70, // 64 lines long
+                        FilePath = string.Empty,
+                        Id = "test-id"
                     }
                 });
         }

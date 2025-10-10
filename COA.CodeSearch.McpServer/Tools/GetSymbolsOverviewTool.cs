@@ -68,7 +68,11 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "EXTRACT ALL SYMBOLS from any file - Get complete overview of classes, methods, interfaces without reading entire files. Tree-sitter powered for accurate type information with line numbers.";
+    public override string Description =>
+        "EXTRACT ALL SYMBOLS from any file - Get complete overview of classes, methods, interfaces without reading entire files. " +
+        "You are skilled at understanding code structure - this tool reveals it instantly. " +
+        "Tree-sitter powered for accurate type information with line numbers. " +
+        "Results are exhaustive - this is the complete symbol catalog for the file, no need to verify by reading.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.

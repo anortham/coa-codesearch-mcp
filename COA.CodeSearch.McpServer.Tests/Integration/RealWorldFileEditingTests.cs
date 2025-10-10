@@ -79,14 +79,14 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<EditLinesTool>
     public async Task EditCSharpClass_MethodReplacement_PreservesCodeStructure()
     {
         // Arrange - Use a real C# file from our codebase
-        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory, 
-            @"..\..\..\..\COA.CodeSearch.McpServer\Services\FileLineUtilities.cs");
-        
-        var testFile = await _fileManager.CreateTestCopyAsync(sourceFile, "FileLineUtilities_test.cs");
-        
-        // Find a method to replace (DetectEncoding method)
-        var methodStartLine = FindLineContaining(testFile.OriginalLines, "public static Encoding DetectEncoding");
-        methodStartLine.Should().BeGreaterThan(0, "DetectEncoding method should exist in FileLineUtilities");
+        var sourceFile = Path.Combine(TestContext.CurrentContext.TestDirectory,
+            "..", "..", "..", "..", "COA.CodeSearch.McpServer", "Services", "UnifiedFileEditService.cs");
+
+        var testFile = await _fileManager.CreateTestCopyAsync(sourceFile, "UnifiedFileEditService_test.cs");
+
+        // Find a method to replace (InsertAtLine method)
+        var methodStartLine = FindLineContaining(testFile.OriginalLines, "public async Task<FileEditResult> InsertAtLine");
+        methodStartLine.Should().BeGreaterThan(0, "InsertAtLine method should exist in UnifiedFileEditService");
         
         var methodEndLine = FindMethodEndLine(testFile.OriginalLines, methodStartLine);
 
@@ -94,34 +94,17 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<EditLinesTool>
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
+            Operation = "replace",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    /// <summary>
-    /// Enhanced encoding detection with additional format support.
+    /// Enhanced line insertion method with additional validation.
     /// </summary>
-    /// <param name=""bytes"">File bytes</param>
-    /// <returns>Detected encoding</returns>
-    public static Encoding DetectEncoding(byte[] bytes)
+    public async Task<FileEditResult> InsertAtLine(string filePath, int lineNumber, string content)
     {
-        // Enhanced BOM detection
-        if (bytes.Length >= 4 && bytes[0] == 0x00 && bytes[1] == 0x00 && bytes[2] == 0xFE && bytes[3] == 0xFF)
-            return Encoding.UTF32; // UTF-32 BE
-        if (bytes.Length >= 4 && bytes[0] == 0xFF && bytes[1] == 0xFE && bytes[2] == 0x00 && bytes[3] == 0x00)
-            return Encoding.UTF32; // UTF-32 LE
-        if (bytes.Length >= 3 && bytes[0] == 0xEF && bytes[1] == 0xBB && bytes[2] == 0xBF)
-            return Encoding.UTF8;
-        
-        if (bytes.Length >= 2)
-        {
-            if (bytes[0] == 0xFF && bytes[1] == 0xFE)
-                return Encoding.Unicode; // UTF-16 LE
-            if (bytes[0] == 0xFE && bytes[1] == 0xFF)
-                return Encoding.BigEndianUnicode; // UTF-16 BE
-        }
-        
-        // Default to UTF-8 without BOM
-        return new UTF8Encoding(false);
+        // Enhanced implementation with additional validation
+        _logger.LogDebug(""Inserting at line {LineNumber} in {FilePath}"", lineNumber, filePath);
+        return await InsertAtLineImplementation(filePath, lineNumber, content);
     }",
             PreserveIndentation = true,
             ContextLines = 3
@@ -140,8 +123,8 @@ public class RealWorldFileEditingTests : CodeSearchToolTestBase<EditLinesTool>
 
         // Verify the method was actually replaced
         var modifiedContent = validation.CurrentContent;
-        modifiedContent.Should().Contain("Enhanced encoding detection");
-        modifiedContent.Should().Contain("UTF-32 BE");
+        modifiedContent.Should().Contain("Enhanced line insertion method");
+        modifiedContent.Should().Contain("Enhanced implementation with additional validation");
         
         // Verify C# syntax is still valid (basic check)
         ValidateCSharpSyntax(modifiedContent).Should().BeTrue("Modified file should still be valid C#");
@@ -1722,7 +1705,7 @@ public class FileProcessor
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
+            Operation = "replace",
             StartLine = methodStartLine,
             EndLine = methodEndLine,
             Content = @"    public async Task<string> ProcessFileAsync(string filePath)

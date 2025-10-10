@@ -132,7 +132,7 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
         }
 
         [Test]
-        public async Task ExecuteAsync_NoIndexExists_ReturnsError()
+        public async Task ExecuteAsync_NoIndexExists_ReturnsEmptyResults()
         {
             // Arrange
             var parameters = new SymbolSearchParameters
@@ -150,15 +150,33 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 .Setup(x => x.IndexExistsAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
                 .ReturnsAsync(false);
 
+            // Setup empty Lucene results
+            LuceneIndexServiceMock
+                .Setup(x => x.SearchAsync(It.IsAny<string>(), It.IsAny<Query>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(new SearchResult
+                {
+                    Hits = new List<SearchHit>(),
+                    TotalHits = 0,
+                    SearchTime = TimeSpan.Zero
+                });
+
             // Act
             var result = await _tool.ExecuteAsync(parameters, CancellationToken.None);
 
-            // Assert - When SearchAsync returns null or throws, we get a generic error
+            // Assert - With multi-tier architecture, tool succeeds even without Lucene index (uses SQLite)
+            // No matches found is not an error, just 0 results
             result.Should().NotBeNull();
-            result.Success.Should().BeFalse();
-            result.Error.Should().NotBeNull();
-            result.Error.Code.Should().Be("SYMBOL_SEARCH_ERROR");
-            result.Error.Message.Should().Contain("Failed to search for symbol");
+            result.Success.Should().BeTrue();
+            result.Data.Should().NotBeNull();
+
+            // Verify 0 symbols returned
+            var dataType = result.Data.GetType();
+            var resultsProperty = dataType.GetProperty("Results");
+            var symbolSearchResult = resultsProperty!.GetValue(result.Data);
+            var symbolsProperty = symbolSearchResult!.GetType().GetProperty("Symbols");
+            var symbols = symbolsProperty?.GetValue(symbolSearchResult) as System.Collections.IList;
+            symbols.Should().NotBeNull();
+            symbols!.Count.Should().Be(0);
         }
         
         [Test]

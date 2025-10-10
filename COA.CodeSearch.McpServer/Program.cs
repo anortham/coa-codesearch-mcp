@@ -13,7 +13,6 @@ using COA.CodeSearch.McpServer.Services;
 using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Services.Lucene;
 using COA.CodeSearch.McpServer.Services.Sqlite;
-using COA.CodeSearch.McpServer.Services.TypeExtraction;
 using COA.CodeSearch.McpServer.Models;
 using COA.CodeSearch.McpServer.Tools;
 using Lucene.Net.Util;
@@ -66,10 +65,8 @@ public class Program
             sp.GetRequiredService<ICircuitBreakerService>(),
             sp.GetRequiredService<IMemoryPressureService>(),
             sp.GetRequiredService<IOptions<MemoryLimitsConfiguration>>(),
-            sp.GetRequiredService<ITypeExtractionService>(),
-            sp.GetRequiredService<IJulieExtractionService>(), // Pass julie-extract service
-            sp.GetRequiredService<IJulieCodeSearchService>(),  // Pass julie-codesearch service
-            sp.GetRequiredService<ISQLiteSymbolService>(),      // Pass SQLite service
+            sp.GetRequiredService<IJulieCodeSearchService>(),     // Pass julie-codesearch service
+            sp.GetRequiredService<ISQLiteSymbolService>(),         // Pass SQLite service
             sp.GetRequiredService<ISemanticIntelligenceService>() // Pass semantic service
         ));
         
@@ -99,15 +96,6 @@ public class Program
                 preserveCase: false, splitCamelCase: true));
         
         // Julie integration services for tree-sitter extraction and semantic search
-        // Register JulieExtractionService as a singleton first
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>();
-
-        // Then register it for both interfaces (pointing to the same instance)
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.IJulieExtractionService>(
-            sp => sp.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
-        services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(
-            sp => sp.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
-
         // Julie CodeSearch CLI service for SQLite-based indexing (scan + update commands)
         services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.IJulieCodeSearchService,
                               COA.CodeSearch.McpServer.Services.Julie.JulieCodeSearchService>();

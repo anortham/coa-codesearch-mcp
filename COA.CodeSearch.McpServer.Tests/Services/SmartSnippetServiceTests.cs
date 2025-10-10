@@ -226,7 +226,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
                     new SearchHit
                     {
                         FilePath = "/test/file.cs",
-                        StartLine = 1,
+                        LineNumber = 1,  // SmartSnippetService checks LineNumber, not StartLine
                         Score = 1.0f
                     }
                 }
@@ -240,7 +240,7 @@ namespace COA.CodeSearch.McpServer.Tests.Services
             // Assert
             result.Should().NotBeNull();
             result.Hits.Should().HaveCount(1);
-            
+
             var hit = result.Hits[0];
             hit.Snippet.Should().NotBeNullOrEmpty();
             hit.ContextLines.Should().NotBeNull();

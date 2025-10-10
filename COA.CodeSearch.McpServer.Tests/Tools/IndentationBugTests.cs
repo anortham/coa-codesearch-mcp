@@ -67,15 +67,15 @@ public static class ToolNames
 
         var testFile = await _fileManager.CreateTestFileAsync(originalContent, "ToolNames.cs");
         
-        // Act: Try to add a new tool constant at the end, similar to what we did
+        // Act: Try to replace the DeleteLines line and add new content
         var parameters = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
+            Operation = "replace",
             StartLine = 16, // The DeleteLines line (corrected)
             EndLine = 16,   // Just replace this one line
             Content = @"    public const string DeleteLines = ""delete_lines"";
-    
+
     // Advanced semantic tools
     public const string GetSymbolsOverview = ""get_symbols_overview"";",
             PreserveIndentation = true,

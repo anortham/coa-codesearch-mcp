@@ -23,9 +23,8 @@ public class FileWatcherService : BackgroundService
     private readonly ConcurrentQueue<RetryQueueItem> _retryQueue = new();
     private Timer? _retryTimer;
 
-    // Phoenix integration: SQLite canonical storage + Julie extraction
+    // Phoenix integration: SQLite canonical storage + Julie codesearch
     private readonly Sqlite.ISQLiteSymbolService? _sqliteService;
-    private readonly Julie.IJulieExtractionService? _julieExtractionService;
     private readonly Julie.IJulieCodeSearchService? _julieCodeSearchService;
     private readonly Julie.ISemanticIntelligenceService? _semanticIntelligenceService;
     // Timing configuration
@@ -57,7 +56,6 @@ public class FileWatcherService : BackgroundService
 
         // Phoenix integration: Optional services (graceful degradation if not available)
         _sqliteService = serviceProvider.GetService<Sqlite.ISQLiteSymbolService>();
-        _julieExtractionService = serviceProvider.GetService<Julie.IJulieExtractionService>();
         _julieCodeSearchService = serviceProvider.GetService<Julie.IJulieCodeSearchService>();
         _semanticIntelligenceService = serviceProvider.GetService<Julie.ISemanticIntelligenceService>();
 
@@ -766,52 +764,8 @@ public class FileWatcherService : BackgroundService
                 _logger.LogWarning(ex, "Phoenix: julie-codesearch update failed for {FilePath} - continuing with Lucene only", filePath);
             }
         }
-        // Fallback to old approach if julie-codesearch not available
-        else if (_sqliteService != null && _julieExtractionService != null && _julieExtractionService.IsAvailable())
-        {
-            try
-            {
-                // Extract symbols from the single file using julie-extract
-                var symbols = await _julieExtractionService.ExtractSingleFileAsync(filePath, cancellationToken);
-
-                if (symbols.Count == 0)
-                {
-                    _logger.LogTrace("Phoenix: No symbols extracted from {FilePath}", filePath);
-                    return;
-                }
-
-                // Read file content and metadata
-                var fileInfo = new FileInfo(filePath);
-                if (!fileInfo.Exists)
-                {
-                    _logger.LogWarning("Phoenix: File disappeared during symbol extraction: {FilePath}", filePath);
-                    return;
-                }
-
-                var content = await File.ReadAllTextAsync(filePath, cancellationToken);
-                var hash = ComputeFileHash(content);
-                var language = DetectLanguage(filePath);
-
-                // Upsert to SQLite (transaction-safe)
-                await _sqliteService.UpsertFileSymbolsAsync(
-                    workspacePath: workspacePath,
-                    filePath: filePath,
-                    symbols: symbols,
-                    fileContent: content,
-                    language: language,
-                    hash: hash,
-                    size: fileInfo.Length,
-                    lastModified: new DateTimeOffset(fileInfo.LastWriteTimeUtc).ToUnixTimeSeconds(),
-                    cancellationToken: cancellationToken);
-
-                _logger.LogDebug("Phoenix: Updated SQLite with {SymbolCount} symbols from {FilePath}",
-                    symbols.Count, filePath);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogWarning(ex, "Phoenix: Failed to update SQLite for {FilePath} - continuing with Lucene only", filePath);
-            }
-        }
+        // If julie-codesearch is not available, SQLite won't be updated
+        // Lucene indexing will still work from FileIndexingService
     }
 
     /// <summary>

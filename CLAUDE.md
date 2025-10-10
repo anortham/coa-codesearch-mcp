@@ -61,6 +61,25 @@ index_workspace     # Build/update search index (REQUIRED FIRST)
 
 **Never run:** `dotnet run -- stdio` (creates orphaned processes)
 
+## 📝 Tool Parameter Documentation
+
+**IMPORTANT: XML Comments are Primary, [Description] is Fallback**
+
+When documenting tool parameters:
+- **XML `/// <summary>` comments**: Primary source for MCP tool descriptions - this is what Claude sees
+- **`[Description("...")]` attribute**: Fallback only if XML comments are missing
+- **Always document in BOTH places** for consistency, but XML comments take precedence
+
+Example:
+```csharp
+/// <summary>
+/// The refactoring operation to perform.
+/// Valid operations: rename_symbol, extract_to_file, move_symbol_to_file, extract_interface
+/// </summary>
+[Description("The refactoring operation to perform: rename_symbol, extract_to_file, move_symbol_to_file, extract_interface")]
+public required string Operation { get; set; }
+```
+
 ## 🔍 Usage Essentials - **Minimal Parameters!** ✨
 
 **Always start with:**

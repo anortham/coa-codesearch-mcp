@@ -9,9 +9,10 @@ namespace COA.CodeSearch.McpServer.Tools;
 public class SmartRefactorParameters
 {
     /// <summary>
-    /// The refactoring operation to perform
+    /// The refactoring operation to perform.
+    /// Valid operations: rename_symbol, extract_to_file, move_symbol_to_file, extract_interface
     /// </summary>
-    [Description("Refactoring operation: rename_symbol, extract_function, inline_variable, replace_symbol_body")]
+    [Description("The refactoring operation to perform: rename_symbol, extract_to_file, move_symbol_to_file, extract_interface")]
     public required string Operation { get; set; }
 
     /// <summary>

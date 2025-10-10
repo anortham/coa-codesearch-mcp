@@ -314,44 +314,45 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
     [Test]
     public async Task UnifiedFileEditService_AllTools_UsesSameInstance()
     {
-        // Arrange
+        // Arrange - Create a simple test file with numbered lines
         var testFile = await _fileManager.CreateTestFileAsync("", "unified_service_test.cs");
-        var originalContent = "using System;\n\nnamespace Test\n{\n    public class TestClass\n    {\n        // Line to replace\n        public void Method() { }\n        // Line to delete\n    }\n}";
+        var originalContent = "Line 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10";
         File.WriteAllText(testFile.FilePath, originalContent);
 
-        // Act 1 - Use InsertAtLineTool
+        // Act 1 - Use InsertAtLineTool (insert at line 3)
         var insertParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
             Operation = "insert",
-            StartLine = 7, // After "// Line to replace"
-            Content = "        // Inserted by UnifiedFileEditService",
-            PreserveIndentation = true,
-            ContextLines = 2
+            StartLine = 3,
+            Content = "INSERTED LINE",
+            PreserveIndentation = false,
+            ContextLines = 1
         };
 
         var insertResult = await _insertTool.ExecuteAsync(insertParams, CancellationToken.None);
 
-        // Act 2 - Use ReplaceLinesTool
+        // Act 2 - Use ReplaceLinesTool (replace line 6, which is now line 7 after insert)
         var replaceParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "insert",
-            StartLine = 6, // "// Line to replace"
-            Content = "        // Line replaced by UnifiedFileEditService",
-            PreserveIndentation = true,
-            ContextLines = 2
+            Operation = "replace",
+            StartLine = 7, // Line 6 became line 7 after insert
+            Content = "REPLACED LINE",
+            PreserveIndentation = false,
+            ContextLines = 1
         };
 
         var replaceResult = await _replaceTool.ExecuteAsync(replaceParams, CancellationToken.None);
 
-        // Act 3 - Use DeleteLinesTool
+        // Act 3 - Use DeleteLinesTool (delete line 10, which is now line 11 after insert)
         var deleteParams = new EditLinesParameters
         {
             FilePath = testFile.FilePath,
-            Operation = "replace",
-            StartLine = 10, // "// Line to delete"
-            ContextLines = 2
+            Operation = "delete",
+            StartLine = 11, // Line 10 became line 11 after insert
+            EndLine = 11,
+            ContextLines = 1
         };
 
         var deleteResult = await _deleteTool.ExecuteAsync(deleteParams, CancellationToken.None);
@@ -360,13 +361,14 @@ public class DiffMatchPatchGoldenMasterTests : CodeSearchToolTestBase<SearchAndR
         insertResult.Success.Should().BeTrue("Insert operation should succeed");
         replaceResult.Success.Should().BeTrue("Replace operation should succeed");
         deleteResult.Success.Should().BeTrue("Delete operation should succeed");
-        
+
         var finalContent = File.ReadAllText(testFile.FilePath);
-        finalContent.Should().Contain("Inserted by UnifiedFileEditService", "Should contain inserted content");
-        finalContent.Should().Contain("replaced by UnifiedFileEditService", "Should contain replaced content");
-        finalContent.Should().NotContain("// Line to delete", "Should not contain deleted content");
-        
+        finalContent.Should().Contain("INSERTED LINE", "Should contain inserted content");
+        finalContent.Should().Contain("REPLACED LINE", "Should contain replaced content");
+        finalContent.Should().NotContain("Line 10", "Should not contain deleted line");
+
         Console.WriteLine($"✅ Unified service integration test completed successfully");
+        Console.WriteLine($"Final content:\n{finalContent}");
     }
 
     [Test]

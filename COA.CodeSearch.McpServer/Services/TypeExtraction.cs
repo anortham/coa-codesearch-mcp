@@ -3,15 +3,8 @@ using System.Text.Json;
 namespace COA.CodeSearch.McpServer.Services.TypeExtraction;
 
 /// <summary>
-/// Interface for extracting type information from source code
-/// </summary>
-public interface ITypeExtractionService
-{
-    Task<TypeExtractionResult> ExtractTypes(string content, string filePath);
-}
-
-/// <summary>
-/// Result from type extraction operation
+/// Result from type extraction operation.
+/// Simple DTO used internally for Lucene indexing - converted from JulieSymbol.
 /// </summary>
 public class TypeExtractionResult
 {

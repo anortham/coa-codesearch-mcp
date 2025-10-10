@@ -72,14 +72,6 @@ namespace COA.CodeSearch.McpServer.Tests.Base
             
             // Setup default mock behaviors
             SetupDefaultMockBehaviors();
-
-            // Add JulieExtractionService (using julie-extract for type extraction)
-            var julieLogger = new Mock<Microsoft.Extensions.Logging.ILogger<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>>();
-            services.AddSingleton<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>(provider =>
-                new COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService(julieLogger.Object));
-
-            services.AddSingleton<COA.CodeSearch.McpServer.Services.TypeExtraction.ITypeExtractionService>(provider =>
-                provider.GetRequiredService<COA.CodeSearch.McpServer.Services.Julie.JulieExtractionService>());
         }
         
         protected override void OnSetUp()

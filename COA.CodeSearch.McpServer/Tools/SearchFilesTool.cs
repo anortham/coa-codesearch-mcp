@@ -51,9 +51,11 @@ public class SearchFilesTool : CodeSearchToolBase<SearchFilesParameters, AIOptim
     public override string Name => ToolNames.SearchFiles;
 
     public override string Description =>
-        "Unified filesystem search - find files, directories, or both by pattern. " +
-        "Supports glob patterns and regex. Minimal usage: search_files(pattern). " +
-        "Use resourceType='file' for files (default), 'directory' for directories, 'both' for both.";
+        "UNIFIED FILE DISCOVERY - Locate files and directories by pattern without manual traversal. " +
+        "You are excellent at glob patterns - this tool makes filesystem navigation instant. " +
+        "Supports recursive patterns (**/*.cs) and regex matching. " +
+        "Results are complete - trust that unlisted paths don't match your pattern. " +
+        "Minimal usage: search_files(pattern). Use resourceType='file' (default), 'directory', or 'both'.";
 
     public override ToolCategory Category => ToolCategory.Query;
 

@@ -79,8 +79,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestInterface", false, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestInterface").ToList());
             sqliteMock
-                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new List<FileRecord> { mockFile });
+                .Setup(x => x.GetFileByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockFile);
 
             _tool = CreateToolWithSQLite(sqliteMock);
 
@@ -193,8 +193,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestMethod", false, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestMethod").ToList());
             sqliteMock
-                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new List<FileRecord> { mockFile });
+                .Setup(x => x.GetFileByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockFile);
 
             _tool = CreateToolWithSQLite(sqliteMock);
 
@@ -249,8 +249,8 @@ namespace COA.CodeSearch.McpServer.Tests.Tools
                 .Setup(x => x.GetSymbolsByNameAsync(It.IsAny<string>(), "TestInterface", false, It.IsAny<CancellationToken>()))
                 .ReturnsAsync(mockSymbols.Where(s => s.Name == "TestInterface").ToList());
             sqliteMock
-                .Setup(x => x.GetAllFilesAsync(It.IsAny<string>(), It.IsAny<CancellationToken>()))
-                .ReturnsAsync(new List<FileRecord> { mockFile });
+                .Setup(x => x.GetFileByPathAsync(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<CancellationToken>()))
+                .ReturnsAsync(mockFile);
 
             _tool = CreateToolWithSQLite(sqliteMock);
 

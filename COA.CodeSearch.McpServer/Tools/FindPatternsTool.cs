@@ -9,7 +9,8 @@ using COA.Mcp.Framework.TokenOptimization.Models;
 using COA.Mcp.Framework.TokenOptimization.Caching;
 using COA.Mcp.Framework.TokenOptimization.Storage;
 using COA.CodeSearch.McpServer.Services;
-using COA.CodeSearch.McpServer.Services.TypeExtraction;
+using COA.CodeSearch.McpServer.Services.Sqlite;
+using COA.CodeSearch.McpServer.Services.Julie;
 using COA.CodeSearch.McpServer.Tools.Models;
 using COA.CodeSearch.McpServer.Tools.Parameters;
 using COA.CodeSearch.McpServer.ResponseBuilders;
@@ -24,19 +25,25 @@ namespace COA.CodeSearch.McpServer.Tools;
 /// </summary>
 public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOptimizedResponse<FindPatternsResult>>
 {
-    private readonly ITypeExtractionService _typeExtractionService;
+    private readonly ISQLiteSymbolService? _sqliteService;
+    private readonly IPathResolutionService _pathResolutionService;
     private readonly ILogger<FindPatternsTool> _logger;
 
     /// <summary>
     /// Initializes a new instance of the FindPatternsTool with required dependencies.
     /// </summary>
     /// <param name="serviceProvider">Service provider for dependency resolution</param>
+    /// <param name="pathResolutionService">Path resolution service for workspace defaults</param>
     /// <param name="logger">Logger instance</param>
+    /// <param name="sqliteService">SQLite symbol service for symbol lookups</param>
     public FindPatternsTool(
         IServiceProvider serviceProvider,
-        ILogger<FindPatternsTool> logger) : base(serviceProvider, logger)
+        IPathResolutionService pathResolutionService,
+        ILogger<FindPatternsTool> logger,
+        ISQLiteSymbolService? sqliteService = null) : base(serviceProvider, logger)
     {
-        _typeExtractionService = serviceProvider.GetRequiredService<ITypeExtractionService>();
+        _sqliteService = sqliteService;
+        _pathResolutionService = pathResolutionService;
         _logger = logger;
     }
 
@@ -48,8 +55,12 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Gets the tool description explaining its purpose and usage scenarios.
     /// </summary>
-    public override string Description => "Detects semantic patterns and code quality issues using Tree-sitter analysis. " +
-        "Identifies async patterns, empty catches, unused usings, magic numbers, large methods, and dead code (unused private members).";
+    public override string Description =>
+        "CODE QUALITY SCANNER - Detect patterns and issues automatically using Tree-sitter analysis. " +
+        "You are skilled at identifying code smells - this tool finds them instantly across entire files. " +
+        "Identifies: async patterns, empty catches, unused usings, magic numbers, large methods, dead code. " +
+        "Results are comprehensive - when it finds issues, you can trust they exist; when it doesn't, the code is clean. " +
+        "Use liberally during code review.";
 
     /// <summary>
     /// Gets the tool category for classification purposes.
@@ -93,25 +104,31 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
 
             // Read file content for pattern analysis
             var fileContent = await File.ReadAllTextAsync(filePath, cancellationToken);
-            
-            // Extract type information using Tree-sitter
-            var extractionResult = await _typeExtractionService.ExtractTypes(fileContent, filePath);
 
-            System.Console.WriteLine($"DEBUG: Type extraction success: {extractionResult.Success}");
+            // Use provided workspace path or default to current workspace
+            var workspacePath = _pathResolutionService.GetPrimaryWorkspacePath();
 
-            if (!extractionResult.Success)
+            // Get symbols from SQLite database (for method detection)
+            List<JulieSymbol>? symbols = null;
+            string? language = null;
+
+            if (_sqliteService != null && _sqliteService.DatabaseExists(workspacePath))
             {
-                System.Console.WriteLine($"DEBUG: Returning error response for type extraction failure");
-                return CreateErrorResponse("Failed to extract type information from file");
+                symbols = await _sqliteService.GetSymbolsForFileAsync(workspacePath, filePath, cancellationToken);
+                language = symbols?.FirstOrDefault()?.Language;
+            }
+            else
+            {
+                _logger.LogWarning("SQLite database not found for workspace {WorkspacePath}, pattern detection will be limited", workspacePath);
             }
 
             // Detect patterns
-            var patterns = await DetectPatternsAsync(fileContent, extractionResult, parameters, cancellationToken);
+            var patterns = await DetectPatternsAsync(fileContent, symbols, language, parameters, cancellationToken);
 
             var result = new FindPatternsResult
             {
                 FilePath = filePath,
-                Language = extractionResult.Language ?? "unknown",
+                Language = language ?? "unknown",
                 PatternsFound = patterns,
                 TotalPatterns = patterns.Count,
                 AnalysisTime = DateTime.UtcNow
@@ -127,11 +144,12 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     }
 
     /// <summary>
-    /// Detects semantic patterns in the code based on Tree-sitter analysis and file content.
+    /// Detects semantic patterns in the code based on SQLite symbols and file content.
     /// </summary>
     private Task<List<CodePattern>> DetectPatternsAsync(
-        string fileContent, 
-        TypeExtractionResult extractionResult, 
+        string fileContent,
+        List<JulieSymbol>? symbols,
+        string? language,
         FindPatternsParameters parameters,
         CancellationToken cancellationToken)
     {
@@ -141,7 +159,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         // Pattern 1: Async methods without ConfigureAwait(false)
         if (parameters.DetectAsyncPatterns)
         {
-            patterns.AddRange(DetectAsyncWithoutConfigureAwait(fileContent, extractionResult, lines));
+            patterns.AddRange(DetectAsyncWithoutConfigureAwait(fileContent, lines));
         }
 
         // Pattern 2: Empty catch blocks
@@ -153,7 +171,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         // Pattern 3: Unused using statements
         if (parameters.DetectUnusedUsings)
         {
-            patterns.AddRange(DetectUnusedUsings(fileContent, extractionResult, lines));
+            patterns.AddRange(DetectUnusedUsings(fileContent, lines));
         }
 
         // Pattern 4: Magic numbers/strings
@@ -163,15 +181,21 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
         }
 
         // Pattern 5: Large methods (high complexity)
-        if (parameters.DetectLargeMethods)
+        if (parameters.DetectLargeMethods && symbols != null)
         {
-            patterns.AddRange(DetectLargeMethods(extractionResult, lines));
+            patterns.AddRange(DetectLargeMethods(symbols, lines));
         }
 
         // Pattern 6: Dead code (unused private methods and fields)
-        if (parameters.DetectDeadCode)
+        if (parameters.DetectDeadCode && symbols != null)
         {
-            patterns.AddRange(DetectDeadCode(fileContent, extractionResult, lines));
+            patterns.AddRange(DetectDeadCode(fileContent, symbols, lines));
+        }
+
+        // Pattern 7: Custom patterns (user-defined regex patterns)
+        if (parameters.CustomPatterns != null && parameters.CustomPatterns.Any())
+        {
+            patterns.AddRange(DetectCustomPatterns(fileContent, parameters.CustomPatterns, lines));
         }
 
         // Apply severity level filtering
@@ -193,7 +217,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Detects async methods that don't use ConfigureAwait(false).
     /// </summary>
-    private List<CodePattern> DetectAsyncWithoutConfigureAwait(string fileContent, TypeExtractionResult extractionResult, string[] lines)
+    private List<CodePattern> DetectAsyncWithoutConfigureAwait(string fileContent, string[] lines)
     {
         var patterns = new List<CodePattern>();
         
@@ -302,7 +326,7 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Detects potentially unused using statements.
     /// </summary>
-    private List<CodePattern> DetectUnusedUsings(string fileContent, TypeExtractionResult extractionResult, string[] lines)
+    private List<CodePattern> DetectUnusedUsings(string fileContent, string[] lines)
     {
         var patterns = new List<CodePattern>();
         var usings = new List<(int lineNumber, string usingStatement, string namespaceName)>();
@@ -433,31 +457,32 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     /// <summary>
     /// Detects methods that are too large based on line count.
     /// </summary>
-    private List<CodePattern> DetectLargeMethods(TypeExtractionResult extractionResult, string[] lines)
+    private List<CodePattern> DetectLargeMethods(List<JulieSymbol> symbols, string[] lines)
     {
         var patterns = new List<CodePattern>();
         const int maxMethodLines = 50; // Configurable threshold
-        
-        if (extractionResult.Methods != null)
+
+        // Filter for methods and functions
+        var methods = symbols.Where(s =>
+            s.Kind.Equals("method", StringComparison.OrdinalIgnoreCase) ||
+            s.Kind.Equals("function", StringComparison.OrdinalIgnoreCase)).ToList();
+
+        foreach (var method in methods)
         {
-            foreach (var method in extractionResult.Methods)
+            // Estimate method size using symbol start/end lines
+            var methodLines = method.EndLine - method.StartLine + 1;
+
+            if (methodLines > maxMethodLines)
             {
-                // Estimate method size (this is simplified - real implementation would use Tree-sitter)
-                var methodStartLine = method.Line;
-                var methodLines = EstimateMethodLength(lines, methodStartLine - 1);
-                
-                if (methodLines > maxMethodLines)
+                patterns.Add(new CodePattern
                 {
-                    patterns.Add(new CodePattern
-                    {
-                        Type = "LargeMethod",
-                        Severity = "Warning",
-                        Message = $"Method '{method.Name}' is {methodLines} lines long. Consider breaking it down.",
-                        LineNumber = methodStartLine,
-                        LineContent = $"Method: {method.Name}",
-                        Suggestion = "Break method into smaller, focused methods with single responsibilities"
-                    });
-                }
+                    Type = "LargeMethod",
+                    Severity = "Warning",
+                    Message = $"Method '{method.Name}' is {methodLines} lines long. Consider breaking it down.",
+                    LineNumber = method.StartLine,
+                    LineContent = $"Method: {method.Name}",
+                    Suggestion = "Break method into smaller, focused methods with single responsibilities"
+                });
             }
         }
 
@@ -465,82 +490,50 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
     }
 
     /// <summary>
-    /// Estimates method length by counting lines until closing brace.
-    /// </summary>
-    private int EstimateMethodLength(string[] lines, int startIndex)
-    {
-        if (startIndex >= lines.Length) return 0;
-        
-        int braceCount = 0;
-        int lineCount = 0;
-        bool foundOpenBrace = false;
-        
-        for (int i = startIndex; i < lines.Length; i++)
-        {
-            var line = lines[i];
-            lineCount++;
-            
-            foreach (char c in line)
-            {
-                if (c == '{')
-                {
-                    braceCount++;
-                    foundOpenBrace = true;
-                }
-                else if (c == '}')
-                {
-                    braceCount--;
-                    if (foundOpenBrace && braceCount == 0)
-                    {
-                        return lineCount;
-                    }
-                }
-            }
-        }
-        
-        return lineCount; // Fallback
-    }
-
-    /// <summary>
     /// Detects unused private methods and fields (dead code).
     /// </summary>
-    private List<CodePattern> DetectDeadCode(string fileContent, TypeExtractionResult extractionResult, string[] lines)
+    private List<CodePattern> DetectDeadCode(string fileContent, List<JulieSymbol> symbols, string[] lines)
     {
         var patterns = new List<CodePattern>();
 
         // Remove comments and strings for accurate reference counting
         var codeOnly = RemoveCommentsAndStrings(fileContent);
 
+        // Filter for methods and functions
+        var methods = symbols.Where(s =>
+            s.Kind.Equals("method", StringComparison.OrdinalIgnoreCase) ||
+            s.Kind.Equals("function", StringComparison.OrdinalIgnoreCase)).ToList();
+
         // Detect unused private methods
-        if (extractionResult.Methods != null)
+        foreach (var method in methods)
         {
-            foreach (var method in extractionResult.Methods)
+            // Skip non-private methods (check visibility from Julie symbol or line inspection)
+            var isPrivate = method.Visibility?.Equals("private", StringComparison.OrdinalIgnoreCase) == true ||
+                           IsPrivateMethod(lines, method.StartLine - 1);
+
+            if (!isPrivate)
+                continue;
+
+            // Skip constructors and special methods
+            if (method.Name.StartsWith("<") || method.Name == ".ctor" || method.Name == ".cctor")
+                continue;
+
+            // Count references to this method (excluding its declaration)
+            var methodPattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(method.Name)}\s*\(";
+            var matches = System.Text.RegularExpressions.Regex.Matches(codeOnly, methodPattern);
+
+            // If only 1 match (the declaration itself), it's likely unused
+            if (matches.Count <= 1)
             {
-                // Skip non-private methods
-                if (!IsPrivateMethod(lines, method.Line - 1))
-                    continue;
-
-                // Skip constructors and special methods
-                if (method.Name.StartsWith("<") || method.Name == ".ctor" || method.Name == ".cctor")
-                    continue;
-
-                // Count references to this method (excluding its declaration)
-                var methodPattern = $@"\b{System.Text.RegularExpressions.Regex.Escape(method.Name)}\s*\(";
-                var matches = System.Text.RegularExpressions.Regex.Matches(codeOnly, methodPattern);
-
-                // If only 1 match (the declaration itself), it's likely unused
-                if (matches.Count <= 1)
+                patterns.Add(new CodePattern
                 {
-                    patterns.Add(new CodePattern
-                    {
-                        Type = "UnusedPrivateMethod",
-                        Severity = "Warning",
-                        Message = $"Private method '{method.Name}' appears to be unused",
-                        LineNumber = method.Line,
-                        LineContent = lines[method.Line - 1].TrimStart(),
-                        Suggestion = "Remove unused method or make it public if it's intended for external use"
-                    });
-                }
+                    Type = "UnusedPrivateMethod",
+                    Severity = "Warning",
+                    Message = $"Private method '{method.Name}' appears to be unused",
+                    LineNumber = method.StartLine,
+                    LineContent = lines[method.StartLine - 1].TrimStart(),
+                    Suggestion = "Remove unused method or make it public if it's intended for external use"
+                });
             }
         }
 
@@ -568,6 +561,74 @@ public class FindPatternsTool : CodeSearchToolBase<FindPatternsParameters, AIOpt
                     LineNumber = lineNumber,
                     LineContent = lines[lineNumber - 1].TrimStart(),
                     Suggestion = "Remove unused field to reduce code clutter"
+                });
+            }
+        }
+
+        return patterns;
+    }
+
+    /// <summary>
+    /// Detects custom user-defined patterns using regex matching.
+    /// </summary>
+    private List<CodePattern> DetectCustomPatterns(string fileContent, List<string> customPatterns, string[] lines)
+    {
+        var patterns = new List<CodePattern>();
+
+        foreach (var customPattern in customPatterns)
+        {
+            if (string.IsNullOrWhiteSpace(customPattern))
+                continue;
+
+            try
+            {
+                // Try to match the pattern against each line
+                for (int i = 0; i < lines.Length; i++)
+                {
+                    var line = lines[i];
+
+                    try
+                    {
+                        var matches = System.Text.RegularExpressions.Regex.Matches(line, customPattern);
+
+                        foreach (System.Text.RegularExpressions.Match match in matches)
+                        {
+                            patterns.Add(new CodePattern
+                            {
+                                Type = "CustomPattern",
+                                Severity = "Info",
+                                Message = $"Custom pattern matched: '{customPattern}'",
+                                LineNumber = i + 1,
+                                LineContent = line.TrimStart(),
+                                Suggestion = $"Matched text: '{match.Value}'",
+                                Metadata = new Dictionary<string, object>
+                                {
+                                    { "pattern", customPattern },
+                                    { "matchedText", match.Value },
+                                    { "matchIndex", match.Index }
+                                }
+                            });
+                        }
+                    }
+                    catch (System.Text.RegularExpressions.RegexMatchTimeoutException)
+                    {
+                        _logger.LogWarning("Regex pattern timed out on line {LineNumber}: {Pattern}", i + 1, customPattern);
+                        continue;
+                    }
+                }
+            }
+            catch (ArgumentException ex)
+            {
+                _logger.LogWarning(ex, "Invalid custom regex pattern: {Pattern}", customPattern);
+                // Add a pattern indicating the regex itself is invalid
+                patterns.Add(new CodePattern
+                {
+                    Type = "InvalidCustomPattern",
+                    Severity = "Error",
+                    Message = $"Invalid regex pattern: '{customPattern}'",
+                    LineNumber = 1,
+                    LineContent = "",
+                    Suggestion = $"Fix the regex pattern. Error: {ex.Message}"
                 });
             }
         }

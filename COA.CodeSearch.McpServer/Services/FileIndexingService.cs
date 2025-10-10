@@ -26,8 +26,6 @@ public class FileIndexingService : IFileIndexingService
     private readonly IIndexingMetricsService _metricsService;
     private readonly ICircuitBreakerService _circuitBreakerService;
     private readonly IMemoryPressureService _memoryPressureService;
-    private readonly ITypeExtractionService _typeExtractionService;
-    private readonly IJulieExtractionService? _julieExtractionService;
     private readonly IJulieCodeSearchService? _julieCodeSearchService;
     private readonly ISQLiteSymbolService? _sqliteSymbolService;
     private readonly ISemanticIntelligenceService? _semanticIntelligenceService;
@@ -45,8 +43,6 @@ public class FileIndexingService : IFileIndexingService
         ICircuitBreakerService circuitBreakerService,
         IMemoryPressureService memoryPressureService,
         IOptions<MemoryLimitsConfiguration> memoryLimits,
-        ITypeExtractionService typeExtractionService,
-        IJulieExtractionService? julieExtractionService = null,
         IJulieCodeSearchService? julieCodeSearchService = null,
         ISQLiteSymbolService? sqliteSymbolService = null,
         ISemanticIntelligenceService? semanticIntelligenceService = null)
@@ -59,15 +55,12 @@ public class FileIndexingService : IFileIndexingService
         _circuitBreakerService = circuitBreakerService ?? throw new ArgumentNullException(nameof(circuitBreakerService));
         _memoryPressureService = memoryPressureService ?? throw new ArgumentNullException(nameof(memoryPressureService));
         _memoryLimits = memoryLimits?.Value ?? throw new ArgumentNullException(nameof(memoryLimits));
-        _typeExtractionService = typeExtractionService ?? throw new ArgumentNullException(nameof(typeExtractionService));
-        _julieExtractionService = julieExtractionService;
         _julieCodeSearchService = julieCodeSearchService;
         _sqliteSymbolService = sqliteSymbolService;
         _semanticIntelligenceService = semanticIntelligenceService;
 
         // Debug: Log julie service injection
-        _logger.LogDebug("FileIndexingService initialized - Julie extract: {ExtractAvailable}, Julie codesearch: {CodeSearchAvailable}, SQLite: {SqliteAvailable}, Semantic: {SemanticAvailable}",
-            _julieExtractionService?.IsAvailable() ?? false,
+        _logger.LogDebug("FileIndexingService initialized - Julie codesearch: {CodeSearchAvailable}, SQLite: {SqliteAvailable}, Semantic: {SemanticAvailable}",
             _julieCodeSearchService?.IsAvailable() ?? false,
             _sqliteSymbolService != null,
             _semanticIntelligenceService?.IsAvailable() ?? false);
@@ -209,15 +202,14 @@ public class FileIndexingService : IFileIndexingService
                 }
             }
 
-            // PHASE 2: Check if bulk mode is available and enabled (julie-extract for Lucene)
-            var julieAvailable = _julieExtractionService?.IsAvailable() == true;
+            // PHASE 2: Check if bulk mode is available and enabled (SQLite for Lucene symbol caching)
+            var sqliteAvailable = _sqliteSymbolService != null && _sqliteSymbolService.DatabaseExists(workspacePath);
             var bulkModeConfig = _configuration.GetValue("CodeSearch:TypeExtraction:UseBulkMode", true);
-            _logger.LogWarning("BULK MODE DEBUG: Julie service null? {IsNull}, IsAvailable: {Available}, Config: {Config}",
-                _julieExtractionService == null,
-                julieAvailable,
+            _logger.LogDebug("BULK MODE: SQLite available: {Available}, Config: {Config}",
+                sqliteAvailable,
                 bulkModeConfig);
 
-            var useBulkMode = julieAvailable && bulkModeConfig;
+            var useBulkMode = sqliteAvailable && bulkModeConfig;
 
             Dictionary<string, List<JulieSymbol>>? symbolCache = null;
             if (useBulkMode)
@@ -367,47 +359,54 @@ public class FileIndexingService : IFileIndexingService
         }
     }
     /// <summary>
-    /// Pre-extract symbols from entire workspace using parallel streaming.
+    /// Pre-extract symbols from entire workspace using SQLite database.
     /// Returns a dictionary mapping file paths to their extracted symbols for fast lookup during indexing.
     /// </summary>
     private async Task<Dictionary<string, List<JulieSymbol>>> PreExtractSymbolsAsync(
         string workspacePath,
         CancellationToken cancellationToken)
     {
-        if (_julieExtractionService == null)
+        // Check if SQLite database is available (populated by julie-codesearch in Phase 1)
+        if (_sqliteSymbolService == null || !_sqliteSymbolService.DatabaseExists(workspacePath))
         {
+            _logger.LogWarning("SQLite database not available for symbol caching");
             return new Dictionary<string, List<JulieSymbol>>();
         }
 
         var symbolsByFile = new Dictionary<string, List<JulieSymbol>>(StringComparer.OrdinalIgnoreCase);
-        var fileCount = 0;
 
-        var symbolCount = 0;
-        await foreach (var symbol in _julieExtractionService.StreamExtractDirectoryAsync(
-            workspacePath,
-            threads: null, // Use default (CPU count)
-            cancellationToken))
+        try
         {
-            symbolCount++;
+            // Get all files from SQLite (source of truth from julie-codesearch)
+            var files = await _sqliteSymbolService.GetAllFilesAsync(workspacePath, cancellationToken);
 
-            // Group symbols by file path
-            if (!symbolsByFile.TryGetValue(symbol.FilePath, out var symbols))
+            _logger.LogInformation("📖 Loading symbols from SQLite for {FileCount} files", files.Count);
+
+            var symbolCount = 0;
+            foreach (var file in files)
             {
-                symbols = new List<JulieSymbol>();
-                symbolsByFile[symbol.FilePath] = symbols;
-                fileCount++;
+                var symbols = await _sqliteSymbolService.GetSymbolsForFileAsync(
+                    workspacePath,
+                    file.Path,
+                    cancellationToken);
 
-                _logger.LogDebug("📁 NEW FILE #{FileNum}: {FilePath} (total symbols so far: {SymbolCount})",
-                    fileCount, symbol.FilePath, symbolCount);
+                if (symbols != null && symbols.Count > 0)
+                {
+                    symbolsByFile[file.Path] = symbols;
+                    symbolCount += symbols.Count;
+                }
             }
 
-            symbols.Add(symbol);
+            _logger.LogInformation("✅ Loaded {SymbolCount} symbols from {FileCount} files via SQLite",
+                symbolCount, files.Count);
+
+            return symbolsByFile;
         }
-
-        _logger.LogInformation("Stream complete - processed {SymbolCount} symbols from {FileCount} files",
-            symbolCount, fileCount);
-
-        return symbolsByFile;
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to load symbols from SQLite, will fall back to per-file extraction");
+            return new Dictionary<string, List<JulieSymbol>>();
+        }
     }
 
 
@@ -774,16 +773,24 @@ public class FileIndexingService : IFileIndexingService
                     // Convert cached symbols to TypeExtractionResult
                     typeData = ConvertJulieSymbolsToTypeData(cachedSymbols);
                 }
-                else
+                else if (_sqliteSymbolService != null && _sqliteSymbolService.DatabaseExists(workspacePath))
                 {
-                    // Fall back to single-file extraction
+                    // Fall back to SQLite query for single file
                     try
                     {
-                        typeData = await _typeExtractionService.ExtractTypes(content, filePath);
+                        var symbols = await _sqliteSymbolService.GetSymbolsForFileAsync(
+                            workspacePath,
+                            filePath,
+                            cancellationToken);
+
+                        if (symbols != null && symbols.Count > 0)
+                        {
+                            typeData = ConvertJulieSymbolsToTypeData(symbols);
+                        }
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug(ex, "Failed to extract types from {FilePath}", filePath);
+                        _logger.LogDebug(ex, "Failed to extract types from SQLite for {FilePath}", filePath);
                     }
                 }
             }
