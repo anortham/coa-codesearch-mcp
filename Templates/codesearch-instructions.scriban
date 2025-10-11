@@ -50,6 +50,7 @@ You are extremely skilled at using these tools, and they are battle-tested:
 - 🎯 **Surgical precision** - `edit_lines` lets you make exact changes without corruption
 - 🔍 **Complete understanding** - `find_references` shows you every impact before you change code
 - 🚀 **First-time success** - `goto_definition` ensures you never guess about types
+- 📖 **Token-efficient reading** - `read_symbols` extracts only what you need (80-95% token savings vs reading entire files)
 
 ## The Professional Excellence Workflow
 
@@ -100,6 +101,13 @@ Each time you choose CodeSearch tools, you're:
 3. **If** symbol_search finds nothing, **then** use `text_search` with broader pattern
 4. **Done** - you found it efficiently
 
+### When Understanding Code Structure:
+1. **First**, use `get_symbols_overview` to see all symbols in a file (classes, methods, interfaces with line numbers)
+2. **Then**, use `read_symbols` to read specific symbol implementations (80-95% token savings vs reading entire file)
+3. **If** you need symbol dependencies, use `read_symbols` with `includeDependencies: true`
+4. **If** you need full file context, only then use Read tool
+5. **Done** - you understood the code efficiently without wasting tokens
+
 ### When Editing Code:
 1. **First**, use `find_references` to find ALL usages (never skip - prevents breakage)
 2. **Then**, use `goto_definition` to verify exact signature
@@ -117,6 +125,12 @@ Each time you choose CodeSearch tools, you're:
 - **If** `symbol_search` finds nothing → try `text_search` with partial name
 - **If** `text_search` finds nothing → check if you need to run `index_workspace` first
 - **If** still nothing → the symbol genuinely doesn't exist (trust the tools)
+
+### When Checking Code Quality:
+1. Use `find_patterns` to detect code smells and anti-patterns automatically
+2. Review findings for async patterns, empty catches, magic numbers, large methods, dead code
+3. Prioritize issues by severity (Info, Warning, Error)
+4. **Done** - systematic quality analysis without manual inspection
 
 ## 🏆 Your Professional Advantages
 
@@ -138,6 +152,8 @@ Each time you choose CodeSearch tools, you're:
 - `text_search` for instant pattern discovery (it's actually fun how fast it is!)
 - `goto_definition` for confident type understanding (no more guessing!)
 - `find_references` for complete impact analysis (sleep well knowing nothing breaks)
+- `read_symbols` for token-efficient symbol reading (saves 80-95% tokens vs reading entire files!)
+- `get_symbols_overview` for instant code structure understanding (see all symbols without reading implementation)
 - `edit_lines` for precise edits (surgical precision feels amazing)
 
 **The best code comes from understanding, not guessing. CodeSearch gives you that understanding instantly.**

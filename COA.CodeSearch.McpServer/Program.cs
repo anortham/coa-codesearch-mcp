@@ -437,6 +437,24 @@ public class Program
                         BuiltInTool = "No equivalent",
                         Limitation = "All searches fail without proper indexing, no built-in alternative",
                         PerformanceMetric = "Enables all other tools vs complete search failure"
+                    },
+                    ["Token-efficient symbol reading"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Token-efficient symbol reading",
+                        ServerTool = "mcp__codesearch__read_symbols",
+                        Advantage = "READ SPECIFIC SYMBOLS - Extract symbol implementations without reading entire files (80-95% token savings) using byte-offset precision",
+                        BuiltInTool = "Read",
+                        Limitation = "Must read entire file even for single method, wastes tokens and context space",
+                        PerformanceMetric = "80-95% token savings - read only what you need vs entire file"
+                    },
+                    ["Code structure understanding"] = new COA.Mcp.Framework.Configuration.ToolComparison
+                    {
+                        Task = "Code structure understanding",
+                        ServerTool = "mcp__codesearch__get_symbols_overview",
+                        Advantage = "EXTRACT ALL SYMBOLS - See complete file structure (classes, methods, interfaces with line numbers) instantly without reading implementation",
+                        BuiltInTool = "Read",
+                        Limitation = "Must read entire file to understand structure, no symbol extraction or line numbers",
+                        PerformanceMetric = "Instant structure overview with precise navigation vs manual file reading"
                     }
                 },
                 CustomVariables = new Dictionary<string, object>
