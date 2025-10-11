@@ -1746,6 +1746,113 @@ LIMIT 1000;";
 
         return results;
     }
+
+    public async Task<Dictionary<string, List<JulieRelationship>>> GetRelationshipsForSymbolsAsync(
+        string workspacePath,
+        List<string> symbolIds,
+        List<string>? relationshipKinds = null,
+        CancellationToken cancellationToken = default)
+    {
+        var dbPath = GetDatabasePath(workspacePath);
+        if (!File.Exists(dbPath))
+        {
+            _logger.LogWarning("SQLite database does not exist at {DbPath}", dbPath);
+            return new Dictionary<string, List<JulieRelationship>>();
+        }
+
+        if (symbolIds == null || symbolIds.Count == 0)
+        {
+            return new Dictionary<string, List<JulieRelationship>>();
+        }
+
+        using var connection = new SqliteConnection(GetConnectionString(dbPath));
+        await connection.OpenAsync(cancellationToken);
+        ConfigureConnection(connection);
+
+        // Check if relationships table exists
+        using (var checkCmd = connection.CreateCommand())
+        {
+            checkCmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='relationships'";
+            var tableExists = (long)(await checkCmd.ExecuteScalarAsync(cancellationToken) ?? 0L) > 0;
+
+            if (!tableExists)
+            {
+                _logger.LogDebug("relationships table not found - julie-codesearch may not have indexed relationships yet");
+                return new Dictionary<string, List<JulieRelationship>>();
+            }
+        }
+
+        // Build parameterized query for symbol IDs
+        var symbolIdParams = string.Join(",", symbolIds.Select((_, i) => $"@id{i}"));
+        var sql = $@"
+            SELECT id, from_symbol_id, to_symbol_id, kind, file_path, line_number, confidence, metadata
+            FROM relationships
+            WHERE from_symbol_id IN ({symbolIdParams})";
+
+        // Add kind filter if specified
+        if (relationshipKinds != null && relationshipKinds.Count > 0)
+        {
+            var kindParams = string.Join(",", relationshipKinds.Select((_, i) => $"@kind{i}"));
+            sql += $" AND kind IN ({kindParams})";
+        }
+
+        sql += " ORDER BY from_symbol_id, kind";
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = sql;
+
+        // Add symbol ID parameters
+        for (int i = 0; i < symbolIds.Count; i++)
+        {
+            cmd.Parameters.AddWithValue($"@id{i}", symbolIds[i]);
+        }
+
+        // Add kind parameters if specified
+        if (relationshipKinds != null)
+        {
+            for (int i = 0; i < relationshipKinds.Count; i++)
+            {
+                cmd.Parameters.AddWithValue($"@kind{i}", relationshipKinds[i]);
+            }
+        }
+
+        var results = new Dictionary<string, List<JulieRelationship>>();
+
+        // Initialize dictionary with empty lists for all symbol IDs
+        foreach (var symbolId in symbolIds)
+        {
+            results[symbolId] = new List<JulieRelationship>();
+        }
+
+        using var reader = await cmd.ExecuteReaderAsync(cancellationToken);
+        while (await reader.ReadAsync(cancellationToken))
+        {
+            var relationship = new JulieRelationship
+            {
+                Id = reader.GetString(0),
+                FromSymbolId = reader.GetString(1),
+                ToSymbolId = reader.GetString(2),
+                Kind = reader.GetString(3),
+                FilePath = reader.GetString(4),
+                LineNumber = reader.GetInt32(5),
+                Confidence = reader.GetFloat(6),
+                Metadata = reader.IsDBNull(7) ? null : reader.GetString(7)
+            };
+
+            // Add to the appropriate symbol's list
+            if (results.ContainsKey(relationship.FromSymbolId))
+            {
+                results[relationship.FromSymbolId].Add(relationship);
+            }
+        }
+
+        _logger.LogDebug(
+            "Retrieved relationships for {SymbolCount} symbols: {TotalRelationships} total relationships",
+            symbolIds.Count,
+            results.Values.Sum(list => list.Count));
+
+        return results;
+    }
 }
 
 //this is a test

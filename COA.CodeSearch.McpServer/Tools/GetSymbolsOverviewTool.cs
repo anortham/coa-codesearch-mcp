@@ -227,7 +227,7 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             _logger.LogInformation("Found {SymbolCount} symbols in {FilePath}", symbols.Count, filePath);
 
             // Build comprehensive overview from SQLite symbols
-            var result = BuildSymbolsOverview(symbols, filePath, stopwatch.Elapsed, parameters);
+            var result = await BuildSymbolsOverviewAsync(symbols, filePath, stopwatch.Elapsed, parameters, workspacePath, cancellationToken);
 
             // Create response
             var response = new AIOptimizedResponse<SymbolsOverviewResult>
@@ -273,11 +273,13 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
         }
     }
     
-    private SymbolsOverviewResult BuildSymbolsOverview(
+    private async Task<SymbolsOverviewResult> BuildSymbolsOverviewAsync(
         List<JulieSymbol> symbols,
         string filePath,
         TimeSpan extractionTime,
-        GetSymbolsOverviewParameters parameters)
+        GetSymbolsOverviewParameters parameters,
+        string workspacePath,
+        CancellationToken cancellationToken)
     {
         var result = new SymbolsOverviewResult
         {
@@ -286,6 +288,9 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
             ExtractionTime = extractionTime,
             Success = true
         };
+
+        // Create a mapping from symbol ID to TypeOverview for populating inheritance later
+        var symbolIdToTypeOverview = new Dictionary<string, TypeOverview>();
 
         // Julie stores all symbols in a flat list with Kind field
         // Categorize by kind: class, interface, struct, enum, function, method
@@ -304,9 +309,12 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
                     Line = parameters.IncludeLineNumbers ? symbol.StartLine : 0,
                     Column = parameters.IncludeLineNumbers ? symbol.StartColumn : 0,
                     Modifiers = new List<string>(), // Julie doesn't extract modifiers currently
-                    BaseType = null, // Not available in JulieSymbol
-                    Interfaces = null // Not available in JulieSymbol
+                    BaseType = null, // Will be populated from relationships if IncludeInheritance is true
+                    Interfaces = null // Will be populated from relationships if IncludeInheritance is true
                 };
+
+                // Track symbol ID for inheritance population
+                symbolIdToTypeOverview[symbol.Id] = typeOverview;
 
                 // Note: Julie doesn't nest methods inside types - they're separate symbols
                 // So we don't populate Methods list here
@@ -344,6 +352,60 @@ public class GetSymbolsOverviewTool : CodeSearchToolBase<GetSymbolsOverviewParam
                 };
 
                 result.Methods.Add(methodOverview);
+            }
+        }
+
+        // Query inheritance relationships if IncludeInheritance is true
+        if (parameters.IncludeInheritance && symbolIdToTypeOverview.Count > 0 && _sqliteService != null)
+        {
+            try
+            {
+                _logger.LogDebug("Querying inheritance relationships for {Count} type symbols", symbolIdToTypeOverview.Count);
+
+                var symbolIds = symbolIdToTypeOverview.Keys.ToList();
+                var relationshipKinds = new List<string> { "extends", "implements" };
+
+                var relationshipsMap = await _sqliteService.GetRelationshipsForSymbolsAsync(
+                    workspacePath,
+                    symbolIds,
+                    relationshipKinds,
+                    cancellationToken);
+
+                // Populate BaseType and Interfaces from relationships
+                foreach (var (symbolId, relationships) in relationshipsMap)
+                {
+                    if (!symbolIdToTypeOverview.TryGetValue(symbolId, out var typeOverview))
+                        continue;
+
+                    foreach (var relationship in relationships)
+                    {
+                        // Find the target symbol to get its name
+                        var targetSymbol = symbols.FirstOrDefault(s => s.Id == relationship.ToSymbolId);
+                        if (targetSymbol == null)
+                            continue;
+
+                        if (relationship.Kind.Equals("extends", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // BaseType (only one extends relationship expected)
+                            typeOverview.BaseType = targetSymbol.Name;
+                        }
+                        else if (relationship.Kind.Equals("implements", StringComparison.OrdinalIgnoreCase))
+                        {
+                            // Interfaces (can have multiple)
+                            if (typeOverview.Interfaces == null)
+                            {
+                                typeOverview.Interfaces = new List<string>();
+                            }
+                            typeOverview.Interfaces.Add(targetSymbol.Name);
+                        }
+                    }
+                }
+
+                _logger.LogDebug("Successfully populated inheritance information for types");
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Failed to query inheritance relationships - continuing without inheritance info");
             }
         }
 

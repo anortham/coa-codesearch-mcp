@@ -315,6 +315,7 @@ public class Program
 
             // Advanced semantic tools (Tree-sitter + Lucene powered)
             builder.Services.AddScoped<GetSymbolsOverviewTool>(); // Extract all symbols from files
+            builder.Services.AddScoped<ReadSymbolsTool>(); // Read specific symbol implementations (token-efficient)
             builder.Services.AddScoped<FindPatternsTool>(); // Semantic pattern detection for code quality
             
             // Register resource providers
@@ -326,7 +327,7 @@ public class Program
             // Configure behavioral adoption using Framework 2.1.1 features
             var templateVariables = new COA.Mcp.Framework.Services.TemplateVariables
             {
-                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "search_files", "line_search", "search_and_replace", "recent_files", "index_workspace", "edit_lines", "smart_refactor", "get_symbols_overview", "find_patterns" },
+                AvailableTools = new[] { "text_search", "symbol_search", "goto_definition", "find_references", "trace_call_path", "search_files", "line_search", "search_and_replace", "recent_files", "index_workspace", "edit_lines", "smart_refactor", "get_symbols_overview", "read_symbols", "find_patterns" },
                 ToolPriorities = new Dictionary<string, int>
                 {
                     {"goto_definition", 100},
@@ -341,7 +342,8 @@ public class Program
                     {"index_workspace", 100},
                     {"edit_lines", 92},
                     {"smart_refactor", 95},
-                    {"get_symbols_overview", 95}
+                    {"get_symbols_overview", 95},
+                    {"read_symbols", 92}
                 },
                 EnforcementLevel = COA.Mcp.Framework.Configuration.WorkflowEnforcement.StronglyUrge,
                 ToolComparisons = new Dictionary<string, COA.Mcp.Framework.Configuration.ToolComparison>

@@ -174,6 +174,21 @@ public interface ISQLiteSymbolService
         CancellationToken cancellationToken = default);
 
     /// <summary>
+    /// Get relationships for specific symbols by their IDs.
+    /// Returns inheritance relationships (extends/implements) for populating type hierarchies.
+    /// </summary>
+    /// <param name="workspacePath">Workspace path for database lookup</param>
+    /// <param name="symbolIds">List of symbol IDs to get relationships for</param>
+    /// <param name="relationshipKinds">Optional filter for specific relationship kinds (e.g., "extends", "implements"). If null, returns all relationships.</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Dictionary mapping symbol IDs to their relationships</returns>
+    Task<Dictionary<string, List<JulieRelationship>>> GetRelationshipsForSymbolsAsync(
+        string workspacePath,
+        List<string> symbolIds,
+        List<string>? relationshipKinds = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
     /// Search for symbols using semantic similarity (Tier 3 - semantic search).
     /// Returns symbols semantically similar to the query text, ordered by similarity score.
     /// </summary>

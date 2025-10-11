@@ -26,6 +26,12 @@ public class JulieSymbol
     [System.Text.Json.Serialization.JsonPropertyName("end_column")]
     public int EndColumn { get; set; }
 
+    [System.Text.Json.Serialization.JsonPropertyName("start_byte")]
+    public int? StartByte { get; set; }
+
+    [System.Text.Json.Serialization.JsonPropertyName("end_byte")]
+    public int? EndByte { get; set; }
+
     public string? Signature { get; set; }
 
     [System.Text.Json.Serialization.JsonPropertyName("doc_comment")]
@@ -79,4 +85,31 @@ public class JulieIdentifier
 
     [System.Text.Json.Serialization.JsonPropertyName("code_context")]
     public string? CodeContext { get; set; }
+}
+
+/// <summary>
+/// Represents a relationship between two symbols from julie-codesearch extraction.
+/// Relationships include inheritance (extends, implements), calls, uses, etc.
+/// </summary>
+public class JulieRelationship
+{
+    public string Id { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("from_symbol_id")]
+    public string FromSymbolId { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("to_symbol_id")]
+    public string ToSymbolId { get; set; } = string.Empty;
+
+    public string Kind { get; set; } = string.Empty; // extends, implements, calls, uses, etc.
+
+    [System.Text.Json.Serialization.JsonPropertyName("file_path")]
+    public string FilePath { get; set; } = string.Empty;
+
+    [System.Text.Json.Serialization.JsonPropertyName("line_number")]
+    public int LineNumber { get; set; }
+
+    public float Confidence { get; set; } = 1.0f;
+
+    public string? Metadata { get; set; }
 }
